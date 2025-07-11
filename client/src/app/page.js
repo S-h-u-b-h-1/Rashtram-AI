@@ -3,6 +3,7 @@
 import Navbar from "@/components/Navbar";
 import { HeroSection } from "@/components/blocks/hero-section"
 import { Icons } from "@/components/ui/icons"
+import { TimelineDemo } from "@/components/TimelineDemo";
 
 export function HeroSectionDemo() {
   return (
@@ -36,6 +37,7 @@ export default function Home() {
   return (
     <>
       <HeroSectionDemo />
+      <TimelineDemo />
     </>
   );
 }
