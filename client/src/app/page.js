@@ -1,10 +1,8 @@
 "use client"
 
-import Navbar from "@/components/Navbar";
 import { HeroSection } from "@/components/blocks/hero-section"
-import { Icons } from "@/components/ui/icons"
 import { TimelineDemo } from "@/components/TimelineDemo";
-
+import { Cta4 } from "@/components/ui/cta-4";
 export function HeroSectionDemo() {
   return (
     <HeroSection
@@ -20,7 +18,7 @@ export function HeroSectionDemo() {
       actions={[
         {
           text: "Get Started",
-          href: "/docs/getting-started",
+          href: "/signup",
           variant: "default",
         }
       ]}
@@ -32,12 +30,30 @@ export function HeroSectionDemo() {
     />
   )
 }
+export function GetStarted(){
+  return (
+    <Cta4
+      title="Ready to Transform Policymaking?"
+      description="Join the growing community of policymakers leveraging Rashtram AI to create a better future."
+      buttonText="Get Started"
+      buttonUrl="/signup"
+      items={[
+        "Accurate Policy Analysis",
+        "Real-time Data Insights",
+        "Customizable Policy Frameworks",
+        "Scalable Decision Making",
+        "Comprehensive Compliance Monitoring"
+      ]}
+    />
+  )
+}
 
 export default function Home() {
   return (
     <>
       <HeroSectionDemo />
       <TimelineDemo />
+      <GetStarted  className = 'w-full'/>
     </>
   );
 }

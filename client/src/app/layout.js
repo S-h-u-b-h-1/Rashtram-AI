@@ -1,7 +1,7 @@
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import Navbar from "../components/Navbar";
-
+import FooterDemo from "../components/Footer";
 const geistSans = Geist({
   variable: "--font-geist-sans",
   subsets: ["latin"],
@@ -12,10 +12,7 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
-export const metadata = {
-  title: "Rashtram AI",
-  description: "Rashtram AI - Advanced AI Solutions",
-};
+
 
 export default function RootLayout({ children }) {
   return (
@@ -25,6 +22,7 @@ export default function RootLayout({ children }) {
       >
         <Navbar />
         {children}
+        <FooterDemo />
       </body>
     </html>
   );
