@@ -21,13 +21,7 @@ export function HeroSectionDemo() {
           text: "Get Started",
           href: "/docs/getting-started",
           variant: "default",
-        },
-        {
-          text: "GitHub",
-          href: "https://github.com/your-repo",
-          variant: "glow",
-          icon: <Icons.gitHub className="h-5 w-5" />,
-        },
+        }
       ]}
       image={{
         light: "https://www.launchuicomponents.com/app-light.png",

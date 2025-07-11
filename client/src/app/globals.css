@@ -1,5 +1,8 @@
 @import "tailwindcss";
 @import "tw-animate-css";
+@theme {
+  --breakpoint-md: 900px;
+}
 
 @custom-variant dark (&:is(.dark *));
 
