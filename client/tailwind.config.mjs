@@ -14,6 +14,13 @@ module.exports = {
         'primary-dark': '#9A0B31',
         'primary-light': '#F8D0DA',
       },
+      backgroundImage: {
+        'gradient-radial': 'radial-gradient(ellipse at center, var(--tw-gradient-stops))',
+        'gradient-radial-to-tr': 'radial-gradient(ellipse at top right, var(--tw-gradient-stops))',
+        'gradient-radial-to-tl': 'radial-gradient(ellipse at top left, var(--tw-gradient-stops))',
+        'gradient-radial-to-br': 'radial-gradient(ellipse at bottom right, var(--tw-gradient-stops))',
+        'gradient-radial-to-bl': 'radial-gradient(ellipse at bottom left, var(--tw-gradient-stops))',
+      },
       keyframes: {
         appear: {
           "0%": { opacity: "0", transform: "translateY(10px)" },

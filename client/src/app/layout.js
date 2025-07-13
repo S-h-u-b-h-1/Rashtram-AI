@@ -23,9 +23,9 @@ export default function RootLayout({ children }) {
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
-        {pathname === '/chat' ? '' : <Navbar />}
+        {pathname === '/chat' || pathname === '/login' || pathname === '/signup' ? '' : <Navbar />}
         {children}
-        {pathname === '/chat' ? '' : <FooterDemo />}
+        {pathname === '/chat' || pathname === '/login' || pathname === '/signup' ? '' : <FooterDemo />}
       </body>
     </html>
   );
