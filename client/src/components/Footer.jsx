@@ -67,12 +67,12 @@ export default function FooterDemo() {
             {
               name: "Solutions",
               Icon: Vote,
-              href: "/soultions",
+              href: "/solutions",
             },
             {
-              name: "Resources",
+              name: "Products",
               Icon: Vault,
-              href: "/resources",
+              href: "/product",
             },
             {
               name: "Pricing",
