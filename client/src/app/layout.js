@@ -1,6 +1,7 @@
 'use client';
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
+import ChatProvider from "../context/Chatcontext";
 import Navbar from "../components/Navbar";
 import FooterDemo from "../components/Footer";
 import { usePathname } from 'next/navigation';
@@ -20,6 +21,7 @@ export default function RootLayout({ children }) {
   const pathname = usePathname();
   return (
     <html lang="en">
+      <ChatProvider>
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
@@ -27,6 +29,7 @@ export default function RootLayout({ children }) {
         {children}
         {pathname === '/chat' || pathname === '/login' || pathname === '/signup' ? '' : <FooterDemo />}
       </body>
+      </ChatProvider>
     </html>
   );
 }
