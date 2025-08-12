@@ -102,7 +102,7 @@ const Navbar = () => {
             </Link>
             <div className="pt-4 flex flex-col space-y-4 mt-2">
               <Link 
-                href="/signup" 
+                href="/chat" 
                 className="bg-[#B20D38] hover:bg-primary-dark text-white px-5 py-3 rounded-md font-medium text-center transition-all duration-300 shadow-sm hover:shadow-md"
                 onClick={() => setIsMenuOpen(false)}
               >
