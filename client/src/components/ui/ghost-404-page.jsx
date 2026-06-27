@@ -5,11 +5,11 @@ import Link from 'next/link';
 import { motion, AnimatePresence } from 'framer-motion';
 
 const containerVariants = {
-  hidden: { 
+  hidden: {
     opacity: 0,
     y: 30
   },
-  visible: { 
+  visible: {
     opacity: 1,
     y: 0,
     transition: {
@@ -22,12 +22,12 @@ const containerVariants = {
 };
 
 const itemVariants = {
-  hidden: { 
+  hidden: {
     opacity: 0,
     y: 20
   },
-  visible: { 
-    opacity: 1, 
+  visible: {
+    opacity: 1,
     y: 0,
     transition: {
       duration: 0.6,
@@ -56,13 +56,13 @@ const numberVariants = {
 };
 
 const ghostVariants = {
-  hidden: { 
+  hidden: {
     scale: 0.8,
     opacity: 0,
     y: 15,
     rotate: -5
   },
-  visible: { 
+  visible: {
     scale: 1,
     opacity: 1,
     y: 0,
@@ -138,13 +138,13 @@ export function NotFound() {
               4
             </motion.span>
           </div>
-          
+
           <motion.h1
             className="text-3xl md:text-5xl font-bold text-[#222222] mb-4 md:mb-6 opacity-70 font-dm-sans select-none"
             variants={itemVariants}>
             Boo! Page missing!
           </motion.h1>
-          
+
           <motion.p
             className="text-lg md:text-xl text-[#222222] mb-8 md:mb-12 opacity-50 font-dm-sans select-none"
             variants={itemVariants}>
@@ -153,7 +153,7 @@ export function NotFound() {
 
           <motion.div
             variants={itemVariants}
-            whileHover={{ 
+            whileHover={{
               scale: 1.05,
               transition: {
                 duration: 0.3,

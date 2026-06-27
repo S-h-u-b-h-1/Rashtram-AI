@@ -16,7 +16,7 @@ export default function FooterDemo() {
   return (
     <>
     <Footer
-    
+
       brand={{
         name: "RashtramAI",
         description: "Rashtram AI - Advanced AI Solutions",

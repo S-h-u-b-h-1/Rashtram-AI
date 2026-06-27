@@ -1,10 +1,10 @@
-'use client';
+"use client";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
-import ChatProvider from "../context/Chatcontext";
+import { AuthProvider } from "../context/AuthContext";
 import Navbar from "../components/Navbar";
 import FooterDemo from "../components/Footer";
-import { usePathname } from 'next/navigation';
+import { usePathname } from "next/navigation";
 const geistSans = Geist({
   variable: "--font-geist-sans",
   subsets: ["latin"],
@@ -15,21 +15,35 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
-
-
 export default function RootLayout({ children }) {
   const pathname = usePathname();
   return (
     <html lang="en">
-      <ChatProvider>
-      <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
-      >
-        {pathname === '/chat' || pathname === '/login' || pathname === '/signup' ? '' : <Navbar />}
-        {children}
-        {pathname === '/chat' || pathname === '/login' || pathname === '/signup' ? '' : <FooterDemo />}
-      </body>
-      </ChatProvider>
+      <AuthProvider>
+        <body
+          className={`${geistSans.variable} ${geistMono.variable} antialiased`}
+        >
+          {pathname === "/login" ||
+          pathname === "/signup" ||
+          pathname === "/app/bill-chat" ||
+          pathname === "/app/act-chat" ||
+          pathname === "/app" ? (
+            ""
+          ) : (
+            <Navbar />
+          )}
+          {children}
+          {pathname === "/login" ||
+          pathname === "/signup" ||
+          pathname === "/app/bill-chat" ||
+          pathname === "/app/act-chat" ||
+          pathname === "/app" ? (
+            ""
+          ) : (
+            <FooterDemo />
+          )}
+        </body>
+      </AuthProvider>
     </html>
   );
 }

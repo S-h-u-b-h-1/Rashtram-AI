@@ -1,4 +1,4 @@
-// component.tsx
+
 import * as React from "react";
 import * as TooltipPrimitive from "@radix-ui/react-tooltip";
 import * as PopoverPrimitive from "@radix-ui/react-popover";
@@ -86,7 +86,7 @@ const DialogContent = React.forwardRef(
 );
 DialogContent.displayName = DialogPrimitive.Content.displayName;
 
-// --- SVG Icon Components ---
+
 const PlusIcon = (props) => (
   <svg
     width="24"
@@ -283,7 +283,7 @@ const LightbulbIcon = (props) => (
     />{" "}
   </svg>
 );
-// NEW: MicIcon
+
 const MicIcon = (props) => (
   <svg
     width="24"
@@ -303,7 +303,7 @@ const MicIcon = (props) => (
   </svg>
 );
 
-// --- The Final, Self-Contained PromptBox Component ---
+
 import { useContext } from "react";
 import { ChatContext } from "../../context/Chatcontext";
 export const PromptBox = React.forwardRef(({ className, ...props }, ref) => {
@@ -446,7 +446,7 @@ export const PromptBox = React.forwardRef(({ className, ...props }, ref) => {
               </TooltipContent>{" "}
             </Tooltip>
 
-            {/* MODIFIED: Right-aligned buttons container */}
+            {}
             <div className="ml-auto flex items-center gap-2">
               <Tooltip>
                 <TooltipTrigger asChild>

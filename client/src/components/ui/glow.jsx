@@ -1,7 +1,7 @@
 import React, { forwardRef } from "react";
-import { cn } from "@/lib/utils"; // Ensure `cn` is a utility like `clsx`
+import { cn } from "@/lib/utils";
 
-import { cva } from "class-variance-authority"; // Keep this if still using `cva`
+import { cva } from "class-variance-authority";
 
 const glowVariants = cva("absolute w-full", {
   variants: {
