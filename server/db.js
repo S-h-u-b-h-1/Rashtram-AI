@@ -177,6 +177,234 @@ const initializeSchema = async () => {
 
     CREATE INDEX IF NOT EXISTS source_snapshots_recent_idx
       ON source_collection_snapshots (source_name, fetched_at DESC);
+
+    ALTER TABLE legislative_documents
+      DROP CONSTRAINT IF EXISTS legislative_documents_document_type_check;
+
+    ALTER TABLE legislative_documents
+      DROP CONSTRAINT IF EXISTS legislative_documents_jurisdiction_level_check;
+
+    ALTER TABLE legislative_documents
+      ADD COLUMN IF NOT EXISTS canonical_id TEXT,
+      ADD COLUMN IF NOT EXISTS normalized_title TEXT,
+      ADD COLUMN IF NOT EXISTS authority TEXT,
+      ADD COLUMN IF NOT EXISTS department TEXT,
+      ADD COLUMN IF NOT EXISTS legal_identifier TEXT,
+      ADD COLUMN IF NOT EXISTS bill_number TEXT,
+      ADD COLUMN IF NOT EXISTS act_number TEXT,
+      ADD COLUMN IF NOT EXISTS gazette_identifier TEXT,
+      ADD COLUMN IF NOT EXISTS introduced_date DATE,
+      ADD COLUMN IF NOT EXISTS passed_date DATE,
+      ADD COLUMN IF NOT EXISTS enacted_date DATE,
+      ADD COLUMN IF NOT EXISTS publication_date DATE,
+      ADD COLUMN IF NOT EXISTS effective_date DATE,
+      ADD COLUMN IF NOT EXISTS canonical_source TEXT,
+      ADD COLUMN IF NOT EXISTS canonical_url TEXT,
+      ADD COLUMN IF NOT EXISTS source_priority INTEGER NOT NULL DEFAULT 100,
+      ADD COLUMN IF NOT EXISTS content_hash TEXT,
+      ADD COLUMN IF NOT EXISTS text_fingerprint TEXT,
+      ADD COLUMN IF NOT EXISTS metadata_json JSONB NOT NULL DEFAULT '{}'::jsonb;
+
+    UPDATE legislative_documents
+       SET canonical_id = 'rashtram-' || id
+     WHERE canonical_id IS NULL;
+
+    UPDATE legislative_documents
+       SET normalized_title = TRIM(
+             LOWER(
+               REGEXP_REPLACE(
+                 REGEXP_REPLACE(
+                   REGEXP_REPLACE(
+                     REGEXP_REPLACE(
+                       title,
+                       '\\m(the|a|an|bill|act|rules?|regulations?|ordinance|notification)\\M',
+                       ' ',
+                       'gi'
+                     ),
+                     '\\m(19|20)[0-9]{2}\\M',
+                     ' ',
+                     'g'
+                   ),
+                   '[^[:alnum:][:space:]]',
+                   ' ',
+                   'g'
+                 ),
+                 '[[:space:]]+',
+                 ' ',
+                 'g'
+               )
+             )
+           ),
+           canonical_source = COALESCE(canonical_source, source_name),
+           canonical_url = COALESCE(canonical_url, detail_url, source_url),
+           source_priority = CASE
+             WHEN LOWER(source_name) LIKE '%egazette%' THEN 10
+             WHEN LOWER(source_name) LIKE '%indiacode%' THEN 20
+             WHEN LOWER(source_name) LIKE '%sansad%'
+               OR LOWER(source_name) LIKE '%lok-sabha%'
+               OR LOWER(source_name) LIKE '%rajya-sabha%' THEN 30
+             WHEN LOWER(source_name) LIKE '%ministry%'
+               OR LOWER(source_name) LIKE '%regulator%' THEN 40
+             WHEN LOWER(source_name) LIKE '%prs%' THEN 50
+             ELSE source_priority
+           END,
+           metadata_json = metadata_json || source_metadata
+     WHERE normalized_title IS NULL
+        OR normalized_title ~* '\\m(the|a|an|bill|act|rules?|regulations?|ordinance|notification)\\M'
+        OR normalized_title ~ '\\m(19|20)[0-9]{2}\\M'
+        OR canonical_source IS NULL
+        OR canonical_url IS NULL
+        OR metadata_json = '{}'::jsonb;
+
+    ALTER TABLE legislative_documents
+      ALTER COLUMN canonical_id SET NOT NULL,
+      ALTER COLUMN canonical_id SET DEFAULT
+        ('rashtram-' || MD5(RANDOM()::TEXT || CLOCK_TIMESTAMP()::TEXT));
+
+    CREATE UNIQUE INDEX IF NOT EXISTS legislative_documents_canonical_id_idx
+      ON legislative_documents (canonical_id);
+
+    CREATE INDEX IF NOT EXISTS legislative_documents_legal_identifier_idx
+      ON legislative_documents (legal_identifier)
+      WHERE legal_identifier IS NOT NULL;
+
+    CREATE INDEX IF NOT EXISTS legislative_documents_gazette_identifier_idx
+      ON legislative_documents (gazette_identifier)
+      WHERE gazette_identifier IS NOT NULL;
+
+    CREATE INDEX IF NOT EXISTS legislative_documents_content_hash_idx
+      ON legislative_documents (content_hash)
+      WHERE content_hash IS NOT NULL;
+
+    CREATE INDEX IF NOT EXISTS legislative_documents_text_fingerprint_idx
+      ON legislative_documents (text_fingerprint)
+      WHERE text_fingerprint IS NOT NULL;
+
+    CREATE INDEX IF NOT EXISTS legislative_documents_normalized_title_idx
+      ON legislative_documents (normalized_title, year);
+
+    CREATE TABLE IF NOT EXISTS document_sources (
+      id BIGSERIAL PRIMARY KEY,
+      document_id BIGINT NOT NULL
+        REFERENCES legislative_documents(id) ON DELETE CASCADE,
+      source_name TEXT NOT NULL,
+      source_record_id TEXT NOT NULL,
+      source_url TEXT NOT NULL,
+      detail_url TEXT,
+      pdf_url TEXT,
+      source_priority INTEGER NOT NULL DEFAULT 100,
+      legal_identifier TEXT,
+      content_hash TEXT,
+      text_fingerprint TEXT,
+      raw_metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
+      first_seen_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      last_seen_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      UNIQUE (source_name, source_record_id)
+    );
+
+    CREATE INDEX IF NOT EXISTS document_sources_document_idx
+      ON document_sources (document_id);
+
+    CREATE INDEX IF NOT EXISTS document_sources_content_hash_idx
+      ON document_sources (content_hash)
+      WHERE content_hash IS NOT NULL;
+
+    INSERT INTO document_sources (
+      document_id,
+      source_name,
+      source_record_id,
+      source_url,
+      detail_url,
+      pdf_url,
+      source_priority,
+      legal_identifier,
+      content_hash,
+      text_fingerprint,
+      raw_metadata,
+      first_seen_at,
+      last_seen_at
+    )
+    SELECT
+      id,
+      source_name,
+      source_document_id,
+      source_url,
+      detail_url,
+      pdf_url,
+      source_priority,
+      legal_identifier,
+      content_hash,
+      text_fingerprint,
+      source_metadata,
+      first_seen_at,
+      last_seen_at
+    FROM legislative_documents
+    ON CONFLICT (source_name, source_record_id) DO NOTHING;
+
+    CREATE TABLE IF NOT EXISTS document_relationships (
+      id BIGSERIAL PRIMARY KEY,
+      from_document_id BIGINT NOT NULL
+        REFERENCES legislative_documents(id) ON DELETE CASCADE,
+      to_document_id BIGINT NOT NULL
+        REFERENCES legislative_documents(id) ON DELETE CASCADE,
+      relationship_type TEXT NOT NULL,
+      source_name TEXT,
+      confidence NUMERIC(5, 4),
+      metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      UNIQUE (from_document_id, to_document_id, relationship_type)
+    );
+
+    CREATE INDEX IF NOT EXISTS document_relationships_from_idx
+      ON document_relationships (from_document_id, relationship_type);
+
+    CREATE INDEX IF NOT EXISTS document_relationships_to_idx
+      ON document_relationships (to_document_id, relationship_type);
+
+    CREATE TABLE IF NOT EXISTS catalog_match_reviews (
+      id BIGSERIAL PRIMARY KEY,
+      incoming_source_name TEXT NOT NULL,
+      incoming_source_record_id TEXT NOT NULL,
+      candidate_document_id BIGINT NOT NULL
+        REFERENCES legislative_documents(id) ON DELETE CASCADE,
+      similarity NUMERIC(5, 4) NOT NULL,
+      incoming_record JSONB NOT NULL DEFAULT '{}'::jsonb,
+      status TEXT NOT NULL DEFAULT 'pending'
+        CHECK (status IN ('pending', 'accepted', 'rejected')),
+      reviewed_by TEXT,
+      reviewed_at TIMESTAMPTZ,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      UNIQUE (
+        incoming_source_name,
+        incoming_source_record_id,
+        candidate_document_id
+      )
+    );
+
+    CREATE INDEX IF NOT EXISTS catalog_match_reviews_pending_idx
+      ON catalog_match_reviews (status, similarity DESC);
+
+    ALTER TABLE ingestion_runs
+      ADD COLUMN IF NOT EXISTS collection_name TEXT,
+      ADD COLUMN IF NOT EXISTS counters_json JSONB NOT NULL DEFAULT '{}'::jsonb,
+      ADD COLUMN IF NOT EXISTS errors_json JSONB NOT NULL DEFAULT '[]'::jsonb;
+
+    ALTER TABLE source_collection_snapshots
+      ADD COLUMN IF NOT EXISTS html_hash TEXT,
+      ADD COLUMN IF NOT EXISTS response_status INTEGER,
+      ADD COLUMN IF NOT EXISTS collected_at TIMESTAMPTZ,
+      ADD COLUMN IF NOT EXISTS metadata_json JSONB NOT NULL DEFAULT '{}'::jsonb;
+
+    UPDATE source_collection_snapshots
+       SET html_hash = COALESCE(html_hash, content_sha256),
+           collected_at = COALESCE(collected_at, fetched_at),
+           metadata_json = metadata_json || metadata
+     WHERE html_hash IS NULL
+        OR collected_at IS NULL
+        OR metadata_json = '{}'::jsonb;
   `);
 };
 

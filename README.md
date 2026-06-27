@@ -16,6 +16,7 @@ Detailed references:
 
 - [Project understanding](docs/PROJECT_UNDERSTANDING.md)
 - [Legislative data catalogue](docs/DATA_CATALOG.md)
+- [Legislative ingestion architecture](docs/LEGISLATIVE_INGESTION_ARCHITECTURE.md)
 
 ## Prerequisites
 
@@ -83,6 +84,13 @@ Run a faster list-only refresh or inspect stored coverage:
 ```bash
 npm run ingest:catalog-only --prefix server
 npm run catalog:stats --prefix server
+```
+
+Collect small official-source samples through the universal ingestion layer:
+
+```bash
+npm run ingest:sources --prefix server -- \
+  --sources=india-code,egazette --limit=10
 ```
 
 The persistent catalogue includes Parliament and state bills and acts. PDF

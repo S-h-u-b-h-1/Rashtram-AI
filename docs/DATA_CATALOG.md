@@ -28,12 +28,18 @@ Additional coverage:
 State acts range back to 1837 in the currently exposed source catalogue.
 Parliament records extend through 2026.
 
-## Data source and attribution
+## Data sources and attribution
 
-The collector reads public records exposed by
+The populated production baseline comes from
 [PRS Legislative Research](https://prsindia.org/). PRS identifies its site
 content as licensed under the
 [Creative Commons Attribution 4.0 International License](https://creativecommons.org/licenses/by/4.0/).
+
+The universal ingestion layer also supports official records from IndiaCode and
+the Gazette of India, plus conservative public-directory adapters for Digital
+Sansad, Lok Sabha, Rajya Sabha, state legislatures, state Gazettes, and central
+ministries. Source-specific acquisition and limitations are documented in
+[Legislative ingestion architecture](LEGISLATIVE_INGESTION_ARCHITECTURE.md).
 
 Each record retains:
 
@@ -66,6 +72,14 @@ npm run ingest:catalog --prefix server -- \
 
 # Review current stored coverage
 npm run catalog:stats --prefix server
+
+# Small official-source refresh
+npm run ingest:sources --prefix server -- \
+  --sources=india-code,egazette --limit=10
+
+# Inspect possible duplicates and uncertain matches
+npm run catalog:duplicates --prefix server
+npm run catalog:review-matches --prefix server
 ```
 
 Supported collection names:
@@ -82,9 +96,10 @@ Useful controls:
 - `--max-pages=500`
 - `--detail-concurrency=4` (maximum 8)
 
-The collector is deliberately throttled, retries transient source failures,
-deduplicates by source URL, and updates existing rows instead of creating
-duplicates.
+Collectors are deliberately throttled, retry transient source failures, obey
+`robots.txt`, retain source snapshots, and reconcile duplicate records through
+source identity, legal identifiers, hashes, fingerprints, and bounded title
+similarity.
 
 ## What is not bulk-copied
 

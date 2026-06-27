@@ -13,6 +13,7 @@ const actsRouter = require("./act/actsRoute");
 const processActRouter = require("./act/processActRoute");
 const actChatManagementRouter = require("./act/actChatRoute");
 const dashboardRouter = require("./dashboard/route");
+const catalogIngestionRouter = require("./catalog/ingestionRoute");
 const { connectDB } = require("./db");
 const cors = require("cors");
 const {
@@ -64,6 +65,7 @@ app.use("/api/acts", fetchUser, actsRouter);
 app.use("/api/process-act", fetchUser, processActRouter);
 app.use("/api/act-chats", actChatManagementRouter);
 app.use("/api/dashboard", dashboardRouter);
+app.use("/api/catalog-operations", catalogIngestionRouter);
 
 app.get("/", (req, res) => {
   res.json({

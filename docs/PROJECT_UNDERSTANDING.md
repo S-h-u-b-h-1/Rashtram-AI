@@ -8,7 +8,7 @@ Rashtram AI is an evidence-oriented research workspace for Indian legislation.
 Its central job is to help a user move from a large bill or act to a reliable
 working understanding of that document.
 
-The product combines four capabilities:
+The product combines five capabilities:
 
 1. **Legislative discovery** — find Parliament bills and acts by title, status,
    or year.
@@ -18,11 +18,14 @@ The product combines four capabilities:
    question and stream a Gemini answer based on that context.
 4. **Research continuity** — retain summaries, messages, and recent work for
    each authenticated user.
+5. **National legislative catalogue** — reconcile the same bill, act, rule,
+   notification, Gazette, policy, or proceeding across official and secondary
+   sources while retaining complete provenance.
 
 The product should be understood as a research assistant, not an authoritative
-legal database or a substitute for the source legislation. PRS India is the
-catalogue source currently used by the application; original PDFs and official
-publication sources remain the final reference.
+legal database or a substitute for the source legislation. PRS remains the
+largest populated source, while IndiaCode and eGazette now have working
+official-source collectors. Original official PDFs remain the final reference.
 
 ## 2. Intended users and jobs
 
@@ -49,7 +52,7 @@ Browser / Next.js client
         v
 Express API on Vercel
    |        |         |
-   |        |         +--> PRS India pages and source PDFs
+   |        |         +--> PRS, IndiaCode, eGazette, Sansad and official sites
    |        |
    |        +--> Gemini generation
    |
@@ -96,6 +99,10 @@ Important backend locations:
 - `server/db.js` — PostgreSQL pool and schema.
 - `server/lib/catalogService.js` — database-backed catalogue queries.
 - `server/lib/prsCatalog.js` — PRS collection and parsing.
+- `server/lib/ingestion/core/` — source-neutral fetching, normalization,
+  deduplication, canonical merging, persistence, and run auditing.
+- `server/lib/ingestion/connectors/` — source-specific acquisition adapters.
+- `server/cli/` — ingestion, coverage, duplicate, and review operations.
 - `server/lib/pdfProcessor.js` — PDF extraction and text chunking.
 - `server/lib/vectordb.js` — embeddings, Pinecone access, retrieval, and Gemini.
 - `server/models/` — PostgreSQL-backed compatibility models.
@@ -120,21 +127,23 @@ Google authentication:
 
 Every protected API request validates issuer, audience, expiry, and signature.
 
-### 4.2 Catalogue collection
+### 4.2 Catalogue collection and reconciliation
 
-The PRS ingestion process now:
+The catalogue process now:
 
-1. Reads Parliament bills and Parliament acts.
-2. Walks every paginated state bill and state act page.
-3. Creates a stable ID from the permanent source URL.
-4. Stores title, type, jurisdiction, year, status, links, and provenance.
-5. Visits every Parliament bill detail page to capture ministry, category,
-   timeline metadata, PDF links, and related resources.
-6. Records content hashes for every collected listing page.
-7. Records the run, counters, errors, and completion state.
+1. Collects source records through a connector.
+2. Records hashes and provenance for every source page.
+3. Normalizes titles, types, dates, identifiers, authorities, and scope.
+4. Matches exact source identity, legal IDs, hashes, fingerprints, and finally
+   same-year title similarity.
+5. Merges high-confidence matches into one canonical document.
+6. Retains every source version and linked resource.
+7. Queues uncertain fuzzy matches for manual review.
+8. Records run scope, counters, errors, and completion state.
 
 Collection is idempotent. Re-running it updates current fields and
-`last_seen_at` without duplicating a source document.
+`last_seen_at` without duplicating a source record. Existing PRS numeric
+document IDs remain stable for frontend and Pinecone compatibility.
 
 ### 4.3 Document preparation
 
@@ -185,7 +194,10 @@ reactivates the same research thread. Chats support:
 | `act_chats` | Act metadata, summary, and message history per user |
 | `related_bills` | Seven-day related-bill result cache |
 | `legislative_documents` | Persistent national and state catalogue |
+| `document_sources` | Every source-specific version of a canonical document |
 | `legislative_document_resources` | Original texts, briefs, reports, and links |
+| `document_relationships` | Typed links between related legal/policy documents |
+| `catalog_match_reviews` | Human review queue for uncertain duplicate matches |
 | `source_collection_snapshots` | Source page hashes and collection provenance |
 | `ingestion_runs` | Auditable collection history and failures |
 
@@ -268,9 +280,10 @@ Areas that should be strengthened:
 - Retrieval is filtered to the selected document, reducing cross-document
   hallucination.
 - Chat history and summaries survive browser sessions.
-- Public document discovery is now independent of PRS availability at request
+- Public document discovery is independent of source availability at request
   time.
-- The catalogue has stable source-derived identity and collection provenance.
+- The catalogue has canonical identity, source-specific identity, official
+  source priority, collection provenance, and an auditable review queue.
 - AI generation streams progressively and supports model fallback.
 - The frontend is responsive and substantially clearer than the inherited UI.
 
@@ -286,6 +299,8 @@ Areas that should be strengthened:
 ### Data
 
 - PRS is a high-value secondary source but not the final legal authority.
+- Official-source adapters beyond IndiaCode/eGazette are conservative directory
+  collectors until stable structured APIs or feeds are confirmed.
 - Some historical records do not include a PDF or ministry.
 - Catalogue metadata is complete to the extent exposed by source pages; full
   PDF text is processed on demand rather than copied wholesale into PostgreSQL.
@@ -314,7 +329,7 @@ Areas that should be strengthened:
 
 ### Highest priority
 
-1. Add a scheduled daily catalogue refresh with alerting on source/parser
+1. Add a scheduled daily multi-source refresh with alerting on source/parser
    changes.
 2. Expose state bills and acts through jurisdiction filters in the UI.
 3. Move PDF processing to a durable background job.
@@ -349,4 +364,3 @@ Rashtram AI succeeds when a researcher can answer:
 
 The system should make those answers faster while keeping the original source,
 provenance, and uncertainty visible.
-
