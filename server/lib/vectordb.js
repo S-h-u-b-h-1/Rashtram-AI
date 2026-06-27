@@ -1,524 +1,356 @@
-import { Pinecone } from '@pinecone-database/pinecone';
-import OpenAI from 'openai';
-
-const pinecone = new Pinecone({
-  apiKey: process.env.PINECONE_API_KEY,
-});
-
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-});
+const { Pinecone } = require("@pinecone-database/pinecone");
 
 const EMBEDDING_DIMENSION = 768;
+const GENERATION_MODEL = process.env.GEMINI_MODEL || "gemini-2.5-flash";
+const EMBEDDING_MODEL =
+  process.env.GEMINI_EMBEDDING_MODEL || "gemini-embedding-001";
 
+let pineconeClient;
+let geminiClientPromise;
 
-export const getIndex = () => {
-  return pinecone.index(process.env.PINECONE_INDEX_NAME || 'rashtram-bills');
+const getPinecone = () => {
+  if (!process.env.PINECONE_API_KEY) {
+    throw new Error("PINECONE_API_KEY is required");
+  }
+
+  if (!pineconeClient) {
+    pineconeClient = new Pinecone({ apiKey: process.env.PINECONE_API_KEY });
+  }
+
+  return pineconeClient;
 };
 
-export const getActIndex = () => {
-  return pinecone.index('rashtram-acts');
+const getGemini = async () => {
+  if (!process.env.GEMINI_API_KEY) {
+    throw new Error("GEMINI_API_KEY is required");
+  }
+
+  if (!geminiClientPromise) {
+    geminiClientPromise = import("@google/genai").then(
+      ({ GoogleGenAI }) =>
+        new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY }),
+    );
+  }
+
+  return geminiClientPromise;
 };
 
+const normalizeVector = (values) => {
+  const magnitude = Math.sqrt(
+    values.reduce((sum, value) => sum + value * value, 0),
+  );
+  if (!magnitude) return values;
+  return values.map((value) => value / magnitude);
+};
 
-export const checkBillExists = async (billId) => {
+const createProbeVector = () => {
+  const vector = new Array(EMBEDDING_DIMENSION).fill(0);
+  vector[0] = 1;
+  return vector;
+};
+
+const responseText = (response) => {
+  if (typeof response?.text === "function") return response.text();
+  return response?.text || "";
+};
+
+const getIndex = () =>
+  getPinecone().index(process.env.PINECONE_INDEX_NAME || "rashtram-bills");
+
+const getActIndex = () =>
+  getPinecone().index(
+    process.env.PINECONE_ACT_INDEX_NAME || "rashtram-acts",
+  );
+
+const checkDocumentExists = async (index, idField, id) => {
   try {
-    console.log(`Checking if bill ${billId} already exists in Pinecone...`);
-    const index = getIndex();
-
-
     const queryResults = await index.query({
-      vector: new Array(EMBEDDING_DIMENSION).fill(0),
+      vector: createProbeVector(),
       topK: 1,
-      filter: { billId: { "$eq": billId.toString() } },
+      filter: { [idField]: { $eq: String(id) } },
       includeMetadata: true,
     });
 
-    const exists = queryResults.matches && queryResults.matches.length > 0;
-    console.log(`Bill ${billId} exists in database: ${exists}`);
+    const match = queryResults.matches?.[0];
+    if (!match) return { exists: false };
 
-    if (exists) {
-      const metadata = queryResults.matches[0].metadata;
-      return {
-        exists: true,
-        summary: metadata.summary || null,
-        billTitle: metadata.billTitle || metadata.title,
-        lastProcessed: metadata.timestamp,
-
-        chunksCount: metadata.totalChunks || 'unknown'
-      };
-    }
-
-    return { exists: false };
+    return {
+      exists: true,
+      summary: match.metadata.summary || null,
+      title:
+        match.metadata.billTitle ||
+        match.metadata.actTitle ||
+        match.metadata.title,
+      lastProcessed: match.metadata.timestamp,
+      chunksCount: match.metadata.totalChunks || "unknown",
+    };
   } catch (error) {
-    console.error(error);
+    console.error(`Failed to check ${idField}:`, error);
     return { exists: false };
   }
 };
 
-export const checkActExists = async (actId) => {
-  try {
-    console.log(`Checking if act ${actId} already exists in Pinecone...`);
-    const index = getActIndex();
-
-
-    const queryResults = await index.query({
-      vector: new Array(EMBEDDING_DIMENSION).fill(0),
-      topK: 1,
-      filter: { actId: { "$eq": actId.toString() } },
-      includeMetadata: true,
-    });
-
-    const exists = queryResults.matches && queryResults.matches.length > 0;
-    console.log(`Act ${actId} exists in database: ${exists}`);
-
-    if (exists) {
-      const metadata = queryResults.matches[0].metadata;
-      return {
-        exists: true,
-        summary: metadata.summary || null,
-        actTitle: metadata.actTitle || metadata.title,
-        lastProcessed: metadata.timestamp,
-
-        chunksCount: metadata.totalChunks || 'unknown'
-      };
-    }
-
-    return { exists: false };
-  } catch (error) {
-    console.error(error);
-    return { exists: false };
-  }
+const checkBillExists = async (billId) => {
+  const result = await checkDocumentExists(getIndex(), "billId", billId);
+  return {
+    ...result,
+    billTitle: result.title,
+  };
 };
 
-export const generateEmbedding = async (text) => {
-  try {
-    const response = await openai.embeddings.create({
-      model: "text-embedding-3-small",
-      input: text,
-      dimensions: 768,
-    });
-    return response.data[0].embedding;
-  } catch (error) {
-    console.error('OpenAI embedding failed:', error);
-    throw error;
-  }
+const checkActExists = async (actId) => {
+  const result = await checkDocumentExists(getActIndex(), "actId", actId);
+  return {
+    ...result,
+    actTitle: result.title,
+  };
 };
 
-export const generateResponse = async (prompt, context = '') => {
-  try {
-    const fullPrompt = `
-Context from bill documents:
+const generateEmbedding = async (text) => {
+  const ai = await getGemini();
+  const response = await ai.models.embedContent({
+    model: EMBEDDING_MODEL,
+    contents: text,
+    config: { outputDimensionality: EMBEDDING_DIMENSION },
+  });
+
+  const values = response.embeddings?.[0]?.values;
+  if (!values?.length) {
+    throw new Error("Gemini returned no embedding values");
+  }
+
+  return normalizeVector(values);
+};
+
+const generateResponse = async (prompt, context = "") => {
+  const ai = await getGemini();
+  const fullPrompt = `
+You are Rashtram AI, an assistant for researching Indian parliamentary
+documents. Answer using the supplied document context.
+
+Document context:
 ${context}
 
-User question: ${prompt}
+User question:
+${prompt}
 
-Please provide a comprehensive answer based on the context provided above. If the context doesn't contain enough information to answer the question, please mention that and provide what information you can based on the available context.
+Give a comprehensive, accessible answer. Clearly state when the context does
+not contain enough information. Do not invent provisions, dates, or citations.
 `;
 
-    const stream = await openai.chat.completions.create({
-      model: "gpt-4o",
-      messages: [{ role: "user", content: fullPrompt }],
-      stream: true,
-    });
-
-    return stream;
-  } catch (error) {
-    console.error('Error generating response:', error);
-    throw error;
-  }
+  return ai.models.generateContentStream({
+    model: GENERATION_MODEL,
+    contents: fullPrompt,
+  });
 };
 
-export const generateBillSummary = async (billContent) => {
-  try {
-    const prompt = `
-Please provide a comprehensive summary of this parliamentary bill. Include:
-1. Main purpose and objectives
-2. Key provisions
-3. Potential impact
-4. Important dates or timelines mentioned
-5. Any notable changes or amendments
-
-Bill content:
-${billContent}
-
-Provide a well-structured summary that's informative yet accessible.
-`;
-
-    const completion = await openai.chat.completions.create({
-      model: "gpt-4o",
-      messages: [{ role: "user", content: prompt }],
-    });
-
-    return completion.choices[0].message.content;
-  } catch (error) {
-    console.error('Error generating bill summary:', error);
-    throw error;
-  }
-};
-
-export const generateActSummary = async (actContent) => {
-  try {
-    const prompt = `
-Please provide a comprehensive summary of this parliamentary act. Include:
+const generateSummary = async (documentType, content) => {
+  const ai = await getGemini();
+  const prompt = `
+Provide a comprehensive summary of this Indian parliamentary ${documentType}.
+Include:
 1. Main purpose and objectives
 2. Key provisions and sections
 3. Potential impact and applicability
-4. Important dates or timelines mentioned
-5. Any notable amendments or changes
+4. Important dates or timelines
+5. Notable amendments or changes
 
-Act content:
-${actContent}
+Document content:
+${content}
 
-Provide a well-structured summary that's informative yet accessible.
+Write an accurate, well-structured summary. Do not invent information that is
+not present in the document.
 `;
 
-    const completion = await openai.chat.completions.create({
-      model: "gpt-4o",
-      messages: [{ role: "user", content: prompt }],
-    });
+  const response = await ai.models.generateContent({
+    model: GENERATION_MODEL,
+    contents: prompt,
+  });
+  return responseText(response);
+};
 
-    return completion.choices[0].message.content;
+const generateBillSummary = (billContent) =>
+  generateSummary("bill", billContent);
+
+const generateActSummary = (actContent) =>
+  generateSummary("act", actContent);
+
+const searchContent = async (index, idField, id, query, topK = 5) => {
+  const queryEmbedding = await generateEmbedding(query);
+  const searchResults = await index.query({
+    vector: queryEmbedding,
+    topK,
+    filter: { [idField]: { $eq: String(id) } },
+    includeMetadata: true,
+  });
+
+  return (searchResults.matches || []).map((match) => ({
+    ...match,
+    relevanceScore: match.score,
+    content: match.metadata?.content || "",
+    chunkInfo: {
+      index: match.metadata?.chunkIndex || 0,
+      total: match.metadata?.totalChunks || 1,
+      source: match.metadata?.source || "pdf",
+    },
+  }));
+};
+
+const searchSimilarContent = (query, billId, topK = 5) =>
+  searchContent(getIndex(), "billId", billId, query, topK);
+
+const searchSimilarContentForAct = (query, actId, topK = 5) =>
+  searchContent(getActIndex(), "actId", actId, query, topK);
+
+const upsertWithRetry = async (index, vectors, retryCount = 0) => {
+  const maxRetries = 3;
+  try {
+    await index.upsert(vectors);
   } catch (error) {
-    console.error('Error generating act summary:', error);
-    throw error;
+    const retriable =
+      error.message?.includes("ECONNRESET") ||
+      error.message?.includes("network") ||
+      error.message?.includes("fetch failed");
+
+    if (!retriable || retryCount >= maxRetries) throw error;
+
+    const delay = 2_000 * (retryCount + 1);
+    await new Promise((resolve) => setTimeout(resolve, delay));
+    await upsertWithRetry(index, vectors, retryCount + 1);
   }
 };
 
-export const searchSimilarContent = async (query, billId, topK = 5) => {
-  try {
-    const index = getIndex();
-    const queryEmbedding = await generateEmbedding(query);
+const storeContentInChunks = async ({
+  chunks,
+  index,
+  idField,
+  titleField,
+}) => {
+  const batchSize = 50;
+  let totalStored = 0;
 
-    const searchResults = await index.query({
-      vector: queryEmbedding,
-      topK,
-      filter: { billId: { "$eq": billId } },
-      includeMetadata: true,
-    });
-
-    const matches = searchResults.matches || [];
-    const enhancedResults = matches.map(match => ({
-      ...match,
-      relevanceScore: match.score,
-      content: match.metadata?.content || '',
-      chunkInfo: {
-        index: match.metadata?.chunkIndex || 0,
-        total: match.metadata?.totalChunks || 1,
-        source: match.metadata?.source || 'pdf'
-      }
-    }));
-
-    return enhancedResults;
-  } catch (error) {
-    console.error('Error searching similar content:', error);
-    throw error;
-  }
-};
-
-export const searchSimilarContentForAct = async (query, actId, topK = 5) => {
-  try {
-    const index = getActIndex();
-    const queryEmbedding = await generateEmbedding(query);
-
-    const searchResults = await index.query({
-      vector: queryEmbedding,
-      topK,
-      filter: { actId: { "$eq": actId } },
-      includeMetadata: true,
-    });
-
-    const matches = searchResults.matches || [];
-    const enhancedResults = matches.map(match => ({
-      ...match,
-      relevanceScore: match.score,
-      content: match.metadata?.content || '',
-      chunkInfo: {
-        index: match.metadata?.chunkIndex || 0,
-        total: match.metadata?.totalChunks || 1,
-        source: match.metadata?.source || 'pdf'
-      }
-    }));
-
-    return enhancedResults;
-  } catch (error) {
-    console.error('Error searching similar content for act:', error);
-    throw error;
-  }
-};
-
-export const storeBillContentInChunks = async (chunks) => {
-  const MAX_RETRIES = 3;
-  const RETRY_DELAY = 2000;
-  const BATCH_SIZE = 50;
-
-  const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
-
-  const upsertWithRetry = async (index, vectors, retryCount = 0) => {
-    try {
-      await index.upsert(vectors);
-      return true;
-    } catch (error) {
-      if (retryCount < MAX_RETRIES && (
-        error.message?.includes('ECONNRESET') ||
-        error.message?.includes('network') ||
-        error.message?.includes('fetch failed')
-      )) {
-        console.log(`⚠️ Connection error, retrying in ${RETRY_DELAY}ms... (attempt ${retryCount + 1}/${MAX_RETRIES})`);
-        await sleep(RETRY_DELAY * (retryCount + 1));
-        return upsertWithRetry(index, vectors, retryCount + 1);
-      }
-      throw error;
-    }
-  };
-
-  try {
-    console.log(`Storing ${chunks.length} pre-processed chunks in Pinecone...`);
-
-    const index = getIndex();
-
-
-    let totalStored = 0;
-    for (let batchStart = 0; batchStart < chunks.length; batchStart += BATCH_SIZE) {
-      const batchEnd = Math.min(batchStart + BATCH_SIZE, chunks.length);
-      const batchChunks = chunks.slice(batchStart, batchEnd);
-
-      console.log(`Processing batch ${Math.floor(batchStart / BATCH_SIZE) + 1}/${Math.ceil(chunks.length / BATCH_SIZE)} (${batchChunks.length} chunks)...`);
-
-      const vectors = [];
-      for (let i = 0; i < batchChunks.length; i++) {
-        const chunk = batchChunks[i];
-        console.log(`Generating embedding for chunk ${batchStart + i + 1}/${chunks.length} (${chunk.content.length} chars)...`);
-
-        const embedding = await generateEmbedding(chunk.content);
-        vectors.push({
-          id: chunk.id,
-          values: embedding,
-          metadata: {
-            billId: chunk.billId.toString(),
-            billTitle: chunk.title,
-            content: chunk.content,
-            chunkIndex: chunk.chunkIndex,
-            totalChunks: chunk.totalChunks,
-            timestamp: new Date().toISOString(),
-            ...chunk.metadata,
-          },
-        });
-      }
-
-      console.log(`Upserting ${vectors.length} vectors to Pinecone (batch ${Math.floor(batchStart / BATCH_SIZE) + 1})...`);
-      await upsertWithRetry(index, vectors);
-      totalStored += vectors.length;
-
-      console.log(`✅ Successfully stored batch (${totalStored}/${chunks.length} total)`);
-
-
-      if (batchEnd < chunks.length) {
-        await sleep(500);
-      }
-    }
-
-    console.log(`🎉 Successfully stored all ${totalStored} chunks in Pinecone with advanced chunking!`);
-    return { chunksStored: totalStored, success: true };
-
-  } catch (error) {
-    console.error('Error storing chunked bill content in Pinecone:', error);
-    throw error;
-  }
-};
-
-export const storeActContentInChunks = async (chunks) => {
-  const MAX_RETRIES = 3;
-  const RETRY_DELAY = 2000;
-  const BATCH_SIZE = 50;
-
-  const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
-
-  const upsertWithRetry = async (index, vectors, retryCount = 0) => {
-    try {
-      await index.upsert(vectors);
-      return true;
-    } catch (error) {
-      if (retryCount < MAX_RETRIES && (
-        error.message?.includes('ECONNRESET') ||
-        error.message?.includes('network') ||
-        error.message?.includes('fetch failed')
-      )) {
-        console.log(`⚠️ Connection error, retrying in ${RETRY_DELAY}ms... (attempt ${retryCount + 1}/${MAX_RETRIES})`);
-        await sleep(RETRY_DELAY * (retryCount + 1));
-        return upsertWithRetry(index, vectors, retryCount + 1);
-      }
-      throw error;
-    }
-  };
-
-  try {
-    console.log(`Storing ${chunks.length} pre-processed act chunks in Pinecone...`);
-
-    const index = getActIndex();
-
-
-    let totalStored = 0;
-    for (let batchStart = 0; batchStart < chunks.length; batchStart += BATCH_SIZE) {
-      const batchEnd = Math.min(batchStart + BATCH_SIZE, chunks.length);
-      const batchChunks = chunks.slice(batchStart, batchEnd);
-
-      console.log(`Processing batch ${Math.floor(batchStart / BATCH_SIZE) + 1}/${Math.ceil(chunks.length / BATCH_SIZE)} (${batchChunks.length} chunks)...`);
-
-      const vectors = [];
-      for (let i = 0; i < batchChunks.length; i++) {
-        const chunk = batchChunks[i];
-        console.log(`Generating embedding for chunk ${batchStart + i + 1}/${chunks.length} (${chunk.content.length} chars)...`);
-
-        const embedding = await generateEmbedding(chunk.content);
-        vectors.push({
-          id: chunk.id,
-          values: embedding,
-          metadata: {
-            actId: chunk.billId.toString(),
-            actTitle: chunk.title,
-            content: chunk.content,
-            chunkIndex: chunk.chunkIndex,
-            totalChunks: chunk.totalChunks,
-            timestamp: new Date().toISOString(),
-            ...chunk.metadata,
-          },
-        });
-      }
-
-      console.log(`Upserting ${vectors.length} vectors to Pinecone (batch ${Math.floor(batchStart / BATCH_SIZE) + 1})...`);
-      await upsertWithRetry(index, vectors);
-      totalStored += vectors.length;
-
-      console.log(`✅ Successfully stored batch (${totalStored}/${chunks.length} total)`);
-
-
-      if (batchEnd < chunks.length) {
-        await sleep(500);
-      }
-    }
-
-    console.log(`🎉 Successfully stored all ${totalStored} act chunks in Pinecone with advanced chunking!`);
-    return { chunksStored: totalStored, success: true };
-
-  } catch (error) {
-    console.error('Error storing chunked act content in Pinecone:', error);
-    throw error;
-  }
-};
-
-export const storeBillContent = async (billId, title, content, metadata = {}) => {
-  try {
-    console.log(`Storing content for bill ${billId} in Pinecone...`);
-
-    const index = getIndex();
-
-    const chunks = splitIntoChunks(content, 1000);
-    console.log(`Content split into ${chunks.length} chunks`);
-
+  for (let start = 0; start < chunks.length; start += batchSize) {
+    const batch = chunks.slice(start, start + batchSize);
     const vectors = [];
-    for (let i = 0; i < chunks.length; i++) {
-      console.log(`Generating embedding for chunk ${i + 1}/${chunks.length}...`);
-      const embedding = await generateEmbedding(chunks[i]);
+
+    for (const chunk of batch) {
+      const embedding = await generateEmbedding(chunk.content);
       vectors.push({
-        id: `bill-${billId}-chunk-${i}`,
+        id: chunk.id,
         values: embedding,
         metadata: {
-          billId: billId.toString(),
-          billTitle: title,
-          content: chunks[i],
-          chunkIndex: i,
+          [idField]: String(chunk.billId),
+          [titleField]: chunk.title,
+          content: chunk.content,
+          chunkIndex: chunk.chunkIndex,
+          totalChunks: chunk.totalChunks,
           timestamp: new Date().toISOString(),
-          ...metadata,
+          ...chunk.metadata,
         },
       });
     }
 
-    console.log(`Upserting ${vectors.length} vectors to Pinecone...`);
-    await index.upsert(vectors);
-
-    console.log(`Successfully stored ${vectors.length} chunks for bill ${billId} in Pinecone!`);
-    return { chunksStored: vectors.length, success: true };
-
-  } catch (error) {
-    console.error('Error storing bill content in Pinecone:', error);
-    throw error;
+    await upsertWithRetry(index, vectors);
+    totalStored += vectors.length;
   }
+
+  return { chunksStored: totalStored, success: true };
 };
 
-const splitIntoChunks = (text, chunkSize = 1000) => {
+const storeBillContentInChunks = (chunks) =>
+  storeContentInChunks({
+    chunks,
+    index: getIndex(),
+    idField: "billId",
+    titleField: "billTitle",
+  });
+
+const storeActContentInChunks = (chunks) =>
+  storeContentInChunks({
+    chunks,
+    index: getActIndex(),
+    idField: "actId",
+    titleField: "actTitle",
+  });
+
+const splitIntoChunks = (text, chunkSize = 1_000) => {
+  const words = text.split(" ");
   const chunks = [];
-  const words = text.split(' ');
-
-  for (let i = 0; i < words.length; i += chunkSize) {
-    chunks.push(words.slice(i, i + chunkSize).join(' '));
+  for (let index = 0; index < words.length; index += chunkSize) {
+    chunks.push(words.slice(index, index + chunkSize).join(" "));
   }
-
   return chunks;
 };
 
+const storeBillContent = async (
+  billId,
+  title,
+  content,
+  metadata = {},
+) => {
+  const rawChunks = splitIntoChunks(content);
+  const chunks = rawChunks.map((chunk, index) => ({
+    id: `bill-${billId}-chunk-${index}`,
+    billId,
+    title,
+    content: chunk,
+    chunkIndex: index,
+    totalChunks: rawChunks.length,
+    metadata,
+  }));
+  return storeBillContentInChunks(chunks);
+};
 
-export const findSimilarBills = async (billId, billTitle, topK = 5) => {
-  try {
-    console.log(`🔍 Finding similar bills for: ${billTitle}`);
+const findSimilarBills = async (billId, billTitle, topK = 5) => {
+  const titleEmbedding = await generateEmbedding(billTitle);
+  const queryResults = await getIndex().query({
+    vector: titleEmbedding,
+    topK: (topK + 1) * 10,
+    includeMetadata: true,
+  });
 
-    const index = getIndex();
+  const billScores = new Map();
+  for (const match of queryResults.matches || []) {
+    const matchBillId = match.metadata?.billId;
+    if (!matchBillId || matchBillId === String(billId)) continue;
 
-
-    const titleEmbedding = await generateEmbedding(billTitle);
-
-
-
-    const queryResults = await index.query({
-      vector: titleEmbedding,
-      topK: (topK + 1) * 10,
-      includeMetadata: true,
-    });
-
-    console.log(`Found ${queryResults.matches.length} potential matches`);
-
-
-    const billScores = new Map();
-
-    for (const match of queryResults.matches) {
-      const matchBillId = match.metadata.billId;
-
-
-      if (matchBillId === billId.toString()) {
-        continue;
-      }
-
-      if (!billScores.has(matchBillId)) {
-        billScores.set(matchBillId, {
-          billId: matchBillId,
-          title: match.metadata.billTitle || match.metadata.title,
-          scores: [],
-          metadata: match.metadata,
-        });
-      }
-
-      billScores.get(matchBillId).scores.push(match.score);
+    if (!billScores.has(matchBillId)) {
+      billScores.set(matchBillId, {
+        billId: matchBillId,
+        title: match.metadata.billTitle || match.metadata.title,
+        scores: [],
+      });
     }
-
-
-    const similarBills = Array.from(billScores.values())
-      .map(bill => ({
-        billId: bill.billId,
-        title: bill.title,
-        similarityScore: bill.scores.reduce((a, b) => a + b, 0) / bill.scores.length,
-        matchCount: bill.scores.length,
-      }))
-      .sort((a, b) => b.similarityScore - a.similarityScore)
-      .slice(0, topK);
-
-    console.log(`✅ Found ${similarBills.length} similar bills`);
-    similarBills.forEach((bill, idx) => {
-      console.log(`  ${idx + 1}. ${bill.title} (score: ${bill.similarityScore.toFixed(4)})`);
-    });
-
-    return similarBills;
-  } catch (error) {
-    console.error('Error finding similar bills:', error);
-    throw error;
+    billScores.get(matchBillId).scores.push(match.score);
   }
+
+  return Array.from(billScores.values())
+    .map((bill) => ({
+      billId: bill.billId,
+      title: bill.title,
+      similarityScore:
+        bill.scores.reduce((sum, score) => sum + score, 0) /
+        bill.scores.length,
+      matchCount: bill.scores.length,
+    }))
+    .sort((left, right) => right.similarityScore - left.similarityScore)
+    .slice(0, topK);
+};
+
+module.exports = {
+  checkActExists,
+  checkBillExists,
+  createProbeVector,
+  findSimilarBills,
+  generateActSummary,
+  generateBillSummary,
+  generateEmbedding,
+  generateResponse,
+  getActIndex,
+  getIndex,
+  searchSimilarContent,
+  searchSimilarContentForAct,
+  storeActContentInChunks,
+  storeBillContent,
+  storeBillContentInChunks,
 };

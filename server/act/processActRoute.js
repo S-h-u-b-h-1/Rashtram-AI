@@ -3,6 +3,7 @@ const {
   storeActContentInChunks,
   generateActSummary,
   checkActExists,
+  createProbeVector,
   getActIndex
 } = require('../lib/vectordb');
 const { pdfProcessor } = require('../lib/pdfProcessor');
@@ -51,7 +52,7 @@ router.post('/', async (req, res) => {
       try {
         const index = getActIndex();
         const contentQuery = await index.query({
-          vector: new Array(768).fill(0),
+          vector: createProbeVector(),
           topK: 5,
           filter: { actId: { $eq: actId.toString() } },
           includeMetadata: true,
@@ -93,7 +94,7 @@ router.post('/', async (req, res) => {
             try {
               const index = getActIndex();
               const allChunks = await index.query({
-                vector: new Array(768).fill(0),
+                vector: createProbeVector(),
                 topK: 100,
                 filter: { actId: { $eq: actId.toString() } },
                 includeMetadata: true,

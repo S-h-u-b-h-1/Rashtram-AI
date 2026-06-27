@@ -1,6 +1,5 @@
 const jwt = require("jsonwebtoken");
 require('dotenv').config();
-const SecretKey = process.env.JWT_SECRET || "fallback-secret-change-me";
 
 const fetchuser = (req, res, next) => {
   const token = req.header("auth-token") || req.header("Authorization")?.replace("Bearer ", "");
@@ -10,7 +9,11 @@ const fetchuser = (req, res, next) => {
   }
 
   try {
-    const data = jwt.verify(token, SecretKey, {
+    if (!process.env.JWT_SECRET) {
+      throw new Error("JWT_SECRET is required");
+    }
+
+    const data = jwt.verify(token, process.env.JWT_SECRET, {
       issuer: 'rashtram-ai',
       audience: 'rashtram-ai-client'
     });

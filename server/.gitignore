@@ -16,6 +16,7 @@ yarn-error.log*
 dist/
 build/
 coverage/
+.vercel/
 
 # IDE and OS specific files
 .vscode/
