@@ -69,6 +69,7 @@ const findCandidates = async (record) => {
           d.normalized_title = $6
           AND ($7::INTEGER IS NULL OR d.year = $7)
           AND d.jurisdiction = $8
+          AND d.document_type = $9
         )
         OR (
           $7::INTEGER IS NOT NULL
@@ -617,6 +618,150 @@ const getPendingReviews = async (limit = 100) => {
   return result.rows;
 };
 
+const repairCrossTypeIndiaCodeMerges = async () => {
+  await connectDB();
+  const candidates = await query(`
+    SELECT
+      d.*,
+      india.source_record_id AS india_source_record_id,
+      india.source_url AS india_source_url,
+      india.detail_url AS india_detail_url,
+      india.pdf_url AS india_pdf_url,
+      india.legal_identifier AS india_legal_identifier,
+      india.content_hash AS india_content_hash,
+      india.text_fingerprint AS india_text_fingerprint,
+      india.raw_metadata AS india_raw_metadata,
+      prs.source_url AS prs_source_url,
+      prs.detail_url AS prs_detail_url,
+      prs.pdf_url AS prs_pdf_url
+    FROM legislative_documents d
+    JOIN document_sources india
+      ON india.document_id = d.id
+     AND india.source_name = 'india-code'
+    JOIN document_sources prs
+      ON prs.document_id = d.id
+     AND prs.source_name = 'prs-india'
+    WHERE d.source_name = 'prs-india'
+      AND d.document_type = 'act'
+      AND (
+        d.source_url ILIKE '%/billtrack/%'
+        OR d.detail_url ILIKE '%/billtrack/%'
+      )
+    ORDER BY d.id
+  `);
+  const repairs = [];
+
+  for (const row of candidates.rows) {
+    const client = await getPool().connect();
+    try {
+      await client.query("BEGIN");
+      const actRecord = {
+        sourceName: "india-code",
+        sourceRecordId: row.india_source_record_id,
+        sourceUrl: row.india_source_url,
+        detailUrl: row.india_detail_url,
+        pdfUrl: row.india_pdf_url,
+        documentType: "act",
+        jurisdictionLevel: row.jurisdiction_level,
+        jurisdiction: row.jurisdiction,
+        title: row.title,
+        normalizedTitle: row.normalized_title,
+        year: row.year,
+        status: row.status,
+        authority: row.authority,
+        ministry: row.ministry,
+        department: row.department,
+        category: row.category,
+        legalIdentifier: row.india_legal_identifier || row.legal_identifier,
+        billNumber: null,
+        actNumber: row.act_number,
+        gazetteIdentifier: null,
+        introducedDate: null,
+        passedDate: null,
+        enactedDate: row.enacted_date,
+        publicationDate: row.publication_date,
+        effectiveDate: row.effective_date,
+        sourcePriority: 20,
+        contentHash: row.india_content_hash || row.content_hash,
+        textFingerprint:
+          row.india_text_fingerprint || row.text_fingerprint,
+        sourceMetadata: row.india_raw_metadata || {},
+        metadata: row.metadata_json || {},
+      };
+      const act = await insertDocument(client, actRecord);
+
+      await client.query(
+        `UPDATE document_sources
+            SET document_id = $1, updated_at = NOW()
+          WHERE source_name = 'india-code'
+            AND source_record_id = $2`,
+        [act.id, row.india_source_record_id],
+      );
+      await client.query(
+        `UPDATE legislative_document_resources
+            SET document_id = $1, updated_at = NOW()
+          WHERE document_id = $2
+            AND url ILIKE '%indiacode.nic.in%'`,
+        [act.id, row.id],
+      );
+      await client.query(
+        `UPDATE legislative_documents
+            SET document_type = 'bill',
+                title = REGEXP_REPLACE(title, '\\mAct\\M', 'Bill', 'i'),
+                canonical_source = 'prs-india',
+                canonical_url = COALESCE($2, $3),
+                source_priority = 50,
+                pdf_url = $4,
+                legal_identifier = NULL,
+                act_number = NULL,
+                gazette_identifier = NULL,
+                enacted_date = NULL,
+                publication_date = NULL,
+                effective_date = NULL,
+                content_hash = NULL,
+                text_fingerprint = NULL,
+                updated_at = NOW()
+          WHERE id = $1`,
+        [
+          row.id,
+          row.prs_detail_url,
+          row.prs_source_url,
+          row.prs_pdf_url,
+        ],
+      );
+      await client.query(
+        `INSERT INTO document_relationships (
+           from_document_id,
+           to_document_id,
+           relationship_type,
+           source_name,
+           confidence,
+           metadata
+         )
+         VALUES (
+           $1, $2, 'became_act', 'india-code', 1,
+           '{"repair":"cross-type-title-merge"}'::jsonb
+         )
+         ON CONFLICT (from_document_id, to_document_id, relationship_type)
+         DO NOTHING`,
+        [row.id, act.id],
+      );
+      await client.query("COMMIT");
+      repairs.push({
+        billDocumentId: row.id,
+        actDocumentId: act.id,
+        indiaCodeRecordId: row.india_source_record_id,
+      });
+    } catch (error) {
+      await client.query("ROLLBACK");
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+  return repairs;
+};
+
 module.exports = {
   completeRun,
   createRun,
@@ -625,5 +770,6 @@ module.exports = {
   getPendingReviews,
   getUniversalStats,
   persistRecord,
+  repairCrossTypeIndiaCodeMerges,
   storeSnapshots,
 };

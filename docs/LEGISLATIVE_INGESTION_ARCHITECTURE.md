@@ -116,10 +116,13 @@ Matching is layered and stops at the strongest available evidence:
 2. Exact legal, Gazette, act, or bill identifier.
 3. Exact PDF/content SHA-256 hash.
 4. Exact normalized text fingerprint.
-5. Same-jurisdiction/same-year normalized-title similarity.
+5. Same-document-type, same-jurisdiction, same-year normalized-title
+   similarity.
 
-Title similarity never acts alone across a different year. Scores are handled
-as follows:
+Title similarity never acts alone across a different document type,
+jurisdiction, or year. A bill and the act it later becomes remain distinct
+canonical documents and are connected with a `became_act` relationship. Scores
+are handled as follows:
 
 | Similarity | Action |
 | --- | --- |

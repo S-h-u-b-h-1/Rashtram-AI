@@ -39,6 +39,10 @@ const evaluateCandidate = (record, candidate) => {
     record.year &&
     candidate.year &&
     Number(record.year) === Number(candidate.year);
+  const sameDocumentType =
+    record.documentType &&
+    candidate.document_type &&
+    record.documentType === candidate.document_type;
   const gazetteMatch =
     normalizedIdentifier(record.gazetteIdentifier) &&
     normalizedIdentifier(record.gazetteIdentifier) ===
@@ -51,6 +55,7 @@ const evaluateCandidate = (record, candidate) => {
   const scopedNumberMatch =
     sameJurisdiction &&
     sameYear &&
+    sameDocumentType &&
     ((normalizedIdentifier(record.actNumber) &&
       normalizedIdentifier(record.actNumber) ===
         normalizedIdentifier(candidate.act_number)) ||
@@ -72,7 +77,7 @@ const evaluateCandidate = (record, candidate) => {
     return { action: "merge", reason: "text-fingerprint", similarity: 1 };
   }
 
-  const similarity = sameYear && sameJurisdiction
+  const similarity = sameYear && sameJurisdiction && sameDocumentType
     ? titleSimilarity(record.normalizedTitle, candidate.normalized_title)
     : 0;
 

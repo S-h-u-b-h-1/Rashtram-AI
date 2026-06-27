@@ -8,6 +8,7 @@ const {
 } = require("../lib/ingestion/core/ingestionRunner");
 const {
   getUniversalStats,
+  repairCrossTypeIndiaCodeMerges,
 } = require("../lib/ingestion/core/catalogRepository");
 
 const router = express.Router();
@@ -103,6 +104,15 @@ router.post("/refresh", async (req, res, next) => {
 router.get("/stats", async (req, res, next) => {
   try {
     return res.json(await getUniversalStats());
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.post("/repair-cross-type-merges", async (req, res, next) => {
+  try {
+    const repairs = await repairCrossTypeIndiaCodeMerges();
+    return res.json({ repaired: repairs.length, repairs });
   } catch (error) {
     return next(error);
   }

@@ -107,6 +107,28 @@ test("dedupe never merges repeated act numbers across years", () => {
   assert.equal(result.action, "create");
 });
 
+test("dedupe keeps a bill and its enacted act as separate documents", () => {
+  const result = evaluateCandidate(
+    {
+      sourceName: "india-code",
+      sourceRecordId: "act-1",
+      documentType: "act",
+      normalizedTitle: "public safety",
+      jurisdiction: "India",
+      year: 2025,
+    },
+    {
+      source_name: "prs-india",
+      source_record_id: "bill-1",
+      document_type: "bill",
+      normalized_title: "public safety",
+      jurisdiction: "India",
+      year: 2025,
+    },
+  );
+  assert.equal(result.action, "create");
+});
+
 test("dedupe merges high-confidence titles and queues ambiguous ones", () => {
   assert.equal(
     titleSimilarity(
@@ -119,6 +141,7 @@ test("dedupe merges high-confidence titles and queues ambiguous ones", () => {
     {
       sourceName: "a",
       sourceRecordId: "1",
+      documentType: "act",
       normalizedTitle: "national public safety amendment",
       jurisdiction: "India",
       year: 2025,
@@ -126,6 +149,7 @@ test("dedupe merges high-confidence titles and queues ambiguous ones", () => {
     [
       {
         id: 2,
+        document_type: "act",
         normalized_title: "national public safety amendment",
         jurisdiction: "India",
         year: 2025,
@@ -138,11 +162,13 @@ test("dedupe merges high-confidence titles and queues ambiguous ones", () => {
     {
       sourceName: "a",
       sourceRecordId: "1",
+      documentType: "act",
       normalizedTitle: "national public safety amendment framework",
       jurisdiction: "India",
       year: 2025,
     },
     {
+      document_type: "act",
       normalized_title: "national public safety amendment",
       jurisdiction: "India",
       year: 2025,
