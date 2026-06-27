@@ -36,7 +36,8 @@ router.post('/', async (req, res) => {
     const stream = await generateResponse(message, context);
 
     for await (const chunk of stream) {
-      const content = chunk.choices[0]?.delta?.content || '';
+      const content =
+        typeof chunk.text === "function" ? chunk.text() : chunk.text || "";
       if (content) {
         res.write(`data: ${JSON.stringify({ type: 'content', content })}\n\n`);
       }

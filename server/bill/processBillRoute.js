@@ -3,6 +3,7 @@ const {
   storeBillContentInChunks,
   generateBillSummary,
   checkBillExists,
+  createProbeVector,
   getIndex
 } = require('../lib/vectordb');
 const { pdfProcessor } = require('../lib/pdfProcessor');
@@ -51,7 +52,7 @@ router.post('/', async (req, res) => {
       try {
         const index = getIndex();
         const contentQuery = await index.query({
-          vector: new Array(768).fill(0),
+          vector: createProbeVector(),
           topK: 5,
           filter: { billId: { $eq: billId.toString() } },
           includeMetadata: true,
@@ -93,7 +94,7 @@ router.post('/', async (req, res) => {
             try {
               const index = getIndex();
               const allChunks = await index.query({
-                vector: new Array(768).fill(0),
+                vector: createProbeVector(),
                 topK: 100,
                 filter: { billId: { $eq: billId.toString() } },
                 includeMetadata: true,

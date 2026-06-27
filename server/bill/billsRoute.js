@@ -212,7 +212,7 @@ router.get('/relatedBills', async (req, res) => {
       const daysSinceUpdate = (Date.now() - cachedRelated.lastUpdated) / (1000 * 60 * 60 * 24);
 
       if (daysSinceUpdate < CACHE_VALIDITY_DAYS) {
-        console.log(`✅ Using cached related bills from MongoDB (${daysSinceUpdate.toFixed(1)} days old)`);
+        console.log(`✅ Using cached related bills from PostgreSQL (${daysSinceUpdate.toFixed(1)} days old)`);
         return res.json({
           success: true,
           relatedBills: cachedRelated.relatedBills,
@@ -298,7 +298,7 @@ router.get('/relatedBills', async (req, res) => {
       { upsert: true, new: true }
     );
 
-    console.log(`💾 Saved ${enrichedRelatedBills.length} related bills to MongoDB cache`);
+    console.log(`💾 Saved ${enrichedRelatedBills.length} related bills to PostgreSQL cache`);
 
     res.json({
       success: true,

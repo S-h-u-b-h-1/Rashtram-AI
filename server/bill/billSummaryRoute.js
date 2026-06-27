@@ -1,5 +1,5 @@
 const express = require('express');
-const { getIndex } = require('../lib/vectordb');
+const { createProbeVector, getIndex } = require('../lib/vectordb');
 
 const router = express.Router();
 
@@ -14,7 +14,7 @@ router.get('/', async (req, res) => {
     const index = getIndex();
 
     const searchResults = await index.query({
-      vector: new Array(768).fill(0),
+      vector: createProbeVector(),
       topK: 1,
       filter: { billId: { $eq: billId } },
       includeMetadata: true,

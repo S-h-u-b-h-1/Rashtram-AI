@@ -1,160 +1,170 @@
-const mongoose = require('mongoose');
+const crypto = require("crypto");
+const { query } = require("../db");
 
-const MessageSchema = new mongoose.Schema({
-  text: {
-    type: String,
-    required: true,
-  },
-  sender: {
-    type: String,
-    required: true,
-    enum: ['user', 'assistant'],
-  },
-  timestamp: {
-    type: String,
-    required: true,
-  },
-  sources: [{
-    type: mongoose.Schema.Types.Mixed,
-  }],
-  isError: {
-    type: Boolean,
-    default: false,
-  },
-}, { _id: true });
+const mapRow = (row) => {
+  if (!row) return null;
+  return new BillChatRecord(row);
+};
 
-const BillChatSchema = new mongoose.Schema({
-  billId: {
-    type: String,
-    required: true,
-    index: true,
-  },
-  userId: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'User',
-    required: true,
-    index: true,
-  },
-  billTitle: {
-    type: String,
-    required: true,
-  },
-  billStatus: {
-    type: String,
-  },
-  pdfUrl: {
-    type: String,
-  },
-  summary: {
-    type: String,
-  },
-  messages: [MessageSchema],
-  lastMessageAt: {
-    type: Date,
-    default: Date.now,
-  },
-  isActive: {
-    type: Boolean,
-    default: true,
-  },
-}, {
-  timestamps: true,
-});
-
-
-BillChatSchema.index({ userId: 1, billId: 1 });
-BillChatSchema.index({ userId: 1, lastMessageAt: -1 });
-
-
-BillChatSchema.pre('save', function(next) {
-  if (this.messages && this.messages.length > 0) {
-    this.lastMessageAt = new Date();
+class BillChatRecord {
+  constructor(row) {
+    this._id = String(row.id);
+    this.billId = row.bill_id;
+    this.userId = String(row.user_id);
+    this.billTitle = row.bill_title;
+    this.billStatus = row.bill_status;
+    this.pdfUrl = row.pdf_url;
+    this.summary = row.summary;
+    this.messages = row.messages || [];
+    this.lastMessageAt = row.last_message_at;
+    this.isActive = row.is_active;
+    this.createdAt = row.created_at;
+    this.updatedAt = row.updated_at;
   }
-  next();
-});
 
+  async addMessage(messageData) {
+    const message = {
+      _id: crypto.randomUUID(),
+      text: messageData.text,
+      sender: messageData.sender,
+      timestamp:
+        messageData.timestamp ||
+        new Date().toLocaleTimeString([], {
+          hour: "2-digit",
+          minute: "2-digit",
+        }),
+      sources: messageData.sources || [],
+      isError: messageData.isError || false,
+    };
 
-BillChatSchema.statics.findOrCreate = async function(userId, billData) {
-  let chat = await this.findOne({
-    userId,
-    billId: billData.billId
-  });
+    const result = await query(
+      `UPDATE bill_chats
+          SET messages = messages || $1::jsonb,
+              last_message_at = NOW(),
+              updated_at = NOW()
+        WHERE id = $2
+        RETURNING *`,
+      [JSON.stringify([message]), this._id],
+    );
+    Object.assign(this, mapRow(result.rows[0]));
+    return this;
+  }
 
-  if (!chat) {
-    chat = new this({
+  async updateSummary(summary) {
+    const result = await query(
+      `UPDATE bill_chats
+          SET summary = $1, updated_at = NOW()
+        WHERE id = $2
+        RETURNING *`,
+      [summary, this._id],
+    );
+    Object.assign(this, mapRow(result.rows[0]));
+    return this;
+  }
+
+  async clearChat() {
+    const result = await query(
+      `UPDATE bill_chats
+          SET messages = '[]'::jsonb,
+              last_message_at = NOW(),
+              updated_at = NOW()
+        WHERE id = $1
+        RETURNING *`,
+      [this._id],
+    );
+    Object.assign(this, mapRow(result.rows[0]));
+    return this;
+  }
+
+  async deactivate() {
+    const result = await query(
+      `UPDATE bill_chats
+          SET is_active = FALSE, updated_at = NOW()
+        WHERE id = $1
+        RETURNING *`,
+      [this._id],
+    );
+    Object.assign(this, mapRow(result.rows[0]));
+    return this;
+  }
+
+  toJSON() {
+    return { ...this };
+  }
+}
+
+const findOrCreate = async (userId, billData) => {
+  const result = await query(
+    `INSERT INTO bill_chats (
+       user_id, bill_id, bill_title, bill_status, pdf_url, summary
+     )
+     VALUES ($1, $2, $3, $4, $5, $6)
+     ON CONFLICT (user_id, bill_id)
+     DO UPDATE SET
+       bill_title = EXCLUDED.bill_title,
+       bill_status = COALESCE(EXCLUDED.bill_status, bill_chats.bill_status),
+       pdf_url = COALESCE(EXCLUDED.pdf_url, bill_chats.pdf_url),
+       summary = COALESCE(EXCLUDED.summary, bill_chats.summary),
+       is_active = TRUE,
+       updated_at = NOW()
+     RETURNING *`,
+    [
       userId,
-      billId: billData.billId,
-      billTitle: billData.title,
-      billStatus: billData.status,
-      pdfUrl: billData.pdfUrl,
-      summary: billData.summary || null,
-      messages: [],
-    });
-    await chat.save();
-  }
-
-  return chat;
+      String(billData.billId),
+      billData.title,
+      billData.status || null,
+      billData.pdfUrl || null,
+      billData.summary || null,
+    ],
+  );
+  return mapRow(result.rows[0]);
 };
 
-
-BillChatSchema.methods.addMessage = async function(messageData) {
-  this.messages.push({
-    text: messageData.text,
-    sender: messageData.sender,
-    timestamp: messageData.timestamp || new Date().toLocaleTimeString([], {
-      hour: '2-digit',
-      minute: '2-digit',
-    }),
-    sources: messageData.sources || [],
-    isError: messageData.isError || false,
-  });
-
-  this.lastMessageAt = new Date();
-  await this.save();
-  return this;
+const getChatByBill = async (userId, billId) => {
+  const result = await query(
+    `SELECT * FROM bill_chats
+      WHERE user_id = $1 AND bill_id = $2 AND is_active = TRUE
+      LIMIT 1`,
+    [userId, String(billId)],
+  );
+  return mapRow(result.rows[0]);
 };
 
-
-BillChatSchema.methods.updateSummary = async function(summary) {
-  this.summary = summary;
-  await this.save();
-  return this;
+const findOne = async ({ userId, billId, isActive = true }) => {
+  const result = await query(
+    `SELECT * FROM bill_chats
+      WHERE user_id = $1 AND bill_id = $2 AND is_active = $3
+      LIMIT 1`,
+    [userId, String(billId), isActive],
+  );
+  return mapRow(result.rows[0]);
 };
 
-
-BillChatSchema.statics.getUserRecentChats = async function(userId, limit = 10) {
-  return this.find({
-    userId,
-    isActive: true
-  })
-    .sort({ lastMessageAt: -1 })
-    .limit(limit)
-    .select('billId billTitle billStatus summary messages lastMessageAt createdAt')
-    .lean();
+const getUserRecentChats = async (userId, limit = 10) => {
+  const result = await query(
+    `SELECT * FROM bill_chats
+      WHERE user_id = $1 AND is_active = TRUE
+      ORDER BY last_message_at DESC
+      LIMIT $2`,
+    [userId, limit],
+  );
+  return result.rows.map((row) => mapRow(row));
 };
 
-
-BillChatSchema.statics.getChatByBill = async function(userId, billId) {
-  return this.findOne({
-    userId,
-    billId,
-    isActive: true
-  }).lean();
+const countDocuments = async ({ userId, isActive = true }) => {
+  const result = await query(
+    `SELECT COUNT(*)::int AS count
+       FROM bill_chats
+      WHERE user_id = $1 AND is_active = $2`,
+    [userId, isActive],
+  );
+  return result.rows[0].count;
 };
 
-
-BillChatSchema.methods.clearChat = async function() {
-  this.messages = [];
-  this.lastMessageAt = new Date();
-  await this.save();
-  return this;
+module.exports = {
+  countDocuments,
+  findOne,
+  findOrCreate,
+  getChatByBill,
+  getUserRecentChats,
 };
-
-
-BillChatSchema.methods.deactivate = async function() {
-  this.isActive = false;
-  await this.save();
-  return this;
-};
-
-module.exports = mongoose.model('BillChat', BillChatSchema);

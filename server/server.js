@@ -21,7 +21,7 @@ const {
   helmetConfig,
 } = require("./middleware/security");
 require("dotenv").config();
-const passport = require("./passport.js");
+require("./passport.js");
 const app = express();
 const port = process.env.PORT || 5001;
 
@@ -30,12 +30,21 @@ app.use(helmetConfig);
 
 app.use(
   cors({
-    origin: process.env.CLIENT_URL || "http://localhost:3000",
+    origin(origin, callback) {
+      const allowedOrigins = new Set([
+        process.env.CLIENT_URL || "http://localhost:3000",
+        "http://localhost:3000",
+      ]);
+
+      if (!origin || allowedOrigins.has(origin)) {
+        return callback(null, true);
+      }
+
+      return callback(new Error("Origin is not allowed by CORS"));
+    },
     credentials: true,
   })
 );
-
-connectDB();
 
 app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true }));
@@ -56,10 +65,43 @@ app.use("/api/process-act", fetchUser, processActRouter);
 app.use("/api/act-chats", actChatManagementRouter);
 app.use("/api/dashboard", dashboardRouter);
 
-app.get("/health", (req, res) => {
-  res.status(200).json({ status: "OK", timestamp: new Date().toISOString() });
+app.get("/", (req, res) => {
+  res.json({
+    name: "Rashtram AI API",
+    status: "OK",
+    health: "/health",
+  });
 });
 
-app.listen(port, () => {
-  console.log(`Server is running at http://localhost:${port}`);
+app.get("/health", async (req, res) => {
+  try {
+    await connectDB();
+    res.status(200).json({
+      status: "OK",
+      database: "connected",
+      aiProvider: "gemini",
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    console.error("Health check failed:", error);
+    res.status(503).json({
+      status: "ERROR",
+      database: "disconnected",
+      timestamp: new Date().toISOString(),
+    });
+  }
 });
+
+app.use((error, req, res, next) => {
+  console.error("Unhandled API error:", error);
+  if (res.headersSent) return next(error);
+  return res.status(500).json({ error: "Internal server error" });
+});
+
+if (require.main === module) {
+  app.listen(port, () => {
+    console.log(`Server is running at http://localhost:${port}`);
+  });
+}
+
+module.exports = app;

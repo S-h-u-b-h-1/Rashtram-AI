@@ -1,146 +1,166 @@
-const mongoose = require('mongoose');
+const crypto = require("crypto");
+const { query } = require("../db");
 
-const MessageSchema = new mongoose.Schema({
-  text: {
-    type: String,
-    required: true,
-  },
-  sender: {
-    type: String,
-    required: true,
-    enum: ['user', 'assistant'],
-  },
-  timestamp: {
-    type: String,
-    required: true,
-  },
-  sources: [{
-    type: mongoose.Schema.Types.Mixed,
-  }],
-  isError: {
-    type: Boolean,
-    default: false,
-  },
-}, { _id: true });
+const mapRow = (row) => {
+  if (!row) return null;
+  return new ActChatRecord(row);
+};
 
-const ActChatSchema = new mongoose.Schema({
-  actId: {
-    type: String,
-    required: true,
-    index: true,
-  },
-  userId: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'User',
-    required: true,
-    index: true,
-  },
-  actTitle: {
-    type: String,
-    required: true,
-  },
-  actStatus: {
-    type: String,
-  },
-  pdfUrl: {
-    type: String,
-  },
-  summary: {
-    type: String,
-  },
-  messages: [MessageSchema],
-  isActive: {
-    type: Boolean,
-    default: true,
-  },
-  createdAt: {
-    type: Date,
-    default: Date.now,
-  },
-  updatedAt: {
-    type: Date,
-    default: Date.now,
-  },
-});
-
-
-ActChatSchema.index({ userId: 1, actId: 1, isActive: 1 });
-
-
-ActChatSchema.pre('save', function(next) {
-  this.updatedAt = Date.now();
-  next();
-});
-
-
-ActChatSchema.statics.findOrCreate = async function(userId, actData) {
-  const { actId, title, status, pdfUrl, summary } = actData;
-
-  let chat = await this.findOne({ userId, actId, isActive: true });
-
-  if (!chat) {
-    chat = await this.create({
-      userId,
-      actId,
-      actTitle: title,
-      actStatus: status,
-      pdfUrl,
-      summary,
-      messages: [],
-    });
-  } else {
-
-    if (title) chat.actTitle = title;
-    if (status) chat.actStatus = status;
-    if (pdfUrl) chat.pdfUrl = pdfUrl;
-    if (summary) chat.summary = summary;
-    await chat.save();
+class ActChatRecord {
+  constructor(row) {
+    this._id = String(row.id);
+    this.actId = row.act_id;
+    this.userId = String(row.user_id);
+    this.actTitle = row.act_title;
+    this.actStatus = row.act_status;
+    this.pdfUrl = row.pdf_url;
+    this.summary = row.summary;
+    this.messages = row.messages || [];
+    this.isActive = row.is_active;
+    this.createdAt = row.created_at;
+    this.updatedAt = row.updated_at;
   }
 
-  return chat;
+  async addMessage(messageData) {
+    const message = {
+      _id: crypto.randomUUID(),
+      text: messageData.text,
+      sender: messageData.sender,
+      timestamp:
+        messageData.timestamp ||
+        new Date().toLocaleTimeString([], {
+          hour: "2-digit",
+          minute: "2-digit",
+        }),
+      sources: messageData.sources || [],
+      isError: messageData.isError || false,
+    };
+
+    const result = await query(
+      `UPDATE act_chats
+          SET messages = messages || $1::jsonb,
+              updated_at = NOW()
+        WHERE id = $2
+        RETURNING *`,
+      [JSON.stringify([message]), this._id],
+    );
+    Object.assign(this, mapRow(result.rows[0]));
+    return this;
+  }
+
+  async updateSummary(summary) {
+    const result = await query(
+      `UPDATE act_chats
+          SET summary = $1, updated_at = NOW()
+        WHERE id = $2
+        RETURNING *`,
+      [summary, this._id],
+    );
+    Object.assign(this, mapRow(result.rows[0]));
+    return this;
+  }
+
+  async clearChat() {
+    const result = await query(
+      `UPDATE act_chats
+          SET messages = '[]'::jsonb, updated_at = NOW()
+        WHERE id = $1
+        RETURNING *`,
+      [this._id],
+    );
+    Object.assign(this, mapRow(result.rows[0]));
+    return this;
+  }
+
+  async deactivate() {
+    const result = await query(
+      `UPDATE act_chats
+          SET is_active = FALSE, updated_at = NOW()
+        WHERE id = $1
+        RETURNING *`,
+      [this._id],
+    );
+    Object.assign(this, mapRow(result.rows[0]));
+    return this;
+  }
+
+  toJSON() {
+    return { ...this };
+  }
+}
+
+const findOrCreate = async (userId, actData) => {
+  const result = await query(
+    `INSERT INTO act_chats (
+       user_id, act_id, act_title, act_status, pdf_url, summary
+     )
+     VALUES ($1, $2, $3, $4, $5, $6)
+     ON CONFLICT (user_id, act_id)
+     DO UPDATE SET
+       act_title = EXCLUDED.act_title,
+       act_status = COALESCE(EXCLUDED.act_status, act_chats.act_status),
+       pdf_url = COALESCE(EXCLUDED.pdf_url, act_chats.pdf_url),
+       summary = COALESCE(EXCLUDED.summary, act_chats.summary),
+       is_active = TRUE,
+       updated_at = NOW()
+     RETURNING *`,
+    [
+      userId,
+      String(actData.actId),
+      actData.title,
+      actData.status || null,
+      actData.pdfUrl || null,
+      actData.summary || null,
+    ],
+  );
+  return mapRow(result.rows[0]);
 };
 
-
-ActChatSchema.statics.getChatByAct = async function(userId, actId) {
-  return this.findOne({ userId, actId, isActive: true });
+const getChatByAct = async (userId, actId) => {
+  const result = await query(
+    `SELECT * FROM act_chats
+      WHERE user_id = $1 AND act_id = $2 AND is_active = TRUE
+      LIMIT 1`,
+    [userId, String(actId)],
+  );
+  return mapRow(result.rows[0]);
 };
 
-
-ActChatSchema.statics.getUserRecentChats = async function(userId, limit = 10) {
-  return this.find({ userId, isActive: true })
-    .sort({ updatedAt: -1 })
-    .limit(limit)
-    .select('-messages');
+const findOne = async ({ userId, actId, isActive = true }) => {
+  const result = await query(
+    `SELECT * FROM act_chats
+      WHERE user_id = $1 AND act_id = $2 AND is_active = $3
+      LIMIT 1`,
+    [userId, String(actId), isActive],
+  );
+  return mapRow(result.rows[0]);
 };
 
-
-ActChatSchema.methods.addMessage = async function(messageData) {
-  this.messages.push(messageData);
-  await this.save();
-  return this;
+const getUserRecentChats = async (userId, limit = 10) => {
+  const result = await query(
+    `SELECT * FROM act_chats
+      WHERE user_id = $1 AND is_active = TRUE
+      ORDER BY updated_at DESC
+      LIMIT $2`,
+    [userId, limit],
+  );
+  return result.rows.map((row) => mapRow(row));
 };
 
-
-ActChatSchema.methods.updateSummary = async function(summary) {
-  this.summary = summary;
-  await this.save();
-  return this;
+const countDocuments = async ({ userId, isActive = true }) => {
+  const result = await query(
+    `SELECT COUNT(*)::int AS count
+       FROM act_chats
+      WHERE user_id = $1 AND is_active = $2`,
+    [userId, isActive],
+  );
+  return result.rows[0].count;
 };
 
-
-ActChatSchema.methods.clearChat = async function() {
-  this.messages = [];
-  await this.save();
-  return this;
+module.exports = {
+  countDocuments,
+  findOne,
+  findOrCreate,
+  getChatByAct,
+  getUserRecentChats,
 };
-
-
-ActChatSchema.methods.deactivate = async function() {
-  this.isActive = false;
-  await this.save();
-  return this;
-};
-
-const ActChat = mongoose.model('ActChat', ActChatSchema);
-
-module.exports = ActChat;

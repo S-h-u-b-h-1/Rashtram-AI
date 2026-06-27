@@ -1,11 +1,15 @@
-const express = require("express");
 const User = require("../models/User");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
-const { body, validationResult } = require("express-validator");
-const fetchuser = require("../middleware/fetchuser");
+const { validationResult } = require("express-validator");
 require('dotenv').config();
-const SecretKey = process.env.JWT_SECRET || "IssueWithJWTSecretKey";
+
+const getSecretKey = () => {
+  if (!process.env.JWT_SECRET) {
+    throw new Error("JWT_SECRET is required");
+  }
+  return process.env.JWT_SECRET;
+};
 
 const LoginController = async (req, res) => {
   const errors = validationResult(req);
@@ -20,7 +24,7 @@ const LoginController = async (req, res) => {
 
     const sanitizedEmail = email.toLowerCase().trim();
 
-    const user = await User.findOne({ email: sanitizedEmail });
+    const user = await User.findByEmail(sanitizedEmail);
     if (!user) {
       return res.status(400).json({ error: "Invalid email or password" });
     }
@@ -37,7 +41,7 @@ const LoginController = async (req, res) => {
     };
 
 
-    let authToken = jwt.sign(data, SecretKey, {
+    const authToken = jwt.sign(data, getSecretKey(), {
       expiresIn: '24h',
       issuer: 'rashtram-ai',
       audience: 'rashtram-ai-client'
@@ -72,7 +76,7 @@ const RegisterController = async (req, res) => {
     const sanitizedEmail = email.toLowerCase().trim();
 
 
-    const existingUser = await User.findOne({ email: sanitizedEmail });
+    const existingUser = await User.findByEmail(sanitizedEmail);
     if (existingUser) {
       return res.status(400).json({ error: "User already exists with this email" });
     }
@@ -94,7 +98,7 @@ const RegisterController = async (req, res) => {
     };
 
 
-    let authToken = jwt.sign(data, SecretKey, {
+    const authToken = jwt.sign(data, getSecretKey(), {
       expiresIn: '24h',
       issuer: 'rashtram-ai',
       audience: 'rashtram-ai-client'
@@ -110,7 +114,7 @@ const RegisterController = async (req, res) => {
     });
   } catch (error) {
     console.error('Registration error:', error);
-    if (error.code === 11000) {
+    if (error.code === "23505") {
       res.status(400).json({ error: "User already exists with this email" });
     } else {
       res.status(500).json({ error: "Internal server error" });
@@ -120,7 +124,10 @@ const RegisterController = async (req, res) => {
 const getUserController = async (req, res) => {
   try {
     const userId = req.user.id;
-    const user = await User.findById(userId).select("-password");
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({ error: "User not found" });
+    }
     res.status(200).json(user);
   } catch (error) {
     res.status(500).json({ error: error.message });
