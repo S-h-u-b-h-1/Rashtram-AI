@@ -71,7 +71,7 @@ function ActChatContent() {
       setError(null);
 
       try {
-        console.log("Checking MongoDB for existing chat...");
+        console.log("Checking PostgreSQL for existing chat...");
         const existingChatResult = await getActChat(act.actId.toString());
 
         if (
@@ -79,7 +79,7 @@ function ActChatContent() {
           existingChatResult.chat &&
           existingChatResult.chat.messages.length > 0
         ) {
-          console.log("Loaded chat from MongoDB (instant sync)");
+          console.log("Loaded chat from PostgreSQL (instant sync)");
           setSummary(existingChatResult.chat.summary);
 
           const sanitizedMessages = existingChatResult.chat.messages.map(
@@ -99,14 +99,10 @@ function ActChatContent() {
           console.log("No existing chat found, will create new one");
         }
       } catch (dbError) {
-        if (dbError.message.includes("404")) {
-          console.log("Chat not found in MongoDB, creating new one");
-        } else {
-          console.warn(
-            "MongoDB error, will fetch fresh data:",
-            dbError.message
-          );
-        }
+        console.warn(
+          "PostgreSQL error, will fetch fresh data:",
+          dbError.message
+        );
       }
 
       let pdfUrl = act.pdfUrl;
@@ -143,7 +139,7 @@ function ActChatContent() {
         setMessages(initialMessages);
 
         try {
-          console.log("Saving chat to MongoDB...");
+          console.log("Saving chat to PostgreSQL...");
           const chatResult = await getOrCreateActChat(
             act.actId.toString(),
             act.title,
@@ -156,9 +152,9 @@ function ActChatContent() {
             await addMessageToActChat(act.actId.toString(), initialMessages[0]);
           }
 
-          console.log("Chat saved to MongoDB");
+          console.log("Chat saved to PostgreSQL");
         } catch (dbError) {
-          console.warn("Failed to save to MongoDB:", dbError.message);
+          console.warn("Failed to save to PostgreSQL:", dbError.message);
         }
       } else {
         console.log("No summary available in response:", summaryResult);
@@ -184,7 +180,7 @@ function ActChatContent() {
           );
           await addMessageToActChat(act.actId.toString(), fallbackMessages[0]);
         } catch (dbError) {
-          console.warn("Failed to save to MongoDB:", dbError.message);
+          console.warn("Failed to save to PostgreSQL:", dbError.message);
         }
       }
     } catch (err) {
@@ -355,10 +351,10 @@ function ActChatContent() {
     try {
       try {
         await addMessageToActChat(actData.actId.toString(), userMessage);
-        console.log("User message saved to MongoDB");
+        console.log("User message saved to PostgreSQL");
       } catch (dbError) {
         console.warn(
-          "Failed to save user message to MongoDB:",
+          "Failed to save user message to PostgreSQL:",
           dbError.message
         );
       }
@@ -394,10 +390,10 @@ function ActChatContent() {
               actData.actId.toString(),
               finalAssistantMessage
             );
-            console.log("Assistant message saved to MongoDB");
+            console.log("Assistant message saved to PostgreSQL");
           } catch (dbError) {
             console.warn(
-              "Failed to save assistant message to MongoDB:",
+              "Failed to save assistant message to PostgreSQL:",
               dbError.message
             );
           }
@@ -427,7 +423,7 @@ function ActChatContent() {
             addMessageToActChat(actData.actId.toString(), errorMessage);
           } catch (dbError) {
             console.warn(
-              "Failed to save error message to MongoDB:",
+              "Failed to save error message to PostgreSQL:",
               dbError.message
             );
           }

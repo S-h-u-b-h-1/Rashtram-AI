@@ -44,8 +44,8 @@ router.get('/:actId', fetchuser, async (req, res) => {
     const chat = await ActChat.getChatByAct(userId, actId);
 
     if (!chat) {
-      return res.status(404).json({
-        error: 'Chat not found',
+      return res.json({
+        success: true,
         chat: null,
       });
     }
