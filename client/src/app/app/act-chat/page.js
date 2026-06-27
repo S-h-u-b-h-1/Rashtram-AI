@@ -470,9 +470,9 @@ function ActChatContent() {
   }
 
   return (
-    <div className="flex h-screen bg-gray-50">
-      <div className="flex flex-col flex-1">
-        <div className="bg-white border-b border-gray-200 px-6 py-4">
+    <div className="flex h-screen overflow-hidden bg-[#eee8dc]">
+      <div className="flex min-w-0 flex-1 flex-col">
+        <div className="border-b border-white/8 bg-[#19231f] px-4 py-3 text-white sm:px-6">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-3">
               <button
@@ -483,19 +483,21 @@ function ActChatContent() {
                     router.back();
                   }
                 }}
-                className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+                className="rounded-xl p-2 text-white/60 transition-colors hover:bg-white/8 hover:text-white"
                 title="Close"
               >
-                <ArrowLeft className="w-5 h-5 text-gray-600" />
+                <ArrowLeft className="h-5 w-5" />
               </button>
               <div className="flex items-center space-x-2">
-                <FileText className="w-5 h-5 text-[#B20F38]" />
+                <div className="grid h-9 w-9 place-items-center rounded-xl bg-white/8">
+                  <FileText className="h-4 w-4 text-[#efb36f]" />
+                </div>
                 <div>
-                  <h1 className="text-lg font-semibold text-gray-800 line-clamp-1">
+                  <h1 className="line-clamp-1 text-sm font-semibold text-white sm:text-base">
                     {actData?.title || "Loading..."}
                   </h1>
                   {actData?.status && (
-                    <p className="text-xs text-gray-500">{actData.status}</p>
+                    <p className="text-[11px] text-white/42">{actData.status}</p>
                   )}
                 </div>
               </div>
@@ -504,7 +506,7 @@ function ActChatContent() {
               {actData?.pdfUrl && (
                 <button
                   onClick={() => window.open(actData.pdfUrl, "_blank")}
-                  className="flex items-center space-x-2 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
+                  className="flex items-center space-x-2 rounded-xl border border-white/8 bg-white/6 px-3 py-2 text-white/65 transition-colors hover:bg-white/10 hover:text-white"
                 >
                   <ExternalLink className="w-4 h-4" />
                   <span className="hidden sm:inline text-sm">View PDF</span>
@@ -512,10 +514,10 @@ function ActChatContent() {
               )}
               <button
                 onClick={() => setShowSummary(!showSummary)}
-                className={`flex items-center space-x-2 px-4 py-2 rounded-lg font-medium transition-all duration-200 ${
+                className={`flex items-center space-x-2 rounded-xl px-3 py-2 font-medium transition-all duration-200 ${
                   showSummary
-                    ? "bg-[#B20D38] text-white"
-                    : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                    ? "bg-[#d97745] text-white"
+                    : "border border-white/8 bg-white/6 text-white/60 hover:bg-white/10"
                 }`}
               >
                 <BarChart3 size={18} />
@@ -525,12 +527,12 @@ function ActChatContent() {
           </div>
         </div>
 
-        <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4">
+        <div className="paper-grid app-scrollbar flex-1 space-y-5 overflow-y-auto px-4 py-6 sm:px-6 lg:px-[8%]">
           {isLoading ? (
             <div className="flex items-center justify-center h-full">
               <div className="text-center">
-                <Loader2 className="w-8 h-8 text-[#B20F38] animate-spin mx-auto mb-2" />
-                <p className="text-gray-600">Loading act data...</p>
+                <Loader2 className="mx-auto mb-3 h-8 w-8 animate-spin text-[#ad4a36]" />
+                <p className="text-sm text-[#706a61]">Preparing the evidence workspace…</p>
               </div>
             </div>
           ) : (
@@ -543,12 +545,12 @@ function ActChatContent() {
                   }`}
                 >
                   <div
-                    className={`max-w-[70%] rounded-lg px-4 py-3 ${
+                    className={`max-w-[88%] rounded-2xl px-4 py-3.5 shadow-sm sm:max-w-[76%] sm:px-5 ${
                       message.sender === "user"
-                        ? "bg-[#B20F38] text-white"
+                        ? "rounded-br-md bg-[#19231f] text-white"
                         : message.isError
-                        ? "bg-red-50 text-red-800 border border-red-200"
-                        : "bg-white text-gray-800 border border-gray-200"
+                        ? "border border-red-200 bg-red-50 text-red-800"
+                        : "rounded-bl-md border border-[#19231f]/8 bg-[#fffdf8] text-[#29312d]"
                     }`}
                   >
                     <div
@@ -567,7 +569,7 @@ function ActChatContent() {
                       className={`text-xs mt-2 ${
                         message.sender === "user"
                           ? "text-white/70"
-                          : "text-gray-500"
+                          : "text-[#8b8378]"
                       }`}
                     >
                       {message.timestamp}
@@ -577,8 +579,8 @@ function ActChatContent() {
               ))}
               {isSending && (
                 <div className="flex justify-start">
-                  <div className="bg-white text-gray-800 border border-gray-200 rounded-lg px-4 py-3">
-                    <Loader2 className="w-5 h-5 animate-spin text-[#B20F38]" />
+                  <div className="rounded-2xl rounded-bl-md border border-[#19231f]/8 bg-[#fffdf8] px-5 py-4 text-[#29312d] shadow-sm">
+                    <Loader2 className="h-5 w-5 animate-spin text-[#ad4a36]" />
                   </div>
                 </div>
               )}
@@ -588,7 +590,7 @@ function ActChatContent() {
         </div>
 
         {!isLoading && (
-          <div className="bg-gradient-to-r from-gray-50 to-white border-t border-gray-200">
+          <div className="border-t border-[#19231f]/8 bg-[#f6f0e6]">
             <button
               onClick={() => {
                 const newState = !showSuggestions;
@@ -602,12 +604,12 @@ function ActChatContent() {
                   generateSuggestedQuestions();
                 }
               }}
-              className="w-full flex items-center justify-between px-6 py-3 hover:bg-white/50 transition-colors"
+              className="flex w-full items-center justify-between px-4 py-3 transition-colors hover:bg-white/40 sm:px-6"
             >
               <div className="flex items-center gap-2">
                 <Sparkles className="w-4 h-4 text-amber-500" />
-                <span className="text-xs font-semibold text-gray-600 uppercase tracking-wide">
-                  Suggested Questions
+                <span className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[#625d55]">
+                  Questions to explore
                 </span>
                 {generatingSuggestions && (
                   <Loader2 className="w-3 h-3 animate-spin text-gray-400" />
@@ -623,7 +625,7 @@ function ActChatContent() {
             {showSuggestions &&
               (suggestedQuestions.length > 0 || generatingSuggestions) && (
                 <div className="px-6 pb-3">
-                  <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-transparent hover:scrollbar-thumb-gray-400">
+                  <div className="app-scrollbar flex gap-2 overflow-x-auto pb-2">
                     {generatingSuggestions ? (
                       <>
                         {[
@@ -647,15 +649,15 @@ function ActChatContent() {
                         ))}
                       </>
                     ) : (
-                      suggestedQuestions.map((question, index) => (
+                      suggestedQuestions.map((question) => (
                         <button
-                          key={index}
+                          key={question}
                           onClick={() => {
                             setInputMessage(question);
                             textareaRef.current?.focus();
                           }}
                           disabled={isSending}
-                          className="group text-left flex-shrink-0 px-3 py-2 bg-white border border-gray-200 rounded-lg hover:border-[#B20F38] hover:bg-[#FFF5F7] transition-all text-sm text-gray-700 hover:text-[#B20F38] disabled:opacity-50 disabled:cursor-not-allowed"
+                          className="group flex-shrink-0 rounded-full border border-[#19231f]/10 bg-white px-4 py-2 text-left text-xs text-[#5f5a52] transition-all hover:border-[#ad4a36]/35 hover:text-[#9f4937] disabled:cursor-not-allowed disabled:opacity-50"
                         >
                           <div className="flex items-center gap-2 whitespace-nowrap">
                             <span className="text-xs opacity-50 group-hover:opacity-100">
@@ -674,22 +676,22 @@ function ActChatContent() {
           </div>
         )}
 
-        <div className="bg-white border-t border-gray-200 px-6 py-4">
-          <div className="flex items-end space-x-3">
+        <div className="border-t border-[#19231f]/8 bg-[#fffdf8] px-4 py-4 sm:px-6">
+          <div className="mx-auto flex max-w-4xl items-end gap-3 rounded-2xl border border-[#19231f]/10 bg-white p-2 shadow-[0_12px_36px_rgba(25,35,31,0.08)]">
             <textarea
               ref={textareaRef}
               value={inputMessage}
               onChange={(e) => setInputMessage(e.target.value)}
-              onKeyPress={handleKeyPress}
-              placeholder="Ask anything about this act..."
+              onKeyDown={handleKeyPress}
+              placeholder="Ask a question about this act…"
               disabled={isLoading || isSending}
-              className="flex-1 resize-none border border-gray-300 rounded-lg px-4 py-3 focus:outline-none focus:border-[#B20F38] focus:ring-1 focus:ring-[#B20F38] disabled:bg-gray-100 disabled:cursor-not-allowed"
+              className="min-h-12 flex-1 resize-none border-0 bg-transparent px-3 py-3 text-sm text-[#19231f] placeholder:text-[#9b9387] focus:outline-none disabled:cursor-not-allowed disabled:opacity-60"
               rows={2}
             />
             <button
               onClick={handleSendMessage}
               disabled={!inputMessage.trim() || isLoading || isSending}
-              className="px-6 py-3 bg-[#B20F38] text-white rounded-lg hover:bg-[#8A0C2D] transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed flex items-center space-x-2"
+              className="flex h-12 items-center space-x-2 rounded-xl bg-[#19231f] px-4 text-white transition-colors hover:bg-[#2d3934] disabled:cursor-not-allowed disabled:bg-[#d1cabf] sm:px-5"
             >
               {isSending ? (
                 <Loader2 className="w-5 h-5 animate-spin" />
@@ -703,11 +705,11 @@ function ActChatContent() {
       </div>
 
       {showSummary && (
-        <div className="fixed md:static right-0 top-0 w-80 md:w-96 h-full bg-white border-l border-gray-200 flex flex-col z-20 shadow-lg animate-slide-in">
-          <div className="px-6 py-4 bg-[#B20F38] flex justify-between items-center">
+        <div className="fixed right-0 top-0 z-20 flex h-full w-[88vw] max-w-96 flex-col border-l border-[#19231f]/10 bg-[#fffdf8] shadow-2xl md:static">
+          <div className="flex items-center justify-between bg-[#24312c] px-6 py-4">
             <div className="flex items-center space-x-2">
               <BarChart3 size={20} className="text-white" />
-              <h3 className="text-lg font-semibold text-white">Act Summary</h3>
+              <h3 className="font-serif text-xl text-white">Evidence brief</h3>
             </div>
             <button
               onClick={() => setShowSummary(false)}
@@ -716,7 +718,7 @@ function ActChatContent() {
               <ChevronRight size={20} />
             </button>
           </div>
-          <div className="flex-1 overflow-y-auto p-6">
+          <div className="app-scrollbar flex-1 overflow-y-auto p-5 sm:p-6">
             {isLoading ? (
               <div className="flex items-center justify-center h-32">
                 <div className="text-center">
@@ -726,7 +728,7 @@ function ActChatContent() {
               </div>
             ) : summary ? (
               <>
-                <div className="bg-gradient-to-br from-orange-50 to-red-50 rounded-xl p-4 border border-red-100">
+                <div className="rounded-2xl border border-[#19231f]/8 bg-[#f5ede0] p-5">
                   <div className="chat-markdown">
                     <ReactMarkdown
                       remarkPlugins={[remarkGfm]}

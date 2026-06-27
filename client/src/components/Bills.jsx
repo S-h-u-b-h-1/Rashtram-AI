@@ -161,7 +161,7 @@ export default function BillsSidebarUI() {
 
 
   const BillSkeleton = () => (
-    <div className="bg-white border border-slate-200 rounded-lg p-3 animate-pulse">
+    <div className="animate-pulse rounded-2xl border border-[#19231f]/8 bg-white p-4">
       <div className="flex items-start justify-between gap-2 mb-2">
         <div className="flex-1 space-y-2">
           <div className="h-4 bg-slate-200 rounded w-3/4"></div>
@@ -183,24 +183,26 @@ export default function BillsSidebarUI() {
   const filteredBills = bills;
 
   return (
-    <div className="h-full flex flex-col bg-gradient-to-b from-slate-50 to-white">
+    <div className="surface-card flex h-full min-h-[620px] flex-col overflow-hidden bg-[#fffdf8]">
       {}
-      <div className="p-4 border-b border-slate-200 bg-white/50 backdrop-blur-sm">
-        <div className="flex items-center justify-between mb-3">
-          <div className="flex items-center space-x-2">
-            <div className="w-8 h-8 bg-gradient-to-br from-[#B20F38] to-[#8A0C2D] rounded-lg flex items-center justify-center shadow-lg">
+      <div className="border-b border-[#19231f]/8 bg-[#fbf7ef] p-5 sm:p-6">
+        <div className="mb-5 flex items-center justify-between">
+          <div className="flex items-center space-x-3">
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#19231f] shadow-lg">
               <FileText size={16} className="text-white" />
             </div>
             <div>
-              <h3 className="text-slate-800 font-bold text-sm">
-                Bills Tracker
+              <h3 className="font-serif text-xl text-[#19231f]">
+                Parliament bills
               </h3>
-              <p className="text-slate-500 text-xs">Parliamentary bills</p>
+              <p className="text-xs text-[#817a70]">
+                Search and open an evidence workspace
+              </p>
             </div>
           </div>
           <button
             onClick={openPRSIndia}
-            className="p-1.5 hover:bg-slate-100 rounded-lg transition-colors"
+            className="grid h-10 w-10 place-items-center rounded-xl border border-[#19231f]/8 bg-white text-[#706a61] transition hover:text-[#19231f]"
             title="Open PRS India"
           >
             <ExternalLink size={14} className="text-slate-600" />
@@ -208,26 +210,26 @@ export default function BillsSidebarUI() {
         </div>
 
         {}
-        <div className="relative mb-2">
+        <div className="relative mb-3">
           <Search
             size={14}
-            className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400"
+            className="absolute left-4 top-1/2 -translate-y-1/2 text-[#918a7f]"
           />
           <input
             type="text"
-            placeholder="Search bills..."
+            placeholder="Search bills by title…"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full bg-white border border-slate-200 rounded-lg pl-9 pr-3 py-2 text-sm text-slate-800 placeholder-slate-400 focus:outline-none focus:border-[#B20F38] focus:ring-1 focus:ring-[#B20F38]/20 transition-all"
+            className="h-12 w-full rounded-xl border border-[#19231f]/10 bg-white pl-11 pr-4 text-sm text-[#19231f] placeholder:text-[#9a9387] focus:border-[#d97745] focus:outline-none focus:ring-4 focus:ring-[#d97745]/10"
           />
         </div>
 
         {}
         <button
           onClick={() => setShowFilters(!showFilters)}
-          className="w-full flex items-center justify-between px-3 py-2 bg-slate-50 hover:bg-slate-100 rounded-lg transition-colors text-sm"
+          className="flex w-full items-center justify-between rounded-xl border border-[#19231f]/8 bg-[#f0e9de] px-4 py-3 text-sm transition hover:bg-[#e9e0d2]"
         >
-          <div className="flex items-center space-x-2 text-slate-700">
+          <div className="flex items-center space-x-2 text-[#514d46]">
             <Filter size={14} />
             <span className="font-medium">
               {selectedStatus === "All" ? "All Status" : selectedStatus}
@@ -243,7 +245,7 @@ export default function BillsSidebarUI() {
 
         {}
         {showFilters && (
-          <div className="mt-2 p-3 bg-white border border-slate-200 rounded-lg shadow-sm">
+          <div className="mt-2 rounded-xl border border-[#19231f]/9 bg-white p-3 shadow-sm">
             <div className="flex items-center justify-between mb-2">
               <span className="text-xs font-semibold text-slate-600 uppercase tracking-wide">
                 Filter Status
@@ -265,7 +267,7 @@ export default function BillsSidebarUI() {
                 }}
                 className={`w-full text-left px-3 py-2 rounded-md text-sm transition-colors ${
                   selectedStatus === "All"
-                    ? "bg-[#B20F38] text-white"
+                    ? "bg-[#19231f] text-white"
                     : "hover:bg-slate-50 text-slate-700"
                 }`}
               >
@@ -280,7 +282,7 @@ export default function BillsSidebarUI() {
                   }}
                   className={`w-full text-left px-3 py-2 rounded-md text-sm transition-colors ${
                     selectedStatus === status
-                      ? "bg-[#B20F38] text-white"
+                      ? "bg-[#19231f] text-white"
                       : "hover:bg-slate-50 text-slate-700"
                   }`}
                 >
@@ -293,7 +295,10 @@ export default function BillsSidebarUI() {
       </div>
 
       {}
-      <div className="flex-1 overflow-y-auto p-3" onScroll={handleScroll}>
+      <div
+        className="app-scrollbar flex-1 overflow-y-auto p-4 sm:p-5"
+        onScroll={handleScroll}
+      >
         {!isAuthenticated ? (
           <div className="text-center py-8">
             <AlertTriangle size={32} className="text-yellow-500 mx-auto mb-2" />
@@ -335,7 +340,8 @@ export default function BillsSidebarUI() {
 
               return (
                 <div key={bill.id || idx} className="block group">
-                  <div
+                  <button
+                    type="button"
                     onClick={() => {
 
                       const billData = {
@@ -347,15 +353,16 @@ export default function BillsSidebarUI() {
                       };
                       window.open(`/app/bill-chat?bill=${encodeURIComponent(JSON.stringify(billData))}`, '_blank');
                     }}
-                    className="bg-white border border-slate-200 rounded-lg p-3 transition-all hover:shadow-md hover:border-[#B20F38]/30 cursor-pointer hover:bg-slate-50"
+                    className="w-full cursor-pointer rounded-2xl border border-[#19231f]/9 bg-white p-4 text-left transition-all hover:-translate-y-0.5 hover:border-[#ad4a36]/30 hover:shadow-[0_14px_35px_rgba(25,35,31,0.08)]"
+                    aria-label={`Open research chat for ${bill.title}`}
                   >
                     <div className="flex items-start justify-between gap-2 mb-2">
-                      <h4 className="text-slate-800 font-semibold text-sm leading-tight group-hover:text-[#B20F38] transition-colors flex-1">
+                      <h4 className="flex-1 text-sm font-semibold leading-5 text-[#29312d] transition-colors group-hover:text-[#9f4937]">
                         {bill.title}
                       </h4>
                       <ArrowRight
                         size={14}
-                        className="text-[#B20F38] opacity-0 group-hover:opacity-100 group-hover:translate-x-0.5 transition-all flex-shrink-0 mt-0.5"
+                        className="mt-0.5 shrink-0 text-[#9f4937] transition-all group-hover:translate-x-0.5"
                       />
                     </div>
 
@@ -375,11 +382,11 @@ export default function BillsSidebarUI() {
                           <span className="text-xs font-semibold text-gray-600">Status Unknown</span>
                         </div>
                       )}
-                      <span className="text-xs text-slate-400 font-medium">
-                        Open chat →
+                      <span className="text-xs font-medium text-[#8b8378]">
+                        Open workspace →
                       </span>
                     </div>
-                  </div>
+                  </button>
                 </div>
               );
             })}
@@ -406,8 +413,8 @@ export default function BillsSidebarUI() {
       </div>
 
       {}
-      <div className="p-3 border-t border-slate-200 bg-white/50">
-        <div className="flex items-center justify-between text-xs text-slate-600">
+      <div className="border-t border-[#19231f]/8 bg-[#fbf7ef] p-4">
+        <div className="flex items-center justify-between text-xs text-[#777065]">
           <span>
             {filteredBills.length}/{totalBills} bill{filteredBills.length !== 1 ? "s" : ""} loaded
             {hasMore && <span className="text-slate-400 ml-1">(scroll for more)</span>}
