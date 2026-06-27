@@ -69,7 +69,7 @@ export default function ContactForm() {
             </div>
           </div>
 
-          {/* Email */}
+          {}
           <div className="sm:col-span-2">
             <label htmlFor="email" className="block text-sm font-semibold leading-6 text-gray-900">
               Email

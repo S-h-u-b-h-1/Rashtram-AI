@@ -3,9 +3,9 @@ import { Timeline } from "@/components/ui/timeline";
 import { Card } from "@/components/ui/card";
 import { Info, Search, BarChart2, Cpu, Shield, Users, Code2, BookOpen, Globe } from "lucide-react";
 
-// Card data for each timeline step
+
 const timelineCards = [
-  // Step 1: Challenges in Policymaking
+
   [
     {
       icon: <Info size={28} className="mb-2" />,
@@ -27,7 +27,7 @@ const timelineCards = [
       fullWidth: true,
     },
   ],
-  // Step 2: Rashtram AI: Augmenting Policymaking with Intelligence
+
   [
     {
       icon: <Cpu size={28} className="mb-2" />,
@@ -49,22 +49,22 @@ const timelineCards = [
       fullWidth: true,
     },
   ],
-  // Step 3: Embedded with Indian Values and First Principles
+
   [
     {
-      icon: <Code2 size={28} className="mb-2" />, // Lucide 'Code2' for Constitutional Values
+      icon: <Code2 size={28} className="mb-2" />,
       title: "Constitutional Values",
       description:
         "Ensuring fairness, equality, and justice in all policy recommendations.",
     },
     {
-      icon: <BookOpen size={28} className="mb-2" />, // Lucide 'BookOpen' for Dharma
+      icon: <BookOpen size={28} className="mb-2" />,
       title: "Dharma",
       description:
         "Promoting ethical conduct, responsibility, and the well-being of all citizens.",
     },
     {
-      icon: <Globe size={28} className="mb-2" />, // Lucide 'Globe' for First Principles
+      icon: <Globe size={28} className="mb-2" />,
       title: "First Principles",
       description:
         "Applying fundamental truths and logical reasoning to policy analysis and decision-making.",
@@ -129,4 +129,4 @@ export function TimelineDemo() {
       <Timeline data={data} />
     </div>
   );
-} 
+}

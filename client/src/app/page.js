@@ -1,6 +1,6 @@
-"use client"
+"use client";
 
-import { HeroSection } from "@/components/blocks/hero-section"
+import { HeroSection } from "@/components/blocks/hero-section";
 import { TimelineDemo } from "@/components/TimelineDemo";
 import { Cta4 } from "@/components/ui/cta-4";
 export function HeroSectionDemo() {
@@ -20,17 +20,17 @@ export function HeroSectionDemo() {
           text: "Get Started",
           href: "/signup",
           variant: "default",
-        }
+        },
       ]}
       image={{
-        light: "https://www.launchuicomponents.com/app-light.png",
-        dark: "https://www.launchuicomponents.com/app-dark.png",
+        light: "/Dashboard.jpeg",
+        dark: "/Dashboard.jpeg",
         alt: "UI Components Preview",
       }}
     />
-  )
+  );
 }
-export function GetStarted(){
+export function GetStarted() {
   return (
     <Cta4
       title="Ready to Transform Policymaking?"
@@ -42,10 +42,10 @@ export function GetStarted(){
         "Real-time Data Insights",
         "Customizable Policy Frameworks",
         "Scalable Decision Making",
-        "Comprehensive Compliance Monitoring"
+        "Comprehensive Compliance Monitoring",
       ]}
     />
-  )
+  );
 }
 
 export default function Home() {
@@ -53,7 +53,7 @@ export default function Home() {
     <>
       <HeroSectionDemo />
       <TimelineDemo />
-      <GetStarted  className = 'w-full'/>
+      <GetStarted className="w-full" />
     </>
   );
 }
