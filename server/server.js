@@ -13,7 +13,7 @@ const actsRouter = require("./act/actsRoute");
 const processActRouter = require("./act/processActRoute");
 const actChatManagementRouter = require("./act/actChatRoute");
 const dashboardRouter = require("./dashboard/route");
-const connectDB = require("./db");
+const { connectDB } = require("./db");
 const cors = require("cors");
 const {
   generalLimiter,
