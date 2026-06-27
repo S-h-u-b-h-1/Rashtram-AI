@@ -3,13 +3,22 @@ require("dotenv").config();
 
 const globalForDatabase = globalThis;
 
+const normalizeConnectionString = (connectionString) => {
+  const url = new URL(connectionString);
+  const sslMode = url.searchParams.get("sslmode");
+  if (["prefer", "require", "verify-ca"].includes(sslMode)) {
+    url.searchParams.set("sslmode", "verify-full");
+  }
+  return url.toString();
+};
+
 const createPool = () => {
   if (!process.env.DATABASE_URL) {
     throw new Error("DATABASE_URL is required");
   }
 
   return new Pool({
-    connectionString: process.env.DATABASE_URL,
+    connectionString: normalizeConnectionString(process.env.DATABASE_URL),
     max: 5,
     idleTimeoutMillis: 30_000,
     connectionTimeoutMillis: 10_000,
