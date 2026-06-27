@@ -69,6 +69,11 @@ collector therefore reads the official recent listings and maps the numeric
 suffix of each public Gazette ID to the official `WriteReadData` PDF archive.
 It intentionally does not automate CAPTCHA or session-bound search forms.
 
+IndiaCode's public WAF rejects conventional bot-style user-agent prefixes even
+on allowed browse pages. Its connector uses the site-compatible identifying
+header `curl/8.7.1 RashtramAI-Catalog/1.0`; robots enforcement, request
+throttling, and stable browse/detail URLs remain unchanged.
+
 ## Source connectors
 
 | Connector | Acquisition method | Stable source identity | Freshness strategy | Status |

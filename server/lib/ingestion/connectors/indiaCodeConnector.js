@@ -4,6 +4,11 @@ const { createSnapshot } = require("../core/sourceSnapshots");
 
 const INDIA_CODE_BASE = "https://www.indiacode.nic.in";
 const CENTRAL_ACTS_HANDLE = "123456789/1362";
+const INDIA_CODE_REQUEST_OPTIONS = {
+  headers: {
+    "User-Agent": "curl/8.7.1 RashtramAI-Catalog/1.0",
+  },
+};
 
 const normalize = (value) =>
   String(value || "")
@@ -206,7 +211,10 @@ const indiaCodeConnector = {
 
     if (String(options.years || "").toLowerCase() === "all") {
       const url = browseUrl(handle, "actyear", null, options);
-      const response = await fetcher.getText(url);
+      const response = await fetcher.getText(
+        url,
+        INDIA_CODE_REQUEST_OPTIONS,
+      );
       yearPages = parseYearLinks(response.body, url);
       snapshots.push(
         createSnapshot({
@@ -233,7 +241,10 @@ const indiaCodeConnector = {
     const records = [];
     for (const page of yearPages.slice(0, maxPages)) {
       try {
-        const response = await fetcher.getText(page.url);
+        const response = await fetcher.getText(
+          page.url,
+          INDIA_CODE_REQUEST_OPTIONS,
+        );
         const pageRecords = parseBrowsePage(
           response.body,
           page.url,
@@ -263,7 +274,10 @@ const indiaCodeConnector = {
     if (!options.catalogOnly) {
       for (let index = 0; index < limited.length; index += 1) {
         try {
-          const response = await fetcher.getText(limited[index].detailUrl);
+          const response = await fetcher.getText(
+            limited[index].detailUrl,
+            INDIA_CODE_REQUEST_OPTIONS,
+          );
           limited[index] = parseDetailPage(
             response.body,
             limited[index].detailUrl,
@@ -299,6 +313,7 @@ const indiaCodeConnector = {
 module.exports = {
   CENTRAL_ACTS_HANDLE,
   INDIA_CODE_BASE,
+  INDIA_CODE_REQUEST_OPTIONS,
   browseUrl,
   indiaCodeConnector,
   parseBrowsePage,
