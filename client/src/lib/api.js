@@ -35,7 +35,11 @@ export const apiRequest = async (endpoint, options = {}) => {
       throw new Error('Session expired. Please login again.');
     }
     const error = await response.json().catch(() => ({}));
-    throw new Error(error.message || `Request failed with status ${response.status}`);
+    throw new Error(
+      error.message ||
+        error.error ||
+        `Request failed with status ${response.status}`
+    );
   }
 
   return response.json();

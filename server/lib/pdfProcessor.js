@@ -3,8 +3,11 @@ const pdf = require('pdf-parse');
 
 class PDFProcessor {
   constructor() {
-    this.chunkSize = 1000;
-    this.overlap = 200;
+    // Gemini embeddings accept substantially more text than the old
+    // character-sized chunks used here. Larger chunks keep long parliamentary
+    // documents within serverless execution limits without losing coverage.
+    this.chunkSize = 4500;
+    this.overlap = 450;
   }
 
   async extractTextFromPDF(pdfUrl) {
