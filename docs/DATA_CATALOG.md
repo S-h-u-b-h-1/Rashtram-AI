@@ -12,18 +12,30 @@ The production PostgreSQL catalogue contains:
 | Parliament acts | 545 |
 | State bills | 8,645 |
 | State acts | 7,395 |
-| **Total** | **17,544** |
+| Official IndiaCode Acts added as distinct canonical records | 6 |
+| Official eGazette documents added as distinct canonical records | 4 |
+| **Canonical total** | **17,554** |
 
 Additional coverage:
 
-- 17,228 documents have a resolved PDF URL.
-- 18,407 source resources are stored.
+- 17,238 documents have a resolved PDF URL.
 - 807 Parliament bills have ministry metadata.
 - 939 Parliament bills have a resolved PDF.
 - 32 jurisdictions are represented.
-- 329 source-page snapshots are stored.
 - Initial collection, detail enrichment, and status refresh completed with zero
   errors.
+
+The controlled official-source sample added:
+
+| Source | Source records | Result |
+| --- | ---: | --- |
+| IndiaCode | 10 | 4 matched existing Acts; 6 distinct Acts connected to their PRS Bills |
+| eGazette | 7 | 4 new canonical documents; 3 matched existing documents |
+
+The IndiaCode sample attached official PDFs and 91 discovered resources. Six
+Bill-to-Act lineages are recorded with `became_act` relationships. One
+eGazette title match is deliberately pending human review rather than being
+merged automatically.
 
 State acts range back to 1837 in the currently exposed source catalogue.
 Parliament records extend through 2026.
