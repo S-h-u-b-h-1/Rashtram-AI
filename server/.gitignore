@@ -27,6 +27,7 @@ Thumbs.db
 # Test related files
 *.spec.js
 *.test.js
+!test/*.test.js
 __snapshots__/
 
 # Other common temporary files

@@ -8,9 +8,14 @@ the associated PDFs, creates AI summaries, and supports source-grounded chat.
 
 - `client/`: Next.js 15 and React 19 web application
 - `server/`: Express API, authentication, document processing, and AI services
-- PostgreSQL: users, bill chats, act chats, and related-bill cache
+- PostgreSQL: users, chats, related-bill cache, and the legislative catalogue
 - Pinecone: separate vector indexes for bills and acts
 - Gemini: embeddings, summaries, and streamed chat responses
+
+Detailed references:
+
+- [Project understanding](docs/PROJECT_UNDERSTANDING.md)
+- [Legislative data catalogue](docs/DATA_CATALOG.md)
 
 ## Prerequisites
 
@@ -64,6 +69,24 @@ The API health endpoint is available at
 [http://localhost:5001/health](http://localhost:5001/health).
 
 The PostgreSQL schema is initialized automatically on the first API request.
+
+## Legislative catalogue
+
+Refresh the full PRS catalogue and enrich Parliament bill details:
+
+```bash
+npm run ingest:catalog --prefix server
+```
+
+Run a faster list-only refresh or inspect stored coverage:
+
+```bash
+npm run ingest:catalog-only --prefix server
+npm run catalog:stats --prefix server
+```
+
+The persistent catalogue includes Parliament and state bills and acts. PDF
+extraction, vector indexing, and AI summaries remain on demand.
 
 ## Google OAuth
 

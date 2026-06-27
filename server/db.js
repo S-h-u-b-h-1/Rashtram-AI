@@ -83,6 +83,91 @@ const initializeSchema = async () => {
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
+
+    CREATE TABLE IF NOT EXISTS ingestion_runs (
+      id BIGSERIAL PRIMARY KEY,
+      source_name TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'running',
+      options JSONB NOT NULL DEFAULT '{}'::jsonb,
+      records_discovered INTEGER NOT NULL DEFAULT 0,
+      records_stored INTEGER NOT NULL DEFAULT 0,
+      resources_stored INTEGER NOT NULL DEFAULT 0,
+      errors JSONB NOT NULL DEFAULT '[]'::jsonb,
+      started_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      completed_at TIMESTAMPTZ
+    );
+
+    CREATE INDEX IF NOT EXISTS ingestion_runs_source_recent_idx
+      ON ingestion_runs (source_name, started_at DESC);
+
+    CREATE TABLE IF NOT EXISTS legislative_documents (
+      id BIGSERIAL PRIMARY KEY,
+      source_name TEXT NOT NULL,
+      source_document_id TEXT NOT NULL,
+      document_type TEXT NOT NULL
+        CHECK (document_type IN ('bill', 'act')),
+      jurisdiction_level TEXT NOT NULL
+        CHECK (jurisdiction_level IN ('parliament', 'state')),
+      jurisdiction TEXT NOT NULL,
+      title TEXT NOT NULL,
+      year INTEGER,
+      status TEXT,
+      ministry TEXT,
+      category TEXT,
+      source_url TEXT NOT NULL,
+      detail_url TEXT,
+      pdf_url TEXT,
+      source_page_url TEXT,
+      source_metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
+      first_seen_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      last_seen_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      content_fetched_at TIMESTAMPTZ,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      UNIQUE (source_name, source_document_id)
+    );
+
+    CREATE INDEX IF NOT EXISTS legislative_documents_scope_idx
+      ON legislative_documents
+        (document_type, jurisdiction_level, jurisdiction, year DESC);
+
+    CREATE INDEX IF NOT EXISTS legislative_documents_status_idx
+      ON legislative_documents (document_type, status);
+
+    CREATE INDEX IF NOT EXISTS legislative_documents_title_idx
+      ON legislative_documents (LOWER(title));
+
+    CREATE TABLE IF NOT EXISTS legislative_document_resources (
+      id BIGSERIAL PRIMARY KEY,
+      document_id BIGINT NOT NULL
+        REFERENCES legislative_documents(id) ON DELETE CASCADE,
+      label TEXT,
+      resource_type TEXT NOT NULL DEFAULT 'link',
+      category TEXT,
+      url TEXT NOT NULL,
+      metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
+      first_seen_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      last_seen_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      UNIQUE (document_id, url)
+    );
+
+    CREATE INDEX IF NOT EXISTS legislative_resources_document_idx
+      ON legislative_document_resources (document_id);
+
+    CREATE TABLE IF NOT EXISTS source_collection_snapshots (
+      id BIGSERIAL PRIMARY KEY,
+      source_name TEXT NOT NULL,
+      source_url TEXT NOT NULL,
+      content_sha256 TEXT NOT NULL,
+      record_count INTEGER NOT NULL DEFAULT 0,
+      metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
+      fetched_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+
+    CREATE INDEX IF NOT EXISTS source_snapshots_recent_idx
+      ON source_collection_snapshots (source_name, fetched_at DESC);
   `);
 };
 

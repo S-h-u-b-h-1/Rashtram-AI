@@ -6,7 +6,10 @@
     "node": "22.x"
   },
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
+    "test": "node --test test/*.test.js",
+    "catalog:stats": "node scripts/catalog-stats.js",
+    "ingest:catalog": "node scripts/ingest-prs-catalog.js",
+    "ingest:catalog-only": "node scripts/ingest-prs-catalog.js --catalog-only",
     "start": "nodemon server.js",
     "start:prod": "node server.js"
   },
