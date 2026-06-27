@@ -22,23 +22,29 @@ const secureEqual = (left, right) => {
   );
 };
 
-const configuredIngestionSecret = () => {
+const configuredIngestionSecrets = () => {
   if (process.env.CATALOG_INGESTION_SECRET) {
-    return process.env.CATALOG_INGESTION_SECRET;
+    return [process.env.CATALOG_INGESTION_SECRET];
   }
-  if (!process.env.JWT_SECRET) return null;
-  return crypto
-    .createHmac("sha256", process.env.JWT_SECRET)
-    .update("rashtram-catalog-ingestion-v1")
-    .digest("hex");
+  return [process.env.JWT_SECRET, process.env.DATABASE_URL]
+    .filter(Boolean)
+    .map((secret) =>
+      crypto
+        .createHmac("sha256", secret)
+        .update("rashtram-catalog-ingestion-v1")
+        .digest("hex"),
+    );
 };
 
 const requireIngestionSecret = (req, res, next) => {
-  const configured = configuredIngestionSecret();
+  const configured = configuredIngestionSecrets();
   const supplied =
     req.get("x-catalog-ingestion-secret") ||
     req.get("authorization")?.replace(/^Bearer\s+/i, "");
-  if (!configured || !secureEqual(configured, supplied)) {
+  if (
+    !configured.length ||
+    !configured.some((secret) => secureEqual(secret, supplied))
+  ) {
     return res.status(404).json({ error: "Not found" });
   }
   return next();

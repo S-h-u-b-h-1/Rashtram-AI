@@ -190,10 +190,12 @@ Common controls are `--catalog-only`, `--collection`, `--years`, `--handle`,
 The deployed backend also exposes `POST /api/catalog-operations/refresh` and
 `GET /api/catalog-operations/stats` for bounded operations. They deliberately
 return `404` without a server-only operational token. If
-`CATALOG_INGESTION_SECRET` is unset, the backend derives a compartmentalized
-HMAC token from `JWT_SECRET`; the JWT signing secret itself is never sent to
-the endpoint. Only IndiaCode and eGazette are enabled through this remote
-surface, and each request is capped at 25 records per source and five pages.
+`CATALOG_INGESTION_SECRET` is unset, the backend accepts compartmentalized,
+domain-separated HMAC tokens derived from its existing server-only JWT or
+database secret. The underlying secret is never sent to the endpoint, and an
+operational token cannot be used as a JWT or database credential. Only
+IndiaCode and eGazette are enabled through this remote surface, and each
+request is capped at 25 records per source and five pages.
 
 ## Adding a connector
 
