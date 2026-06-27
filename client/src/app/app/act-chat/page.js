@@ -63,6 +63,8 @@ function ActChatContent() {
       setError("No act data provided");
       setIsLoading(false);
     }
+    // Initialization is intentionally keyed only to the URL document payload.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams]);
 
   const initializeAct = async (act) => {

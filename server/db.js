@@ -387,6 +387,104 @@ const initializeSchema = async () => {
     CREATE INDEX IF NOT EXISTS catalog_match_reviews_pending_idx
       ON catalog_match_reviews (status, similarity DESC);
 
+    CREATE TABLE IF NOT EXISTS intelligence_events (
+      id BIGSERIAL PRIMARY KEY,
+      event_key TEXT UNIQUE,
+      event_type TEXT NOT NULL,
+      title TEXT NOT NULL,
+      summary TEXT,
+      document_id BIGINT
+        REFERENCES legislative_documents(id) ON DELETE SET NULL,
+      source_name TEXT NOT NULL,
+      source_url TEXT,
+      document_type TEXT,
+      jurisdiction TEXT,
+      authority TEXT,
+      ministry TEXT,
+      category TEXT,
+      status TEXT,
+      event_date DATE,
+      importance_score NUMERIC(6, 2) NOT NULL DEFAULT 50,
+      metadata_json JSONB NOT NULL DEFAULT '{}'::jsonb,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      first_seen_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      last_seen_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+
+    CREATE INDEX IF NOT EXISTS intelligence_events_feed_idx
+      ON intelligence_events (
+        importance_score DESC,
+        event_date DESC NULLS LAST,
+        created_at DESC
+      );
+
+    CREATE INDEX IF NOT EXISTS intelligence_events_document_idx
+      ON intelligence_events (document_id, event_type);
+
+    INSERT INTO intelligence_events (
+      event_key,
+      event_type,
+      title,
+      document_id,
+      source_name,
+      source_url,
+      document_type,
+      jurisdiction,
+      authority,
+      ministry,
+      category,
+      status,
+      event_date,
+      importance_score,
+      metadata_json,
+      first_seen_at,
+      last_seen_at
+    )
+    SELECT
+      'catalog:' || d.canonical_id || ':' ||
+        CASE
+          WHEN d.canonical_source = 'egazette'
+            THEN 'gazette_notification'
+          WHEN d.document_type = 'act'
+            THEN 'act_published'
+          ELSE 'document_added'
+        END,
+      CASE
+        WHEN d.canonical_source = 'egazette'
+          THEN 'gazette_notification'
+        WHEN d.document_type = 'act'
+          THEN 'act_published'
+        ELSE 'document_added'
+      END,
+      d.title,
+      d.id,
+      d.canonical_source,
+      COALESCE(d.canonical_url, d.detail_url, d.source_url),
+      d.document_type,
+      d.jurisdiction,
+      d.authority,
+      d.ministry,
+      d.category,
+      d.status,
+      COALESCE(
+        d.publication_date,
+        d.enacted_date,
+        d.introduced_date,
+        d.first_seen_at::DATE
+      ),
+      CASE
+        WHEN d.canonical_source = 'egazette' THEN 90
+        WHEN d.canonical_source = 'india-code' THEN 80
+        ELSE 50
+      END,
+      JSONB_BUILD_OBJECT('origin', 'canonical-catalog-backfill'),
+      d.first_seen_at,
+      d.last_seen_at
+    FROM legislative_documents d
+    WHERE d.canonical_source IN ('egazette', 'india-code')
+    ON CONFLICT (event_key) DO NOTHING;
+
     ALTER TABLE ingestion_runs
       ADD COLUMN IF NOT EXISTS collection_name TEXT,
       ADD COLUMN IF NOT EXISTS counters_json JSONB NOT NULL DEFAULT '{}'::jsonb,

@@ -71,6 +71,8 @@ function BillChatContent() {
       setError("No bill data provided");
       setIsLoading(false);
     }
+    // Initialization is intentionally keyed only to the URL document payload.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams]);
 
   const initializeBill = async (bill) => {

@@ -512,6 +512,18 @@ export const getDashboardData = async () => {
   }
 };
 
+export const getDashboardIntelligence = async () => {
+  return apiRequest("/dashboard/intelligence");
+};
+
+export const getProfile = async () => {
+  return apiRequest("/profile");
+};
+
+export const getSourceHealth = async () => {
+  return apiRequest("/dashboard/source-health");
+};
+
 
 export const getUser = async () => {
   try {

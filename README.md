@@ -17,6 +17,7 @@ Detailed references:
 - [Project understanding](docs/PROJECT_UNDERSTANDING.md)
 - [Legislative data catalogue](docs/DATA_CATALOG.md)
 - [Legislative ingestion architecture](docs/LEGISLATIVE_INGESTION_ARCHITECTURE.md)
+- [Dashboard and profile redesign](docs/DASHBOARD_AND_PROFILE_REDESIGN.md)
 
 ## Prerequisites
 

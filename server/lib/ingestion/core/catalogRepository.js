@@ -414,6 +414,89 @@ const upsertRelationships = async (client, documentId, record) => {
   return stored;
 };
 
+const eventTypeForRecord = (record) => {
+  if (record.sourceName === "egazette") return "gazette_notification";
+  const types = {
+    act: "act_published",
+    rule: "rule_published",
+    ordinance: "ordinance_published",
+    committee_report: "committee_report_published",
+    debate: "debate_published",
+    question: "question_published",
+    policy: "ministry_policy_published",
+  };
+  return types[record.documentType] || "document_added";
+};
+
+const recordIntelligenceEvent = async (client, document, record) => {
+  const eventType = eventTypeForRecord(record);
+  const eventDate =
+    record.publicationDate ||
+    record.enactedDate ||
+    record.introducedDate ||
+    null;
+  const importanceScore =
+    record.sourceName === "egazette"
+      ? 90
+      : record.sourceName === "india-code"
+        ? 80
+        : record.documentType === "bill"
+          ? 65
+          : 50;
+  await client.query(
+    `INSERT INTO intelligence_events (
+       event_key,
+       event_type,
+       title,
+       document_id,
+       source_name,
+       source_url,
+       document_type,
+       jurisdiction,
+       authority,
+       ministry,
+       category,
+       status,
+       event_date,
+       importance_score,
+       metadata_json
+     )
+     VALUES (
+       $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14,
+       $15::jsonb
+     )
+     ON CONFLICT (event_key)
+     DO UPDATE SET
+       title = EXCLUDED.title,
+       source_url = EXCLUDED.source_url,
+       status = COALESCE(EXCLUDED.status, intelligence_events.status),
+       metadata_json =
+         intelligence_events.metadata_json || EXCLUDED.metadata_json,
+       last_seen_at = NOW(),
+       updated_at = NOW()`,
+    [
+      `${record.sourceName}:${record.sourceRecordId}:${eventType}`,
+      eventType,
+      record.title,
+      document.id,
+      record.sourceName,
+      record.detailUrl || record.sourceUrl,
+      record.documentType,
+      record.jurisdiction,
+      record.authority,
+      record.ministry,
+      record.category,
+      record.status,
+      eventDate,
+      importanceScore,
+      JSON.stringify({
+        origin: "source-ingestion",
+        sourceRecordId: record.sourceRecordId,
+      }),
+    ],
+  );
+};
+
 const queueReview = async (client, record, candidate, similarity) => {
   await client.query(
     `INSERT INTO catalog_match_reviews (
@@ -468,6 +551,9 @@ const persistRecord = async (record, decision) => {
       document.id,
       record,
     );
+    if (decision.action !== "merge") {
+      await recordIntelligenceEvent(client, document, record);
+    }
     if (decision.action === "review" && decision.candidate) {
       await queueReview(
         client,
