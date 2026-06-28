@@ -46,74 +46,77 @@ export function IntelligenceFeed({ events, isFallback }) {
       ) : (
         <div className="mt-5 divide-y divide-[#19231f]/8">
           {events.slice(0, 10).map((event) => {
-          const researchHref = buildResearchHref(event);
-          return (
-            <article key={`${event.id}-${event.eventType}`} className="py-5 first:pt-0">
-              <div className="flex flex-wrap items-center gap-2">
-                <span className="rounded-full bg-[#19231f] px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.1em] text-white">
-                  {humanize(event.eventType)}
-                </span>
-                <span className="rounded-full bg-[#eee6d9] px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.1em] text-[#6f4335]">
-                  {humanize(event.documentType)}
-                </span>
-                <span className="text-[11px] text-[#8a8277]">
-                  {formatDate(event.eventDate || event.createdAt)}
-                </span>
-              </div>
+            const researchHref = buildResearchHref(event);
+            return (
+              <article
+                key={`${event.id}-${event.eventType}`}
+                className="py-5 first:pt-0"
+              >
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="rounded-full bg-[#19231f] px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.1em] text-white">
+                    {humanize(event.eventType)}
+                  </span>
+                  <span className="rounded-full bg-[#eee6d9] px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.1em] text-[#6f4335]">
+                    {humanize(event.documentType)}
+                  </span>
+                  <span className="text-[11px] text-[#8a8277]">
+                    {formatDate(event.eventDate || event.createdAt)}
+                  </span>
+                </div>
 
-              <h3 className="mt-3 text-base font-semibold leading-6 text-[#25302b]">
-                {event.title}
-              </h3>
-              {event.summary && (
-                <p className="mt-2 line-clamp-2 text-sm leading-6 text-[#6f685f]">
-                  {event.summary}
-                </p>
-              )}
+                <h3 className="mt-3 text-base font-semibold leading-6 text-[#25302b]">
+                  {event.title}
+                </h3>
+                {event.summary && (
+                  <p className="mt-2 line-clamp-2 text-sm leading-6 text-[#6f685f]">
+                    {event.summary}
+                  </p>
+                )}
 
-              <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-[#857d72]">
-                <span className="font-semibold text-[#9f4937]">
-                  {event.sourceName}
-                </span>
-                <span>{event.jurisdiction || "India"}</span>
-                {event.ministry && <span>{event.ministry}</span>}
-                {event.status && <span>{event.status}</span>}
-              </div>
+                <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-[#857d72]">
+                  <span className="font-semibold text-[#9f4937]">
+                    {event.sourceName}
+                  </span>
+                  <span>{event.jurisdiction || "India"}</span>
+                  {event.ministry && <span>{event.ministry}</span>}
+                  {event.status && <span>{event.status}</span>}
+                </div>
 
-              <div className="mt-4 flex flex-wrap gap-2">
-                {researchHref && (
-                  <Link
-                    href={researchHref}
-                    className="inline-flex items-center gap-1.5 rounded-full bg-[#19231f] px-3 py-2 text-xs font-semibold text-white transition hover:bg-[#2d3a34]"
-                  >
-                    <BookOpenText className="h-3.5 w-3.5" />
-                    Research
-                  </Link>
-                )}
-                {event.sourceUrl && (
-                  <a
-                    href={event.sourceUrl}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="inline-flex items-center gap-1.5 rounded-full border border-[#19231f]/12 px-3 py-2 text-xs font-semibold text-[#514d46] transition hover:bg-[#f2ece1]"
-                  >
-                    View source
-                    <ExternalLink className="h-3.5 w-3.5" />
-                  </a>
-                )}
-                {!researchHref && event.pdfUrl && (
-                  <a
-                    href={event.pdfUrl}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="inline-flex items-center gap-1.5 px-2 py-2 text-xs font-semibold text-[#9f4937]"
-                  >
-                    Open PDF
-                    <ArrowUpRight className="h-3.5 w-3.5" />
-                  </a>
-                )}
-              </div>
-            </article>
-          );
+                <div className="mt-4 flex flex-wrap gap-2">
+                  {event.pdfUrl && (
+                    <a
+                      href={event.pdfUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="inline-flex items-center gap-1.5 rounded-full border border-[#19231f]/12 px-3 py-2 text-xs font-semibold text-[#514d46] transition hover:bg-[#f2ece1]"
+                    >
+                      Open
+                      <ArrowUpRight className="h-3.5 w-3.5" />
+                    </a>
+                  )}
+                  {researchHref && (
+                    <Link
+                      href={researchHref}
+                      className="inline-flex items-center gap-1.5 rounded-full bg-[#19231f] px-3 py-2 text-xs font-semibold text-white transition hover:bg-[#2d3a34]"
+                    >
+                      <BookOpenText className="h-3.5 w-3.5" />
+                      Research
+                    </Link>
+                  )}
+                  {event.sourceUrl && (
+                    <a
+                      href={event.sourceUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="inline-flex items-center gap-1.5 rounded-full border border-[#19231f]/12 px-3 py-2 text-xs font-semibold text-[#514d46] transition hover:bg-[#f2ece1]"
+                    >
+                      View source
+                      <ExternalLink className="h-3.5 w-3.5" />
+                    </a>
+                  )}
+                </div>
+              </article>
+            );
           })}
         </div>
       )}

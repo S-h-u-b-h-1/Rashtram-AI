@@ -86,6 +86,7 @@ Returns:
 - user greeting and current date;
 - last successful refresh and freshness summary;
 - deterministic brief based on stored events and source state;
+- real recent-item counts for the last 24 hours and seven days;
 - intelligence feed;
 - recent documents;
 - active Bills with safely recognized statuses;
@@ -112,6 +113,7 @@ Returns:
 
 - safe user identity fields, with no password or token;
 - personal Bill/Act chat, summary, and message counts;
+- research-history and safely inferred opened-document counts;
 - platform catalogue/PDF/resource/jurisdiction counts;
 - coverage by document type;
 - latest collection status;

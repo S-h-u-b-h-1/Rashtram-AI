@@ -1,6 +1,8 @@
 import {
   BookOpenText,
   FileCheck2,
+  FolderOpen,
+  History,
   MessageSquareText,
   ScrollText,
 } from "lucide-react";
@@ -16,6 +18,16 @@ export function ResearchActivity({ stats }) {
       label: "Act conversations",
       value: stats.actChats,
       icon: BookOpenText,
+    },
+    {
+      label: "Research history",
+      value: stats.researchHistoryCount,
+      icon: History,
+    },
+    {
+      label: "Documents opened",
+      value: stats.documentsOpened,
+      icon: FolderOpen,
     },
     {
       label: "Saved summaries",
@@ -43,7 +55,7 @@ export function ResearchActivity({ stats }) {
         </p>
       </div>
 
-      <div className="mt-5 grid grid-cols-2 gap-3 lg:grid-cols-4">
+      <div className="mt-5 grid grid-cols-2 gap-3 lg:grid-cols-3 xl:grid-cols-6">
         {items.map((item) => {
           const ActivityIcon = item.icon;
           return (

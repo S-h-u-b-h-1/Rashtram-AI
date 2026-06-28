@@ -52,7 +52,8 @@ export function PlatformCoverage({ coverage }) {
               Latest collection:
             </span>{" "}
             {coverage.lastCollection.sourceName} ·{" "}
-            {formatDate(coverage.lastCollection.completedAt)}
+            {formatDate(coverage.lastCollection.completedAt)} ·{" "}
+            {humanize(coverage.lastCollection.status)}
           </div>
         )}
       </div>

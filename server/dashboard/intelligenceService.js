@@ -264,6 +264,26 @@ const buildBriefSummary = ({
   return "No current legislative events have been ingested yet. Connected sources will appear here after their next refresh.";
 };
 
+const buildRecentActivity = ({
+  recentEventCount24h = 0,
+  recentEventCount = 0,
+  recentDocumentCount24h = 0,
+  recentDocumentCount = 0,
+}) => ({
+  last24Hours: recentEventCount24h || recentDocumentCount24h,
+  last7Days: recentEventCount || recentDocumentCount,
+});
+
+const findLatestDatedEvent = (events) =>
+  events.reduce((latest, event) => {
+    if (!event.eventDate) return latest;
+    if (!latest) return event;
+    return new Date(event.eventDate).getTime() >
+      new Date(latest.eventDate).getTime()
+      ? event
+      : latest;
+  }, null);
+
 const getDashboardIntelligence = async (userId) => {
   const [
     user,
@@ -360,6 +380,7 @@ const getDashboardIntelligence = async (userId) => {
       SELECT completed_at, status, source_name
       FROM ingestion_runs
       WHERE completed_at IS NOT NULL
+        AND status = 'completed'
       ORDER BY completed_at DESC
       LIMIT 1
     `),
@@ -368,8 +389,18 @@ const getDashboardIntelligence = async (userId) => {
         (
           SELECT COUNT(*)::INTEGER
           FROM intelligence_events
+          WHERE event_date >= CURRENT_DATE - INTERVAL '24 hours'
+        ) AS recent_events_24h,
+        (
+          SELECT COUNT(*)::INTEGER
+          FROM intelligence_events
           WHERE event_date >= CURRENT_DATE - INTERVAL '7 days'
         ) AS recent_events,
+        (
+          SELECT COUNT(*)::INTEGER
+          FROM legislative_documents
+          WHERE first_seen_at >= NOW() - INTERVAL '24 hours'
+        ) AS recent_documents_24h,
         (
           SELECT COUNT(*)::INTEGER
           FROM legislative_documents
@@ -399,10 +430,14 @@ const getDashboardIntelligence = async (userId) => {
   const connectedSourceCount = sourceHealth.filter(
     (source) => source.status !== "Planned",
   ).length;
+  const recentEventCount24h =
+    recentCountsResult.rows[0]?.recent_events_24h || 0;
   const recentEventCount = recentCountsResult.rows[0]?.recent_events || 0;
+  const recentDocumentCount24h =
+    recentCountsResult.rows[0]?.recent_documents_24h || 0;
   const recentDocumentCount =
     recentCountsResult.rows[0]?.recent_documents || 0;
-  const latestEvent = storedEvents.find((event) => event.eventDate);
+  const latestEvent = findLatestDatedEvent(storedEvents);
   const userRow = user.rows[0];
 
   return {
@@ -423,6 +458,12 @@ const getDashboardIntelligence = async (userId) => {
     briefSummary: buildBriefSummary({
       recentEventCount,
       freshSourceCount,
+      recentDocumentCount,
+    }),
+    recentActivity: buildRecentActivity({
+      recentEventCount24h,
+      recentEventCount,
+      recentDocumentCount24h,
       recentDocumentCount,
     }),
     whatChangedRecently: latestEvent
@@ -609,7 +650,9 @@ const getProfileData = async (userId) => {
 module.exports = {
   SOURCE_REGISTRY,
   buildBriefSummary,
+  buildRecentActivity,
   deriveSourceStatus,
+  findLatestDatedEvent,
   getDashboardIntelligence,
   getProfileData,
   getRecentUserChats,

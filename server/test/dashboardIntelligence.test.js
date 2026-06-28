@@ -4,7 +4,9 @@ const assert = require("node:assert/strict");
 const {
   SOURCE_REGISTRY,
   buildBriefSummary,
+  buildRecentActivity,
   deriveSourceStatus,
+  findLatestDatedEvent,
   mapDocument,
 } = require("../dashboard/intelligenceService");
 
@@ -78,6 +80,45 @@ test("brief summary never invents current Parliament activity", () => {
     }),
     /2 verified legislative updates/,
   );
+});
+
+test("recent activity prefers verified events and falls back to documents", () => {
+  assert.deepEqual(
+    buildRecentActivity({
+      recentEventCount24h: 2,
+      recentEventCount: 4,
+      recentDocumentCount24h: 20,
+      recentDocumentCount: 40,
+    }),
+    { last24Hours: 2, last7Days: 4 },
+  );
+  assert.deepEqual(
+    buildRecentActivity({
+      recentDocumentCount24h: 3,
+      recentDocumentCount: 8,
+    }),
+    { last24Hours: 3, last7Days: 8 },
+  );
+});
+
+test("what changed recently uses the newest dated event, not importance", () => {
+  assert.equal(
+    findLatestDatedEvent([
+      {
+        title: "High importance older event",
+        eventDate: "2026-06-20T00:00:00.000Z",
+        importanceScore: 100,
+      },
+      {
+        title: "Newest verified event",
+        eventDate: "2026-06-27T00:00:00.000Z",
+        importanceScore: 10,
+      },
+      { title: "Undated event", eventDate: null, importanceScore: 200 },
+    ]).title,
+    "Newest verified event",
+  );
+  assert.equal(findLatestDatedEvent([]), null);
 });
 
 test("document mapping exposes provenance without leaking source metadata", () => {

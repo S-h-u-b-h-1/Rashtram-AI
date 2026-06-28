@@ -10,8 +10,8 @@ import { formatDate, formatRelativeTime } from "@/lib/document-links";
 export function DashboardHero({ data }) {
   const metrics = [
     {
-      label: "Verified feed items",
-      value: data.intelligenceEvents.length,
+      label: "New in 7 days",
+      value: data.recentActivity?.last7Days ?? data.intelligenceEvents.length,
       icon: RadioTower,
     },
     {
