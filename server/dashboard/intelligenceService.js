@@ -61,12 +61,13 @@ const deriveSourceStatus = ({
   latestSnapshot,
   now = Date.now(),
 }) => {
-  if (!latestRun && !latestSnapshot && !documentCount) return "Planned";
-  if (
-    latestRun?.status === "failed" ||
-    latestRun?.status === "completed_with_errors"
-  ) {
-    return "Error";
+  if (!latestRun && !latestSnapshot && !documentCount) return "Not Run";
+  if (latestRun?.status === "completed_with_errors") return "Degraded";
+  if (latestRun?.status === "failed") {
+    const errors = JSON.stringify(latestRun.errors_json || []);
+    return /robots|captcha|blocked|forbidden|interactive/i.test(errors)
+      ? "Blocked"
+      : "Error";
   }
 
   const freshnessDate =
@@ -429,7 +430,8 @@ const getDashboardIntelligence = async (userId) => {
     (source) => source.status === "Fresh",
   ).length;
   const connectedSourceCount = sourceHealth.filter(
-    (source) => source.status !== "Planned",
+    (source) =>
+      ["Fresh", "Stale", "Connected", "Degraded"].includes(source.status),
   ).length;
   const recentEventCount24h =
     recentCountsResult.rows[0]?.recent_events_24h || 0;

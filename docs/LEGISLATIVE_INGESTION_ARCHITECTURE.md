@@ -207,6 +207,24 @@ IndiaCode detail collection accepts `--detail-concurrency`. The
 `--download-pdfs=false` flag is explicit documentation of the safe default:
 catalogue runs discover links but do not bulk-download files.
 
+All registered connectors expose the operational lifecycle
+`discover()`, `fetchDetails()`, `normalize()`, and `run()`, while retaining
+`collect()` for the shared runner. Safe validation without PostgreSQL writes is
+available with `--dry-run`:
+
+```bash
+npm run ingest:sources --prefix server -- \
+  --sources=digital-sansad,lok-sabha,rajya-sabha \
+  --max-pages=1 --limit=10 --catalog-only --dry-run
+
+npm run ingest:sources --prefix server -- --sources=ministries --dry-run
+npm run ingest:sources --prefix server -- --sources=state-legislatures --dry-run
+npm run ingest:sources --prefix server -- --sources=state-gazettes --dry-run
+```
+
+CLI aliases map `ministries`, `state-legislatures`, `state-gazettes`, and
+`indiacode` to their canonical internal source names.
+
 Controlled PDF verification is available only for bounded CLI runs:
 
 ```bash
@@ -233,10 +251,11 @@ npm run ingest:health --prefix server -- \
 ```
 
 The report checks reachability, universal record shape, sample discovery, PDF
-links, latest ingestion state, and error counts. Its safe mode never writes
-catalogue rows, downloads PDFs, invokes Gemini, or updates vectors. Mature
-connectors returning no records are marked `parser changed`; directory starters
-remain `planned` until a targeted adapter or successful stored run exists.
+links, latest ingestion state, last successful ingestion, refresh age, stored
+record count, and errors. Its safe mode never writes catalogue rows, downloads
+PDFs, invokes Gemini, or updates vectors. Interactive catalogues that cannot be
+enumerated without browser state are marked `blocked` with a reason; an
+implemented connector with no run history is `Not Run`, not `Planned`.
 
 Each run records the operational counters requested by the catalogue contract:
 `discovered`, `inserted`, `updated`, `duplicate_sources_added`,
@@ -258,8 +277,10 @@ request is capped at 25 records per source and five pages.
 ## Adding a connector
 
 1. Create a connector in `server/lib/ingestion/connectors/`.
-2. Export a unique `name`, optional `defaultCollection`, and `collect()`.
-3. Return `{ records, snapshots, errors }`.
+2. Export a unique `name`, `sourceName`, `collections`, and the lifecycle
+   methods `discover()`, `fetchDetails()`, `normalize()`, and `run()`.
+3. Keep `collect()` as the shared-runner compatibility entry point and return
+   `{ records, snapshots, errors, diagnostics? }`.
 4. Use `PoliteFetcher`; do not call remote sites directly.
 5. Keep parsing pure where possible and add an HTML fixture test.
 6. Register it in `connectors/index.js`.
@@ -269,9 +290,11 @@ No connector should write directly to PostgreSQL. The shared runner owns
 normalization, deduplication, canonical merge, provenance, and run auditing.
 
 Meaningful changes to stored title, status, PDF, or legal dates create a
-conservative `document_updated` intelligence event. Unchanged refreshes do not
-create events, and Bill lifecycle events are not inferred without supporting
-source history.
+conservative `document_updated` intelligence event. A Bill receives
+`bill_introduced` only with an introduction date and
+`bill_status_changed` only when the stored status actually changes. Source
+document types support Gazette, Act, rule, ordinance, committee-report, debate,
+question, and ministry-policy events. Unchanged refreshes do not create events.
 
 ## Operational safeguards
 
@@ -286,9 +309,13 @@ source history.
 
 ## Known next steps
 
-- Add source-specific API adapters for Sansad questions, debates, proceedings,
-  and committee reports after confirming stable official endpoints.
-- Add official per-state legislature and Gazette manifests.
+- Add stable public API adapters if Parliament publishes and documents them;
+  current connectors use official server-rendered listings and the Parliament
+  Digital Library rather than private application endpoints.
+- Expand per-state adapters beyond the initial official portal set and add
+  checkpointed crawling below each portal landing page.
+- Replace interactive ministry and state-Gazette directory discovery when
+  those sites publish stable crawlable manifests or documented APIs.
 - Add a scheduled worker with per-source checkpoints and alerting.
 - Populate explicit bill-to-act, act-to-rule, amendment, repeal, and
   supersession relationships from authoritative identifiers.

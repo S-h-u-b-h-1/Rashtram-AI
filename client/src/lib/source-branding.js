@@ -32,11 +32,14 @@ const SOURCE_GROUPS = [
 ];
 
 const STATUS_PRIORITY = {
-  Error: 5,
+  Error: 7,
+  Blocked: 6,
+  Degraded: 5,
   Stale: 4,
   Fresh: 3,
   Connected: 2,
-  Planned: 1,
+  "Not Run": 1,
+  Planned: 0,
 };
 
 export const getPublicSourceLabel = (sourceName) => {

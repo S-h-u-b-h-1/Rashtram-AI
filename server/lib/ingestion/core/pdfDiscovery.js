@@ -3,6 +3,7 @@ const cheerio = require("cheerio");
 const parseHtml = (html) => cheerio.load(html || "");
 
 const absoluteUrl = (url, baseUrl) => {
+  if (!url) return null;
   try {
     return new URL(url, baseUrl).toString();
   } catch {

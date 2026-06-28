@@ -1,6 +1,7 @@
 const cheerio = require("cheerio");
 const { sha256 } = require("../core/hashing");
 const { createSnapshot } = require("../core/sourceSnapshots");
+const { attachConnectorLifecycle } = require("./connectorLifecycle");
 
 const EGAZETTE_HOME = "https://egazette.gov.in/";
 
@@ -53,6 +54,13 @@ const parseHomePage = (html, pageUrl = EGAZETTE_HOME) => {
     const publicationDate = parseGazetteDate(rawDate);
     const pdfUrl = pdfUrlForGazette(gazetteIdentifier, publicationDate);
     const weekly = /-W-/.test(gazetteIdentifier);
+    const subjectType = (() => {
+      if (weekly) return "gazette";
+      if (/\bordinance\b/i.test(subject)) return "ordinance";
+      if (/\brules?\b/i.test(subject)) return "rule";
+      if (/\borders?\b/i.test(subject)) return "order";
+      return "notification";
+    })();
 
     records.push({
       sourceName: "egazette",
@@ -60,7 +68,7 @@ const parseHomePage = (html, pageUrl = EGAZETTE_HOME) => {
       sourceUrl: pdfUrl || pageUrl,
       detailUrl: pageUrl,
       pdfUrl,
-      documentType: weekly ? "gazette" : "notification",
+      documentType: subjectType,
       jurisdictionLevel: "union",
       jurisdiction: "India",
       title:
@@ -132,9 +140,22 @@ const eGazetteConnector = {
         }),
       ],
       errors: [],
+      diagnostics:
+        records.length === 0 && (options.from || options.to)
+          ? [
+              {
+                type: "blocked",
+                collection: "archive-window",
+                message:
+                  "The requested date window is outside the homepage feed; historical archive search requires interactive ASP.NET controls.",
+              },
+            ]
+          : [],
     };
   },
 };
+
+attachConnectorLifecycle(eGazetteConnector, ["recent"]);
 
 module.exports = {
   EGAZETTE_HOME,

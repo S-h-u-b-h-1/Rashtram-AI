@@ -99,6 +99,31 @@ test("connector health reports a collection-level network failure as unavailable
   assert.match(report.error, /DNS lookup failed/);
 });
 
+test("connector health reports interactive official catalogues as blocked", async () => {
+  const report = await probeConnector(
+    {
+      name: "state-gazette",
+      async collect() {
+        return {
+          records: [],
+          snapshots: [{ sourceName: "state-gazette" }],
+          errors: [],
+          diagnostics: [
+            {
+              type: "blocked",
+              message: "Interactive ASP.NET controls require a browser session.",
+            },
+          ],
+        };
+      },
+    },
+    {},
+    { fetcher: {}, history: {} },
+  );
+  assert.equal(report.status, "blocked");
+  assert.match(report.error, /Interactive ASP.NET/);
+});
+
 test("controlled PDF download verifies bytes and defaults to URL-only", async () => {
   const body = Buffer.from("%PDF-1.7\nsafe fixture");
   const result = await downloadPdfForRecord(

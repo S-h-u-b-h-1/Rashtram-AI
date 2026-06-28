@@ -13,6 +13,7 @@ const parseArguments = (argumentsList) => {
   const options = {
     sources: [],
     catalogOnly: false,
+    dryRun: false,
     downloadPdfs: false,
     maxPdfs: 100,
     maxPdfBytes: 25 * 1024 * 1024,
@@ -25,6 +26,7 @@ const parseArguments = (argumentsList) => {
   for (const argument of argumentsList) {
     if (argument === "--catalog-only") options.catalogOnly = true;
     else if (argument === "--details") options.catalogOnly = false;
+    else if (argument === "--dry-run") options.dryRun = true;
     else if (argument.startsWith("--source=")) {
       options.sources.push(argument.slice("--source=".length));
     } else if (argument.startsWith("--sources=")) {
@@ -57,7 +59,7 @@ const parseArguments = (argumentsList) => {
   ]) {
     if (options[key] != null) options[key] = Number(options[key]);
   }
-  for (const key of ["catalogOnly", "downloadPdfs"]) {
+  for (const key of ["catalogOnly", "downloadPdfs", "dryRun"]) {
     if (typeof options[key] === "string") {
       options[key] = !["0", "false", "no", "off"].includes(
         options[key].toLowerCase(),

@@ -28,9 +28,9 @@ test("source registry distinguishes all requested official source groups", () =>
   );
 });
 
-test("source health safely reports planned, fresh, stale, and error states", () => {
+test("source health safely reports not-run, fresh, stale, degraded, and blocked states", () => {
   const now = new Date("2026-06-28T00:00:00.000Z").getTime();
-  assert.equal(deriveSourceStatus({ now }), "Planned");
+  assert.equal(deriveSourceStatus({ now }), "Not Run");
   assert.equal(
     deriveSourceStatus({
       documentCount: 10,
@@ -56,10 +56,20 @@ test("source health safely reports planned, fresh, stale, and error states", () 
   assert.equal(
     deriveSourceStatus({
       documentCount: 10,
-      latestRun: { status: "failed" },
+      latestRun: { status: "completed_with_errors" },
       now,
     }),
-    "Error",
+    "Degraded",
+  );
+  assert.equal(
+    deriveSourceStatus({
+      latestRun: {
+        status: "failed",
+        errors_json: [{ message: "robots.txt blocked this path" }],
+      },
+      now,
+    }),
+    "Blocked",
   );
 });
 

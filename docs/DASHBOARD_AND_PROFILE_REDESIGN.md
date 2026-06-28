@@ -37,17 +37,17 @@ bulk-process documents.
 | Source | Dashboard status logic | Intended intelligence |
 | --- | --- | --- |
 | PRS Legislative Research | Connected when stored source records or runs exist | Bills, Acts, briefs and state coverage |
-| Digital Sansad | Planned until a successful run or stored record exists | Parliament business, debates and questions |
-| Lok Sabha | Planned until connected | Business, questions, debates and committees |
-| Rajya Sabha | Planned until connected | Bills, questions, debates and proceedings |
+| Digital Sansad | Not Run, Connected/Fresh, Degraded, or Blocked from real run evidence | Parliament business, debates and questions |
+| Lok Sabha | Not Run, Connected/Fresh, Degraded, or Blocked from real run evidence | Business, questions, debates and committees |
+| Rajya Sabha | Not Run, Connected/Fresh, Degraded, or Blocked from real run evidence | Bills, questions, debates and proceedings |
 | eGazette of India | Connected from real ingestion records | Notifications, rules, orders and Gazettes |
 | India Code | Connected from real ingestion records | Official Acts and subordinate legislation |
-| Ministries & Departments | Planned until connected | Policies, schemes, guidelines and consultations |
-| State Legislatures | Planned until connected | State Bills, Acts and proceedings |
-| State Gazettes | Planned until connected | State notifications, rules, orders and ordinances |
+| Ministries & Departments | Not Run or Blocked until the official interactive directory exposes links | Policies, schemes, guidelines and consultations |
+| State Legislatures | Per-portal Not Run, Connected/Fresh, Degraded, or Blocked | State Bills, Acts and proceedings |
+| State Gazettes | Not Run or Blocked when the ASP.NET directory cannot be enumerated | State notifications, rules, orders and ordinances |
 
-No planned source is presented as a live feed. The Parliament calendar and
-watchlist use explicit “planned” and “coming soon” states.
+No not-yet-run or blocked source is presented as a live feed. The Parliament
+calendar and watchlist use explicit “planned” and “coming soon” product states.
 
 Public dashboard and profile presentation groups sources into product-safe
 categories such as “Official Gazette Records” and “Parliamentary Public
@@ -78,9 +78,12 @@ policies, consultations, and future lifecycle events.
   document.
 - A stored document creates `document_updated` only when a title, status, PDF,
   or legal date meaningfully changes; unchanged refreshes remain silent.
-- eGazette records become `gazette_notification`.
+- eGazette notifications/Gazettes become `gazette_notification`; records
+  explicitly identified as rules, orders, or ordinances retain those event
+  types.
 - IndiaCode Acts become `act_published`.
-- A Bill status change is never inferred without stored status history.
+- A Bill introduction requires an explicit introduction date, and a status
+  change requires stored status history.
 - Existing official IndiaCode/eGazette canonical documents are backfilled from
   real stored catalogue fields.
 - If no event exists, the API marks `noLiveEvents` and provides recent
@@ -110,7 +113,8 @@ Returns:
 
 Returns all nine source groups with:
 
-- `Fresh`, `Connected`, `Stale`, `Error`, or `Planned`;
+- `Fresh`, `Connected`, `Stale`, `Degraded`, `Blocked`, `Error`, or
+  `Not Run`;
 - latest run and collection;
 - last refresh;
 - stored source-record count;
@@ -173,7 +177,7 @@ Dashboard and profile implement:
 - loading skeletons;
 - authenticated route protection;
 - empty feed and empty research states;
-- partial data and planned-source states;
+- partial data, not-yet-run, blocked, and degraded-source states;
 - stale/error source states;
 - backend error recovery links;
 - desktop, tablet, and mobile navigation.
@@ -195,8 +199,7 @@ interactive deprecated `next lint` setup prompt.
 
 ## Future improvements
 
-- scheduled Digital Sansad, Lok Sabha, Rajya Sabha, ministry, and state-source
-  refreshes;
+- scheduled checkpointed refreshes for every implemented source;
 - source-specific Bill lifecycle and status-history events;
 - committee meeting and parliamentary business calendars;
 - watchlists and topic tracking;

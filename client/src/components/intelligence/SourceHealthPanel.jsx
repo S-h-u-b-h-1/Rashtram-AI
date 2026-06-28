@@ -20,6 +20,18 @@ const STATUS_STYLES = {
     icon: CircleAlert,
     className: "bg-[#f5dfda] text-[#8d372b]",
   },
+  Blocked: {
+    icon: CircleAlert,
+    className: "bg-[#f5dfda] text-[#8d372b]",
+  },
+  Degraded: {
+    icon: CircleAlert,
+    className: "bg-[#f6e7ce] text-[#815b25]",
+  },
+  "Not Run": {
+    icon: CircleDashed,
+    className: "bg-[#ece8e1] text-[#777066]",
+  },
   Planned: {
     icon: CircleDashed,
     className: "bg-[#ece8e1] text-[#777066]",
@@ -45,7 +57,8 @@ export function SourceHealthPanel({ sources }) {
 
       <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
         {publicSourceGroups.map((source) => {
-          const style = STATUS_STYLES[source.status] || STATUS_STYLES.Planned;
+          const style =
+            STATUS_STYLES[source.status] || STATUS_STYLES["Not Run"];
           const StatusIcon = style.icon;
           return (
             <article

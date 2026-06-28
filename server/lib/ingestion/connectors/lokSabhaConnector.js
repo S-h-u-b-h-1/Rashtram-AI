@@ -1,14 +1,59 @@
 const {
-  createOfficialDirectoryConnector,
-} = require("./officialDirectoryConnector");
+  createParliamentPortalConnector,
+} = require("./parliamentPortalConnector");
 
-const lokSabhaConnector = createOfficialDirectoryConnector({
+const lokSabhaConnector = createParliamentPortalConnector({
   name: "lok-sabha",
-  collection: "lok-sabha",
-  url: "https://sansad.in/ls",
   authority: "Lok Sabha Secretariat",
-  jurisdictionLevel: "union",
-  jurisdiction: "India",
+  defaultCollection: "questions",
+  pages: [
+    {
+      collection: "questions",
+      url: "https://sansad.in/ls/questions/questions-and-answers",
+      documentType: "question",
+      titleCell: 1,
+      identityCells: [0, 2, 3],
+      ministryCell: 5,
+      accessMethod: "Digital Sansad server-rendered listing",
+    },
+    {
+      collection: "debates",
+      url: "https://eparlib.sansad.in/handle/123456789/7",
+      documentType: "debate",
+      titleCell: 1,
+      pagination: "offset",
+      pageSize: 20,
+      accessMethod: "Parliament Digital Library HTML catalogue",
+    },
+    {
+      collection: "bulletin-i",
+      url: "https://eparlib.sansad.in/handle/123456789/795919",
+      documentType: "proceeding",
+      titleCell: 1,
+      pagination: "offset",
+      pageSize: 20,
+      accessMethod: "Parliament Digital Library HTML catalogue",
+    },
+    {
+      collection: "bulletin-ii",
+      url: "https://eparlib.sansad.in/handle/123456789/1933333",
+      documentType: "proceeding",
+      titleCell: 1,
+      pagination: "offset",
+      pageSize: 20,
+      accessMethod: "Parliament Digital Library HTML catalogue",
+    },
+    {
+      collection: "business",
+      url: "https://sansad.in/ls/business",
+      documentType: "proceeding",
+      rowPattern: /(list of business|bulletin|papers laid|calendar)/i,
+      accessMethod: "Digital Sansad server-rendered listing",
+      blockedWhenEmpty: true,
+      blockedReason:
+        "The current business page exposes descriptions but its document listing requires interactive filters.",
+    },
+  ],
 });
 
 module.exports = { lokSabhaConnector };

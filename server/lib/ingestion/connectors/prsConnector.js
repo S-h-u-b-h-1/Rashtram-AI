@@ -5,6 +5,7 @@ const {
   requestPage,
 } = require("../../prsCatalog");
 const { sha256 } = require("../core/hashing");
+const { attachConnectorLifecycle } = require("./connectorLifecycle");
 
 const enrichBill = async (document, options) => {
   if (
@@ -89,6 +90,11 @@ const prsConnector = {
     return { records, snapshots, errors };
   },
 };
+
+attachConnectorLifecycle(
+  prsConnector,
+  SOURCE_DEFINITIONS.map((definition) => definition.key),
+);
 
 module.exports = {
   prsConnector,

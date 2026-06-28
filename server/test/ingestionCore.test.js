@@ -30,7 +30,9 @@ const {
 } = require("../lib/ingestion/core/ingestionRunner");
 const { parseArguments } = require("../cli/ingestSources");
 const {
+  eventTypeForRecord,
   hasMeaningfulDocumentUpdate,
+  updateEventTypeForRecord,
 } = require("../lib/ingestion/core/catalogRepository");
 
 test("hashing is stable and normalizes text fingerprints", () => {
@@ -96,6 +98,23 @@ test("normalization accepts universal schema aliases", () => {
   assert.equal(record.status, "Published");
 });
 
+test("normalization scopes circular identities by authority and date", () => {
+  const record = normalizeRecord({
+    sourceName: "ministry",
+    sourceRecordId: "circular-42",
+    sourceUrl: "https://example.gov.in/circular-42",
+    title: "Administrative Circular",
+    documentType: "circular",
+    authority: "Department of Legal Affairs",
+    circularNumber: "42/2026",
+    publicationDate: "02-Apr-2026",
+  });
+  assert.equal(
+    record.legalIdentifier,
+    "Department of Legal Affairs:42/2026:2026-04-02",
+  );
+});
+
 test("normalization handles Indian numeric dates and source priority", () => {
   assert.equal(normalizeDate("22-08-2025"), "2025-08-22");
   assert.equal(normalizeTitle("The Companies (Amendment) Bill, 2025"), "companies amendment");
@@ -145,6 +164,8 @@ test("ingestion counters count distinct PDF URLs and parse operational flags", (
     parseArguments(["--pdf-storage=filesystem"]).pdfStorage,
     "filesystem",
   );
+  assert.equal(parseArguments(["--dry-run"]).dryRun, true);
+  assert.equal(parseArguments(["--from=2025-01-01"]).from, "2025-01-01");
 });
 
 test("intelligence updates are emitted only for meaningful field changes", () => {
@@ -167,6 +188,38 @@ test("intelligence updates are emitted only for meaningful field changes", () =>
       status: "Amended",
     }),
     true,
+  );
+});
+
+test("intelligence event types require evidence from normalized records", () => {
+  assert.equal(
+    eventTypeForRecord({
+      sourceName: "lok-sabha",
+      documentType: "bill",
+      introducedDate: "2026-02-01",
+    }),
+    "bill_introduced",
+  );
+  assert.equal(
+    eventTypeForRecord({
+      sourceName: "egazette",
+      documentType: "ordinance",
+    }),
+    "ordinance_published",
+  );
+  assert.equal(
+    updateEventTypeForRecord(
+      { status: "Introduced" },
+      { documentType: "bill", status: "Passed" },
+    ),
+    "bill_status_changed",
+  );
+  assert.equal(
+    updateEventTypeForRecord(
+      { status: "Active" },
+      { documentType: "act", status: "Active" },
+    ),
+    "document_updated",
   );
 });
 
@@ -232,6 +285,30 @@ test("dedupe keeps a bill and its enacted act as separate documents", () => {
       normalized_title: "public safety",
       jurisdiction: "India",
       year: 2025,
+    },
+  );
+  assert.equal(result.action, "create");
+});
+
+test("dedupe does not merge same-number Bills from different Houses", () => {
+  const result = evaluateCandidate(
+    {
+      sourceName: "parliament-a",
+      sourceRecordId: "bill-new",
+      billNumber: "42",
+      house: "Lok Sabha",
+      documentType: "bill",
+      normalizedTitle: "public safety",
+      jurisdiction: "India",
+      year: 2026,
+    },
+    {
+      bill_number: "42",
+      document_type: "bill",
+      metadata_json: { house: "Rajya Sabha" },
+      normalized_title: "different measure",
+      jurisdiction: "India",
+      year: 2026,
     },
   );
   assert.equal(result.action, "create");

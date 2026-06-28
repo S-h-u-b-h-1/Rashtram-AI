@@ -67,7 +67,7 @@ const main = async () => {
   console.log(JSON.stringify(report, null, 2));
   if (
     report.sources.some((source) =>
-      ["unavailable", "parser changed"].includes(source.status),
+      ["unavailable", "parser changed", "blocked"].includes(source.status),
     )
   ) {
     process.exitCode = 2;

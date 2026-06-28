@@ -469,7 +469,15 @@ const upsertRelationships = async (client, documentId, record) => {
 };
 
 const eventTypeForRecord = (record) => {
-  if (record.sourceName === "egazette") return "gazette_notification";
+  if (
+    record.sourceName === "egazette" &&
+    ["gazette", "notification"].includes(record.documentType)
+  ) {
+    return "gazette_notification";
+  }
+  if (record.documentType === "bill" && record.introducedDate) {
+    return "bill_introduced";
+  }
   const types = {
     act: "act_published",
     rule: "rule_published",
@@ -480,6 +488,17 @@ const eventTypeForRecord = (record) => {
     policy: "ministry_policy_published",
   };
   return types[record.documentType] || "document_added";
+};
+
+const updateEventTypeForRecord = (candidate, record) => {
+  if (
+    record.documentType === "bill" &&
+    record.status &&
+    String(record.status) !== String(candidate?.status || "")
+  ) {
+    return "bill_status_changed";
+  }
+  return "document_updated";
 };
 
 const recordIntelligenceEvent = async (
@@ -640,7 +659,7 @@ const persistRecord = async (record, decision) => {
         client,
         document,
         record,
-        "document_updated",
+        updateEventTypeForRecord(decision.candidate, record),
       );
     }
     if (decision.action === "review" && decision.candidate) {
@@ -1008,6 +1027,8 @@ module.exports = {
   hasMeaningfulDocumentUpdate,
   persistRecord,
   recordIngestionRun,
+  eventTypeForRecord,
+  updateEventTypeForRecord,
   recordSourceSnapshot,
   repairCrossTypeIndiaCodeMerges,
   storeSnapshots,

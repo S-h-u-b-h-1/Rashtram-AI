@@ -2,6 +2,8 @@ const cheerio = require("cheerio");
 const { discoverPdfLinks, absoluteUrl } = require("../core/pdfDiscovery");
 const { sha256 } = require("../core/hashing");
 const { createSnapshot } = require("../core/sourceSnapshots");
+const { normalizeDate } = require("../core/normalizer");
+const { attachConnectorLifecycle } = require("./connectorLifecycle");
 
 const INDIA_CODE_BASE = "https://www.indiacode.nic.in";
 const CENTRAL_ACTS_HANDLE = "123456789/1362";
@@ -216,6 +218,54 @@ const parseDetailPage = (html, detailUrl, record) => {
   };
 };
 
+const subordinateRecordsFor = (record) => {
+  const types = new Set([
+    "rule",
+    "regulation",
+    "notification",
+    "order",
+    "circular",
+    "ordinance",
+    "statute",
+  ]);
+  return (record.resources || [])
+    .filter((resource) => types.has(resource.category))
+    .map((resource) => {
+      const publicationDate = normalizeDate(
+        String(resource.label || "").match(
+          /\b\d{1,2}[-/]\d{1,2}[-/]\d{4}\b|\b\d{1,2}[-\s][A-Za-z]{3,9}[-\s]\d{4}\b/,
+        )?.[0],
+      );
+      return {
+        sourceName: record.sourceName,
+        sourceRecordId: `${record.sourceRecordId}:${sha256(resource.url).slice(0, 16)}`,
+        sourceUrl: resource.url,
+        detailUrl: record.detailUrl,
+        pdfUrl:
+          resource.resourceType === "pdf" ? resource.url : null,
+        documentType:
+          resource.category === "statute" ? "act" : resource.category,
+        jurisdictionLevel: record.jurisdictionLevel,
+        jurisdiction: record.jurisdiction,
+        title: resource.label,
+        authority: record.authority,
+        ministry: record.ministry,
+        department: record.department,
+        category: "subordinate-legislation",
+        publicationDate,
+        year: publicationDate
+          ? Number(publicationDate.slice(0, 4))
+          : record.year,
+        resources: [resource],
+        metadata: {
+          parentActSourceRecordId: record.sourceRecordId,
+          parentActTitle: record.title,
+          collection: "subordinate-legislation",
+        },
+      };
+    });
+};
+
 const indiaCodeConnector = {
   name: "india-code",
   defaultCollection: "central-acts",
@@ -246,7 +296,21 @@ const indiaCodeConnector = {
         }),
       );
     } else {
-      const years = String(options.years || new Date().getFullYear())
+      const currentYear = new Date().getFullYear();
+      const rangeStart = Number.parseInt(options.from, 10);
+      const rangeEnd = Number.parseInt(options.to, 10);
+      const defaultYears = Array.from(
+        { length: 6 },
+        (_, index) => currentYear - index,
+      );
+      const rangeYears =
+        rangeStart && rangeEnd
+          ? Array.from(
+              { length: Math.abs(rangeEnd - rangeStart) + 1 },
+              (_, index) => Math.max(rangeStart, rangeEnd) - index,
+            )
+          : defaultYears;
+      const years = String(options.years || rangeYears.join(","))
         .split(",")
         .map((value) => Number.parseInt(value.trim(), 10))
         .filter(Boolean);
@@ -302,7 +366,11 @@ const indiaCodeConnector = {
       }
     }
 
-    const limited = records.slice(0, Number(options.limit || records.length));
+    const limit = Number(options.limit || records.length);
+    const parentLimit = options.catalogOnly
+      ? limit
+      : Math.max(1, Math.ceil(limit / 2));
+    const limited = records.slice(0, parentLimit);
     if (!options.catalogOnly) {
       await mapWithConcurrency(
         limited,
@@ -343,9 +411,24 @@ const indiaCodeConnector = {
         },
       );
     }
-    return { records: limited, snapshots, errors, diagnostics };
+    const subordinateRecords = limited.flatMap(subordinateRecordsFor);
+    const outputRecords =
+      collection === "subordinate-legislation"
+        ? subordinateRecords
+        : [...limited, ...subordinateRecords];
+    return {
+      records: outputRecords.slice(0, limit),
+      snapshots,
+      errors,
+      diagnostics,
+    };
   },
 };
+
+attachConnectorLifecycle(indiaCodeConnector, [
+  "central-acts",
+  "subordinate-legislation",
+]);
 
 module.exports = {
   CENTRAL_ACTS_HANDLE,
@@ -357,4 +440,5 @@ module.exports = {
   parseBrowsePage,
   parseDetailPage,
   parseYearLinks,
+  subordinateRecordsFor,
 };

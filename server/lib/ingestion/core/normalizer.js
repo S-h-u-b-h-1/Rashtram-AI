@@ -30,6 +30,7 @@ const SOURCE_PRIORITIES = {
   "lok-sabha": 30,
   "rajya-sabha": 30,
   "state-legislature": 30,
+  "state-gazette": 20,
   ministry: 40,
   regulator: 40,
   "prs-india": 50,
@@ -165,9 +166,14 @@ const normalizeRecord = (record) => {
   );
   const normalizedTitle = normalizeTitle(title);
   const documentType = normalizeDocumentType(record.documentType, record);
+  const house = cleanText(record.house);
+  const circularNumber = cleanText(record.circularNumber);
   const legalIdentifier = cleanText(
     record.legalIdentifier || record.gazetteIdentifier || record.gazetteId,
-  );
+  ) ||
+    (circularNumber && record.authority && publicationDate
+      ? `${cleanText(record.authority)}:${circularNumber}:${publicationDate}`
+      : null);
 
   return {
     ...record,
@@ -192,6 +198,8 @@ const normalizeRecord = (record) => {
     status: cleanText(record.status || record.sourceStatus),
     legalIdentifier,
     billNumber: cleanText(record.billNumber),
+    house,
+    circularNumber,
     actNumber: cleanText(record.actNumber),
     gazetteIdentifier: cleanText(
       record.gazetteIdentifier || record.gazetteId,
@@ -217,7 +225,10 @@ const normalizeRecord = (record) => {
     sourceMetadata: record.sourceMetadata || record.metadata || {},
     sourceTitle: cleanText(record.sourceTitle || title),
     sourceStatus: cleanText(record.sourceStatus || record.status),
-    metadata: record.metadata || record.sourceMetadata || {},
+    metadata: {
+      ...(record.metadata || record.sourceMetadata || {}),
+      ...(house ? { house } : {}),
+    },
     resources: Array.isArray(record.resources) ? record.resources : [],
     relationships: Array.isArray(record.relationships)
       ? record.relationships

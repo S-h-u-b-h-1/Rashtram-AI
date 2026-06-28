@@ -69,6 +69,10 @@ Collectors:
 
 `npm run ingest:health --prefix server` performs read-only sample checks. It
 does not write catalogue data, download PDFs, invoke AI, or fill Pinecone.
+Health distinguishes an implemented connector that has not run (`Not Run`)
+from a source that is technically inaccessible (`Blocked`). Blocked reasons
+are retained internally, and public source cards continue to use grouped
+source branding.
 
 PDF downloading is disabled by default. Bounded verification can be enabled
 with `--download-pdfs=true`, `--max-pdfs`, and `--pdf-storage`. URL-only mode
@@ -136,7 +140,9 @@ The dashboard reads stored PostgreSQL events and documents only:
 - source-supported events are preferred;
 - meaningful catalogue changes use `document_updated`;
 - unchanged refreshes do not create activity;
-- Bill status events are never inferred without history;
+- Bill introduction and status-change events require explicit source dates or
+  a real stored status transition;
 - empty event feeds fall back to clearly labelled recent catalogue records;
-- unavailable sources are shown as planned, stale, degraded, or unavailable;
+- unavailable sources are shown as not run, stale, degraded, blocked, or
+  unavailable without projected counts;
 - no Parliament agenda or news item is invented.

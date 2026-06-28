@@ -22,10 +22,21 @@ const CONNECTORS = [
   ministryConnector,
 ];
 
+const CONNECTOR_ALIASES = {
+  ministries: "ministry",
+  "state-legislatures": "state-legislature",
+  "state-gazettes": "state-gazette",
+  indiacode: "india-code",
+};
+
 const connectorByName = (name) =>
-  CONNECTORS.find((connector) => connector.name === name);
+  CONNECTORS.find(
+    (connector) =>
+      connector.name === (CONNECTOR_ALIASES[name] || name),
+  );
 
 module.exports = {
+  CONNECTOR_ALIASES,
   CONNECTORS,
   connectorByName,
 };

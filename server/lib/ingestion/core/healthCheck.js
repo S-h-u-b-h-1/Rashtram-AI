@@ -5,6 +5,12 @@ const PRODUCTION_CONNECTORS = new Set([
   "prs-india",
   "india-code",
   "egazette",
+  "digital-sansad",
+  "lok-sabha",
+  "rajya-sabha",
+  "ministry",
+  "state-legislature",
+  "state-gazette",
 ]);
 
 const countPdfLinks = (records) =>
@@ -82,11 +88,15 @@ const probeConnector = async (
       (collection.errors?.length || 0) + Number(history.errorCount || 0);
     const reachable =
       (collection.snapshots?.length || 0) > 0 || discovered > 0;
+    const blockedDiagnostic = collection.diagnostics?.find(
+      (diagnostic) => diagnostic.type === "blocked",
+    );
     let status = "connected";
 
     if (!shape.valid) status = "parser changed";
     else if (!reachable && collection.errors.length) status = "unavailable";
     else if (discovered > 0 && collection.errors.length) status = "degraded";
+    else if (discovered === 0 && blockedDiagnostic) status = "blocked";
     else if (
       discovered === 0 &&
       collection.diagnostics?.some(
@@ -119,11 +129,22 @@ const probeConnector = async (
       samplePdfLinksDiscovered: pdfLinks,
       snapshotsCaptured: collection.snapshots?.length || 0,
       latestIngestionStatus: history.latestRunStatus || null,
+      lastSuccessfulIngestion: history.lastSuccessfulAt || null,
       storedSourceRecords: Number(history.documentCount || 0),
+      refreshAgeHours: history.lastSuccessfulAt
+        ? Math.round(
+            ((Date.now() - new Date(history.lastSuccessfulAt).getTime()) /
+              3_600_000) *
+              10,
+          ) / 10
+        : null,
+      latestStoredError: history.latestError || null,
       errorCount,
       durationMs: Date.now() - startedAt,
       error:
-        status === "unavailable"
+        status === "blocked"
+          ? blockedDiagnostic.message
+          : status === "unavailable"
           ? String(
               collection.errors[0]?.message ||
                 collection.errors[0]?.error ||
@@ -142,7 +163,16 @@ const probeConnector = async (
       samplePdfLinksDiscovered: 0,
       snapshotsCaptured: 0,
       latestIngestionStatus: history.latestRunStatus || null,
+      lastSuccessfulIngestion: history.lastSuccessfulAt || null,
       storedSourceRecords: Number(history.documentCount || 0),
+      refreshAgeHours: history.lastSuccessfulAt
+        ? Math.round(
+            ((Date.now() - new Date(history.lastSuccessfulAt).getTime()) /
+              3_600_000) *
+              10,
+          ) / 10
+        : null,
+      latestStoredError: history.latestError || null,
       errorCount: Number(history.errorCount || 0) + 1,
       durationMs: Date.now() - startedAt,
       error: String(error.message || "Source probe failed").slice(0, 300),
@@ -152,7 +182,7 @@ const probeConnector = async (
 
 const loadIngestionHistory = async () => {
   if (!process.env.DATABASE_URL) return new Map();
-  const [runs, counts] = await Promise.all([
+  const [runs, successfulRuns, counts] = await Promise.all([
     query(`
       SELECT DISTINCT ON (source_name)
         source_name,
@@ -160,6 +190,13 @@ const loadIngestionHistory = async () => {
         errors_json
       FROM ingestion_runs
       ORDER BY source_name, started_at DESC
+    `),
+    query(`
+      SELECT source_name, MAX(completed_at) AS last_successful_at
+      FROM ingestion_runs
+      WHERE status = 'completed'
+        AND completed_at IS NOT NULL
+      GROUP BY source_name
     `),
     query(`
       SELECT source_name, COUNT(*)::INTEGER AS document_count
@@ -172,7 +209,16 @@ const loadIngestionHistory = async () => {
     history.set(row.source_name, {
       latestRunStatus: row.status,
       errorCount: Array.isArray(row.errors_json) ? row.errors_json.length : 0,
+      latestError: Array.isArray(row.errors_json)
+        ? row.errors_json.at(-1)?.message || null
+        : null,
       documentCount: 0,
+    });
+  }
+  for (const row of successfulRuns.rows) {
+    history.set(row.source_name, {
+      ...(history.get(row.source_name) || {}),
+      lastSuccessfulAt: row.last_successful_at,
     });
   }
   for (const row of counts.rows) {

@@ -52,6 +52,14 @@ const evaluateCandidate = (record, candidate) => {
     normalizedIdentifier(record.legalIdentifier) &&
     normalizedIdentifier(record.legalIdentifier) ===
       normalizedIdentifier(candidate.legal_identifier);
+  const recordHouse = normalizedIdentifier(
+    record.house || record.metadata?.house,
+  );
+  const candidateHouse = normalizedIdentifier(
+    candidate.house || candidate.metadata_json?.house,
+  );
+  const sameHouse =
+    !recordHouse || !candidateHouse || recordHouse === candidateHouse;
   const scopedNumberMatch =
     sameJurisdiction &&
     sameYear &&
@@ -60,6 +68,7 @@ const evaluateCandidate = (record, candidate) => {
       normalizedIdentifier(record.actNumber) ===
         normalizedIdentifier(candidate.act_number)) ||
       (normalizedIdentifier(record.billNumber) &&
+        sameHouse &&
         normalizedIdentifier(record.billNumber) ===
           normalizedIdentifier(candidate.bill_number)));
   if (gazetteMatch || legalIdentifierMatch || scopedNumberMatch) {

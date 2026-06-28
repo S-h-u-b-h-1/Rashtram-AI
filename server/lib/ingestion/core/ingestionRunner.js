@@ -33,11 +33,13 @@ const runIngestion = async (connector, options = {}) => {
     throw new Error("A connector with name and collect() is required");
   }
 
-  const run = await createRun({
-    sourceName: connector.name,
-    collectionName: options.collection || connector.defaultCollection,
-    options,
-  });
+  const run = options.dryRun
+    ? { id: null }
+    : await createRun({
+        sourceName: connector.name,
+        collectionName: options.collection || connector.defaultCollection,
+        options,
+      });
   const summary = {
     runId: run.id,
     source: connector.name,
@@ -63,8 +65,10 @@ const runIngestion = async (connector, options = {}) => {
       downloaded_pdfs: 0,
       stored_pdfs: 0,
       pdf_download_errors: 0,
+      validated: 0,
     },
     errors: [],
+    sampleRecords: [],
   };
 
   try {
@@ -107,6 +111,23 @@ const runIngestion = async (connector, options = {}) => {
           }
         }
         summary.counters.pdf_urls_found += countPdfUrls(record);
+        if (options.dryRun) {
+          summary.stored += 1;
+          summary.counters.validated += 1;
+          if (summary.sampleRecords.length < 10) {
+            summary.sampleRecords.push({
+              sourceName: record.sourceName,
+              sourceRecordId: record.sourceRecordId,
+              title: record.title,
+              documentType: record.documentType,
+              jurisdiction: record.jurisdiction,
+              publicationDate: record.publicationDate,
+              sourceUrl: record.sourceUrl,
+              pdfUrl: record.pdfUrl,
+            });
+          }
+          continue;
+        }
         const candidates = await findCandidates(record);
         const decision = chooseBestCandidate(record, candidates);
         const persisted = await persistRecord(record, decision);
@@ -135,9 +156,9 @@ const runIngestion = async (connector, options = {}) => {
       }
     }
 
-    summary.counters.snapshots = await storeSnapshots(
-      collection.snapshots || [],
-    );
+    summary.counters.snapshots = options.dryRun
+      ? collection.snapshots?.length || 0
+      : await storeSnapshots(collection.snapshots || []);
     summary.counters.errors = summary.errors.length;
     if (summary.errors.length) summary.status = "completed_with_errors";
   } catch (error) {
@@ -146,7 +167,7 @@ const runIngestion = async (connector, options = {}) => {
     summary.counters.errors = summary.errors.length;
   }
 
-  await completeRun(run.id, summary);
+  if (!options.dryRun) await completeRun(run.id, summary);
   return summary;
 };
 
