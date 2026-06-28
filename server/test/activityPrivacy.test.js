@@ -1,5 +1,6 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
+const path = require("node:path");
 const fetchuser = require("../middleware/fetchuser");
 
 const {
@@ -116,6 +117,9 @@ test(
   "consented activity writes to PostgreSQL without persisting the test fixture",
   { skip: process.env.RUN_ACTIVITY_DB_TEST !== "1" },
   async () => {
+    require("dotenv").config({
+      path: process.env.ENV_FILE || path.resolve(__dirname, "../.env.local"),
+    });
     const { connectDB, getPool } = require("../db");
     await connectDB();
     const client = await getPool().connect();
