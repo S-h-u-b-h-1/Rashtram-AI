@@ -94,9 +94,9 @@ const probeConnector = async (
     let status = "connected";
 
     if (!shape.valid) status = "parser changed";
+    else if (blockedDiagnostic) status = "blocked";
     else if (!reachable && collection.errors.length) status = "unavailable";
     else if (discovered > 0 && collection.errors.length) status = "degraded";
-    else if (discovered === 0 && blockedDiagnostic) status = "blocked";
     else if (
       discovered === 0 &&
       collection.diagnostics?.some(

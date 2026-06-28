@@ -62,12 +62,15 @@ const deriveSourceStatus = ({
   now = Date.now(),
 }) => {
   if (!latestRun && !latestSnapshot && !documentCount) return "Not Run";
-  if (latestRun?.status === "completed_with_errors") return "Degraded";
+
+  const errors = JSON.stringify(latestRun?.errors_json || []);
+  const isBlocked = /robots|captcha|blocked|forbidden|interactive|timeout|403|unreachable/i.test(errors);
+
   if (latestRun?.status === "failed") {
-    const errors = JSON.stringify(latestRun.errors_json || []);
-    return /robots|captcha|blocked|forbidden|interactive/i.test(errors)
-      ? "Blocked"
-      : "Error";
+    return isBlocked ? "Blocked" : "Error";
+  }
+  if (latestRun?.status === "completed_with_errors") {
+    return isBlocked ? "Blocked" : "Degraded";
   }
 
   const freshnessDate =

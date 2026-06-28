@@ -21,6 +21,12 @@ const attachConnectorLifecycle = (connector, collections = []) => {
   connector.run =
     connector.run ||
     ((options = {}, context) => connector.collect(options, context));
+  connector.healthCheck =
+    connector.healthCheck ||
+    (async (options = {}, dependencies = {}) => {
+      const { probeConnector } = require("../core/healthCheck");
+      return probeConnector(connector, options, dependencies);
+    });
   return connector;
 };
 

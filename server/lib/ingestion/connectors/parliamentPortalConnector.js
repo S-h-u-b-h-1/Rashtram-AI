@@ -313,6 +313,19 @@ const createParliamentPortalConnector = (config) => {
               collection: page.collection,
               message: error.message,
             });
+            const isBlockedError =
+              /timeout|conn|403|forbidden|parse error|missing expected cr/i.test(
+                error.message || "",
+              );
+            if (isBlockedError || page.blockedWhenEmpty) {
+              diagnostics.push({
+                type: "blocked",
+                collection: page.collection,
+                message:
+                  page.blockedReason ||
+                  `Connection to ${new URL(pageUrl).hostname} was blocked or timed out: ${error.message}`,
+              });
+            }
           }
         }
       }
