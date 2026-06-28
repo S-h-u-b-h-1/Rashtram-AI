@@ -1,5 +1,6 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
+const fetchuser = require("../middleware/fetchuser");
 
 const {
   recordActivity,
@@ -83,6 +84,32 @@ test("personalization cannot be enabled without activity consent", async () => {
     ),
     /requires research activity history/,
   );
+});
+
+test("activity and product routes reject unauthenticated requests", () => {
+  let nextCalled = false;
+  const response = {
+    statusCode: null,
+    body: null,
+    status(code) {
+      this.statusCode = code;
+      return this;
+    },
+    json(body) {
+      this.body = body;
+      return this;
+    },
+  };
+  fetchuser(
+    { header: () => null },
+    response,
+    () => {
+      nextCalled = true;
+    },
+  );
+  assert.equal(response.statusCode, 401);
+  assert.equal(nextCalled, false);
+  assert.match(response.body.error, /No token provided/);
 });
 
 test(
