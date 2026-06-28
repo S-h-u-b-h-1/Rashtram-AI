@@ -27,6 +27,7 @@ const CONNECTOR_ALIASES = {
   "state-legislatures": "state-legislature",
   "state-gazettes": "state-gazette",
   indiacode: "india-code",
+  prs: "prs-india",
 };
 
 const connectorByName = (name) =>
