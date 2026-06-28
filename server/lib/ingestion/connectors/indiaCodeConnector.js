@@ -1,0 +1,444 @@
+const cheerio = require("cheerio");
+const { discoverPdfLinks, absoluteUrl } = require("../core/pdfDiscovery");
+const { sha256 } = require("../core/hashing");
+const { createSnapshot } = require("../core/sourceSnapshots");
+const { normalizeDate } = require("../core/normalizer");
+const { attachConnectorLifecycle } = require("./connectorLifecycle");
+
+const INDIA_CODE_BASE = "https://www.indiacode.nic.in";
+const CENTRAL_ACTS_HANDLE = "123456789/1362";
+const INDIA_CODE_REQUEST_OPTIONS = {
+  headers: {
+    "User-Agent": "curl/8.7.1 RashtramAI-Catalog/1.0",
+  },
+};
+
+const normalize = (value) =>
+  String(value || "")
+    .replace(/\s+/g, " ")
+    .trim();
+
+const mapWithConcurrency = async (items, concurrency, callback) => {
+  const workerCount = Math.max(
+    1,
+    Math.min(Number(concurrency) || 1, items.length || 1),
+  );
+  let nextIndex = 0;
+  await Promise.all(
+    Array.from({ length: workerCount }, async () => {
+      while (nextIndex < items.length) {
+        const index = nextIndex;
+        nextIndex += 1;
+        await callback(items[index], index);
+      }
+    }),
+  );
+};
+
+const handleId = (url) =>
+  String(url || "").match(/\/handle\/123456789\/(\d+)/)?.[1] || null;
+
+const browseUrl = (handle, type, value, options = {}) => {
+  const url = new URL(`${INDIA_CODE_BASE}/handle/${handle}/browse`);
+  url.searchParams.set("type", type);
+  url.searchParams.set("order", "DESC");
+  url.searchParams.set("rpp", String(options.pageSize || 100));
+  if (value != null) url.searchParams.set("value", String(value));
+  if (options.offset) url.searchParams.set("offset", String(options.offset));
+  return url.toString();
+};
+
+const parseYearLinks = (html, pageUrl) => {
+  const $ = cheerio.load(html);
+  const years = new Map();
+  $("a[href*='type=actyear'][href*='value=']").each((_, element) => {
+    const label = normalize($(element).text());
+    const year = Number.parseInt(label.match(/\b(18|19|20)\d{2}\b/)?.[0], 10);
+    if (year) years.set(year, absoluteUrl($(element).attr("href"), pageUrl));
+  });
+  return [...years.entries()]
+    .sort((left, right) => right[0] - left[0])
+    .map(([year, url]) => ({ year, url }));
+};
+
+const parseBrowsePage = (html, pageUrl, collection) => {
+  const $ = cheerio.load(html);
+  const records = [];
+
+  $("tr").each((_, row) => {
+    const anchor = $(row)
+      .find("a[href*='/handle/123456789/']")
+      .filter((__, element) => !/browse\?/.test($(element).attr("href") || ""))
+      .first();
+    if (!anchor.length) return;
+
+    const cells = $(row)
+      .find("td")
+      .map((__, cell) => normalize($(cell).text()))
+      .get()
+      .filter(Boolean);
+    const date = cells.find((cell) =>
+      /^\d{1,2}[-/](?:\d{1,2}|[A-Za-z]{3,9})[-/]\d{4}$/.test(cell),
+    );
+    const actNumber = cells.find(
+      (cell) => cell !== date && /^\d{1,4}$/.test(cell),
+    );
+    const anchorTitle = normalize(anchor.text());
+    const title =
+      (anchorTitle && !/^view(?:\.{3})?$/i.test(anchorTitle)
+        ? anchorTitle
+        : cells
+            .filter(
+              (cell) =>
+                cell !== date &&
+                cell !== actNumber &&
+                !/^view(?:\.{3})?$/i.test(cell),
+            )
+            .sort((left, right) => right.length - left.length)[0]) || null;
+    const detailUrl = absoluteUrl(anchor.attr("href"), pageUrl);
+    const sourceRecordId = handleId(detailUrl);
+    if (!sourceRecordId || !title) return;
+    const year =
+      Number.parseInt(date?.match(/\d{4}$/)?.[0], 10) ||
+      Number.parseInt(pageUrl.match(/[?&]value=((?:18|19|20)\d{2})/)?.[1], 10) ||
+      null;
+
+    records.push({
+      sourceName: "india-code",
+      sourceRecordId,
+      sourceUrl: detailUrl,
+      detailUrl,
+      documentType: "act",
+      jurisdictionLevel:
+        collection === "central-acts" ? "union" : "state",
+      jurisdiction: collection === "central-acts" ? "India" : collection,
+      title,
+      year,
+      enactedDate: date,
+      actNumber: actNumber || null,
+      legalIdentifier:
+        actNumber && year ? `${year}-${actNumber}` : null,
+      authority: "Legislative Department, Ministry of Law and Justice",
+      category: collection,
+      metadata: {
+        collection,
+        browsePage: pageUrl,
+        browseCells: cells,
+      },
+    });
+  });
+  return records;
+};
+
+const metaValues = ($, name) =>
+  $(`meta[name='${name}']`)
+    .map((_, element) => normalize($(element).attr("content")))
+    .get()
+    .filter(Boolean);
+
+const parseDetailPage = (html, detailUrl, record) => {
+  const $ = cheerio.load(html);
+  const title =
+    metaValues($, "DC.title")[0] ||
+    metaValues($, "citation_title")[0] ||
+    record.title;
+  const issued =
+    metaValues($, "DCTERMS.issued")[0] ||
+    metaValues($, "citation_date")[0] ||
+    record.enactedDate;
+  const identifiers = metaValues($, "DC.identifier");
+  const actNumber =
+    normalize(
+      $("tr")
+        .filter((_, row) => /Act Number/i.test($(row).text()))
+        .first()
+        .find("td")
+        .last()
+        .text(),
+    ) ||
+    record.actNumber ||
+    null;
+  const ministry =
+    metaValues($, "DC.relation").find((value) => /ministry/i.test(value)) ||
+    metaValues($, "DC.relation")[0] ||
+    null;
+  const pdfResources = discoverPdfLinks(html, detailUrl);
+  const relatedResources = [];
+  const seen = new Set(pdfResources.map((resource) => resource.url));
+
+  $("a[href]").each((_, element) => {
+    const label = normalize($(element).text());
+    const category = [
+      "Rule",
+      "Regulation",
+      "Notification",
+      "Order",
+      "Circular",
+      "Ordinance",
+      "Statute",
+    ].find((type) => new RegExp(type, "i").test(label));
+    if (!category) return;
+    const url = absoluteUrl($(element).attr("href"), detailUrl);
+    if (!url || seen.has(url)) return;
+    seen.add(url);
+    relatedResources.push({
+      label,
+      resourceType: /\.pdf(?:$|[?#])/i.test(url) ? "pdf" : "link",
+      category: category.toLowerCase(),
+      url,
+    });
+  });
+
+  const pdfUrl =
+    metaValues($, "citation_pdf_url")
+      .map((url) => absoluteUrl(url, detailUrl))
+      .find(Boolean) ||
+    pdfResources[0]?.url ||
+    null;
+  const legalIdentifier =
+    identifiers.find((value) => /^\d{4}[-/]\w+/.test(value)) ||
+    record.legalIdentifier ||
+    (actNumber && record.year ? `${record.year}-${actNumber}` : null);
+
+  return {
+    ...record,
+    title,
+    enactedDate: issued,
+    publicationDate: issued,
+    actNumber,
+    legalIdentifier,
+    ministry,
+    pdfUrl,
+    resources: [...pdfResources, ...relatedResources],
+    metadata: {
+      ...(record.metadata || {}),
+      identifiers,
+      dublinCoreRelations: metaValues($, "DC.relation"),
+    },
+  };
+};
+
+const subordinateRecordsFor = (record) => {
+  const types = new Set([
+    "rule",
+    "regulation",
+    "notification",
+    "order",
+    "circular",
+    "ordinance",
+    "statute",
+  ]);
+  return (record.resources || [])
+    .filter((resource) => types.has(resource.category))
+    .map((resource) => {
+      const publicationDate = normalizeDate(
+        String(resource.label || "").match(
+          /\b\d{1,2}[-/]\d{1,2}[-/]\d{4}\b|\b\d{1,2}[-\s][A-Za-z]{3,9}[-\s]\d{4}\b/,
+        )?.[0],
+      );
+      return {
+        sourceName: record.sourceName,
+        sourceRecordId: `${record.sourceRecordId}:${sha256(resource.url).slice(0, 16)}`,
+        sourceUrl: resource.url,
+        detailUrl: record.detailUrl,
+        pdfUrl:
+          resource.resourceType === "pdf" ? resource.url : null,
+        documentType:
+          resource.category === "statute" ? "act" : resource.category,
+        jurisdictionLevel: record.jurisdictionLevel,
+        jurisdiction: record.jurisdiction,
+        title: resource.label,
+        authority: record.authority,
+        ministry: record.ministry,
+        department: record.department,
+        category: "subordinate-legislation",
+        publicationDate,
+        year: publicationDate
+          ? Number(publicationDate.slice(0, 4))
+          : record.year,
+        resources: [resource],
+        metadata: {
+          parentActSourceRecordId: record.sourceRecordId,
+          parentActTitle: record.title,
+          collection: "subordinate-legislation",
+        },
+      };
+    });
+};
+
+const indiaCodeConnector = {
+  name: "india-code",
+  defaultCollection: "central-acts",
+
+  async collect(options = {}, { fetcher }) {
+    const collection = options.collection || this.defaultCollection;
+    const handle = options.handle || CENTRAL_ACTS_HANDLE;
+    const snapshots = [];
+    const errors = [];
+    const diagnostics = [];
+    let yearPages = [];
+
+    if (String(options.years || "").toLowerCase() === "all") {
+      const url = browseUrl(handle, "actyear", null, options);
+      const response = await fetcher.getText(
+        url,
+        INDIA_CODE_REQUEST_OPTIONS,
+      );
+      yearPages = parseYearLinks(response.body, url);
+      snapshots.push(
+        createSnapshot({
+          sourceName: this.name,
+          sourceUrl: url,
+          body: response.body,
+          responseStatus: response.status,
+          recordCount: yearPages.length,
+          metadata: { collection, kind: "year-index" },
+        }),
+      );
+    } else {
+      const currentYear = new Date().getFullYear();
+      const rangeStart = Number.parseInt(options.from, 10);
+      const rangeEnd = Number.parseInt(options.to, 10);
+      const defaultYears = Array.from(
+        { length: 6 },
+        (_, index) => currentYear - index,
+      );
+      const rangeYears =
+        rangeStart && rangeEnd
+          ? Array.from(
+              { length: Math.abs(rangeEnd - rangeStart) + 1 },
+              (_, index) => Math.max(rangeStart, rangeEnd) - index,
+            )
+          : defaultYears;
+      const years = String(options.years || rangeYears.join(","))
+        .split(",")
+        .map((value) => Number.parseInt(value.trim(), 10))
+        .filter(Boolean);
+      yearPages = years.map((year) => ({
+        year,
+        url: browseUrl(handle, "actyear", year, options),
+      }));
+    }
+
+    const maxPages = Number(options.maxPages || yearPages.length || 1);
+    const records = [];
+    for (const page of yearPages.slice(0, maxPages)) {
+      try {
+        const response = await fetcher.getText(
+          page.url,
+          INDIA_CODE_REQUEST_OPTIONS,
+        );
+        const pageRecords = parseBrowsePage(
+          response.body,
+          page.url,
+          collection,
+        ).map((record) => ({
+          ...record,
+          htmlHash: sha256(response.body),
+        }));
+        if (
+          pageRecords.length === 0 &&
+          /there are no entries in the index/i.test(response.body)
+        ) {
+          diagnostics.push({
+            type: "empty-source",
+            year: page.year,
+            message: "The official index reports no entries for this period.",
+          });
+        }
+        snapshots.push(
+          createSnapshot({
+            sourceName: this.name,
+            sourceUrl: page.url,
+            body: response.body,
+            responseStatus: response.status,
+            recordCount: pageRecords.length,
+            metadata: { collection, year: page.year, kind: "browse" },
+          }),
+        );
+        records.push(...pageRecords);
+      } catch (error) {
+        errors.push({
+          stage: "browse",
+          year: page.year,
+          message: error.message,
+        });
+      }
+    }
+
+    const limit = Number(options.limit || records.length);
+    const parentLimit = options.catalogOnly
+      ? limit
+      : Math.max(1, Math.ceil(limit / 2));
+    const limited = records.slice(0, parentLimit);
+    if (!options.catalogOnly) {
+      await mapWithConcurrency(
+        limited,
+        options.detailConcurrency,
+        async (record, index) => {
+          try {
+            const response = await fetcher.getText(
+              record.detailUrl,
+              INDIA_CODE_REQUEST_OPTIONS,
+            );
+            limited[index] = parseDetailPage(
+              response.body,
+              record.detailUrl,
+              record,
+            );
+            limited[index].htmlHash = sha256(response.body);
+            snapshots.push(
+              createSnapshot({
+                sourceName: this.name,
+                sourceUrl: record.detailUrl,
+                body: response.body,
+                responseStatus: response.status,
+                recordCount: 1,
+                metadata: {
+                  collection,
+                  kind: "detail",
+                  sourceRecordId: limited[index].sourceRecordId,
+                },
+              }),
+            );
+          } catch (error) {
+            errors.push({
+              stage: "detail",
+              sourceRecordId: record.sourceRecordId,
+              message: error.message,
+            });
+          }
+        },
+      );
+    }
+    const subordinateRecords = limited.flatMap(subordinateRecordsFor);
+    const outputRecords =
+      collection === "subordinate-legislation"
+        ? subordinateRecords
+        : [...limited, ...subordinateRecords];
+    return {
+      records: outputRecords.slice(0, limit),
+      snapshots,
+      errors,
+      diagnostics,
+    };
+  },
+};
+
+attachConnectorLifecycle(indiaCodeConnector, [
+  "central-acts",
+  "subordinate-legislation",
+]);
+
+module.exports = {
+  CENTRAL_ACTS_HANDLE,
+  INDIA_CODE_BASE,
+  INDIA_CODE_REQUEST_OPTIONS,
+  browseUrl,
+  indiaCodeConnector,
+  mapWithConcurrency,
+  parseBrowsePage,
+  parseDetailPage,
+  parseYearLinks,
+  subordinateRecordsFor,
+};

@@ -1,172 +1,155 @@
 "use client";
-import React from 'react'
 
 import { useState } from "react";
 import Link from "next/link";
-import Typewriter from "typewriter-effect";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@radix-ui/react-label";
-import { Checkbox } from "@/components/ui/checkbox";
+import { Chrome, Eye, EyeOff, Loader2 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import PublicRoute from "@/components/PublicRoute";
-import { Chrome } from "lucide-react";
+import { AuthShell } from "@/components/AuthShell";
+import { Checkbox } from "@/components/ui/checkbox";
 
-const Login = () => {
+export default function Login() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [rememberMe, setRememberMe] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
   const { login, googleLogin, loading } = useAuth();
 
-  const handleLogin = async (e) => {
-    e.preventDefault();
+  const handleLogin = async (event) => {
+    event.preventDefault();
     setError("");
 
     if (!email || !password) {
-      setError("Please fill in all fields");
+      setError("Enter your email and password to continue.");
       return;
     }
 
     const result = await login(email, password, rememberMe);
-
-    if (!result.success) {
-      setError(result.error);
-    }
+    if (!result.success) setError(result.error);
   };
 
   return (
     <PublicRoute>
-      <div className="flex min-h-screen">
-      {}
-      <div className="w-full md:w-1/2 flex flex-col justify-center items-center p-8 bg-background">
-        <div className="w-full max-w-md space-y-8">
-          <div className="flex flex-col items-center">
-            <div className="h-12 w-12 bg-gradient-to-br from-pink-500 via-red-500 to-yellow-500 rounded-lg mb-4"></div>
-            <h1 className="text-2xl font-bold">Login to your account</h1>
+      <AuthShell
+        eyebrow="Welcome back"
+        title="Continue your research."
+        description="Sign in to return to your saved bill and act conversations."
+      >
+        <button
+          type="button"
+          onClick={googleLogin}
+          disabled={loading}
+          className="flex h-12 w-full items-center justify-center gap-3 rounded-xl border border-[#c30000]/12 bg-white text-sm font-semibold text-[#26302c] shadow-sm transition hover:border-[#c30000]/22 hover:bg-[#fffdf8] disabled:cursor-not-allowed disabled:opacity-60"
+        >
+          <Chrome className="h-4 w-4" />
+          Continue with Google
+        </button>
+
+        <div className="my-6 flex items-center gap-3">
+          <div className="h-px flex-1 bg-[#c30000]/10" />
+          <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[#898176]">
+            or use email
+          </span>
+          <div className="h-px flex-1 bg-[#c30000]/10" />
+        </div>
+
+        <form onSubmit={handleLogin} className="space-y-5">
+          {error && (
+            <div
+              role="alert"
+              className="rounded-xl border border-[#bd3c2d]/20 bg-[#bd3c2d]/7 px-4 py-3 text-sm text-[#9d3529]"
+            >
+              {error}
+            </div>
+          )}
+
+          <div>
+            <label
+              htmlFor="email"
+              className="mb-2 block text-sm font-medium text-[#323a36]"
+            >
+              Email address
+            </label>
+            <input
+              id="email"
+              type="email"
+              autoComplete="email"
+              placeholder="you@organisation.org"
+              value={email}
+              onChange={(event) => setEmail(event.target.value)}
+              disabled={loading}
+              required
+              className="h-12 w-full rounded-xl border border-[#c30000]/12 bg-white px-4 text-sm text-[#c30000] placeholder:text-[#9c9589] transition focus:border-[#d97745] focus:outline-none focus:ring-4 focus:ring-[#d97745]/10 disabled:opacity-60"
+            />
           </div>
 
-          <div className="space-y-4">
-            <div className="grid w-full items-center gap-1.5">
-              <Button
-                variant="outline"
-                className="w-full justify-start gap-2 py-5"
-                onClick={() => googleLogin()}
-                disabled={loading}
+          <div>
+            <div className="mb-2 flex items-center justify-between">
+              <label
+                htmlFor="password"
+                className="text-sm font-medium text-[#323a36]"
               >
-                <Chrome className="h-5 w-5" />
-                Continue with Google
-              </Button>
+                Password
+              </label>
             </div>
             <div className="relative">
-              <div className="absolute inset-0 flex items-center">
-                <span className="w-full border-t"></span>
-              </div>
-              <div className="relative flex justify-center text-xs uppercase">
-                <span className="bg-background px-2 text-muted-foreground">OR</span>
-              </div>
-            </div>
-
-            <form onSubmit={handleLogin} className="space-y-4">
-              {error && (
-                <div className="p-3 text-sm text-red-600 bg-red-50 border border-red-200 rounded-md">
-                  {error}
-                </div>
-              )}
-
-              <div className="grid w-full items-center gap-1.5">
-                <Label htmlFor="email">Email</Label>
-                <Input
-                  id="email"
-                  type="email"
-                  placeholder="Email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  required
-                  disabled={loading}
-                />
-              </div>
-
-              <div className="grid w-full items-center gap-1.5">
-                <Label htmlFor="password">Password</Label>
-                <Input
-                  id="password"
-                  type="password"
-                  placeholder="Password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  required
-                  disabled={loading}
-                />
-              </div>
-
-              <div className="flex items-center space-x-2">
-                <Checkbox
-                  id="rememberMe"
-                  checked={rememberMe}
-                  onCheckedChange={setRememberMe}
-                  disabled={loading}
-                />
-                <label htmlFor="rememberMe" className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
-                  Remember me
-                </label>
-              </div>
-
-              <Button type="submit" className="w-full py-5 cursor-pointer" disabled={loading}>
-                {loading ? "Logging in..." : "Login"}
-              </Button>
-            </form>
-
-            <div className="text-center text-sm">
-              Don't have an account? <Link href="/signup" className="underline">Register</Link>
-            </div>
-
-            <div className="text-center">
-              <Link href="/" className="text-sm underline">Home</Link>
+              <input
+                id="password"
+                type={showPassword ? "text" : "password"}
+                autoComplete="current-password"
+                placeholder="Enter your password"
+                value={password}
+                onChange={(event) => setPassword(event.target.value)}
+                disabled={loading}
+                required
+                className="h-12 w-full rounded-xl border border-[#c30000]/12 bg-white px-4 pr-12 text-sm text-[#c30000] placeholder:text-[#9c9589] transition focus:border-[#d97745] focus:outline-none focus:ring-4 focus:ring-[#d97745]/10 disabled:opacity-60"
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword((visible) => !visible)}
+                className="absolute inset-y-0 right-0 grid w-12 place-items-center text-[#7e776d] hover:text-[#c30000]"
+                aria-label={showPassword ? "Hide password" : "Show password"}
+              >
+                {showPassword ? (
+                  <EyeOff className="h-4 w-4" />
+                ) : (
+                  <Eye className="h-4 w-4" />
+                )}
+              </button>
             </div>
           </div>
-        </div>
-      </div>
 
-      <div className="hidden md:flex md:w-1/2 justify-center items-center p-12 relative overflow-hidden">
-        <div className="absolute inset-0">
-          <img src="/Gradiant.png" alt="Gradient Background" className="w-full h-full object-cover" />
-        </div>
-        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,rgba(255,255,255,0.3)_0%,transparent_70%)] mix-blend-overlay"></div>
-
-        {/* Animated background elements */}
-        <div className="absolute top-0 left-0 w-full h-full">
-          <div className="absolute top-1/4 left-1/4 w-48 h-48 rounded-full bg-white/50 blur-xl animate-pulse"></div>
-          <div className="absolute bottom-1/3 right-1/3 w-56 h-56 rounded-full bg-pink-300/40 blur-xl animate-pulse animation-delay-1000"></div>
-          <div className="absolute top-2/3 left-1/2 w-40 h-40 rounded-full bg-red-300/40 blur-xl animate-pulse animation-delay-2000"></div>
-          <div className="absolute bottom-1/4 left-1/3 w-32 h-32 rounded-full bg-rose-400/30 blur-xl animate-pulse animation-delay-1500"></div>
-        </div>
-
-        <div className="relative z-10 bg-white/80 backdrop-blur-sm p-6 rounded-xl border border-white/50 shadow-xl max-w-md w-full">
-          <div className="flex items-center gap-2 mb-4">
-            <div className="w-3 h-3 rounded-full bg-red-500"></div>
-            <div className="w-3 h-3 rounded-full bg-yellow-500"></div>
-            <div className="w-3 h-3 rounded-full bg-green-500"></div>
-          </div>
-          <div className="text-black text-xl font-medium mb-2">$ rashtram-ai</div>
-          <div className="text-black text-xl font-bold flex items-center">
-            <span className="text-green-600 mr-2"></span>
-            <Typewriter
-              options={{
-                strings: ['Welcome to Rashtram AI', 'Empowering with Indian Values', 'Building AI with First Principles'],
-                autoStart: true,
-                loop: true,
-                delay: 50,
-                deleteSpeed: 30,
-              }}
+          <label className="flex cursor-pointer items-center gap-3 text-sm text-[#625d55]">
+            <Checkbox
+              id="rememberMe"
+              checked={rememberMe}
+              onCheckedChange={setRememberMe}
+              disabled={loading}
             />
-            <span className="ml-1 animate-blink bg-black"></span>
-          </div>
-        </div>
-      </div>
-    </div>
+            Keep me signed in on this device
+          </label>
+
+          <button
+            type="submit"
+            disabled={loading}
+            className="flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-[#c30000] text-sm font-semibold text-[#fffaf0] shadow-[0_12px_28px_rgba(195, 0, 0,0.16)] transition hover:-translate-y-0.5 hover:bg-[#2d3934] disabled:cursor-not-allowed disabled:translate-y-0 disabled:opacity-60"
+          >
+            {loading && <Loader2 className="h-4 w-4 animate-spin" />}
+            {loading ? "Signing in…" : "Sign in"}
+          </button>
+        </form>
+
+        <p className="mt-7 text-center text-sm text-[#706a61]">
+          New to Rashtram?{" "}
+          <Link
+            href="/signup"
+            className="font-semibold text-[#9f3e30] underline decoration-[#9f3e30]/25 underline-offset-4"
+          >
+            Create an account
+          </Link>
+        </p>
+      </AuthShell>
     </PublicRoute>
   );
-};
-
-export default Login;
+}

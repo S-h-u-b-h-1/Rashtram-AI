@@ -35,7 +35,11 @@ export const apiRequest = async (endpoint, options = {}) => {
       throw new Error('Session expired. Please login again.');
     }
     const error = await response.json().catch(() => ({}));
-    throw new Error(error.message || `Request failed with status ${response.status}`);
+    throw new Error(
+      error.message ||
+        error.error ||
+        `Request failed with status ${response.status}`
+    );
   }
 
   return response.json();
@@ -506,6 +510,97 @@ export const getDashboardData = async () => {
   } catch (error) {
     throw error;
   }
+};
+
+export const getDashboardIntelligence = async () => {
+  return apiRequest("/dashboard/intelligence");
+};
+
+export const getProfile = async () => {
+  return apiRequest("/profile");
+};
+
+export const getSourceHealth = async () => {
+  return apiRequest("/dashboard/source-health");
+};
+
+const recentActivityEvents = new Map();
+let searchActivityTimer = null;
+
+const getActivitySessionId = () => {
+  if (typeof window === "undefined") return null;
+  const key = "rashtram-activity-session";
+  let sessionId = sessionStorage.getItem(key);
+  if (!sessionId) {
+    sessionId =
+      globalThis.crypto?.randomUUID?.() ||
+      `session-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    sessionStorage.setItem(key, sessionId);
+  }
+  return sessionId;
+};
+
+export const trackActivity = async (event) => {
+  if (typeof window === "undefined") return { tracked: false };
+  const token = getAuthToken();
+  if (!token) return { tracked: false };
+
+  const payload = {
+    ...event,
+    session_id: getActivitySessionId(),
+  };
+  const signature = JSON.stringify([
+    payload.event_type,
+    payload.entity_type,
+    payload.entity_id,
+    payload.document_id,
+    payload.page_path,
+    payload.search_query,
+    payload.filters_json,
+  ]);
+  const now = Date.now();
+  if (now - (recentActivityEvents.get(signature) || 0) < 2_000) {
+    return { tracked: false, reason: "duplicate_suppressed" };
+  }
+  if (recentActivityEvents.size > 200) {
+    for (const [key, timestamp] of recentActivityEvents) {
+      if (now - timestamp > 60_000) recentActivityEvents.delete(key);
+    }
+  }
+  recentActivityEvents.set(signature, now);
+
+  try {
+    const response = await fetch(`${API_BASE_URL}/activity`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "auth-token": token,
+      },
+      body: JSON.stringify(payload),
+      keepalive: true,
+    });
+    return await response.json().catch(() => ({ tracked: false }));
+  } catch {
+    return { tracked: false };
+  }
+};
+
+export const trackSearchActivity = (event, delayMs = 700) => {
+  if (searchActivityTimer) clearTimeout(searchActivityTimer);
+  searchActivityTimer = setTimeout(() => {
+    trackActivity(event);
+  }, delayMs);
+};
+
+export const getActivityPreferences = async () => {
+  return apiRequest("/activity/preferences");
+};
+
+export const updateActivityPreferences = async (preferences) => {
+  return apiRequest("/activity/preferences", {
+    method: "PATCH",
+    body: JSON.stringify(preferences),
+  });
 };
 
 

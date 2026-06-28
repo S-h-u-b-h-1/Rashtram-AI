@@ -13,7 +13,10 @@ const actsRouter = require("./act/actsRoute");
 const processActRouter = require("./act/processActRoute");
 const actChatManagementRouter = require("./act/actChatRoute");
 const dashboardRouter = require("./dashboard/route");
-const connectDB = require("./db");
+const profileRouter = require("./profile/route");
+const catalogIngestionRouter = require("./catalog/ingestionRoute");
+const activityRouter = require("./activity/route");
+const { connectDB } = require("./db");
 const cors = require("cors");
 const {
   generalLimiter,
@@ -64,6 +67,9 @@ app.use("/api/acts", fetchUser, actsRouter);
 app.use("/api/process-act", fetchUser, processActRouter);
 app.use("/api/act-chats", actChatManagementRouter);
 app.use("/api/dashboard", dashboardRouter);
+app.use("/api/profile", profileRouter);
+app.use("/api/catalog-operations", catalogIngestionRouter);
+app.use("/api/activity", activityRouter);
 
 app.get("/", (req, res) => {
   res.json({

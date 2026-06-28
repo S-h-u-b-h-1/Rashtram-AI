@@ -129,7 +129,7 @@ export default function ContactForm() {
             type="submit"
             className="block w-full rounded-md bg-[#b20d38] px-3.5 py-2.5 text-center text-sm font-semibold text-white shadow-sm hover:bg-[#a2062f] focus:outline-none focus:ring-2 focus:ring-offset-2"
           >
-            Let's talk
+            Let&apos;s talk
           </button>
         </div>
       </form>

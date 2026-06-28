@@ -1,212 +1,220 @@
 "use client";
-import React from 'react'
 
 import { useState } from "react";
 import Link from "next/link";
-import Typewriter from "typewriter-effect";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@radix-ui/react-label";
-import { Checkbox } from "@/components/ui/checkbox";
+import { Check, Chrome, Eye, EyeOff, Loader2 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import PublicRoute from "@/components/PublicRoute";
-import { Chrome } from "lucide-react";
+import { AuthShell } from "@/components/AuthShell";
+import { Checkbox } from "@/components/ui/checkbox";
 
-const Signup = () => {
+const strongPassword =
+  /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,128}$/;
+
+export default function Signup() {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [agreeTerms, setAgreeTerms] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
   const { register, googleLogin, loading } = useAuth();
 
-  const handleSignup = async (e) => {
-    e.preventDefault();
+  const handleSignup = async (event) => {
+    event.preventDefault();
     setError("");
 
     if (!name || !email || !password || !confirmPassword) {
-      setError("Please fill in all fields");
+      setError("Complete all fields to create your workspace.");
       return;
     }
-
+    if (!strongPassword.test(password)) {
+      setError(
+        "Use 8+ characters with uppercase, lowercase, a number, and a special character.",
+      );
+      return;
+    }
     if (password !== confirmPassword) {
-      setError("Passwords do not match");
+      setError("The passwords do not match.");
       return;
     }
-
-    if (password.length < 8) {
-      setError("Password must be at least 8 characters long");
-      return;
-    }
-
     if (!agreeTerms) {
-      setError("Please agree to the Terms of Service and Privacy Policy");
+      setError("Please accept the terms to continue.");
       return;
     }
 
     const result = await register(name, email, password);
-
-    if (!result.success) {
-      setError(result.error);
-    }
+    if (!result.success) setError(result.error);
   };
 
   return (
     <PublicRoute>
-      <div className="flex min-h-screen">
-      {}
-      <div className="w-full md:w-1/2 flex flex-col justify-center items-center p-8 bg-background">
-        <div className="w-full max-w-md space-y-8">
-          <div className="flex flex-col items-center">
-            <div className="h-12 w-12 bg-gradient-to-br from-pink-500 via-red-500 to-yellow-500 rounded-lg mb-4"></div>
-            <h1 className="text-2xl font-bold">Sign up for an account</h1>
-          </div>
+      <AuthShell
+        eyebrow="Create your workspace"
+        title="Begin with a question."
+        description="Create an account to research bills, acts, and their policy implications."
+      >
+        <button
+          type="button"
+          onClick={googleLogin}
+          disabled={loading}
+          className="flex h-12 w-full items-center justify-center gap-3 rounded-xl border border-[#c30000]/12 bg-white text-sm font-semibold text-[#26302c] shadow-sm transition hover:border-[#c30000]/22 hover:bg-[#fffdf8] disabled:cursor-not-allowed disabled:opacity-60"
+        >
+          <Chrome className="h-4 w-4" />
+          Continue with Google
+        </button>
 
-          <div className="space-y-4">
-            <div className="grid w-full items-center gap-1.5">
-              <Button
-                variant="outline"
-                className="w-full justify-start gap-2 py-5"
-                onClick={() => googleLogin()}
-                disabled={loading}
+        <div className="my-6 flex items-center gap-3">
+          <div className="h-px flex-1 bg-[#c30000]/10" />
+          <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[#898176]">
+            or use email
+          </span>
+          <div className="h-px flex-1 bg-[#c30000]/10" />
+        </div>
+
+        <form onSubmit={handleSignup} className="space-y-4">
+          {error && (
+            <div
+              role="alert"
+              className="rounded-xl border border-[#bd3c2d]/20 bg-[#bd3c2d]/7 px-4 py-3 text-sm text-[#9d3529]"
+            >
+              {error}
+            </div>
+          )}
+
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="sm:col-span-2">
+              <label
+                htmlFor="name"
+                className="mb-2 block text-sm font-medium text-[#323a36]"
               >
-                <Chrome className="h-5 w-5" />
-                Continue with Google
-              </Button>
+                Full name
+              </label>
+              <input
+                id="name"
+                type="text"
+                autoComplete="name"
+                placeholder="Your name"
+                value={name}
+                onChange={(event) => setName(event.target.value)}
+                disabled={loading}
+                required
+                className="h-12 w-full rounded-xl border border-[#c30000]/12 bg-white px-4 text-sm placeholder:text-[#9c9589] focus:border-[#d97745] focus:outline-none focus:ring-4 focus:ring-[#d97745]/10"
+              />
             </div>
-            <div className="relative">
-              <div className="absolute inset-0 flex items-center">
-                <span className="w-full border-t"></span>
-              </div>
-              <div className="relative flex justify-center text-xs uppercase">
-                <span className="bg-background px-2 text-muted-foreground">OR</span>
-              </div>
+
+            <div className="sm:col-span-2">
+              <label
+                htmlFor="email"
+                className="mb-2 block text-sm font-medium text-[#323a36]"
+              >
+                Email address
+              </label>
+              <input
+                id="email"
+                type="email"
+                autoComplete="email"
+                placeholder="you@organisation.org"
+                value={email}
+                onChange={(event) => setEmail(event.target.value)}
+                disabled={loading}
+                required
+                className="h-12 w-full rounded-xl border border-[#c30000]/12 bg-white px-4 text-sm placeholder:text-[#9c9589] focus:border-[#d97745] focus:outline-none focus:ring-4 focus:ring-[#d97745]/10"
+              />
             </div>
 
-            <form onSubmit={handleSignup} className="space-y-4">
-              {error && (
-                <div className="p-3 text-sm text-red-600 bg-red-50 border border-red-200 rounded-md">
-                  {error}
-                </div>
-              )}
-
-              <div className="grid w-full items-center gap-1.5">
-                <Label htmlFor="name">Full Name</Label>
-                <Input
-                  id="name"
-                  type="text"
-                  placeholder="Full Name"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  required
-                  disabled={loading}
-                />
-              </div>
-              <div className="grid w-full items-center gap-1.5">
-                <Label htmlFor="email">Email</Label>
-                <Input
-                  id="email"
-                  type="email"
-                  placeholder="Email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  required
-                  disabled={loading}
-                />
-              </div>
-
-              <div className="grid w-full items-center gap-1.5">
-                <Label htmlFor="password">Password</Label>
-                <Input
+            <div>
+              <label
+                htmlFor="password"
+                className="mb-2 block text-sm font-medium text-[#323a36]"
+              >
+                Password
+              </label>
+              <div className="relative">
+                <input
                   id="password"
-                  type="password"
-                  placeholder="Password (min 8 characters)"
+                  type={showPassword ? "text" : "password"}
+                  autoComplete="new-password"
                   value={password}
-                  onChange={(e) => setPassword(e.target.value)}
+                  onChange={(event) => setPassword(event.target.value)}
+                  disabled={loading}
                   required
-                  disabled={loading}
+                  className="h-12 w-full rounded-xl border border-[#c30000]/12 bg-white px-4 pr-11 text-sm focus:border-[#d97745] focus:outline-none focus:ring-4 focus:ring-[#d97745]/10"
                 />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword((visible) => !visible)}
+                  className="absolute inset-y-0 right-0 grid w-11 place-items-center text-[#7e776d]"
+                  aria-label={showPassword ? "Hide password" : "Show password"}
+                >
+                  {showPassword ? (
+                    <EyeOff className="h-4 w-4" />
+                  ) : (
+                    <Eye className="h-4 w-4" />
+                  )}
+                </button>
               </div>
+            </div>
 
-              <div className="grid w-full items-center gap-1.5">
-                <Label htmlFor="confirmPassword">Confirm Password</Label>
-                <Input
-                  id="confirmPassword"
-                  type="password"
-                  placeholder="Confirm Password"
-                  value={confirmPassword}
-                  onChange={(e) => setConfirmPassword(e.target.value)}
-                  required
-                  disabled={loading}
-                />
-              </div>
-
-              <div className="flex items-center space-x-2">
-                <Checkbox
-                  id="terms"
-                  checked={agreeTerms}
-                  onCheckedChange={setAgreeTerms}
-                  disabled={loading}
-                />
-                <label htmlFor="terms" className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
-                  I agree to the <Link href="/terms" className="underline">Terms of Service</Link> and <Link href="/privacy" className="underline">Privacy Policy</Link>
-                </label>
-              </div>
-
-              <Button type="submit" className="w-full py-5" disabled={loading}>
-                {loading ? "Creating Account..." : "Sign up"}
-              </Button>
-            </form>
-
-            <div className="text-center text-sm">
-              Already have an account? <Link href="/login" className="underline">Log in</Link>
+            <div>
+              <label
+                htmlFor="confirmPassword"
+                className="mb-2 block text-sm font-medium text-[#323a36]"
+              >
+                Confirm password
+              </label>
+              <input
+                id="confirmPassword"
+                type={showPassword ? "text" : "password"}
+                autoComplete="new-password"
+                value={confirmPassword}
+                onChange={(event) => setConfirmPassword(event.target.value)}
+                disabled={loading}
+                required
+                className="h-12 w-full rounded-xl border border-[#c30000]/12 bg-white px-4 text-sm focus:border-[#d97745] focus:outline-none focus:ring-4 focus:ring-[#d97745]/10"
+              />
             </div>
           </div>
-        </div>
-      </div>
 
-      {}
-      <div className="hidden md:flex md:w-1/2 justify-center items-center p-12 relative overflow-hidden">
-        {}
-        <div className="absolute inset-0">
-          <img src="/Gradiant.png" alt="Gradient Background" className="w-full h-full object-cover" />
-        </div>
-        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,rgba(255,255,255,0.3)_0%,transparent_70%)] mix-blend-overlay"></div>
+          <p className="flex items-start gap-2 text-xs leading-5 text-[#817a70]">
+            <Check className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[#39715f]" />
+            8+ characters with uppercase, lowercase, number, and special
+            character.
+          </p>
 
-        {}
-        <div className="absolute top-0 left-0 w-full h-full">
-          <div className="absolute top-1/4 left-1/4 w-48 h-48 rounded-full bg-white/50 blur-xl animate-pulse"></div>
-          <div className="absolute bottom-1/3 right-1/3 w-56 h-56 rounded-full bg-pink-300/40 blur-xl animate-pulse animation-delay-1000"></div>
-          <div className="absolute top-2/3 left-1/2 w-40 h-40 rounded-full bg-red-300/40 blur-xl animate-pulse animation-delay-2000"></div>
-          <div className="absolute bottom-1/4 left-1/3 w-32 h-32 rounded-full bg-rose-400/30 blur-xl animate-pulse animation-delay-1500"></div>
-        </div>
-
-        <div className="relative z-10 bg-white/80 backdrop-blur-sm p-6 rounded-xl border border-white/50 shadow-xl max-w-md w-full">
-          <div className="flex items-center gap-2 mb-4">
-            <div className="w-3 h-3 rounded-full bg-red-500"></div>
-            <div className="w-3 h-3 rounded-full bg-yellow-500"></div>
-            <div className="w-3 h-3 rounded-full bg-green-500"></div>
-          </div>
-          <div className="text-black text-xl font-medium mb-2">$ rashtram-ai</div>
-          <div className="text-black text-xl font-bold flex items-center">
-            <span className="text-green-600 mr-2"></span>
-            <Typewriter
-              options={{
-                strings: ['Join our community today', 'Create amazing projects', 'Connect with other developers'],
-                autoStart: true,
-                loop: true,
-                delay: 50,
-                deleteSpeed: 30,
-              }}
+          <label className="flex cursor-pointer items-start gap-3 text-xs leading-5 text-[#625d55]">
+            <Checkbox
+              id="terms"
+              checked={agreeTerms}
+              onCheckedChange={setAgreeTerms}
+              disabled={loading}
+              className="mt-0.5"
             />
-            <span className="ml-1 animate-blink bg-black"></span>
-          </div>
-        </div>
-      </div>
-    </div>
+            I agree to use Rashtram AI responsibly and verify important policy
+            conclusions against primary sources.
+          </label>
+
+          <button
+            type="submit"
+            disabled={loading}
+            className="flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-[#c30000] text-sm font-semibold text-[#fffaf0] shadow-[0_12px_28px_rgba(195, 0, 0,0.16)] transition hover:-translate-y-0.5 hover:bg-[#2d3934] disabled:cursor-not-allowed disabled:translate-y-0 disabled:opacity-60"
+          >
+            {loading && <Loader2 className="h-4 w-4 animate-spin" />}
+            {loading ? "Creating workspace…" : "Create workspace"}
+          </button>
+        </form>
+
+        <p className="mt-6 text-center text-sm text-[#706a61]">
+          Already have an account?{" "}
+          <Link
+            href="/login"
+            className="font-semibold text-[#9f3e30] underline decoration-[#9f3e30]/25 underline-offset-4"
+          >
+            Sign in
+          </Link>
+        </p>
+      </AuthShell>
     </PublicRoute>
   );
-};
-
-export default Signup;
+}

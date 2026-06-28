@@ -147,7 +147,7 @@ function SolutionPage() {
 
             <p className="text-xl md:text-2xl text-gray-500 mb-14 max-w-2xl mx-auto leading-relaxed font-medium animate-fade-in-up delay-200">
               From education to environment, we deliver the precision insights
-              needed to solve humanity's complex challenges.
+              needed to solve humanity&apos;s complex challenges.
             </p>
 
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-6 max-w-5xl mx-auto animate-fade-in-up delay-300">
@@ -206,7 +206,7 @@ function SolutionPage() {
               <ProcessStep
                 number="01"
                 title="Aggregation"
-                description="Collecting real-time signals from thousands of verified public and private sources globally."
+                description="Structuring continuously refreshed public legislative records and trusted policy references with retained provenance."
               />
               <ProcessStep
                 number="02"

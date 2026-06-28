@@ -1,4 +1,4 @@
-export default () => {
+export default function PricingPage() {
   const plans = [
     {
       name: "Basic plan",
@@ -98,4 +98,4 @@ export default () => {
       </div>
     </section>
   );
-};
+}

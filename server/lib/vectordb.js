@@ -1,9 +1,20 @@
 const { Pinecone } = require("@pinecone-database/pinecone");
 
 const EMBEDDING_DIMENSION = 768;
-const GENERATION_MODEL = process.env.GEMINI_MODEL || "gemini-2.5-flash";
+const EMBEDDING_BATCH_SIZE = 50;
+const EMBEDDING_PROVIDER =
+  (process.env.EMBEDDING_PROVIDER || "local").toLowerCase();
+const GENERATION_MODEL =
+  process.env.GEMINI_MODEL || "gemini-2.5-flash-lite";
+const FALLBACK_GENERATION_MODEL =
+  process.env.GEMINI_FALLBACK_MODEL || "gemini-2.0-flash-lite";
 const EMBEDDING_MODEL =
   process.env.GEMINI_EMBEDDING_MODEL || "gemini-embedding-001";
+const VECTOR_NAMESPACE =
+  process.env.PINECONE_NAMESPACE ||
+  (EMBEDDING_PROVIDER === "local"
+    ? "local-hash-v1"
+    : `${EMBEDDING_MODEL}-v1`);
 
 let pineconeClient;
 let geminiClientPromise;
@@ -43,6 +54,40 @@ const normalizeVector = (values) => {
   return values.map((value) => value / magnitude);
 };
 
+const hashFeature = (feature, seed = 0) => {
+  let hash = (2166136261 ^ seed) >>> 0;
+  for (let index = 0; index < feature.length; index += 1) {
+    hash ^= feature.charCodeAt(index);
+    hash = Math.imul(hash, 16777619) >>> 0;
+  }
+  return hash;
+};
+
+const generateLocalEmbedding = (text) => {
+  const tokens = String(text)
+    .toLowerCase()
+    .match(/[\p{L}\p{N}]+/gu) || [];
+  const features = [...tokens];
+
+  for (let index = 0; index < tokens.length - 1; index += 1) {
+    features.push(`${tokens[index]}_${tokens[index + 1]}`);
+  }
+
+  const counts = new Map();
+  for (const feature of features) {
+    counts.set(feature, (counts.get(feature) || 0) + 1);
+  }
+
+  const values = new Array(EMBEDDING_DIMENSION).fill(0);
+  for (const [feature, count] of counts) {
+    const bucket = hashFeature(feature) % EMBEDDING_DIMENSION;
+    const sign = hashFeature(feature, 0x9e3779b9) % 2 === 0 ? 1 : -1;
+    values[bucket] += sign * (1 + Math.log(count));
+  }
+
+  return normalizeVector(values);
+};
+
 const createProbeVector = () => {
   const vector = new Array(EMBEDDING_DIMENSION).fill(0);
   vector[0] = 1;
@@ -54,13 +99,70 @@ const responseText = (response) => {
   return response?.text || "";
 };
 
+const isTransientGeminiError = (error) => {
+  const status = Number(error?.status || error?.code);
+  const message = String(error?.message || "");
+  return (
+    [429, 500, 502, 503, 504].includes(status) ||
+    /RESOURCE_EXHAUSTED|UNAVAILABLE|high demand|rate limit|temporar/i.test(
+      message,
+    )
+  );
+};
+
+const withGeminiRetry = async (operation, label, attempts = 3) => {
+  let lastError;
+
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    try {
+      return await operation();
+    } catch (error) {
+      lastError = error;
+      if (!isTransientGeminiError(error) || attempt === attempts) throw error;
+
+      const delay = 1_000 * 2 ** (attempt - 1);
+      console.warn(
+        `${label} temporarily unavailable; retrying in ${delay}ms`,
+      );
+      await new Promise((resolve) => setTimeout(resolve, delay));
+    }
+  }
+
+  throw lastError;
+};
+
+const generationModels = () =>
+  [...new Set([GENERATION_MODEL, FALLBACK_GENERATION_MODEL])].filter(Boolean);
+
+const runGeneration = async (method, contents) => {
+  const ai = await getGemini();
+  let lastError;
+
+  for (const model of generationModels()) {
+    try {
+      return await withGeminiRetry(
+        () => ai.models[method]({ model, contents }),
+        `Gemini model ${model}`,
+      );
+    } catch (error) {
+      lastError = error;
+      if (!isTransientGeminiError(error)) throw error;
+      console.warn(`Gemini model ${model} unavailable; trying fallback`);
+    }
+  }
+
+  throw lastError;
+};
+
 const getIndex = () =>
-  getPinecone().index(process.env.PINECONE_INDEX_NAME || "rashtram-bills");
+  getPinecone()
+    .index(process.env.PINECONE_INDEX_NAME || "rashtram-bills")
+    .namespace(VECTOR_NAMESPACE);
 
 const getActIndex = () =>
-  getPinecone().index(
-    process.env.PINECONE_ACT_INDEX_NAME || "rashtram-acts",
-  );
+  getPinecone()
+    .index(process.env.PINECONE_ACT_INDEX_NAME || "rashtram-acts")
+    .namespace(VECTOR_NAMESPACE);
 
 const checkDocumentExists = async (index, idField, id) => {
   try {
@@ -106,24 +208,54 @@ const checkActExists = async (actId) => {
   };
 };
 
-const generateEmbedding = async (text) => {
-  const ai = await getGemini();
-  const response = await ai.models.embedContent({
-    model: EMBEDDING_MODEL,
-    contents: text,
-    config: { outputDimensionality: EMBEDDING_DIMENSION },
-  });
-
-  const values = response.embeddings?.[0]?.values;
-  if (!values?.length) {
-    throw new Error("Gemini returned no embedding values");
+const generateEmbeddings = async (
+  texts,
+  taskType = "RETRIEVAL_DOCUMENT",
+) => {
+  if (!Array.isArray(texts) || texts.length === 0) return [];
+  if (EMBEDDING_PROVIDER === "local") {
+    return texts.map(generateLocalEmbedding);
+  }
+  if (EMBEDDING_PROVIDER !== "gemini") {
+    throw new Error(
+      `Unsupported EMBEDDING_PROVIDER: ${EMBEDDING_PROVIDER}`,
+    );
   }
 
-  return normalizeVector(values);
+  const ai = await getGemini();
+  const response = await withGeminiRetry(
+    () =>
+      ai.models.embedContent({
+        model: EMBEDDING_MODEL,
+        contents: texts,
+        config: {
+          outputDimensionality: EMBEDDING_DIMENSION,
+          taskType,
+        },
+      }),
+    `Gemini embedding model ${EMBEDDING_MODEL}`,
+  );
+
+  const embeddings = response.embeddings || [];
+  if (embeddings.length !== texts.length) {
+    throw new Error(
+      `Gemini returned ${embeddings.length} embeddings for ${texts.length} inputs`,
+    );
+  }
+
+  return embeddings.map((embedding, index) => {
+    const values = embedding.values;
+    if (!values?.length) {
+      throw new Error(`Gemini returned no values for embedding ${index}`);
+    }
+    return normalizeVector(values);
+  });
 };
 
+const generateEmbedding = async (text) =>
+  (await generateEmbeddings([text], "RETRIEVAL_QUERY"))[0];
+
 const generateResponse = async (prompt, context = "") => {
-  const ai = await getGemini();
   const fullPrompt = `
 You are Rashtram AI, an assistant for researching Indian parliamentary
 documents. Answer using the supplied document context.
@@ -138,14 +270,10 @@ Give a comprehensive, accessible answer. Clearly state when the context does
 not contain enough information. Do not invent provisions, dates, or citations.
 `;
 
-  return ai.models.generateContentStream({
-    model: GENERATION_MODEL,
-    contents: fullPrompt,
-  });
+  return runGeneration("generateContentStream", fullPrompt);
 };
 
 const generateSummary = async (documentType, content) => {
-  const ai = await getGemini();
   const prompt = `
 Provide a comprehensive summary of this Indian parliamentary ${documentType}.
 Include:
@@ -162,10 +290,7 @@ Write an accurate, well-structured summary. Do not invent information that is
 not present in the document.
 `;
 
-  const response = await ai.models.generateContent({
-    model: GENERATION_MODEL,
-    contents: prompt,
-  });
+  const response = await runGeneration("generateContent", prompt);
   return responseText(response);
 };
 
@@ -226,18 +351,21 @@ const storeContentInChunks = async ({
   idField,
   titleField,
 }) => {
-  const batchSize = 50;
   let totalStored = 0;
 
-  for (let start = 0; start < chunks.length; start += batchSize) {
-    const batch = chunks.slice(start, start + batchSize);
-    const vectors = [];
-
-    for (const chunk of batch) {
-      const embedding = await generateEmbedding(chunk.content);
-      vectors.push({
+  for (
+    let start = 0;
+    start < chunks.length;
+    start += EMBEDDING_BATCH_SIZE
+  ) {
+    const batch = chunks.slice(start, start + EMBEDDING_BATCH_SIZE);
+    const embeddings = await generateEmbeddings(
+      batch.map((chunk) => chunk.content),
+      "RETRIEVAL_DOCUMENT",
+    );
+    const vectors = batch.map((chunk, index) => ({
         id: chunk.id,
-        values: embedding,
+        values: embeddings[index],
         metadata: {
           [idField]: String(chunk.billId),
           [titleField]: chunk.title,
@@ -245,10 +373,10 @@ const storeContentInChunks = async ({
           chunkIndex: chunk.chunkIndex,
           totalChunks: chunk.totalChunks,
           timestamp: new Date().toISOString(),
+          embeddingProvider: EMBEDDING_PROVIDER,
           ...chunk.metadata,
         },
-      });
-    }
+      }));
 
     await upsertWithRetry(index, vectors);
     totalStored += vectors.length;
@@ -345,6 +473,7 @@ module.exports = {
   generateActSummary,
   generateBillSummary,
   generateEmbedding,
+  generateEmbeddings,
   generateResponse,
   getActIndex,
   getIndex,

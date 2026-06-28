@@ -44,8 +44,8 @@ router.get('/:billId', fetchuser, async (req, res) => {
     const chat = await BillChat.getChatByBill(userId, billId);
 
     if (!chat) {
-      return res.status(404).json({
-        error: 'Chat not found',
+      return res.json({
+        success: true,
         chat: null,
       });
     }

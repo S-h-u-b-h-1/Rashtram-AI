@@ -1,216 +1,165 @@
 "use client";
-import React, { useState, useEffect } from 'react'
-import Link from 'next/link'
-import { Cylinder, Menu, X, ChevronRight, User, LogOut } from 'lucide-react'
-import { useAuth } from '@/context/AuthContext'
 
-const Navbar = () => {
-  const [isMenuOpen, setIsMenuOpen] = useState(false)
-  const [scrolled, setScrolled] = useState(false)
-  const [isUserMenuOpen, setIsUserMenuOpen] = useState(false)
-  const { isAuthenticated, user, logout, loading } = useAuth()
+import { useEffect, useState } from "react";
+import Link from "next/link";
+import { ArrowUpRight, LogOut, Menu, User, X } from "lucide-react";
+import { useAuth } from "@/context/AuthContext";
+import { BrandMark } from "@/components/BrandMark";
+
+const links = [
+  { href: "/#capabilities", label: "Capabilities" },
+  { href: "/#workflow", label: "How it works" },
+  { href: "/product", label: "Product" },
+  { href: "/contact", label: "Contact" },
+];
+
+export default function Navbar() {
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [scrolled, setScrolled] = useState(false);
+  const { isAuthenticated, user, logout, loading } = useAuth();
 
   useEffect(() => {
-    const handleScroll = () => {
-      setScrolled(window.scrollY > 10)
-    }
-    window.addEventListener('scroll', handleScroll)
-    return () => window.removeEventListener('scroll', handleScroll)
-  }, [])
-
-  useEffect(() => {
-    const handleClickOutside = (event) => {
-      if (isUserMenuOpen && !event.target.closest('.user-menu-container')) {
-        setIsUserMenuOpen(false)
-      }
-    }
-    document.addEventListener('mousedown', handleClickOutside)
-    return () => document.removeEventListener('mousedown', handleClickOutside)
-  }, [isUserMenuOpen])
+    const handleScroll = () => setScrolled(window.scrollY > 18);
+    handleScroll();
+    window.addEventListener("scroll", handleScroll, { passive: true });
+    return () => window.removeEventListener("scroll", handleScroll);
+  }, []);
 
   return (
-    <nav
-      className={`fixed top-0 left-1/2 z-50 transition-all duration-300
-        ${scrolled
-          ? 'backdrop-blur-md bg-white/60 shadow-lg py-5 border-b border-white/30 max-w-4xl top-5 w-full rounded-xl -translate-x-1/2 transition-all duration-300'
-          : 'bg-white shadow-sm py-4 w-full -translate-x-1/2'
-        }
-      `}
-      style={{ right: 'auto' }}
+    <header
+      className={`fixed inset-x-0 top-0 z-50 transition-all duration-300 ${
+        scrolled
+          ? "border-b border-[#c30000]/10 bg-[#fffdf8]/88 shadow-[0_10px_35px_rgba(195, 0, 0,0.06)] backdrop-blur-xl"
+          : "bg-transparent"
+      }`}
     >
-      <div className="flex items-center justify-between px-6 transition-all duration-300">
-        <Link href="/" className="flex items-center font-bold text-xl text-black whitespace-nowrap">
-          <Cylinder className="mr-2 text-black transform rotate-45" size={20}/>
-          Rashtram AI
-        </Link>
-        <div className="hidden md:flex items-center space-x-8">
-          <Link href="/solutions" className="text-gray-700 hover:text-gray-900 relative group">
-            Solutions
-            <span className="absolute bottom-0 left-0 w-0 h-0.5 bg-gray-900 transition-all duration-300 group-hover:w-full"></span>
-          </Link>
-          <Link href="/product" className="text-gray-700 hover:text-gray-900 relative group">
-            Product
-            <span className="absolute bottom-0 left-0 w-0 h-0.5 bg-gray-900 transition-all duration-300 group-hover:w-full"></span>
-          </Link>
-          <Link href="/pricing" className="text-gray-700 hover:text-gray-900 relative group">
-            Pricing
-            <span className="absolute bottom-0 left-0 w-0 h-0.5 bg-gray-900 transition-all duration-300 group-hover:w-full"></span>
-          </Link>
-          <Link
-            href="/contact"
-            className="text-gray-700 hover:text-gray-900 font-medium relative group"
-          >
-            Contact Us
-            <span className="absolute bottom-0 left-0 w-0 h-0.5 bg-gray-900 transition-all duration-300 group-hover:w-full"></span>
-          </Link>
+      <nav
+        className="mx-auto flex h-20 max-w-[1240px] items-center justify-between px-5 sm:px-8"
+        aria-label="Primary navigation"
+      >
+        <BrandMark />
 
-          {}
-          {!loading && (
-            <>
-              {isAuthenticated ? (
-                <div className="relative ml-6 user-menu-container">
-                  <button
-                    onClick={() => setIsUserMenuOpen(!isUserMenuOpen)}
-                    className="flex items-center space-x-2 text-gray-700 hover:text-gray-900 focus:outline-none"
-                  >
-                    <div className="w-8 h-8 bg-[#B20D38] rounded-full flex items-center justify-center">
-                      <User className="w-4 h-4 text-white" />
-                    </div>
-                    <span className="font-medium">{user?.name || 'User'}</span>
-                    <ChevronRight className={`w-4 h-4 transition-transform ${isUserMenuOpen ? 'rotate-90' : ''}`} />
-                  </button>
-                  {isUserMenuOpen && (
-                    <div className="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg py-1 z-10">
-                      <Link
-                        href="/app"
-                        className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
-                        onClick={() => setIsUserMenuOpen(false)}
-                      >
-                        Dashboard
-                      </Link>
-                      <button
-                        onClick={() => {
-                          logout();
-                          setIsUserMenuOpen(false);
-                        }}
-                        className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center space-x-2"
-                      >
-                        <LogOut className="w-4 h-4" />
-                        <span>Sign Out</span>
-                      </button>
-                    </div>
-                  )}
-                </div>
-              ) : (
+        <div className="hidden items-center gap-8 lg:flex">
+          {links.map((link) => (
+            <Link
+              key={link.href}
+              href={link.href}
+              className="text-sm font-medium text-[#5f5a52] transition hover:text-[#c30000]"
+            >
+              {link.label}
+            </Link>
+          ))}
+        </div>
+
+        <div className="hidden items-center gap-3 lg:flex">
+          {!loading &&
+            (isAuthenticated ? (
+              <>
+                <Link
+                  href="/app"
+                  className="inline-flex items-center gap-2 rounded-full border border-[#c30000]/12 bg-white/60 px-4 py-2.5 text-sm font-medium text-[#c30000] transition hover:bg-white"
+                >
+                  <User className="h-4 w-4" />
+                  {user?.name?.split(" ")[0] || "Workspace"}
+                </Link>
+                <button
+                  type="button"
+                  onClick={logout}
+                  className="grid h-10 w-10 place-items-center rounded-full text-[#6c665d] transition hover:bg-[#c30000]/5 hover:text-[#c30000]"
+                  aria-label="Sign out"
+                >
+                  <LogOut className="h-4 w-4" />
+                </button>
+              </>
+            ) : (
+              <>
+                <Link
+                  href="/login"
+                  className="px-4 py-2.5 text-sm font-medium text-[#5f5a52] transition hover:text-[#c30000]"
+                >
+                  Sign in
+                </Link>
                 <Link
                   href="/signup"
-                  className="ml-6 bg-[#B20D38] hover:bg-primary-dark text-white px-6 py-2.5 rounded-md font-medium transition-all duration-300 shadow-sm hover:shadow-md transform hover:-translate-y-0.5"
+                  className="inline-flex items-center gap-2 rounded-full bg-[#c30000] px-5 py-2.5 text-sm font-medium text-[#fffaf0] shadow-sm transition hover:-translate-y-0.5 hover:bg-[#2b3732]"
                 >
-                  Get Started
+                  Start researching
+                  <ArrowUpRight className="h-4 w-4" />
                 </Link>
-              )}
-            </>
+              </>
+            ))}
+        </div>
+
+        <button
+          type="button"
+          onClick={() => setIsMenuOpen((open) => !open)}
+          className="grid h-11 w-11 place-items-center rounded-full border border-[#c30000]/10 bg-white/70 text-[#c30000] lg:hidden"
+          aria-expanded={isMenuOpen}
+          aria-controls="mobile-navigation"
+          aria-label={isMenuOpen ? "Close navigation" : "Open navigation"}
+        >
+          {isMenuOpen ? (
+            <X className="h-5 w-5" />
+          ) : (
+            <Menu className="h-5 w-5" />
           )}
-        </div>
-        <div className="md:hidden">
-          <button
-            onClick={() => setIsMenuOpen(!isMenuOpen)}
-            className="text-gray-700 hover:text-gray-900 focus:outline-none"
-          >
-            {isMenuOpen ? (
-              <X className="h-6 w-6" />
-            ) : (
-              <Menu className="h-6 w-6" />
-            )}
-          </button>
-        </div>
-      </div>
+        </button>
+      </nav>
+
       {isMenuOpen && (
-        <div className="absolute top-16 left-0 right-0 bg-white shadow-md py-4 px-6 md:hidden z-10">
-          <div className="flex flex-col space-y-4">
-            <Link
-              href="/solutions"
-              className="text-gray-700 hover:text-gray-900 font-medium py-2 border-b border-gray-50 flex items-center justify-between group relative"
-              onClick={() => setIsMenuOpen(false)}
-            >
-              <span>Solutions</span>
-              <ChevronRight className="text-gray-900 opacity-0 group-hover:opacity-100 transition-opacity duration-300 h-4 w-4" />
-              <span className="absolute bottom-0 left-0 w-0 h-0.5 bg-gray-900 transition-all duration-300 group-hover:w-full"></span>
-            </Link>
-            <Link
-              href="/product"
-              className="text-gray-700 hover:text-gray-900 font-medium py-2 border-b border-gray-50 flex items-center justify-between group relative"
-              onClick={() => setIsMenuOpen(false)}
-            >
-              <span>Product</span>
-              <ChevronRight className="text-gray-900 opacity-0 group-hover:opacity-100 transition-opacity duration-300 h-4 w-4" />
-              <span className="absolute bottom-0 left-0 w-0 h-0.5 bg-gray-900 transition-all duration-300 group-hover:w-full"></span>
-            </Link>
-            <Link
-              href="/pricing"
-              className="text-gray-700 hover:text-gray-900 font-medium py-2 border-b border-gray-50 flex items-center justify-between group relative"
-              onClick={() => setIsMenuOpen(false)}
-            >
-              <span>Pricing</span>
-              <ChevronRight className="text-gray-900 opacity-0 group-hover:opacity-100 transition-opacity duration-300 h-4 w-4" />
-              <span className="absolute bottom-0 left-0 w-0 h-0.5 bg-gray-900 transition-all duration-300 group-hover:w-full"></span>
-            </Link>
-            <div className="pt-4 flex flex-col space-y-4 mt-2">
-              {}
-              {!loading && (
+        <div
+          id="mobile-navigation"
+          className="border-t border-[#c30000]/10 bg-[#fffdf8] px-5 pb-6 pt-4 shadow-xl lg:hidden"
+        >
+          <div className="mx-auto flex max-w-[1240px] flex-col gap-1">
+            {links.map((link) => (
+              <Link
+                key={link.href}
+                href={link.href}
+                onClick={() => setIsMenuOpen(false)}
+                className="rounded-xl px-3 py-3 text-base font-medium text-[#3c443f] hover:bg-[#c30000]/5"
+              >
+                {link.label}
+              </Link>
+            ))}
+            <div className="mt-3 grid grid-cols-2 gap-2 border-t border-[#c30000]/10 pt-4">
+              {isAuthenticated ? (
                 <>
-                  {isAuthenticated ? (
-                    <>
-                      <div className="flex items-center space-x-3 px-3 py-2 bg-gray-50 rounded-md">
-                        <div className="w-8 h-8 bg-[#B20D38] rounded-full flex items-center justify-center">
-                          <User className="w-4 h-4 text-white" />
-                        </div>
-                        <span className="font-medium text-gray-900">{user?.name || 'User'}</span>
-                      </div>
-                      <Link
-                        href="/app"
-                        className="text-gray-700 hover:text-gray-900 font-medium text-center py-2 border border-gray-200 rounded-md hover:border-gray-400"
-                        onClick={() => setIsMenuOpen(false)}
-                      >
-                        Dashboard
-                      </Link>
-                      <button
-                        onClick={() => {
-                          logout();
-                          setIsMenuOpen(false);
-                        }}
-                        className="text-gray-700 hover:text-gray-900 font-medium text-center py-2 border border-gray-200 rounded-md hover:border-gray-400 flex items-center justify-center space-x-2"
-                      >
-                        <LogOut className="w-4 h-4" />
-                        <span>Sign Out</span>
-                      </button>
-                    </>
-                  ) : (
-                    <Link
-                      href="/signup"
-                      className="bg-[#B20D38] hover:bg-primary-dark text-white px-5 py-3 rounded-md font-medium text-center transition-all duration-300 shadow-sm hover:shadow-md"
-                      onClick={() => setIsMenuOpen(false)}
-                    >
-                      Get Started
-                    </Link>
-                  )}
+                  <Link
+                    href="/app"
+                    onClick={() => setIsMenuOpen(false)}
+                    className="rounded-xl border border-[#c30000]/10 px-4 py-3 text-center text-sm font-medium"
+                  >
+                    Workspace
+                  </Link>
+                  <button
+                    type="button"
+                    onClick={logout}
+                    className="rounded-xl bg-[#c30000] px-4 py-3 text-sm font-medium text-white"
+                  >
+                    Sign out
+                  </button>
+                </>
+              ) : (
+                <>
+                  <Link
+                    href="/login"
+                    className="rounded-xl border border-[#c30000]/10 px-4 py-3 text-center text-sm font-medium"
+                  >
+                    Sign in
+                  </Link>
+                  <Link
+                    href="/signup"
+                    className="rounded-xl bg-[#c30000] px-4 py-3 text-center text-sm font-medium text-white"
+                  >
+                    Get started
+                  </Link>
                 </>
               )}
-              <Link
-                href="/contact"
-                className="text-gray-700 hover:text-gray-900 font-medium text-center py-2 border border-gray-200 rounded-md hover:border-gray-400 flex items-center justify-center space-x-2 group relative"
-                onClick={() => setIsMenuOpen(false)}
-              >
-                <span>Contact Us</span>
-                <ChevronRight className="text-gray-900 opacity-0 group-hover:opacity-100 transition-opacity duration-300 h-4 w-4" />
-                <span className="absolute bottom-0 left-0 w-0 h-0.5 bg-gray-900 transition-all duration-300 group-hover:w-full"></span>
-              </Link>
             </div>
           </div>
         </div>
       )}
-    </nav>
-  )
+    </header>
+  );
 }
-
-export default Navbar

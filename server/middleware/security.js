@@ -27,6 +27,17 @@ const authLimiter = rateLimit({
   skipSuccessfulRequests: false
 });
 
+const activityLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  max: 240,
+  message: {
+    error: "Activity tracking rate limit reached. Research remains available.",
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
+  skipSuccessfulRequests: false,
+});
+
 
 const helmetConfig = helmet({
   contentSecurityPolicy: {
@@ -52,6 +63,7 @@ const helmetConfig = helmet({
 });
 
 module.exports = {
+  activityLimiter,
   generalLimiter,
   authLimiter,
   helmetConfig

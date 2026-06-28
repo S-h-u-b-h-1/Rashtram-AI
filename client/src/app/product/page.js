@@ -78,21 +78,21 @@ function ProductPage() {
       icon: Database,
       title: "Comprehensive Data",
       description:
-        "Access to 500+ verified data sources including government databases, research institutions, and international organizations.",
+        "Explore a continuously refreshed public legislative catalogue built from official public records and trusted legislative references.",
       delay: "100ms",
     },
     {
       icon: FileText,
       title: "Automatic Citations",
       description:
-        "Every response includes proper citations and source references (APA, MLA, etc.), ensuring almost academic-grade integrity.",
+        "Research responses retain document and source context so users can return to the underlying public record.",
       delay: "200ms",
     },
     {
       icon: Shield,
       title: "Verified Information",
       description:
-        "Multi-layer verification process ensures all data is accurate, up-to-date, and comes from authoritative, trusted sources.",
+        "Provenance, update timestamps, and duplicate controls make the catalogue auditable without claiming legal authority.",
       delay: "0ms",
     },
     {
@@ -106,18 +106,18 @@ function ProductPage() {
       icon: Clock,
       title: "Real-time Updates",
       description:
-        "Continuous monitoring and updating of policy data to ensure recommendations reflect the absolute latest developments.",
+        "Source-aware refresh status distinguishes current, stale, planned, and unavailable public record feeds.",
       delay: "200ms",
     },
   ];
 
   const dataSources = [
-    { name: "Government of India Open Data", type: "Official" },
-    { name: "World Bank Open Data", type: "Global" },
-    { name: "NITI Aayog Reports", type: "Think Tank" },
-    { name: "Census of India", type: "Demographic" },
-    { name: "Reserve Bank of India", type: "Financial" },
-    { name: "UN Sustainable Development Goals", type: "Global" },
+    { name: "Parliamentary Public Records", type: "Legislative" },
+    { name: "Official Gazette Records", type: "Legal" },
+    { name: "Official Acts Repositories", type: "Statutory" },
+    { name: "Public Policy Documents", type: "Policy" },
+    { name: "State Legislative Records", type: "State" },
+    { name: "Trusted Legislative References", type: "Research" },
   ];
 
   return (
@@ -167,10 +167,10 @@ function ProductPage() {
         <section className="px-4 -mt-16 sm:px-6 lg:px-8 pb-24 relative z-20">
           <div className="max-w-6xl mx-auto">
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-              <StatBox number="500+" label="Data Sources" />
-              <StatBox number="99.2%" label="Accuracy" />
-              <StatBox number="24/7" label="Monitoring" />
-              <StatBox number="10K+" label="Daily Citations" />
+              <StatBox number="Public" label="Legal Records" />
+              <StatBox number="Traceable" label="Provenance" />
+              <StatBox number="On-demand" label="Document Analysis" />
+              <StatBox number="Consent-first" label="Personalization" />
             </div>
           </div>
         </section>
@@ -208,8 +208,8 @@ function ProductPage() {
                   <span className="text-gray-400">the Best</span>
                 </h2>
                 <p className="text-lg text-gray-600 leading-relaxed">
-                  We don’t just generate text; we synthesize knowledge from the
-                  world’s most credible institutions. Every claim is verifiable.
+                  We preserve the public record context behind legislative
+                  research. Original records remain the final legal reference.
                 </p>
                 <Link
                   href="/signup"
@@ -226,7 +226,7 @@ function ProductPage() {
                     <DataSourceItem key={index} {...source} />
                   ))}
                   <div className="flex items-center justify-center p-5 bg-gradient-to-r from-red-50 to-white border border-dashed border-red-200 text-gray-500 font-medium cursor-pointer hover:bg-red-50 transition-colors">
-                    + 490 more sources
+                    Additional public record categories
                   </div>
                 </div>
               </div>
