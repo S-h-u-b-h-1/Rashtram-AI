@@ -4,6 +4,7 @@ const {
   parseBillDetail,
   requestPage,
 } = require("../../prsCatalog");
+const { sha256 } = require("../core/hashing");
 
 const enrichBill = async (document, options) => {
   if (
@@ -24,6 +25,7 @@ const enrichBill = async (document, options) => {
     ministry: detail.ministry || document.ministry,
     category: detail.category || document.category,
     pdfUrl: detail.pdfUrl || document.pdfUrl,
+    htmlHash: sha256(html),
     resources: detail.resources,
     metadata: {
       ...(document.sourceMetadata || {}),

@@ -13,7 +13,9 @@ const parseArguments = (argumentsList) => {
   const options = {
     sources: [],
     catalogOnly: false,
+    downloadPdfs: false,
     delayMs: 750,
+    detailConcurrency: 1,
     maxPages: 10,
     limit: 100,
   };
@@ -41,6 +43,7 @@ const parseArguments = (argumentsList) => {
   options.sources = [...new Set(options.sources.filter(Boolean))];
   for (const key of [
     "delayMs",
+    "detailConcurrency",
     "maxPages",
     "limit",
     "pageSize",
@@ -48,6 +51,13 @@ const parseArguments = (argumentsList) => {
     "retries",
   ]) {
     if (options[key] != null) options[key] = Number(options[key]);
+  }
+  for (const key of ["catalogOnly", "downloadPdfs"]) {
+    if (typeof options[key] === "string") {
+      options[key] = !["0", "false", "no", "off"].includes(
+        options[key].toLowerCase(),
+      );
+    }
   }
   return options;
 };
@@ -75,15 +85,18 @@ const main = async () => {
   console.log(JSON.stringify({ summaries }, null, 2));
 };
 
-main()
-  .catch((error) => {
-    console.error(error);
-    process.exitCode = 1;
-  })
-  .finally(async () => {
-    if (globalThis.__rashtramPostgresPool) await getPool().end();
-  });
+if (require.main === module) {
+  main()
+    .catch((error) => {
+      console.error(error);
+      process.exitCode = 1;
+    })
+    .finally(async () => {
+      if (globalThis.__rashtramPostgresPool) await getPool().end();
+    });
+}
 
 module.exports = {
+  main,
   parseArguments,
 };

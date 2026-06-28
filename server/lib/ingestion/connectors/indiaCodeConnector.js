@@ -1,5 +1,6 @@
 const cheerio = require("cheerio");
 const { discoverPdfLinks, absoluteUrl } = require("../core/pdfDiscovery");
+const { sha256 } = require("../core/hashing");
 const { createSnapshot } = require("../core/sourceSnapshots");
 
 const INDIA_CODE_BASE = "https://www.indiacode.nic.in";
@@ -14,6 +15,23 @@ const normalize = (value) =>
   String(value || "")
     .replace(/\s+/g, " ")
     .trim();
+
+const mapWithConcurrency = async (items, concurrency, callback) => {
+  const workerCount = Math.max(
+    1,
+    Math.min(Number(concurrency) || 1, items.length || 1),
+  );
+  let nextIndex = 0;
+  await Promise.all(
+    Array.from({ length: workerCount }, async () => {
+      while (nextIndex < items.length) {
+        const index = nextIndex;
+        nextIndex += 1;
+        await callback(items[index], index);
+      }
+    }),
+  );
+};
 
 const handleId = (url) =>
   String(url || "").match(/\/handle\/123456789\/(\d+)/)?.[1] || null;
@@ -249,7 +267,10 @@ const indiaCodeConnector = {
           response.body,
           page.url,
           collection,
-        );
+        ).map((record) => ({
+          ...record,
+          htmlHash: sha256(response.body),
+        }));
         snapshots.push(
           createSnapshot({
             sourceName: this.name,
@@ -272,39 +293,44 @@ const indiaCodeConnector = {
 
     const limited = records.slice(0, Number(options.limit || records.length));
     if (!options.catalogOnly) {
-      for (let index = 0; index < limited.length; index += 1) {
-        try {
-          const response = await fetcher.getText(
-            limited[index].detailUrl,
-            INDIA_CODE_REQUEST_OPTIONS,
-          );
-          limited[index] = parseDetailPage(
-            response.body,
-            limited[index].detailUrl,
-            limited[index],
-          );
-          snapshots.push(
-            createSnapshot({
-              sourceName: this.name,
-              sourceUrl: limited[index].detailUrl,
-              body: response.body,
-              responseStatus: response.status,
-              recordCount: 1,
-              metadata: {
-                collection,
-                kind: "detail",
-                sourceRecordId: limited[index].sourceRecordId,
-              },
-            }),
-          );
-        } catch (error) {
-          errors.push({
-            stage: "detail",
-            sourceRecordId: limited[index].sourceRecordId,
-            message: error.message,
-          });
-        }
-      }
+      await mapWithConcurrency(
+        limited,
+        options.detailConcurrency,
+        async (record, index) => {
+          try {
+            const response = await fetcher.getText(
+              record.detailUrl,
+              INDIA_CODE_REQUEST_OPTIONS,
+            );
+            limited[index] = parseDetailPage(
+              response.body,
+              record.detailUrl,
+              record,
+            );
+            limited[index].htmlHash = sha256(response.body);
+            snapshots.push(
+              createSnapshot({
+                sourceName: this.name,
+                sourceUrl: record.detailUrl,
+                body: response.body,
+                responseStatus: response.status,
+                recordCount: 1,
+                metadata: {
+                  collection,
+                  kind: "detail",
+                  sourceRecordId: limited[index].sourceRecordId,
+                },
+              }),
+            );
+          } catch (error) {
+            errors.push({
+              stage: "detail",
+              sourceRecordId: record.sourceRecordId,
+              message: error.message,
+            });
+          }
+        },
+      );
     }
     return { records: limited, snapshots, errors };
   },
@@ -316,6 +342,7 @@ module.exports = {
   INDIA_CODE_REQUEST_OPTIONS,
   browseUrl,
   indiaCodeConnector,
+  mapWithConcurrency,
   parseBrowsePage,
   parseDetailPage,
   parseYearLinks,

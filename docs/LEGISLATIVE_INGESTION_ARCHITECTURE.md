@@ -1,6 +1,6 @@
 # Legislative Ingestion Architecture
 
-Last reviewed: 27 June 2026
+Last reviewed: 28 June 2026
 
 ## Purpose
 
@@ -40,15 +40,24 @@ The canonical row stores:
 | Identity | `id`, `canonical_id`, `document_type` |
 | Scope | `jurisdiction_level`, `jurisdiction`, `authority` |
 | Description | `title`, `normalized_title`, `status`, `category` |
-| Legal identity | `legal_identifier`, `bill_number`, `act_number`, `gazette_identifier` |
+| Legal identity | `legal_identifier`, `bill_number`, `act_number`, `gazette_id` / `gazette_identifier` |
 | Organisations | `ministry`, `department` |
-| Dates | introduced, passed, enacted, published, effective |
+| Dates | introduced, passed, assent/enacted, published, commencement/effective |
 | Canonical provenance | `canonical_source`, `canonical_url`, `source_priority` |
 | Content identity | `content_hash`, `text_fingerprint` |
 | Compatibility | original source fields used by current bill/act routes |
 
 Unstructured source-only values remain in JSON metadata. Known universal values
 are promoted into typed columns so they can be filtered and audited.
+Compatibility aliases (`gazette_identifier`, `enacted_date`, and
+`effective_date`) remain alongside the universal contract fields
+(`gazette_id`, `assent_date`, and `commencement_date`) so existing routes and
+stored IDs are not broken.
+
+Each `document_sources` row retains the source title and status, exact source
+and PDF URLs, source-derived stable ID, HTML hash, optional PDF hash, source
+metadata, and first/last-seen timestamps. Relationship rows retain their
+evidence URL and metadata in addition to confidence and provenance.
 
 ## Acquisition policy
 
@@ -193,7 +202,17 @@ npm run catalog:review-matches --prefix server
 
 Common controls are `--catalog-only`, `--collection`, `--years`, `--handle`,
 `--url`, `--limit`, `--max-pages`, `--delay-ms`, `--timeout-ms`, and
-`--retries`.
+`--retries`. Date-aware connectors also accept `--from` and `--to`;
+IndiaCode detail collection accepts `--detail-concurrency`. The
+`--download-pdfs=false` flag is explicit documentation of the safe default:
+catalogue runs discover links but do not bulk-download files.
+
+Each run records the operational counters requested by the catalogue contract:
+`discovered`, `inserted`, `updated`, `duplicate_sources_added`,
+`pdf_urls_found`, `errors`, `skipped`, and `manual_review_required`. Legacy
+`created`, `merged`, and `reviewsQueued` counters remain for compatibility.
+Catalogue statistics include totals by source, document type, jurisdiction,
+year, probable duplicate group, and manual-review status.
 
 The deployed backend also exposes `POST /api/catalog-operations/refresh` and
 `GET /api/catalog-operations/stats` for bounded operations. They deliberately

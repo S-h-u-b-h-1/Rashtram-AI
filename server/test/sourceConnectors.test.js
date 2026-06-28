@@ -5,6 +5,7 @@ const {
   parseBrowsePage,
   parseDetailPage,
   parseYearLinks,
+  mapWithConcurrency,
 } = require("../lib/ingestion/connectors/indiaCodeConnector");
 const {
   parseHomePage,
@@ -99,4 +100,16 @@ test("official directory adapter stores only linked official PDFs", () => {
   assert.equal(records.length, 1);
   assert.equal(records[0].documentType, "question");
   assert.equal(records[0].year, 2025);
+});
+
+test("IndiaCode detail work respects the requested concurrency bound", async () => {
+  let active = 0;
+  let peak = 0;
+  await mapWithConcurrency([1, 2, 3, 4, 5], 2, async () => {
+    active += 1;
+    peak = Math.max(peak, active);
+    await new Promise((resolve) => setImmediate(resolve));
+    active -= 1;
+  });
+  assert.equal(peak, 2);
 });

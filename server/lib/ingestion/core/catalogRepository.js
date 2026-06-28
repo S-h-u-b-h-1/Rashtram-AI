@@ -115,11 +115,14 @@ const documentInsertValues = (record) => [
   record.billNumber,
   record.actNumber,
   record.gazetteIdentifier,
+  record.gazetteIdentifier,
   record.introducedDate,
   record.passedDate,
   record.enactedDate,
+  record.assentDate || record.enactedDate,
   record.publicationDate,
   record.effectiveDate,
+  record.commencementDate || record.effectiveDate,
   record.sourceUrl,
   record.detailUrl,
   record.pdfUrl,
@@ -154,11 +157,14 @@ const insertDocument = async (client, record) => {
        bill_number,
        act_number,
        gazette_identifier,
+       gazette_id,
        introduced_date,
        passed_date,
        enacted_date,
+       assent_date,
        publication_date,
        effective_date,
+       commencement_date,
        source_url,
        detail_url,
        pdf_url,
@@ -174,7 +180,8 @@ const insertDocument = async (client, record) => {
      VALUES (
        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14,
        $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26,
-       $27, $28::jsonb, $29, $30, $31, $32, $33, $34::jsonb
+       $27, $28, $29, $30, $31::jsonb, $32, $33, $34, $35, $36,
+       $37::jsonb
      )
      RETURNING *`,
     documentInsertValues(record),
@@ -212,11 +219,14 @@ const updateCanonicalDocument = async (client, documentId, record) => {
             bill_number = COALESCE(bill_number, $15),
             act_number = COALESCE(act_number, $16),
             gazette_identifier = COALESCE(gazette_identifier, $17),
+            gazette_id = COALESCE(gazette_id, $17),
             introduced_date = COALESCE(introduced_date, $18),
             passed_date = COALESCE(passed_date, $19),
             enacted_date = COALESCE(enacted_date, $20),
+            assent_date = COALESCE(assent_date, $20),
             publication_date = COALESCE(publication_date, $21),
             effective_date = COALESCE(effective_date, $22),
+            commencement_date = COALESCE(commencement_date, $22),
             pdf_url = CASE WHEN $2 < source_priority OR pdf_url IS NULL
                            THEN COALESCE($23, pdf_url) ELSE pdf_url END,
             content_hash = COALESCE(content_hash, $24),
@@ -266,6 +276,13 @@ const updateCanonicalDocument = async (client, documentId, record) => {
 };
 
 const upsertSource = async (client, documentId, record) => {
+  const existing = await client.query(
+    `SELECT document_id
+       FROM document_sources
+      WHERE source_name = $1 AND source_record_id = $2
+      FOR UPDATE`,
+    [record.sourceName, record.sourceRecordId],
+  );
   await client.query(
     `INSERT INTO document_sources (
        document_id,
@@ -277,10 +294,18 @@ const upsertSource = async (client, documentId, record) => {
        source_priority,
        legal_identifier,
        content_hash,
+       pdf_hash,
+       html_hash,
        text_fingerprint,
-       raw_metadata
+       source_title,
+       source_status,
+       raw_metadata,
+       source_metadata
      )
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11::jsonb)
+     VALUES (
+       $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14,
+       $15::jsonb, $15::jsonb
+     )
      ON CONFLICT (source_name, source_record_id)
      DO UPDATE SET
        document_id = EXCLUDED.document_id,
@@ -296,11 +321,23 @@ const upsertSource = async (client, documentId, record) => {
          EXCLUDED.content_hash,
          document_sources.content_hash
        ),
+       pdf_hash = COALESCE(EXCLUDED.pdf_hash, document_sources.pdf_hash),
+       html_hash = COALESCE(EXCLUDED.html_hash, document_sources.html_hash),
        text_fingerprint = COALESCE(
          EXCLUDED.text_fingerprint,
          document_sources.text_fingerprint
        ),
+       source_title = COALESCE(
+         EXCLUDED.source_title,
+         document_sources.source_title
+       ),
+       source_status = COALESCE(
+         EXCLUDED.source_status,
+         document_sources.source_status
+       ),
        raw_metadata = document_sources.raw_metadata || EXCLUDED.raw_metadata,
+       source_metadata =
+         document_sources.source_metadata || EXCLUDED.source_metadata,
        last_seen_at = NOW(),
        updated_at = NOW()`,
     [
@@ -313,10 +350,18 @@ const upsertSource = async (client, documentId, record) => {
       record.sourcePriority,
       record.legalIdentifier,
       record.contentHash,
+      record.pdfHash,
+      record.htmlHash,
       record.textFingerprint,
+      record.sourceTitle || record.title,
+      record.sourceStatus || record.status,
       JSON.stringify(record.sourceMetadata || {}),
     ],
   );
+  return {
+    added: existing.rowCount === 0,
+    previousDocumentId: existing.rows[0]?.document_id || null,
+  };
 };
 
 const upsertResources = async (client, documentId, resources) => {
@@ -384,27 +429,36 @@ const upsertRelationships = async (client, documentId, record) => {
          to_document_id,
          relationship_type,
          source_name,
+         source_url,
          confidence,
-         metadata
+         metadata,
+         metadata_json
        )
-       VALUES ($1, $2, $3, $4, $5, $6::jsonb)
+       VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb, $7::jsonb)
        ON CONFLICT (from_document_id, to_document_id, relationship_type)
        DO UPDATE SET
          source_name = COALESCE(
            EXCLUDED.source_name,
            document_relationships.source_name
          ),
+         source_url = COALESCE(
+           EXCLUDED.source_url,
+           document_relationships.source_url
+         ),
          confidence = COALESCE(
            EXCLUDED.confidence,
            document_relationships.confidence
          ),
          metadata = document_relationships.metadata || EXCLUDED.metadata,
+         metadata_json =
+           document_relationships.metadata_json || EXCLUDED.metadata_json,
          updated_at = NOW()`,
       [
         documentId,
         targetId,
         relationship.type || "related_to",
         record.sourceName,
+        relationship.sourceUrl || record.detailUrl || record.sourceUrl,
         relationship.confidence || null,
         JSON.stringify(relationship.metadata || {}),
       ],
@@ -540,7 +594,7 @@ const persistRecord = async (record, decision) => {
     } else {
       document = await insertDocument(client, record);
     }
-    await upsertSource(client, document.id, record);
+    const source = await upsertSource(client, document.id, record);
     const resources = await upsertResources(
       client,
       document.id,
@@ -571,6 +625,7 @@ const persistRecord = async (record, decision) => {
       action: decision.action === "merge" ? "merged" : "created",
       matchReason: decision.reason,
       reviewQueued: decision.action === "review",
+      sourceAdded: source.added,
     };
   } catch (error) {
     await client.query("ROLLBACK");
@@ -579,6 +634,17 @@ const persistRecord = async (record, decision) => {
     client.release();
   }
 };
+
+const findExistingDocument = async (record) =>
+  (await findCandidates(record))[0] || null;
+
+const upsertCanonicalDocument = async (client, record, documentId = null) =>
+  documentId
+    ? updateCanonicalDocument(client, documentId, record)
+    : insertDocument(client, record);
+
+const upsertDocumentSource = upsertSource;
+const recordIngestionRun = createRun;
 
 const storeSnapshots = async (snapshots) => {
   for (const snapshot of snapshots || []) {
@@ -615,8 +681,18 @@ const storeSnapshots = async (snapshots) => {
   return snapshots?.length || 0;
 };
 
+const recordSourceSnapshot = async (snapshot) => storeSnapshots([snapshot]);
+
 const getUniversalStats = async () => {
-  const [totals, bySource, byType, reviews] = await Promise.all([
+  const [
+    totals,
+    bySource,
+    byType,
+    byJurisdiction,
+    byYear,
+    reviews,
+    duplicates,
+  ] = await Promise.all([
     query(`
       SELECT
         COUNT(*)::INTEGER AS documents,
@@ -629,7 +705,9 @@ const getUniversalStats = async () => {
       SELECT
         source_name,
         COUNT(*)::INTEGER AS source_records,
-        COUNT(pdf_url)::INTEGER AS records_with_pdf
+        COUNT(pdf_url)::INTEGER AS records_with_pdf,
+        COUNT(pdf_hash)::INTEGER AS records_with_pdf_hash,
+        COUNT(html_hash)::INTEGER AS records_with_html_hash
       FROM document_sources
       GROUP BY source_name
       ORDER BY source_records DESC, source_name
@@ -641,16 +719,48 @@ const getUniversalStats = async () => {
       ORDER BY documents DESC, document_type
     `),
     query(`
+      SELECT
+        jurisdiction_level,
+        jurisdiction,
+        COUNT(*)::INTEGER AS documents
+      FROM legislative_documents
+      GROUP BY jurisdiction_level, jurisdiction
+      ORDER BY documents DESC, jurisdiction_level, jurisdiction
+    `),
+    query(`
+      SELECT year, COUNT(*)::INTEGER AS documents
+      FROM legislative_documents
+      WHERE year IS NOT NULL
+      GROUP BY year
+      ORDER BY year DESC
+    `),
+    query(`
       SELECT status, COUNT(*)::INTEGER AS matches
       FROM catalog_match_reviews
       GROUP BY status
       ORDER BY status
+    `),
+    query(`
+      SELECT
+        COUNT(*)::INTEGER AS probable_duplicate_groups,
+        COALESCE(SUM(documents), 0)::INTEGER
+          AS documents_in_probable_groups
+      FROM (
+        SELECT COUNT(*)::INTEGER AS documents
+        FROM legislative_documents
+        WHERE normalized_title IS NOT NULL
+        GROUP BY normalized_title, year, jurisdiction, document_type
+        HAVING COUNT(*) > 1
+      ) duplicate_groups
     `),
   ]);
   return {
     totals: totals.rows[0],
     bySource: bySource.rows,
     byType: byType.rows,
+    byJurisdiction: byJurisdiction.rows,
+    byYear: byYear.rows,
+    duplicateStatus: duplicates.rows[0],
     matchReviews: reviews.rows,
   };
 };
@@ -661,6 +771,7 @@ const getDuplicateCandidates = async (limit = 100) => {
        normalized_title,
        year,
        jurisdiction,
+       document_type,
        COUNT(*)::INTEGER AS documents,
        JSON_AGG(
          JSON_BUILD_OBJECT(
@@ -673,7 +784,7 @@ const getDuplicateCandidates = async (limit = 100) => {
        ) AS candidates
      FROM legislative_documents
      WHERE normalized_title IS NOT NULL
-     GROUP BY normalized_title, year, jurisdiction
+     GROUP BY normalized_title, year, jurisdiction, document_type
      HAVING COUNT(*) > 1
      ORDER BY documents DESC, normalized_title
      LIMIT $1`,
@@ -801,9 +912,12 @@ const repairCrossTypeIndiaCodeMerges = async () => {
                 legal_identifier = NULL,
                 act_number = NULL,
                 gazette_identifier = NULL,
+                gazette_id = NULL,
                 enacted_date = NULL,
+                assent_date = NULL,
                 publication_date = NULL,
                 effective_date = NULL,
+                commencement_date = NULL,
                 content_hash = NULL,
                 text_fingerprint = NULL,
                 updated_at = NOW()
@@ -851,11 +965,16 @@ const repairCrossTypeIndiaCodeMerges = async () => {
 module.exports = {
   completeRun,
   createRun,
+  findExistingDocument,
   findCandidates,
   getDuplicateCandidates,
   getPendingReviews,
   getUniversalStats,
   persistRecord,
+  recordIngestionRun,
+  recordSourceSnapshot,
   repairCrossTypeIndiaCodeMerges,
   storeSnapshots,
+  upsertCanonicalDocument,
+  upsertDocumentSource,
 };

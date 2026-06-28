@@ -126,6 +126,15 @@ const inferDocumentType = (record) => {
   return matches.find(([term]) => value.includes(term))?.[1] || "other";
 };
 
+const normalizeDocumentType = (value, context = {}) =>
+  inferDocumentType({ ...context, documentType: value });
+
+const normalizeJurisdiction = (value, jurisdictionLevel) => {
+  const jurisdiction = cleanText(value);
+  if (jurisdiction) return jurisdiction;
+  return jurisdictionLevel === "state" ? "Unknown" : "India";
+};
+
 const normalizeRecord = (record) => {
   const title = cleanText(record.title || record.sourceTitle);
   const sourceName = cleanText(record.sourceName);
@@ -143,9 +152,11 @@ const normalizeRecord = (record) => {
   }
 
   const publicationDate = normalizeDate(record.publicationDate);
-  const enactedDate = normalizeDate(record.enactedDate);
+  const enactedDate = normalizeDate(record.enactedDate || record.assentDate);
   const introducedDate = normalizeDate(record.introducedDate);
-  const effectiveDate = normalizeDate(record.effectiveDate);
+  const effectiveDate = normalizeDate(
+    record.effectiveDate || record.commencementDate,
+  );
   const year = normalizeYear(
     record.year,
     publicationDate,
@@ -153,9 +164,9 @@ const normalizeRecord = (record) => {
     introducedDate,
   );
   const normalizedTitle = normalizeTitle(title);
-  const documentType = inferDocumentType(record);
+  const documentType = normalizeDocumentType(record.documentType, record);
   const legalIdentifier = cleanText(
-    record.legalIdentifier || record.gazetteIdentifier,
+    record.legalIdentifier || record.gazetteIdentifier || record.gazetteId,
   );
 
   return {
@@ -170,31 +181,42 @@ const normalizeRecord = (record) => {
     normalizedTitle,
     documentType,
     jurisdictionLevel: cleanText(record.jurisdictionLevel) || "union",
-    jurisdiction: cleanText(record.jurisdiction) || "India",
+    jurisdiction: normalizeJurisdiction(
+      record.jurisdiction,
+      cleanText(record.jurisdictionLevel) || "union",
+    ),
     authority: cleanText(record.authority),
     ministry: cleanText(record.ministry),
     department: cleanText(record.department),
     category: cleanText(record.category),
-    status: cleanText(record.status),
+    status: cleanText(record.status || record.sourceStatus),
     legalIdentifier,
     billNumber: cleanText(record.billNumber),
     actNumber: cleanText(record.actNumber),
-    gazetteIdentifier: cleanText(record.gazetteIdentifier),
+    gazetteIdentifier: cleanText(
+      record.gazetteIdentifier || record.gazetteId,
+    ),
     introducedDate,
     passedDate: normalizeDate(record.passedDate),
     enactedDate,
+    assentDate: enactedDate,
     publicationDate,
     effectiveDate,
+    commencementDate: effectiveDate,
     year,
     sourcePriority:
       Number.isFinite(record.sourcePriority) && record.sourcePriority > 0
         ? record.sourcePriority
         : sourcePriorityFor(sourceName),
     contentHash: cleanText(record.contentHash || record.pdfHash),
+    pdfHash: cleanText(record.pdfHash),
+    htmlHash: cleanText(record.htmlHash),
     textFingerprint:
       cleanText(record.textFingerprint) ||
       textFingerprint(record.fullText || record.summary),
     sourceMetadata: record.sourceMetadata || record.metadata || {},
+    sourceTitle: cleanText(record.sourceTitle || title),
+    sourceStatus: cleanText(record.sourceStatus || record.status),
     metadata: record.metadata || record.sourceMetadata || {},
     resources: Array.isArray(record.resources) ? record.resources : [],
     relationships: Array.isArray(record.relationships)
@@ -209,6 +231,8 @@ module.exports = {
   cleanText,
   inferDocumentType,
   normalizeDate,
+  normalizeDocumentType,
+  normalizeJurisdiction,
   normalizeRecord,
   normalizeTitle,
   normalizeYear,

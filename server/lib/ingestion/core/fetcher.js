@@ -51,14 +51,28 @@ class PoliteFetcher {
         validateStatus: (status) => status >= 200 && status < 400,
       });
     this.lastRequestAt = new Map();
+    this.hostQueues = new Map();
     this.robotsCache = new Map();
   }
 
   async waitForHost(hostname) {
-    const previous = this.lastRequestAt.get(hostname) || 0;
-    const waitMs = Math.max(0, this.delayMs - (Date.now() - previous));
-    if (waitMs) await sleep(waitMs);
-    this.lastRequestAt.set(hostname, Date.now());
+    const previousQueue = this.hostQueues.get(hostname) || Promise.resolve();
+    const queued = previousQueue
+      .catch(() => {})
+      .then(async () => {
+        const previous = this.lastRequestAt.get(hostname) || 0;
+        const waitMs = Math.max(
+          0,
+          this.delayMs - (Date.now() - previous),
+        );
+        if (waitMs) await sleep(waitMs);
+        this.lastRequestAt.set(hostname, Date.now());
+      });
+    this.hostQueues.set(hostname, queued);
+    await queued;
+    if (this.hostQueues.get(hostname) === queued) {
+      this.hostQueues.delete(hostname);
+    }
   }
 
   async robotsRules(url) {
@@ -140,9 +154,19 @@ class PoliteFetcher {
   }
 }
 
+const fetchWithRetry = (
+  url,
+  { fetcher, requestOptions = {}, ...fetcherOptions } = {},
+) =>
+  (fetcher || new PoliteFetcher(fetcherOptions)).get(url, requestOptions);
+
+const politeFetch = fetchWithRetry;
+
 module.exports = {
   PoliteFetcher,
+  fetchWithRetry,
   isPathAllowed,
   parseRobots,
+  politeFetch,
   sleep,
 };

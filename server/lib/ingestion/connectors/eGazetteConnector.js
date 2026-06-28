@@ -1,4 +1,5 @@
 const cheerio = require("cheerio");
+const { sha256 } = require("../core/hashing");
 const { createSnapshot } = require("../core/sourceSnapshots");
 
 const EGAZETTE_HOME = "https://egazette.gov.in/";
@@ -102,10 +103,19 @@ const eGazetteConnector = {
 
   async collect(options = {}, { fetcher }) {
     const response = await fetcher.getText(EGAZETTE_HOME);
-    const records = parseHomePage(response.body).slice(
-      0,
-      Number(options.limit || 50),
-    );
+    const pageHash = sha256(response.body);
+    const records = parseHomePage(response.body)
+      .filter(
+        (record) =>
+          (!options.from ||
+            !record.publicationDate ||
+            record.publicationDate >= options.from) &&
+          (!options.to ||
+            !record.publicationDate ||
+            record.publicationDate <= options.to),
+      )
+      .slice(0, Number(options.limit || 50))
+      .map((record) => ({ ...record, htmlHash: pageHash }));
     return {
       records,
       snapshots: [

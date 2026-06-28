@@ -83,11 +83,14 @@ const createOfficialDirectoryConnector = (config) => ({
   async collect(options = {}, { fetcher }) {
     const pageUrl = options.url || config.url;
     const response = await fetcher.getText(pageUrl);
+    const pageHash = sha256(response.body);
     const records = parseOfficialDirectory(
       response.body,
       pageUrl,
       config,
-    ).slice(0, Number(options.limit || 100));
+    )
+      .slice(0, Number(options.limit || 100))
+      .map((record) => ({ ...record, htmlHash: pageHash }));
     return {
       records,
       snapshots: [

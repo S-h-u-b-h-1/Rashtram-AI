@@ -193,11 +193,14 @@ const initializeSchema = async () => {
       ADD COLUMN IF NOT EXISTS bill_number TEXT,
       ADD COLUMN IF NOT EXISTS act_number TEXT,
       ADD COLUMN IF NOT EXISTS gazette_identifier TEXT,
+      ADD COLUMN IF NOT EXISTS gazette_id TEXT,
       ADD COLUMN IF NOT EXISTS introduced_date DATE,
       ADD COLUMN IF NOT EXISTS passed_date DATE,
       ADD COLUMN IF NOT EXISTS enacted_date DATE,
+      ADD COLUMN IF NOT EXISTS assent_date DATE,
       ADD COLUMN IF NOT EXISTS publication_date DATE,
       ADD COLUMN IF NOT EXISTS effective_date DATE,
+      ADD COLUMN IF NOT EXISTS commencement_date DATE,
       ADD COLUMN IF NOT EXISTS canonical_source TEXT,
       ADD COLUMN IF NOT EXISTS canonical_url TEXT,
       ADD COLUMN IF NOT EXISTS source_priority INTEGER NOT NULL DEFAULT 100,
@@ -237,6 +240,12 @@ const initializeSchema = async () => {
            ),
            canonical_source = COALESCE(canonical_source, source_name),
            canonical_url = COALESCE(canonical_url, detail_url, source_url),
+           gazette_id = COALESCE(gazette_id, gazette_identifier),
+           assent_date = COALESCE(assent_date, enacted_date),
+           commencement_date = COALESCE(
+             commencement_date,
+             effective_date
+           ),
            source_priority = CASE
              WHEN LOWER(source_name) LIKE '%egazette%' THEN 10
              WHEN LOWER(source_name) LIKE '%indiacode%' THEN 20
@@ -254,6 +263,9 @@ const initializeSchema = async () => {
         OR normalized_title ~ '\\m(19|20)[0-9]{2}\\M'
         OR canonical_source IS NULL
         OR canonical_url IS NULL
+        OR (gazette_identifier IS NOT NULL AND gazette_id IS NULL)
+        OR (enacted_date IS NOT NULL AND assent_date IS NULL)
+        OR (effective_date IS NOT NULL AND commencement_date IS NULL)
         OR metadata_json = '{}'::jsonb;
 
     ALTER TABLE legislative_documents
@@ -295,8 +307,13 @@ const initializeSchema = async () => {
       source_priority INTEGER NOT NULL DEFAULT 100,
       legal_identifier TEXT,
       content_hash TEXT,
+      pdf_hash TEXT,
+      html_hash TEXT,
       text_fingerprint TEXT,
+      source_title TEXT,
+      source_status TEXT,
       raw_metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
+      source_metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
       first_seen_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       last_seen_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -311,6 +328,17 @@ const initializeSchema = async () => {
       ON document_sources (content_hash)
       WHERE content_hash IS NOT NULL;
 
+    ALTER TABLE document_sources
+      ADD COLUMN IF NOT EXISTS pdf_hash TEXT,
+      ADD COLUMN IF NOT EXISTS html_hash TEXT,
+      ADD COLUMN IF NOT EXISTS source_title TEXT,
+      ADD COLUMN IF NOT EXISTS source_status TEXT,
+      ADD COLUMN IF NOT EXISTS source_metadata JSONB NOT NULL DEFAULT '{}'::jsonb;
+
+    CREATE INDEX IF NOT EXISTS document_sources_pdf_hash_idx
+      ON document_sources (pdf_hash)
+      WHERE pdf_hash IS NOT NULL;
+
     INSERT INTO document_sources (
       document_id,
       source_name,
@@ -321,8 +349,12 @@ const initializeSchema = async () => {
       source_priority,
       legal_identifier,
       content_hash,
+      pdf_hash,
       text_fingerprint,
+      source_title,
+      source_status,
       raw_metadata,
+      source_metadata,
       first_seen_at,
       last_seen_at
     )
@@ -336,12 +368,31 @@ const initializeSchema = async () => {
       source_priority,
       legal_identifier,
       content_hash,
+      NULL::TEXT,
       text_fingerprint,
+      title,
+      status,
+      source_metadata,
       source_metadata,
       first_seen_at,
       last_seen_at
     FROM legislative_documents
     ON CONFLICT (source_name, source_record_id) DO NOTHING;
+
+    UPDATE document_sources s
+       SET source_title = COALESCE(s.source_title, d.title),
+           source_status = COALESCE(s.source_status, d.status),
+           source_metadata = CASE
+             WHEN s.source_metadata = '{}'::jsonb THEN s.raw_metadata
+             ELSE s.source_metadata
+           END
+      FROM legislative_documents d
+     WHERE d.id = s.document_id
+       AND (
+         s.source_title IS NULL
+         OR (s.source_status IS NULL AND d.status IS NOT NULL)
+         OR s.source_metadata = '{}'::jsonb
+       );
 
     CREATE TABLE IF NOT EXISTS document_relationships (
       id BIGSERIAL PRIMARY KEY,
@@ -351,8 +402,10 @@ const initializeSchema = async () => {
         REFERENCES legislative_documents(id) ON DELETE CASCADE,
       relationship_type TEXT NOT NULL,
       source_name TEXT,
+      source_url TEXT,
       confidence NUMERIC(5, 4),
       metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
+      metadata_json JSONB NOT NULL DEFAULT '{}'::jsonb,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       UNIQUE (from_document_id, to_document_id, relationship_type)
@@ -363,6 +416,15 @@ const initializeSchema = async () => {
 
     CREATE INDEX IF NOT EXISTS document_relationships_to_idx
       ON document_relationships (to_document_id, relationship_type);
+
+    ALTER TABLE document_relationships
+      ADD COLUMN IF NOT EXISTS source_url TEXT,
+      ADD COLUMN IF NOT EXISTS metadata_json JSONB NOT NULL DEFAULT '{}'::jsonb;
+
+    UPDATE document_relationships
+       SET metadata_json = metadata
+     WHERE metadata_json = '{}'::jsonb
+       AND metadata <> '{}'::jsonb;
 
     CREATE TABLE IF NOT EXISTS catalog_match_reviews (
       id BIGSERIAL PRIMARY KEY,

@@ -1,5 +1,7 @@
 const cheerio = require("cheerio");
 
+const parseHtml = (html) => cheerio.load(html || "");
+
 const absoluteUrl = (url, baseUrl) => {
   try {
     return new URL(url, baseUrl).toString();
@@ -9,7 +11,7 @@ const absoluteUrl = (url, baseUrl) => {
 };
 
 const discoverPdfLinks = (html, baseUrl) => {
-  const $ = cheerio.load(html || "");
+  const $ = parseHtml(html);
   const links = [];
   const seen = new Set();
 
@@ -39,4 +41,5 @@ const discoverPdfLinks = (html, baseUrl) => {
 module.exports = {
   absoluteUrl,
   discoverPdfLinks,
+  parseHtml,
 };

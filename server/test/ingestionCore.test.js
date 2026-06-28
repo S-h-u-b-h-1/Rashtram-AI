@@ -2,12 +2,16 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 
 const {
+  generateSourceStableId,
+  normalizeFingerprintText,
   sha256,
   stableRecordHash,
   textFingerprint,
 } = require("../lib/ingestion/core/hashing");
 const {
   normalizeDate,
+  normalizeDocumentType,
+  normalizeJurisdiction,
   normalizeRecord,
   normalizeTitle,
   sourcePriorityFor,
@@ -21,6 +25,10 @@ const {
   isPathAllowed,
   parseRobots,
 } = require("../lib/ingestion/core/fetcher");
+const {
+  countPdfUrls,
+} = require("../lib/ingestion/core/ingestionRunner");
+const { parseArguments } = require("../cli/ingestSources");
 
 test("hashing is stable and normalizes text fingerprints", () => {
   assert.equal(sha256("rashtram"), sha256("rashtram"));
@@ -31,6 +39,14 @@ test("hashing is stable and normalizes text fingerprints", () => {
   assert.equal(
     textFingerprint("The   Public-Safety Act"),
     textFingerprint("the public safety act"),
+  );
+  assert.equal(
+    normalizeFingerprintText("Public Safety\nPage 2 of 8\nSection 4"),
+    "public safety section 4",
+  );
+  assert.equal(
+    generateSourceStableId("india-code", "22148"),
+    generateSourceStableId(["india-code", "22148"]),
   );
 });
 
@@ -55,11 +71,71 @@ test("normalization creates a universal record without losing source metadata", 
   assert.deepEqual(record.metadata, { official: true });
 });
 
+test("normalization accepts universal schema aliases", () => {
+  const record = normalizeRecord({
+    sourceName: "egazette",
+    sourceRecordId: "CG-DL-E-1",
+    sourceUrl: "https://egazette.gov.in/example.pdf",
+    sourceTitle: "Public Safety Notification",
+    sourceStatus: "Published",
+    documentType: "Notification",
+    gazetteId: "CG-DL-E-1",
+    assentDate: "2025-08-22",
+    commencementDate: "2025-09-01",
+    pdfHash: "abc123",
+    htmlHash: "def456",
+  });
+  assert.equal(record.gazetteIdentifier, "CG-DL-E-1");
+  assert.equal(record.enactedDate, "2025-08-22");
+  assert.equal(record.effectiveDate, "2025-09-01");
+  assert.equal(record.pdfHash, "abc123");
+  assert.equal(record.htmlHash, "def456");
+  assert.equal(record.status, "Published");
+});
+
 test("normalization handles Indian numeric dates and source priority", () => {
   assert.equal(normalizeDate("22-08-2025"), "2025-08-22");
   assert.equal(normalizeTitle("The Companies (Amendment) Bill, 2025"), "companies amendment");
   assert.equal(sourcePriorityFor("egazette"), 10);
   assert.equal(sourcePriorityFor("prs-india"), 50);
+  assert.equal(normalizeDocumentType("Office Memorandum"), "office_memorandum");
+  assert.equal(normalizeJurisdiction(null, "union"), "India");
+  assert.equal(normalizeJurisdiction(null, "state"), "Unknown");
+});
+
+test("ingestion counters count distinct PDF URLs and parse operational flags", () => {
+  assert.equal(
+    countPdfUrls({
+      pdfUrl: "https://example.gov.in/a.pdf",
+      resources: [
+        {
+          resourceType: "pdf",
+          url: "https://example.gov.in/a.pdf",
+        },
+        {
+          resourceType: "pdf",
+          url: "https://example.gov.in/b.pdf",
+        },
+      ],
+    }),
+    2,
+  );
+  assert.deepEqual(
+    parseArguments([
+      "--sources=prs-india,india-code",
+      "--download-pdfs=false",
+      "--detail-concurrency=4",
+    ]).sources,
+    ["prs-india", "india-code"],
+  );
+  assert.equal(
+    parseArguments(["--download-pdfs=false"]).downloadPdfs,
+    false,
+  );
+  assert.equal(
+    parseArguments(["--detail-concurrency=4"]).detailConcurrency,
+    4,
+  );
 });
 
 test("dedupe applies exact layers before fuzzy matching", () => {
