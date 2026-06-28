@@ -1,3 +1,5 @@
+"use client";
+
 import Link from "next/link";
 import { ArrowRight, ExternalLink, FileText } from "lucide-react";
 import {
@@ -5,6 +7,8 @@ import {
   formatDate,
   humanize,
 } from "@/lib/document-links";
+import { getPublicSourceLabel } from "@/lib/source-branding";
+import { trackActivity } from "@/lib/api";
 
 export function DocumentListSection({
   eyebrow,
@@ -20,13 +24,13 @@ export function DocumentListSection({
           <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#9e4937]">
             {eyebrow}
           </p>
-          <h2 className="mt-2 font-serif text-2xl text-[#19231f]">{title}</h2>
+          <h2 className="mt-2 font-serif text-2xl text-[#c30000]">{title}</h2>
         </div>
         {onViewAll && (
           <button
             type="button"
             onClick={onViewAll}
-            className="inline-flex items-center gap-1 rounded-full border border-[#19231f]/10 px-3 py-2 text-xs font-semibold text-[#5f5a52] transition hover:bg-[#19231f] hover:text-white"
+            className="inline-flex items-center gap-1 rounded-full border border-[#c30000]/10 px-3 py-2 text-xs font-semibold text-[#5f5a52] transition hover:bg-[#c30000] hover:text-white"
           >
             View all
             <ArrowRight className="h-3.5 w-3.5" />
@@ -36,7 +40,7 @@ export function DocumentListSection({
 
       <div className="mt-5 space-y-2">
         {documents.length === 0 ? (
-          <div className="rounded-2xl border border-dashed border-[#19231f]/12 bg-[#f7f2e8]/65 p-7 text-center">
+          <div className="rounded-2xl border border-dashed border-[#c30000]/12 bg-[#f7f2e8]/65 p-7 text-center">
             <FileText className="mx-auto h-6 w-6 text-[#9b9387]" />
             <p className="mt-3 text-sm text-[#706a61]">{emptyMessage}</p>
           </div>
@@ -44,7 +48,7 @@ export function DocumentListSection({
           documents.slice(0, 6).map((document) => {
             const researchHref = buildResearchHref(document);
             const row = (
-              <div className="group flex items-start gap-3 rounded-xl border border-transparent p-3 transition hover:border-[#19231f]/8 hover:bg-[#f5efe5]">
+              <div className="group flex items-start gap-3 rounded-xl border border-transparent p-3 transition hover:border-[#c30000]/8 hover:bg-[#f5efe5]">
                 <div className="mt-0.5 grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-[#ebe3d6] text-[#9f4937]">
                   <FileText className="h-4 w-4" />
                 </div>
@@ -54,7 +58,7 @@ export function DocumentListSection({
                   </p>
                   <div className="mt-2 flex flex-wrap gap-x-2 gap-y-1 text-[10px] uppercase tracking-[0.08em] text-[#8a8277]">
                     <span>{humanize(document.documentType)}</span>
-                    <span>{document.sourceName}</span>
+                    <span>{getPublicSourceLabel(document.sourceName)}</span>
                     <span>{formatDate(document.eventDate)}</span>
                   </div>
                 </div>
@@ -67,7 +71,25 @@ export function DocumentListSection({
             );
 
             return researchHref ? (
-              <Link key={document.id} href={researchHref}>
+              <Link
+                key={document.id}
+                href={researchHref}
+                onClick={() =>
+                  trackActivity({
+                    event_type: "research_continued",
+                    entity_type: document.documentType,
+                    entity_id: document.id,
+                    document_id: document.id,
+                    page_path: "/app",
+                    metadata_json: {
+                      documentType: document.documentType,
+                      jurisdiction: document.jurisdiction,
+                      category: document.category,
+                      ministry: document.ministry,
+                    },
+                  })
+                }
+              >
                 {row}
               </Link>
             ) : document.sourceUrl ? (
@@ -76,6 +98,22 @@ export function DocumentListSection({
                 href={document.sourceUrl}
                 target="_blank"
                 rel="noreferrer"
+                onClick={() =>
+                  trackActivity({
+                    event_type: "source_opened",
+                    entity_type: document.documentType,
+                    entity_id: document.id,
+                    document_id: document.id,
+                    page_path: "/app",
+                    metadata_json: {
+                      documentType: document.documentType,
+                      jurisdiction: document.jurisdiction,
+                      publicSourceType: getPublicSourceLabel(
+                        document.sourceName,
+                      ),
+                    },
+                  })
+                }
               >
                 {row}
               </a>

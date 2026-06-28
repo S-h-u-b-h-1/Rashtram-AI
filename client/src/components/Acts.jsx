@@ -3,7 +3,6 @@ import {
   Search,
   Filter,
   ArrowRight,
-  ExternalLink,
   AlertCircle,
   XCircle,
   ChevronDown,
@@ -15,7 +14,12 @@ import {
   GitBranch,
   Scale,
 } from "lucide-react";
-import { fetchActs, fetchActYears } from "@/lib/api";
+import {
+  fetchActs,
+  fetchActYears,
+  trackActivity,
+  trackSearchActivity,
+} from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 
 export default function ActsSidebarUI() {
@@ -81,6 +85,30 @@ export default function ActsSidebarUI() {
     return () => clearTimeout(timeoutId);
   }, [isAuthenticated, searchTerm, selectedYear]);
 
+  useEffect(() => {
+    const query = searchTerm.trim();
+    if (query.length < 2) return;
+    trackSearchActivity({
+      event_type: "search_performed",
+      entity_type: "act",
+      page_path: "/app",
+      search_query: query,
+      filters_json: { year: selectedYear },
+      metadata_json: { documentType: "act" },
+    });
+  }, [searchTerm, selectedYear]);
+
+  useEffect(() => {
+    if (selectedYear === "All") return;
+    trackActivity({
+      event_type: "filter_used",
+      entity_type: "act",
+      page_path: "/app",
+      filters_json: { year: selectedYear },
+      metadata_json: { documentType: "act" },
+    });
+  }, [selectedYear]);
+
 
   const loadMoreActs = async () => {
     if (loadingMore || !hasMore || !isAuthenticated) return;
@@ -108,10 +136,6 @@ export default function ActsSidebarUI() {
     if (scrollHeight - scrollTop <= clientHeight * 1.2 && hasMore && !loadingMore) {
       loadMoreActs();
     }
-  };
-
-  const openIndiaCode = () => {
-    window.open("https://www.indiacode.nic.in/", "_blank");
   };
 
   const getStatusIcon = (status) => {
@@ -153,7 +177,7 @@ export default function ActsSidebarUI() {
 
 
   const ActSkeleton = () => (
-    <div className="animate-pulse rounded-2xl border border-[#19231f]/8 bg-white p-4">
+    <div className="animate-pulse rounded-2xl border border-[#c30000]/8 bg-white p-4">
       <div className="flex items-start justify-between gap-2 mb-2">
         <div className="flex-1 space-y-2">
           <div className="h-4 bg-slate-200 rounded w-3/4"></div>
@@ -177,14 +201,14 @@ export default function ActsSidebarUI() {
   return (
     <div className="surface-card flex h-full min-h-[620px] flex-col overflow-hidden bg-[#fffdf8]">
       {}
-      <div className="border-b border-[#19231f]/8 bg-[#fbf7ef] p-5 sm:p-6">
+      <div className="border-b border-[#c30000]/8 bg-[#fbf7ef] p-5 sm:p-6">
         <div className="mb-5 flex items-center justify-between">
           <div className="flex items-center space-x-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#19231f] shadow-lg">
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#c30000] shadow-lg">
               <Scale size={16} className="text-white" />
             </div>
             <div>
-              <h3 className="font-serif text-xl text-[#19231f]">
+              <h3 className="font-serif text-xl text-[#c30000]">
                 Parliament acts
               </h3>
               <p className="text-xs text-[#817a70]">
@@ -192,13 +216,9 @@ export default function ActsSidebarUI() {
               </p>
             </div>
           </div>
-          <button
-            onClick={openIndiaCode}
-            className="grid h-10 w-10 place-items-center rounded-xl border border-[#19231f]/8 bg-white text-[#706a61] transition hover:text-[#19231f]"
-            title="Open India Code"
-          >
-            <ExternalLink size={14} className="text-slate-600" />
-          </button>
+          <span className="rounded-full bg-[#e2ece6] px-3 py-2 text-[10px] font-semibold uppercase tracking-[0.1em] text-[#315a49]">
+            Official public records
+          </span>
         </div>
 
         {}
@@ -212,14 +232,14 @@ export default function ActsSidebarUI() {
             placeholder="Search acts by title…"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="h-12 w-full rounded-xl border border-[#19231f]/10 bg-white pl-11 pr-4 text-sm text-[#19231f] placeholder:text-[#9a9387] focus:border-[#d97745] focus:outline-none focus:ring-4 focus:ring-[#d97745]/10"
+            className="h-12 w-full rounded-xl border border-[#c30000]/10 bg-white pl-11 pr-4 text-sm text-[#c30000] placeholder:text-[#9a9387] focus:border-[#d97745] focus:outline-none focus:ring-4 focus:ring-[#d97745]/10"
           />
         </div>
 
         {}
         <button
           onClick={() => setShowFilters(!showFilters)}
-          className="flex w-full items-center justify-between rounded-xl border border-[#19231f]/8 bg-[#f0e9de] px-4 py-3 text-sm transition hover:bg-[#e9e0d2]"
+          className="flex w-full items-center justify-between rounded-xl border border-[#c30000]/8 bg-[#f0e9de] px-4 py-3 text-sm transition hover:bg-[#e9e0d2]"
         >
           <div className="flex items-center space-x-2 text-[#514d46]">
             <Filter size={14} />
@@ -237,7 +257,7 @@ export default function ActsSidebarUI() {
 
         {}
         {showFilters && (
-          <div className="mt-2 rounded-xl border border-[#19231f]/9 bg-white p-3 shadow-sm">
+          <div className="mt-2 rounded-xl border border-[#c30000]/9 bg-white p-3 shadow-sm">
             <div className="flex items-center justify-between mb-2">
               <span className="text-xs font-semibold text-slate-600 uppercase tracking-wide">
                 Filter by Year
@@ -259,7 +279,7 @@ export default function ActsSidebarUI() {
                 }}
                 className={`w-full text-left px-3 py-2 rounded-md text-sm transition-colors ${
                   selectedYear === "All"
-                    ? "bg-[#19231f] text-white"
+                    ? "bg-[#c30000] text-white"
                     : "hover:bg-slate-50 text-slate-700"
                 }`}
               >
@@ -274,7 +294,7 @@ export default function ActsSidebarUI() {
                   }}
                   className={`w-full text-left px-3 py-2 rounded-md text-sm transition-colors ${
                     selectedYear === year.toString()
-                      ? "bg-[#19231f] text-white"
+                      ? "bg-[#c30000] text-white"
                       : "hover:bg-slate-50 text-slate-700"
                   }`}
                 >
@@ -345,13 +365,32 @@ export default function ActsSidebarUI() {
                           link: act.link,
                           status: act.status
                         };
+                        trackActivity({
+                          event_type: "act_opened",
+                          entity_type: "act",
+                          entity_id: act.id,
+                          document_id: act.id,
+                          page_path: "/app",
+                          metadata_json: {
+                            documentType: "act",
+                            status: act.status,
+                          },
+                        });
                         window.open(`/app/act-chat?act=${encodeURIComponent(JSON.stringify(actData))}`, '_blank');
                       } else if (act.link) {
+                        trackActivity({
+                          event_type: "source_opened",
+                          entity_type: "act",
+                          entity_id: act.id,
+                          document_id: act.id,
+                          page_path: "/app",
+                          metadata_json: { documentType: "act" },
+                        });
                         window.open(act.link, '_blank');
                       }
                     }}
-                    className={`w-full rounded-2xl border border-[#19231f]/9 bg-white p-4 text-left transition-all hover:border-[#ad4a36]/30 ${
-                      hasPdf || act.link ? 'cursor-pointer hover:-translate-y-0.5 hover:shadow-[0_14px_35px_rgba(25,35,31,0.08)]' : 'cursor-default'
+                    className={`w-full rounded-2xl border border-[#c30000]/9 bg-white p-4 text-left transition-all hover:border-[#ad4a36]/30 ${
+                      hasPdf || act.link ? 'cursor-pointer hover:-translate-y-0.5 hover:shadow-[0_14px_35px_rgba(195, 0, 0,0.08)]' : 'cursor-default'
                     }`}
                     aria-label={`Open ${act.title}`}
                   >
@@ -414,13 +453,13 @@ export default function ActsSidebarUI() {
       </div>
 
       {}
-      <div className="border-t border-[#19231f]/8 bg-[#fbf7ef] p-4">
+      <div className="border-t border-[#c30000]/8 bg-[#fbf7ef] p-4">
         <div className="flex items-center justify-between text-xs text-[#777065]">
           <span>
             {filteredActs.length}/{totalActs} act{filteredActs.length !== 1 ? "s" : ""} loaded
             {hasMore && <span className="text-slate-400 ml-1">(scroll for more)</span>}
           </span>
-          <span className="text-slate-400">India Code</span>
+          <span className="text-slate-400">Official acts repository</span>
         </div>
       </div>
     </div>

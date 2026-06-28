@@ -1,6 +1,9 @@
+"use client";
+
 import Link from "next/link";
 import { ArrowRight, BookOpenText } from "lucide-react";
 import { buildResearchHref, formatDate } from "@/lib/document-links";
+import { trackActivity } from "@/lib/api";
 
 export function ContinueResearch({ chats }) {
   return (
@@ -9,13 +12,13 @@ export function ContinueResearch({ chats }) {
         <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#9e4937]">
           Your workspace
         </p>
-        <h2 className="mt-2 font-serif text-2xl text-[#19231f]">
+        <h2 className="mt-2 font-serif text-2xl text-[#c30000]">
           Continue research
         </h2>
       </div>
 
       {chats.length === 0 ? (
-        <div className="mt-5 rounded-2xl border border-dashed border-[#19231f]/12 bg-[#f7f2e8]/65 p-7 text-center">
+        <div className="mt-5 rounded-2xl border border-dashed border-[#c30000]/12 bg-[#f7f2e8]/65 p-7 text-center">
           <BookOpenText className="mx-auto h-6 w-6 text-[#9b9387]" />
           <p className="mt-3 text-sm font-medium text-[#514d46]">
             No research conversations yet
@@ -32,7 +35,19 @@ export function ContinueResearch({ chats }) {
               <Link
                 key={`${chat.documentType}-${chat.id}`}
                 href={href || "/app"}
-                className="group rounded-2xl border border-[#19231f]/9 bg-[#fffdf8] p-4 transition hover:-translate-y-0.5 hover:border-[#ad4a36]/25 hover:shadow-[0_12px_30px_rgba(25,35,31,0.06)]"
+                onClick={() =>
+                  trackActivity({
+                    event_type: "research_continued",
+                    entity_type: chat.documentType,
+                    entity_id: chat.documentId,
+                    document_id: chat.documentId,
+                    page_path: window.location.pathname,
+                    metadata_json: {
+                      documentType: chat.documentType,
+                    },
+                  })
+                }
+                className="group rounded-2xl border border-[#c30000]/9 bg-[#fffdf8] p-4 transition hover:-translate-y-0.5 hover:border-[#ad4a36]/25 hover:shadow-[0_12px_30px_rgba(195, 0, 0,0.06)]"
               >
                 <div className="flex items-start gap-3">
                   <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-[#ebe3d6] text-[#9f4937]">

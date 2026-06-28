@@ -29,6 +29,9 @@ const {
   countPdfUrls,
 } = require("../lib/ingestion/core/ingestionRunner");
 const { parseArguments } = require("../cli/ingestSources");
+const {
+  hasMeaningfulDocumentUpdate,
+} = require("../lib/ingestion/core/catalogRepository");
 
 test("hashing is stable and normalizes text fingerprints", () => {
   assert.equal(sha256("rashtram"), sha256("rashtram"));
@@ -135,6 +138,35 @@ test("ingestion counters count distinct PDF URLs and parse operational flags", (
   assert.equal(
     parseArguments(["--detail-concurrency=4"]).detailConcurrency,
     4,
+  );
+  assert.equal(parseArguments([]).downloadPdfs, false);
+  assert.equal(parseArguments(["--max-pdfs=12"]).maxPdfs, 12);
+  assert.equal(
+    parseArguments(["--pdf-storage=filesystem"]).pdfStorage,
+    "filesystem",
+  );
+});
+
+test("intelligence updates are emitted only for meaningful field changes", () => {
+  const candidate = {
+    title: "Public Safety Act",
+    status: "Active",
+    pdf_url: "https://example.gov.in/safety.pdf",
+  };
+  assert.equal(
+    hasMeaningfulDocumentUpdate(candidate, {
+      title: "Public Safety Act",
+      status: "Active",
+      pdfUrl: "https://example.gov.in/safety.pdf",
+    }),
+    false,
+  );
+  assert.equal(
+    hasMeaningfulDocumentUpdate(candidate, {
+      title: "Public Safety Act",
+      status: "Amended",
+    }),
+    true,
   );
 });
 

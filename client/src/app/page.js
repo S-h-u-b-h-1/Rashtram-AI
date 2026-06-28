@@ -71,6 +71,29 @@ const useCases = [
   "Institutional memory",
 ];
 
+const dataTrustPrinciples = [
+  {
+    title: "Verified public records",
+    description:
+      "Government-verified public legislative data is complemented by trusted legislative references.",
+  },
+  {
+    title: "Provenance retained",
+    description:
+      "Source identity, update timestamps, and original record links are retained for audit and citation.",
+  },
+  {
+    title: "Duplicate-safe catalogue",
+    description:
+      "Legal identifiers, document fingerprints, and hashes are used to reconcile records across repositories.",
+  },
+  {
+    title: "Original record prevails",
+    description:
+      "Rashtram AI is a research aid, not a legal authority. Original government and public records remain the final reference.",
+  },
+];
+
 export default function Home() {
   return (
     <main className="overflow-hidden bg-[#fffdf8]">
@@ -78,12 +101,12 @@ export default function Home() {
         <div className="absolute inset-0 -z-10 bg-[radial-gradient(circle_at_78%_15%,rgba(217,119,69,0.13),transparent_28%),radial-gradient(circle_at_10%_55%,rgba(61,118,105,0.1),transparent_25%)]" />
         <div className="mx-auto grid max-w-[1240px] items-center gap-16 lg:grid-cols-[1.02fr_0.98fr]">
           <div className="animate-fade-up">
-            <div className="inline-flex items-center gap-2 rounded-full border border-[#19231f]/10 bg-white/70 px-3 py-1.5 text-xs font-semibold text-[#59544c] shadow-sm backdrop-blur">
+            <div className="inline-flex items-center gap-2 rounded-full border border-[#c30000]/10 bg-white/70 px-3 py-1.5 text-xs font-semibold text-[#59544c] shadow-sm backdrop-blur">
               <Sparkles className="h-3.5 w-3.5 text-[#c35b39]" />
               Evidence-first public policy intelligence
             </div>
 
-            <h1 className="mt-7 max-w-3xl font-serif text-[clamp(3.5rem,7.4vw,6.9rem)] leading-[0.91] tracking-[-0.055em] text-[#19231f]">
+            <h1 className="mt-7 max-w-3xl font-serif text-[clamp(3.5rem,7.4vw,6.9rem)] leading-[0.91] tracking-[-0.055em] text-[#c30000]">
               Read policy.
               <br />
               <span className="text-[#a84634]">Trace impact.</span>
@@ -100,14 +123,14 @@ export default function Home() {
             <div className="mt-9 flex flex-col gap-3 sm:flex-row">
               <Link
                 href="/signup"
-                className="inline-flex items-center justify-center gap-2 rounded-full bg-[#19231f] px-6 py-3.5 text-sm font-semibold text-[#fffaf0] shadow-[0_14px_35px_rgba(25,35,31,0.18)] transition hover:-translate-y-0.5 hover:bg-[#2c3833]"
+                className="inline-flex items-center justify-center gap-2 rounded-full bg-[#c30000] px-6 py-3.5 text-sm font-semibold text-[#fffaf0] shadow-[0_14px_35px_rgba(195, 0, 0,0.18)] transition hover:-translate-y-0.5 hover:bg-[#2c3833]"
               >
                 Explore the workspace
                 <ArrowRight className="h-4 w-4" />
               </Link>
               <Link
                 href="#workflow"
-                className="inline-flex items-center justify-center gap-2 rounded-full border border-[#19231f]/12 bg-white/65 px-6 py-3.5 text-sm font-semibold text-[#19231f] transition hover:bg-white"
+                className="inline-flex items-center justify-center gap-2 rounded-full border border-[#c30000]/12 bg-white/65 px-6 py-3.5 text-sm font-semibold text-[#c30000] transition hover:bg-white"
               >
                 See how it works
               </Link>
@@ -131,13 +154,13 @@ export default function Home() {
         </div>
       </section>
 
-      <section className="border-y border-[#19231f]/8 bg-[#f3ede2] px-5 py-5 sm:px-8">
+      <section className="border-y border-[#c30000]/8 bg-[#f3ede2] px-5 py-5 sm:px-8">
         <div className="mx-auto flex max-w-[1240px] flex-wrap items-center justify-between gap-5 text-xs font-semibold uppercase tracking-[0.16em] text-[#777065]">
           <span>Built for India&apos;s policy ecosystem</span>
           <div className="flex flex-wrap gap-x-8 gap-y-3 text-[#3f4742]">
             <span>Parliament Bills</span>
-            <span>PRS India</span>
-            <span>India Code</span>
+            <span>Verified Public Legislative Sources</span>
+            <span>Official Public Records</span>
             <span>Legislative research</span>
           </div>
         </div>
@@ -153,7 +176,7 @@ export default function Home() {
               <p className="text-xs font-semibold uppercase tracking-[0.22em] text-[#ad4a36]">
                 Built for careful work
               </p>
-              <h2 className="mt-4 font-serif text-4xl leading-[1.03] tracking-[-0.035em] text-[#19231f] sm:text-5xl">
+              <h2 className="mt-4 font-serif text-4xl leading-[1.03] tracking-[-0.035em] text-[#c30000] sm:text-5xl">
                 Policy intelligence without the black box.
               </h2>
             </div>
@@ -168,7 +191,7 @@ export default function Home() {
             {capabilities.map((capability) => (
               <article
                 key={capability.title}
-                className="group rounded-[1.7rem] border border-[#19231f]/9 bg-white p-7 shadow-[0_20px_55px_rgba(25,35,31,0.05)] transition duration-300 hover:-translate-y-1 hover:shadow-[0_28px_75px_rgba(25,35,31,0.09)]"
+                className="group rounded-[1.7rem] border border-[#c30000]/9 bg-white p-7 shadow-[0_20px_55px_rgba(195, 0, 0,0.05)] transition duration-300 hover:-translate-y-1 hover:shadow-[0_28px_75px_rgba(195, 0, 0,0.09)]"
               >
                 <div
                   className={`grid h-12 w-12 place-items-center rounded-2xl ${capability.color}`}
@@ -178,7 +201,7 @@ export default function Home() {
                 <p className="mt-8 text-[11px] font-bold uppercase tracking-[0.2em] text-[#8a8277]">
                   {capability.eyebrow}
                 </p>
-                <h3 className="mt-3 font-serif text-2xl leading-tight tracking-[-0.02em] text-[#19231f]">
+                <h3 className="mt-3 font-serif text-2xl leading-tight tracking-[-0.02em] text-[#c30000]">
                   {capability.title}
                 </h3>
                 <p className="mt-4 text-sm leading-6 text-[#716b62]">
@@ -190,28 +213,66 @@ export default function Home() {
         </div>
       </section>
 
+      <section className="border-y border-[#c30000]/8 bg-[#f7f2e8] px-5 py-24 sm:px-8 lg:py-28">
+        <div className="mx-auto max-w-[1240px]">
+          <div className="grid gap-8 lg:grid-cols-[0.8fr_1.2fr] lg:items-end">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.22em] text-[#ad4a36]">
+                Data Trust
+              </p>
+              <h2 className="mt-4 font-serif text-4xl leading-[1.03] tracking-[-0.035em] text-[#c30000] sm:text-5xl">
+                Trust the record, not a black box.
+              </h2>
+            </div>
+            <p className="max-w-2xl text-base leading-7 text-[#706a61] lg:justify-self-end">
+              Rashtram AI maintains a continuously refreshed public legislative
+              catalogue while preserving provenance, deduplicating overlapping
+              records, and clearly separating research assistance from legal
+              authority.
+            </p>
+          </div>
+
+          <div className="mt-12 grid gap-4 md:grid-cols-2">
+            {dataTrustPrinciples.map((principle) => (
+              <article
+                key={principle.title}
+                className="rounded-2xl border border-[#c30000]/9 bg-[#fffdf8] p-6"
+              >
+                <ShieldCheck className="h-5 w-5 text-[#34725b]" />
+                <h3 className="mt-4 text-base font-semibold text-[#29312d]">
+                  {principle.title}
+                </h3>
+                <p className="mt-2 text-sm leading-6 text-[#716b62]">
+                  {principle.description}
+                </p>
+              </article>
+            ))}
+          </div>
+        </div>
+      </section>
+
       <section
         id="workflow"
-        className="paper-grid border-y border-[#19231f]/8 px-5 py-24 sm:px-8 lg:py-32"
+        className="paper-grid border-y border-[#c30000]/8 px-5 py-24 sm:px-8 lg:py-32"
       >
         <div className="mx-auto max-w-[1240px]">
           <div className="mx-auto max-w-2xl text-center">
             <p className="text-xs font-semibold uppercase tracking-[0.22em] text-[#ad4a36]">
               From source to insight
             </p>
-            <h2 className="mt-4 font-serif text-4xl tracking-[-0.035em] text-[#19231f] sm:text-5xl">
+            <h2 className="mt-4 font-serif text-4xl tracking-[-0.035em] text-[#c30000] sm:text-5xl">
               A calmer way through complex policy.
             </h2>
           </div>
 
           <div className="relative mt-16 grid gap-6 lg:grid-cols-3">
-            <div className="absolute left-[16%] right-[16%] top-7 hidden border-t border-dashed border-[#19231f]/20 lg:block" />
+            <div className="absolute left-[16%] right-[16%] top-7 hidden border-t border-dashed border-[#c30000]/20 lg:block" />
             {workflow.map((step) => (
               <article key={step.number} className="relative text-center">
-                <div className="relative z-10 mx-auto grid h-14 w-14 place-items-center rounded-full border border-[#19231f]/12 bg-[#fffdf8] font-mono text-xs font-semibold text-[#ad4a36] shadow-sm">
+                <div className="relative z-10 mx-auto grid h-14 w-14 place-items-center rounded-full border border-[#c30000]/12 bg-[#fffdf8] font-mono text-xs font-semibold text-[#ad4a36] shadow-sm">
                   {step.number}
                 </div>
-                <h3 className="mt-7 font-serif text-2xl text-[#19231f]">
+                <h3 className="mt-7 font-serif text-2xl text-[#c30000]">
                   {step.title}
                 </h3>
                 <p className="mx-auto mt-3 max-w-sm text-sm leading-6 text-[#706a61]">
@@ -223,7 +284,7 @@ export default function Home() {
         </div>
       </section>
 
-      <section className="bg-[#19231f] px-5 py-24 text-white sm:px-8 lg:py-32">
+      <section className="bg-[#c30000] px-5 py-24 text-white sm:px-8 lg:py-32">
         <div className="mx-auto grid max-w-[1240px] gap-14 lg:grid-cols-[0.95fr_1.05fr] lg:items-center">
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.22em] text-[#efb36f]">
@@ -239,7 +300,7 @@ export default function Home() {
             </p>
             <Link
               href="/signup"
-              className="mt-9 inline-flex items-center gap-2 rounded-full bg-[#fffaf0] px-6 py-3.5 text-sm font-semibold text-[#19231f] transition hover:-translate-y-0.5"
+              className="mt-9 inline-flex items-center gap-2 rounded-full bg-[#fffaf0] px-6 py-3.5 text-sm font-semibold text-[#c30000] transition hover:-translate-y-0.5"
             >
               Start a research workspace
               <ArrowRight className="h-4 w-4" />

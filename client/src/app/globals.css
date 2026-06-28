@@ -31,15 +31,15 @@
 :root {
   --radius: 0.85rem;
   --background: #fffdf8;
-  --foreground: #19231f;
+  --foreground: #c30000;
   --card: #ffffff;
-  --card-foreground: #19231f;
+  --card-foreground: #c30000;
   --popover: #ffffff;
-  --popover-foreground: #19231f;
-  --primary: #19231f;
+  --popover-foreground: #c30000;
+  --primary: #c30000;
   --primary-foreground: #fffaf0;
   --secondary: #eee7da;
-  --secondary-foreground: #19231f;
+  --secondary-foreground: #c30000;
   --muted: #f1ece3;
   --muted-foreground: #706a61;
   --accent: #f4e0cf;
@@ -69,7 +69,7 @@ body {
 
 ::selection {
   background: rgba(217, 119, 69, 0.24);
-  color: #19231f;
+  color: #c30000;
 }
 
 button,
@@ -102,8 +102,8 @@ textarea:focus-visible {
 .paper-grid {
   background-color: #f7f2e8;
   background-image:
-    linear-gradient(rgba(25, 35, 31, 0.035) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(25, 35, 31, 0.035) 1px, transparent 1px);
+    linear-gradient(rgba(195, 0, 0, 0.035) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(195, 0, 0, 0.035) 1px, transparent 1px);
   background-size: 42px 42px;
 }
 
@@ -132,7 +132,7 @@ textarea:focus-visible {
 }
 
 .surface-card {
-  border: 1px solid rgba(25, 35, 31, 0.1);
+  border: 1px solid rgba(195, 0, 0, 0.1);
   border-radius: 1.4rem;
   background: rgba(255, 253, 248, 0.92);
   box-shadow: 0 18px 55px rgba(27, 37, 33, 0.06);
@@ -208,7 +208,7 @@ textarea:focus-visible {
 
 .chat-markdown code {
   border-radius: 0.35rem;
-  background: rgba(25, 35, 31, 0.08);
+  background: rgba(195, 0, 0, 0.08);
   padding: 0.12rem 0.35rem;
   font-family: var(--font-geist-mono), monospace;
   font-size: 0.8rem;
@@ -218,7 +218,7 @@ textarea:focus-visible {
   margin-bottom: 0.8rem;
   overflow-x: auto;
   border-radius: 0.8rem;
-  background: #19231f;
+  background: #c30000;
   padding: 1rem;
   color: #fffaf0;
 }

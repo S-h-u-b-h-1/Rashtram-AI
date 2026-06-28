@@ -71,7 +71,7 @@ export function WorkspaceShell({ activeKey, title, children }) {
 
       <aside
         className={cn(
-          "fixed inset-y-0 left-0 z-50 flex w-[280px] flex-col border-r border-white/8 bg-[#19231f] text-white transition-transform duration-300 md:static md:translate-x-0",
+          "fixed inset-y-0 left-0 z-50 flex w-[280px] flex-col border-r border-white/8 bg-[#c30000] text-white transition-transform duration-300 md:static md:translate-x-0",
           isMobileMenuOpen ? "translate-x-0" : "-translate-x-full",
         )}
       >
@@ -104,7 +104,7 @@ export function WorkspaceShell({ activeKey, title, children }) {
                   className={cn(
                     "group flex w-full items-center gap-3 rounded-xl px-3 py-3 text-sm font-medium transition",
                     isActive
-                      ? "bg-[#fffaf0] text-[#19231f] shadow-sm"
+                      ? "bg-[#fffaf0] text-[#c30000] shadow-sm"
                       : "text-white/58 hover:bg-white/7 hover:text-white",
                   )}
                 >
@@ -166,19 +166,19 @@ export function WorkspaceShell({ activeKey, title, children }) {
       </aside>
 
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="flex h-20 shrink-0 items-center justify-between border-b border-[#19231f]/9 bg-[#f7f2e8]/85 px-5 backdrop-blur-xl md:px-8">
+        <header className="flex h-20 shrink-0 items-center justify-between border-b border-[#c30000]/9 bg-[#f7f2e8]/85 px-5 backdrop-blur-xl md:px-8">
           <div>
             <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[#9f4937]">
               Rashtram intelligence
             </p>
-            <h1 className="mt-1 text-sm font-semibold text-[#19231f]">
+            <h1 className="mt-1 text-sm font-semibold text-[#c30000]">
               {title}
             </h1>
           </div>
           <button
             type="button"
             onClick={() => setIsMobileMenuOpen(true)}
-            className="grid h-11 w-11 place-items-center rounded-xl border border-[#19231f]/10 bg-white text-[#19231f] md:hidden"
+            className="grid h-11 w-11 place-items-center rounded-xl border border-[#c30000]/10 bg-white text-[#c30000] md:hidden"
             aria-label="Open navigation"
           >
             {isMobileMenuOpen ? (

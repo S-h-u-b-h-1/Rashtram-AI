@@ -32,7 +32,7 @@ export function DashboardHero({ data }) {
   ];
 
   return (
-    <section className="relative overflow-hidden rounded-[1.8rem] bg-[#19231f] p-6 text-white sm:p-8 lg:p-10">
+    <section className="relative overflow-hidden rounded-[1.8rem] bg-[#c30000] p-6 text-white sm:p-8 lg:p-10">
       <div className="policy-grid absolute inset-0 opacity-20" />
       <div className="absolute -right-20 -top-24 h-72 w-72 rounded-full bg-[#d97745]/18 blur-3xl" />
       <div className="relative">

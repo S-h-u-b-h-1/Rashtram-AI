@@ -13,6 +13,7 @@
     "ingest:catalog": "node scripts/ingest-prs-catalog.js",
     "ingest:catalog-only": "node scripts/ingest-prs-catalog.js --catalog-only",
     "ingest:sources": "node cli/ingestSources.js",
+    "ingest:health": "node cli/ingestHealth.js",
     "start": "nodemon server.js",
     "start:prod": "node server.js"
   },

@@ -3,7 +3,7 @@ import { formatDate } from "@/lib/document-links";
 
 export function ProfileIdentity({ user }) {
   return (
-    <section className="relative overflow-hidden rounded-[1.8rem] bg-[#19231f] p-6 text-white sm:p-8">
+    <section className="relative overflow-hidden rounded-[1.8rem] bg-[#c30000] p-6 text-white sm:p-8">
       <div className="policy-grid absolute inset-0 opacity-20" />
       <div className="relative flex flex-col gap-6 sm:flex-row sm:items-center">
         <div className="grid h-20 w-20 shrink-0 place-items-center rounded-3xl bg-[#d97745] font-serif text-2xl font-semibold">

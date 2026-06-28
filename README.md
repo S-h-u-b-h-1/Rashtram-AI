@@ -18,6 +18,7 @@ Detailed references:
 - [Legislative data catalogue](docs/DATA_CATALOG.md)
 - [Legislative ingestion architecture](docs/LEGISLATIVE_INGESTION_ARCHITECTURE.md)
 - [Dashboard and profile redesign](docs/DASHBOARD_AND_PROFILE_REDESIGN.md)
+- [Data trust and privacy](docs/DATA_TRUST_AND_PRIVACY.md)
 
 ## Prerequisites
 

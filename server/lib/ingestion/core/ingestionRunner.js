@@ -8,6 +8,11 @@ const {
 const { chooseBestCandidate } = require("./dedupe");
 const { PoliteFetcher } = require("./fetcher");
 const { normalizeRecord } = require("./normalizer");
+const {
+  downloadPdfForRecord,
+  pdfUrlFromRecord,
+  validatePdfStorageOptions,
+} = require("./pdfDownload");
 
 const countPdfUrls = (record) =>
   new Set(
@@ -55,6 +60,9 @@ const runIngestion = async (connector, options = {}) => {
       reviewsQueued: 0,
       snapshots: 0,
       relationships: 0,
+      downloaded_pdfs: 0,
+      stored_pdfs: 0,
+      pdf_download_errors: 0,
     },
     errors: [],
   };
@@ -73,9 +81,31 @@ const runIngestion = async (connector, options = {}) => {
     summary.counters.discovered = records.length;
     summary.errors.push(...(collection.errors || []));
 
+    const maximumPdfDownloads = Math.max(0, Number(options.maxPdfs || 100));
+    if (options.downloadPdfs) validatePdfStorageOptions(options);
+
     for (const rawRecord of records) {
       try {
-        const record = normalizeRecord(rawRecord);
+        let record = normalizeRecord(rawRecord);
+        if (
+          options.downloadPdfs &&
+          summary.counters.downloaded_pdfs < maximumPdfDownloads &&
+          pdfUrlFromRecord(record)
+        ) {
+          try {
+            const pdf = await downloadPdfForRecord(record, fetcher, options);
+            record = pdf.record;
+            if (pdf.downloaded) summary.counters.downloaded_pdfs += 1;
+            if (pdf.stored) summary.counters.stored_pdfs += 1;
+          } catch (error) {
+            summary.counters.pdf_download_errors += 1;
+            summary.errors.push({
+              sourceRecordId: record.sourceRecordId,
+              stage: "pdf-download",
+              message: error.message,
+            });
+          }
+        }
         summary.counters.pdf_urls_found += countPdfUrls(record);
         const candidates = await findCandidates(record);
         const decision = chooseBestCandidate(record, candidates);

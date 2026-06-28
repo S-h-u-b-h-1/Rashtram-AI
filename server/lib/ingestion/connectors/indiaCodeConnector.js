@@ -225,6 +225,7 @@ const indiaCodeConnector = {
     const handle = options.handle || CENTRAL_ACTS_HANDLE;
     const snapshots = [];
     const errors = [];
+    const diagnostics = [];
     let yearPages = [];
 
     if (String(options.years || "").toLowerCase() === "all") {
@@ -271,6 +272,16 @@ const indiaCodeConnector = {
           ...record,
           htmlHash: sha256(response.body),
         }));
+        if (
+          pageRecords.length === 0 &&
+          /there are no entries in the index/i.test(response.body)
+        ) {
+          diagnostics.push({
+            type: "empty-source",
+            year: page.year,
+            message: "The official index reports no entries for this period.",
+          });
+        }
         snapshots.push(
           createSnapshot({
             sourceName: this.name,
@@ -332,7 +343,7 @@ const indiaCodeConnector = {
         },
       );
     }
-    return { records: limited, snapshots, errors };
+    return { records: limited, snapshots, errors, diagnostics };
   },
 };
 

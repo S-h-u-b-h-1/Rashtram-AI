@@ -47,7 +47,7 @@ export function ResearchActivity({ stats }) {
         <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#9e4937]">
           Personal activity
         </p>
-        <h2 className="mt-2 font-serif text-2xl text-[#19231f]">
+        <h2 className="mt-2 font-serif text-2xl text-[#c30000]">
           Your research activity
         </h2>
         <p className="mt-2 text-sm text-[#777066]">
@@ -61,10 +61,10 @@ export function ResearchActivity({ stats }) {
           return (
             <article
               key={item.label}
-              className="rounded-2xl border border-[#19231f]/9 bg-[#fffdf8] p-4"
+              className="rounded-2xl border border-[#c30000]/9 bg-[#fffdf8] p-4"
             >
               <ActivityIcon className="h-4 w-4 text-[#9f4937]" />
-              <p className="mt-4 font-serif text-3xl text-[#19231f]">
+              <p className="mt-4 font-serif text-3xl text-[#c30000]">
                 {item.value.toLocaleString()}
               </p>
               <p className="mt-1 text-[11px] text-[#81796e]">

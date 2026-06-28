@@ -4,7 +4,6 @@ import {
   Filter,
   FileText,
   ArrowRight,
-  ExternalLink,
   AlertCircle,
   XCircle,
   ChevronDown,
@@ -16,7 +15,11 @@ import {
   Hourglass,
   GitBranch,
 } from "lucide-react";
-import { fetchBills } from "@/lib/api";
+import {
+  fetchBills,
+  trackActivity,
+  trackSearchActivity,
+} from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 
 export default function BillsSidebarUI() {
@@ -82,6 +85,30 @@ export default function BillsSidebarUI() {
     return () => clearTimeout(timeoutId);
   }, [isAuthenticated, searchTerm, selectedStatus]);
 
+  useEffect(() => {
+    const query = searchTerm.trim();
+    if (query.length < 2) return;
+    trackSearchActivity({
+      event_type: "search_performed",
+      entity_type: "bill",
+      page_path: "/app",
+      search_query: query,
+      filters_json: { status: selectedStatus },
+      metadata_json: { documentType: "bill" },
+    });
+  }, [searchTerm, selectedStatus]);
+
+  useEffect(() => {
+    if (selectedStatus === "All") return;
+    trackActivity({
+      event_type: "filter_used",
+      entity_type: "bill",
+      page_path: "/app",
+      filters_json: { status: selectedStatus },
+      metadata_json: { documentType: "bill" },
+    });
+  }, [selectedStatus]);
+
 
   const loadMoreBills = async () => {
     if (loadingMore || !hasMore || !isAuthenticated) return;
@@ -112,10 +139,6 @@ export default function BillsSidebarUI() {
     }
   };
 
-
-  const openPRSIndia = () => {
-    window.open("https://prsindia.org/billtrack/", "_blank");
-  };
 
   const getStatusIcon = (status) => {
     const statusLower = status?.toLowerCase() || '';
@@ -161,7 +184,7 @@ export default function BillsSidebarUI() {
 
 
   const BillSkeleton = () => (
-    <div className="animate-pulse rounded-2xl border border-[#19231f]/8 bg-white p-4">
+    <div className="animate-pulse rounded-2xl border border-[#c30000]/8 bg-white p-4">
       <div className="flex items-start justify-between gap-2 mb-2">
         <div className="flex-1 space-y-2">
           <div className="h-4 bg-slate-200 rounded w-3/4"></div>
@@ -185,14 +208,14 @@ export default function BillsSidebarUI() {
   return (
     <div className="surface-card flex h-full min-h-[620px] flex-col overflow-hidden bg-[#fffdf8]">
       {}
-      <div className="border-b border-[#19231f]/8 bg-[#fbf7ef] p-5 sm:p-6">
+      <div className="border-b border-[#c30000]/8 bg-[#fbf7ef] p-5 sm:p-6">
         <div className="mb-5 flex items-center justify-between">
           <div className="flex items-center space-x-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#19231f] shadow-lg">
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#c30000] shadow-lg">
               <FileText size={16} className="text-white" />
             </div>
             <div>
-              <h3 className="font-serif text-xl text-[#19231f]">
+              <h3 className="font-serif text-xl text-[#c30000]">
                 Parliament bills
               </h3>
               <p className="text-xs text-[#817a70]">
@@ -200,13 +223,9 @@ export default function BillsSidebarUI() {
               </p>
             </div>
           </div>
-          <button
-            onClick={openPRSIndia}
-            className="grid h-10 w-10 place-items-center rounded-xl border border-[#19231f]/8 bg-white text-[#706a61] transition hover:text-[#19231f]"
-            title="Open PRS India"
-          >
-            <ExternalLink size={14} className="text-slate-600" />
-          </button>
+          <span className="rounded-full bg-[#e2ece6] px-3 py-2 text-[10px] font-semibold uppercase tracking-[0.1em] text-[#315a49]">
+            Verified public records
+          </span>
         </div>
 
         {}
@@ -220,14 +239,14 @@ export default function BillsSidebarUI() {
             placeholder="Search bills by title…"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="h-12 w-full rounded-xl border border-[#19231f]/10 bg-white pl-11 pr-4 text-sm text-[#19231f] placeholder:text-[#9a9387] focus:border-[#d97745] focus:outline-none focus:ring-4 focus:ring-[#d97745]/10"
+            className="h-12 w-full rounded-xl border border-[#c30000]/10 bg-white pl-11 pr-4 text-sm text-[#c30000] placeholder:text-[#9a9387] focus:border-[#d97745] focus:outline-none focus:ring-4 focus:ring-[#d97745]/10"
           />
         </div>
 
         {}
         <button
           onClick={() => setShowFilters(!showFilters)}
-          className="flex w-full items-center justify-between rounded-xl border border-[#19231f]/8 bg-[#f0e9de] px-4 py-3 text-sm transition hover:bg-[#e9e0d2]"
+          className="flex w-full items-center justify-between rounded-xl border border-[#c30000]/8 bg-[#f0e9de] px-4 py-3 text-sm transition hover:bg-[#e9e0d2]"
         >
           <div className="flex items-center space-x-2 text-[#514d46]">
             <Filter size={14} />
@@ -245,7 +264,7 @@ export default function BillsSidebarUI() {
 
         {}
         {showFilters && (
-          <div className="mt-2 rounded-xl border border-[#19231f]/9 bg-white p-3 shadow-sm">
+          <div className="mt-2 rounded-xl border border-[#c30000]/9 bg-white p-3 shadow-sm">
             <div className="flex items-center justify-between mb-2">
               <span className="text-xs font-semibold text-slate-600 uppercase tracking-wide">
                 Filter Status
@@ -267,7 +286,7 @@ export default function BillsSidebarUI() {
                 }}
                 className={`w-full text-left px-3 py-2 rounded-md text-sm transition-colors ${
                   selectedStatus === "All"
-                    ? "bg-[#19231f] text-white"
+                    ? "bg-[#c30000] text-white"
                     : "hover:bg-slate-50 text-slate-700"
                 }`}
               >
@@ -282,7 +301,7 @@ export default function BillsSidebarUI() {
                   }}
                   className={`w-full text-left px-3 py-2 rounded-md text-sm transition-colors ${
                     selectedStatus === status
-                      ? "bg-[#19231f] text-white"
+                      ? "bg-[#c30000] text-white"
                       : "hover:bg-slate-50 text-slate-700"
                   }`}
                 >
@@ -343,7 +362,6 @@ export default function BillsSidebarUI() {
                   <button
                     type="button"
                     onClick={() => {
-
                       const billData = {
                         billId: bill.id,
                         title: bill.title,
@@ -351,9 +369,20 @@ export default function BillsSidebarUI() {
                         link: bill.link,
                         status: bill.status
                       };
+                      trackActivity({
+                        event_type: "bill_opened",
+                        entity_type: "bill",
+                        entity_id: bill.id,
+                        document_id: bill.id,
+                        page_path: "/app",
+                        metadata_json: {
+                          documentType: "bill",
+                          status: bill.status,
+                        },
+                      });
                       window.open(`/app/bill-chat?bill=${encodeURIComponent(JSON.stringify(billData))}`, '_blank');
                     }}
-                    className="w-full cursor-pointer rounded-2xl border border-[#19231f]/9 bg-white p-4 text-left transition-all hover:-translate-y-0.5 hover:border-[#ad4a36]/30 hover:shadow-[0_14px_35px_rgba(25,35,31,0.08)]"
+                    className="w-full cursor-pointer rounded-2xl border border-[#c30000]/9 bg-white p-4 text-left transition-all hover:-translate-y-0.5 hover:border-[#ad4a36]/30 hover:shadow-[0_14px_35px_rgba(195, 0, 0,0.08)]"
                     aria-label={`Open research chat for ${bill.title}`}
                   >
                     <div className="flex items-start justify-between gap-2 mb-2">
@@ -413,13 +442,15 @@ export default function BillsSidebarUI() {
       </div>
 
       {}
-      <div className="border-t border-[#19231f]/8 bg-[#fbf7ef] p-4">
+      <div className="border-t border-[#c30000]/8 bg-[#fbf7ef] p-4">
         <div className="flex items-center justify-between text-xs text-[#777065]">
           <span>
             {filteredBills.length}/{totalBills} bill{filteredBills.length !== 1 ? "s" : ""} loaded
             {hasMore && <span className="text-slate-400 ml-1">(scroll for more)</span>}
           </span>
-          <span className="text-slate-400">PRS India</span>
+          <span className="text-slate-400">
+            Verified legislative references
+          </span>
         </div>
       </div>
     </div>

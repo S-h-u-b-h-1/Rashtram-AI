@@ -484,6 +484,84 @@ const initializeSchema = async () => {
     CREATE INDEX IF NOT EXISTS intelligence_events_document_idx
       ON intelligence_events (document_id, event_type);
 
+    CREATE TABLE IF NOT EXISTS user_activity_events (
+      id BIGSERIAL PRIMARY KEY,
+      user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      event_type TEXT NOT NULL CHECK (
+        event_type IN (
+          'login',
+          'logout',
+          'dashboard_viewed',
+          'document_opened',
+          'bill_opened',
+          'act_opened',
+          'search_performed',
+          'filter_used',
+          'chat_started',
+          'chat_message_sent',
+          'summary_viewed',
+          'source_opened',
+          'profile_viewed',
+          'research_continued',
+          'export_clicked',
+          'watchlist_placeholder_clicked'
+        )
+      ),
+      entity_type TEXT,
+      entity_id TEXT,
+      document_id BIGINT
+        REFERENCES legislative_documents(id) ON DELETE SET NULL,
+      session_id TEXT,
+      page_path TEXT,
+      referrer TEXT,
+      search_query TEXT,
+      filters_json JSONB NOT NULL DEFAULT '{}'::jsonb,
+      metadata_json JSONB NOT NULL DEFAULT '{}'::jsonb,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+
+    CREATE INDEX IF NOT EXISTS user_activity_events_user_recent_idx
+      ON user_activity_events (user_id, created_at DESC);
+
+    CREATE INDEX IF NOT EXISTS user_activity_events_document_idx
+      ON user_activity_events (document_id, created_at DESC)
+      WHERE document_id IS NOT NULL;
+
+    CREATE INDEX IF NOT EXISTS user_activity_events_type_idx
+      ON user_activity_events (event_type, created_at DESC);
+
+    CREATE TABLE IF NOT EXISTS user_research_preferences (
+      user_id BIGINT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+      preferred_topics_json JSONB NOT NULL DEFAULT '[]'::jsonb,
+      preferred_jurisdictions_json JSONB NOT NULL DEFAULT '[]'::jsonb,
+      preferred_document_types_json JSONB NOT NULL DEFAULT '[]'::jsonb,
+      frequently_viewed_ministries_json JSONB NOT NULL DEFAULT '[]'::jsonb,
+      activity_tracking_enabled BOOLEAN NOT NULL DEFAULT FALSE,
+      personalization_enabled BOOLEAN NOT NULL DEFAULT FALSE,
+      consented_at TIMESTAMPTZ,
+      revoked_at TIMESTAMPTZ,
+      last_active_at TIMESTAMPTZ,
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+
+    CREATE TABLE IF NOT EXISTS user_document_interactions (
+      id BIGSERIAL PRIMARY KEY,
+      user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      document_id BIGINT NOT NULL
+        REFERENCES legislative_documents(id) ON DELETE CASCADE,
+      interaction_type TEXT NOT NULL,
+      count INTEGER NOT NULL DEFAULT 1 CHECK (count > 0),
+      last_interacted_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      metadata_json JSONB NOT NULL DEFAULT '{}'::jsonb,
+      UNIQUE (user_id, document_id, interaction_type)
+    );
+
+    CREATE INDEX IF NOT EXISTS user_document_interactions_user_recent_idx
+      ON user_document_interactions (user_id, last_interacted_at DESC);
+
+    CREATE INDEX IF NOT EXISTS user_document_interactions_document_idx
+      ON user_document_interactions (document_id, last_interacted_at DESC);
+
     INSERT INTO intelligence_events (
       event_key,
       event_type,

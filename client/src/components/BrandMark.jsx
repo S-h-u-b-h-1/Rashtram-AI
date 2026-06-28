@@ -21,7 +21,7 @@ export function BrandMark({
           "relative grid h-9 w-9 shrink-0 place-items-center overflow-hidden rounded-xl border",
           inverse
             ? "border-white/15 bg-white/10"
-            : "border-[#19231f]/10 bg-[#19231f]",
+            : "border-[#c30000]/10 bg-[#c30000]",
         )}
         aria-hidden="true"
       >
@@ -40,7 +40,7 @@ export function BrandMark({
         <span
           className={cn(
             "text-[15px] font-semibold tracking-[-0.02em]",
-            inverse ? "text-white" : "text-[#19231f]",
+            inverse ? "text-white" : "text-[#c30000]",
           )}
         >
           Rashtram <span className="font-normal opacity-60">AI</span>

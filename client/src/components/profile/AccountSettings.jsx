@@ -36,7 +36,7 @@ export function AccountSettings() {
         <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#9e4937]">
           Account controls
         </p>
-        <h2 className="mt-2 font-serif text-2xl text-[#19231f]">
+        <h2 className="mt-2 font-serif text-2xl text-[#c30000]">
           Settings
         </h2>
       </div>
@@ -48,7 +48,7 @@ export function AccountSettings() {
               key={action.label}
               type="button"
               disabled
-              className="flex cursor-not-allowed items-start gap-3 rounded-2xl border border-[#19231f]/9 bg-[#fffdf8] p-4 text-left opacity-75"
+              className="flex cursor-not-allowed items-start gap-3 rounded-2xl border border-[#c30000]/9 bg-[#fffdf8] p-4 text-left opacity-75"
             >
               <ActionIcon
                 className={`mt-0.5 h-4 w-4 shrink-0 ${

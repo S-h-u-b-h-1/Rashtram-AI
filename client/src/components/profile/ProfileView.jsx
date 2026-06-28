@@ -8,6 +8,7 @@ import { AccountSettings } from "./AccountSettings";
 import { PlatformCoverage } from "./PlatformCoverage";
 import { ProfileIdentity } from "./ProfileIdentity";
 import { ResearchActivity } from "./ResearchActivity";
+import { DataPersonalization } from "./DataPersonalization";
 
 export function ProfileView() {
   const [profile, setProfile] = useState(null);
@@ -19,7 +20,14 @@ export function ProfileView() {
     const loadProfile = async () => {
       try {
         const profileData = await api.getProfile();
-        if (!controller.signal.aborted) setProfile(profileData);
+        if (!controller.signal.aborted) {
+          setProfile(profileData);
+          api.trackActivity({
+            event_type: "profile_viewed",
+            entity_type: "profile",
+            page_path: "/app/profile",
+          });
+        }
       } catch (requestError) {
         console.error("Failed to load research profile:", requestError);
         if (!controller.signal.aborted) {
@@ -36,7 +44,7 @@ export function ProfileView() {
   if (loading) {
     return (
       <div className="space-y-5" aria-label="Loading profile">
-        <div className="h-56 animate-pulse rounded-[1.8rem] bg-[#19231f]/90" />
+        <div className="h-56 animate-pulse rounded-[1.8rem] bg-[#c30000]/90" />
         <div className="h-64 animate-pulse rounded-[1.4rem] bg-white/55" />
         <div className="h-80 animate-pulse rounded-[1.4rem] bg-white/55" />
       </div>
@@ -47,7 +55,7 @@ export function ProfileView() {
     return (
       <div className="surface-card grid min-h-[420px] place-items-center p-8 text-center">
         <div>
-          <p className="font-serif text-2xl text-[#19231f]">
+          <p className="font-serif text-2xl text-[#c30000]">
             Your research profile is temporarily unavailable.
           </p>
           <p className="mt-2 text-sm text-[#8c4436]">{error}</p>
@@ -63,6 +71,18 @@ export function ProfileView() {
       <PlatformCoverage coverage={profile.platformCoverageStats} />
       <ContinueResearch chats={profile.recentChats} />
       <SourceHealthPanel sources={profile.sourceConnections} />
+      <DataPersonalization
+        insights={profile.activityInsights}
+        onUpdate={(preferences) =>
+          setProfile((current) => ({
+            ...current,
+            activityInsights: {
+              ...current.activityInsights,
+              ...preferences,
+            },
+          }))
+        }
+      />
       <AccountSettings />
     </div>
   );

@@ -207,6 +207,37 @@ IndiaCode detail collection accepts `--detail-concurrency`. The
 `--download-pdfs=false` flag is explicit documentation of the safe default:
 catalogue runs discover links but do not bulk-download files.
 
+Controlled PDF verification is available only for bounded CLI runs:
+
+```bash
+npm run ingest:sources --prefix server -- \
+  --source=india-code \
+  --limit=10 \
+  --download-pdfs=true \
+  --max-pdfs=10 \
+  --pdf-storage=url-only
+```
+
+`url-only` downloads bytes transiently to verify the PDF signature and compute
+SHA-256 without retaining another copy. `filesystem` additionally requires
+`PDF_STORAGE_DIR`. Database and object-storage values are reserved but rejected
+until a managed storage backend is configured. The default remains
+`--download-pdfs=false`, with a 25 MB per-file safety limit when enabled.
+
+Connector health can be checked without catalogue writes:
+
+```bash
+npm run ingest:health --prefix server
+npm run ingest:health --prefix server -- \
+  --sources=prs-india,india-code,egazette
+```
+
+The report checks reachability, universal record shape, sample discovery, PDF
+links, latest ingestion state, and error counts. Its safe mode never writes
+catalogue rows, downloads PDFs, invokes Gemini, or updates vectors. Mature
+connectors returning no records are marked `parser changed`; directory starters
+remain `planned` until a targeted adapter or successful stored run exists.
+
 Each run records the operational counters requested by the catalogue contract:
 `discovered`, `inserted`, `updated`, `duplicate_sources_added`,
 `pdf_urls_found`, `errors`, `skipped`, and `manual_review_required`. Legacy
@@ -236,6 +267,11 @@ request is capped at 25 records per source and five pages.
 
 No connector should write directly to PostgreSQL. The shared runner owns
 normalization, deduplication, canonical merge, provenance, and run auditing.
+
+Meaningful changes to stored title, status, PDF, or legal dates create a
+conservative `document_updated` intelligence event. Unchanged refreshes do not
+create events, and Bill lifecycle events are not inferred without supporting
+source history.
 
 ## Operational safeguards
 

@@ -2,6 +2,7 @@
 
 import React, { createContext, useState, useContext, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import { trackActivity } from "@/lib/api";
 
 const AuthContext = createContext();
 
@@ -37,6 +38,11 @@ export const AuthProvider = ({ children }) => {
       window.history.replaceState({}, document.title, window.location.pathname);
 
       checkAuthStatus();
+      trackActivity({
+        event_type: "login",
+        entity_type: "account",
+        page_path: window.location.pathname,
+      });
     } else if (errorFromUrl) {
 
       window.history.replaceState({}, document.title, window.location.pathname);
@@ -106,6 +112,11 @@ export const AuthProvider = ({ children }) => {
 
 
         await checkAuthStatus();
+        trackActivity({
+          event_type: "login",
+          entity_type: "account",
+          page_path: "/login",
+        });
 
 
         router.push('/app');
@@ -173,6 +184,11 @@ export const AuthProvider = ({ children }) => {
   };
 
   const logout = () => {
+    trackActivity({
+      event_type: "logout",
+      entity_type: "account",
+      page_path: window.location.pathname,
+    });
     localStorage.removeItem('auth-token');
     sessionStorage.removeItem('auth-token');
     setUser(null);

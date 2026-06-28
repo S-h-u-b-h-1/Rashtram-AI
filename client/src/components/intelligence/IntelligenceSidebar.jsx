@@ -15,16 +15,16 @@ export function IntelligenceSidebar({ trendingCategories }) {
             Parliamentary calendar
           </p>
         </div>
-        <h2 className="mt-3 font-serif text-2xl text-[#19231f]">
+        <h2 className="mt-3 font-serif text-2xl text-[#c30000]">
           Business & committee agenda
         </h2>
-        <div className="mt-5 rounded-2xl border border-dashed border-[#19231f]/14 bg-[#f7f2e8] p-5">
+        <div className="mt-5 rounded-2xl border border-dashed border-[#c30000]/14 bg-[#f7f2e8] p-5">
           <p className="text-sm font-semibold text-[#3c443f]">
-            Calendar connector planned
+            Calendar feed planned
           </p>
           <p className="mt-2 text-xs leading-5 text-[#7d756b]">
-            Digital Sansad and Lok Sabha business calendars are not connected
-            yet. No agenda entries are being inferred.
+            Parliamentary business and committee calendar feeds are not
+            connected yet. No agenda entries are being inferred.
           </p>
         </div>
       </section>
@@ -41,7 +41,7 @@ export function IntelligenceSidebar({ trendingCategories }) {
             trendingCategories.map((category) => (
               <span
                 key={category.label}
-                className="inline-flex items-center gap-2 rounded-full border border-[#19231f]/10 bg-[#fffdf8] px-3 py-2 text-xs font-medium text-[#514d46]"
+                className="inline-flex items-center gap-2 rounded-full border border-[#c30000]/10 bg-[#fffdf8] px-3 py-2 text-xs font-medium text-[#514d46]"
               >
                 {category.label}
                 <span className="text-[10px] text-[#9f4937]">
@@ -57,9 +57,9 @@ export function IntelligenceSidebar({ trendingCategories }) {
         </div>
       </section>
 
-      <section className="overflow-hidden rounded-[1.4rem] border border-[#19231f]/10 bg-[#e9dfd0] p-5 sm:p-6">
+      <section className="overflow-hidden rounded-[1.4rem] border border-[#c30000]/10 bg-[#e9dfd0] p-5 sm:p-6">
         <BellRing className="h-5 w-5 text-[#9f4937]" />
-        <h2 className="mt-4 font-serif text-2xl text-[#19231f]">
+        <h2 className="mt-4 font-serif text-2xl text-[#c30000]">
           Build your watchlist
         </h2>
         <p className="mt-2 text-sm leading-6 text-[#6f685f]">

@@ -49,6 +49,13 @@ bulk-process documents.
 No planned source is presented as a live feed. The Parliament calendar and
 watchlist use explicit “planned” and “coming soon” states.
 
+Public dashboard and profile presentation groups sources into product-safe
+categories such as “Official Gazette Records” and “Parliamentary Public
+Records”. Exact repositories, URLs, source IDs, hashes, parser state, and
+ingestion history remain in PostgreSQL for audit and document-level
+provenance. Exact source links appear only in document research/provenance
+actions.
+
 ## Intelligence event model
 
 `intelligence_events` stores:
@@ -69,6 +76,8 @@ policies, consultations, and future lifecycle events.
 
 - New source ingestion creates an event only when it creates a new canonical
   document.
+- A stored document creates `document_updated` only when a title, status, PDF,
+  or legal date meaningfully changes; unchanged refreshes remain silent.
 - eGazette records become `gazette_notification`.
 - IndiaCode Acts become `act_published`.
 - A Bill status change is never inferred without stored status history.
@@ -146,9 +155,16 @@ feed. Research links are offered only for supported Bill/Act records with PDFs.
 4. Recent research history
 5. Source connections
 6. Non-destructive settings placeholders
+7. Consent-based Data & Personalization controls and opted-in research insights
 
 Personal activity is labelled separately from shared platform coverage so
 catalogue totals cannot be mistaken for user achievements.
+
+Activity tracking is disabled by default. When a user opts in, the profile can
+show recent opened documents, topic and jurisdiction signals, viewed document
+types, and recent searches. Tracking failures never block research actions.
+Passwords, tokens, chat text, document contents, and secret-like metadata keys
+are never accepted by the activity endpoint.
 
 ## Frontend states
 

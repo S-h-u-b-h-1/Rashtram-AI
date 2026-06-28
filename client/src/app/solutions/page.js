@@ -206,7 +206,7 @@ function SolutionPage() {
               <ProcessStep
                 number="01"
                 title="Aggregation"
-                description="Collecting real-time signals from thousands of verified public and private sources globally."
+                description="Structuring continuously refreshed public legislative records and trusted policy references with retained provenance."
               />
               <ProcessStep
                 number="02"

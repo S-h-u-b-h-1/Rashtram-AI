@@ -482,8 +482,13 @@ const eventTypeForRecord = (record) => {
   return types[record.documentType] || "document_added";
 };
 
-const recordIntelligenceEvent = async (client, document, record) => {
-  const eventType = eventTypeForRecord(record);
+const recordIntelligenceEvent = async (
+  client,
+  document,
+  record,
+  eventTypeOverride = null,
+) => {
+  const eventType = eventTypeOverride || eventTypeForRecord(record);
   const eventDate =
     record.publicationDate ||
     record.enactedDate ||
@@ -551,6 +556,26 @@ const recordIntelligenceEvent = async (client, document, record) => {
   );
 };
 
+const hasMeaningfulDocumentUpdate = (candidate, record) => {
+  if (!candidate) return false;
+  const fields = [
+    ["title", "title"],
+    ["status", "status"],
+    ["pdfUrl", "pdf_url"],
+    ["introducedDate", "introduced_date"],
+    ["passedDate", "passed_date"],
+    ["enactedDate", "enacted_date"],
+    ["publicationDate", "publication_date"],
+    ["effectiveDate", "effective_date"],
+  ];
+  return fields.some(([recordKey, candidateKey]) => {
+    const incoming = record[recordKey];
+    if (incoming == null || incoming === "") return false;
+    const current = candidate[candidateKey];
+    return String(incoming) !== String(current ?? "");
+  });
+};
+
 const queueReview = async (client, record, candidate, similarity) => {
   await client.query(
     `INSERT INTO catalog_match_reviews (
@@ -584,6 +609,9 @@ const persistRecord = async (record, decision) => {
   const client = await getPool().connect();
   try {
     await client.query("BEGIN");
+    const meaningfulUpdate =
+      decision.action === "merge" &&
+      hasMeaningfulDocumentUpdate(decision.candidate, record);
     let document;
     if (decision.action === "merge" && decision.candidate) {
       document = await updateCanonicalDocument(
@@ -607,6 +635,13 @@ const persistRecord = async (record, decision) => {
     );
     if (decision.action !== "merge") {
       await recordIntelligenceEvent(client, document, record);
+    } else if (meaningfulUpdate) {
+      await recordIntelligenceEvent(
+        client,
+        document,
+        record,
+        "document_updated",
+      );
     }
     if (decision.action === "review" && decision.candidate) {
       await queueReview(
@@ -970,6 +1005,7 @@ module.exports = {
   getDuplicateCandidates,
   getPendingReviews,
   getUniversalStats,
+  hasMeaningfulDocumentUpdate,
   persistRecord,
   recordIngestionRun,
   recordSourceSnapshot,

@@ -1,5 +1,6 @@
 import { Database, FileText, Globe2, Link2 } from "lucide-react";
 import { formatDate, humanize } from "@/lib/document-links";
+import { getPublicSourceLabel } from "@/lib/source-branding";
 
 export function PlatformCoverage({ coverage }) {
   const headlineStats = [
@@ -38,7 +39,7 @@ export function PlatformCoverage({ coverage }) {
           <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#9e4937]">
             Platform-wide data
           </p>
-          <h2 className="mt-2 font-serif text-2xl text-[#19231f]">
+          <h2 className="mt-2 font-serif text-2xl text-[#c30000]">
             Rashtram AI coverage
           </h2>
           <p className="mt-2 text-sm text-[#777066]">
@@ -49,9 +50,9 @@ export function PlatformCoverage({ coverage }) {
         {coverage.lastCollection && (
           <div className="rounded-xl bg-[#f2ece1] px-4 py-3 text-xs text-[#6f685f]">
             <span className="font-semibold text-[#29312d]">
-              Latest collection:
+              Latest catalogue refresh:
             </span>{" "}
-            {coverage.lastCollection.sourceName} ·{" "}
+            {getPublicSourceLabel(coverage.lastCollection.sourceName)} ·{" "}
             {formatDate(coverage.lastCollection.completedAt)} ·{" "}
             {humanize(coverage.lastCollection.status)}
           </div>
@@ -64,10 +65,10 @@ export function PlatformCoverage({ coverage }) {
           return (
             <article
               key={item.label}
-              className="rounded-2xl border border-[#19231f]/9 bg-[#fffdf8] p-4"
+              className="rounded-2xl border border-[#c30000]/9 bg-[#fffdf8] p-4"
             >
               <CoverageIcon className="h-4 w-4 text-[#9f4937]" />
-              <p className="mt-4 font-serif text-3xl text-[#19231f]">
+              <p className="mt-4 font-serif text-3xl text-[#c30000]">
                 {item.value.toLocaleString()}
               </p>
               <p className="mt-1 text-[11px] text-[#81796e]">
@@ -79,7 +80,7 @@ export function PlatformCoverage({ coverage }) {
       </div>
 
       <div className="mt-5 grid gap-5 lg:grid-cols-[0.8fr_1.2fr]">
-        <div className="rounded-2xl bg-[#19231f] p-5 text-white">
+        <div className="rounded-2xl bg-[#c30000] p-5 text-white">
           <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[#efb36f]">
             Core catalogue
           </p>
@@ -98,7 +99,7 @@ export function PlatformCoverage({ coverage }) {
           </div>
         </div>
 
-        <div className="rounded-2xl border border-[#19231f]/9 bg-[#fffdf8] p-5">
+        <div className="rounded-2xl border border-[#c30000]/9 bg-[#fffdf8] p-5">
           <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[#9f4937]">
             Document types present
           </p>
@@ -106,7 +107,7 @@ export function PlatformCoverage({ coverage }) {
             {coverage.byDocumentType.map((item) => (
               <span
                 key={item.documentType}
-                className="rounded-full border border-[#19231f]/10 bg-[#f4eee4] px-3 py-2 text-xs text-[#514d46]"
+                className="rounded-full border border-[#c30000]/10 bg-[#f4eee4] px-3 py-2 text-xs text-[#514d46]"
               >
                 {humanize(item.documentType)}{" "}
                 <strong className="ml-1 text-[#9f4937]">

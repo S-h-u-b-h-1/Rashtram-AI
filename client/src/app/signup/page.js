@@ -59,18 +59,18 @@ export default function Signup() {
           type="button"
           onClick={googleLogin}
           disabled={loading}
-          className="flex h-12 w-full items-center justify-center gap-3 rounded-xl border border-[#19231f]/12 bg-white text-sm font-semibold text-[#26302c] shadow-sm transition hover:border-[#19231f]/22 hover:bg-[#fffdf8] disabled:cursor-not-allowed disabled:opacity-60"
+          className="flex h-12 w-full items-center justify-center gap-3 rounded-xl border border-[#c30000]/12 bg-white text-sm font-semibold text-[#26302c] shadow-sm transition hover:border-[#c30000]/22 hover:bg-[#fffdf8] disabled:cursor-not-allowed disabled:opacity-60"
         >
           <Chrome className="h-4 w-4" />
           Continue with Google
         </button>
 
         <div className="my-6 flex items-center gap-3">
-          <div className="h-px flex-1 bg-[#19231f]/10" />
+          <div className="h-px flex-1 bg-[#c30000]/10" />
           <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[#898176]">
             or use email
           </span>
-          <div className="h-px flex-1 bg-[#19231f]/10" />
+          <div className="h-px flex-1 bg-[#c30000]/10" />
         </div>
 
         <form onSubmit={handleSignup} className="space-y-4">
@@ -100,7 +100,7 @@ export default function Signup() {
                 onChange={(event) => setName(event.target.value)}
                 disabled={loading}
                 required
-                className="h-12 w-full rounded-xl border border-[#19231f]/12 bg-white px-4 text-sm placeholder:text-[#9c9589] focus:border-[#d97745] focus:outline-none focus:ring-4 focus:ring-[#d97745]/10"
+                className="h-12 w-full rounded-xl border border-[#c30000]/12 bg-white px-4 text-sm placeholder:text-[#9c9589] focus:border-[#d97745] focus:outline-none focus:ring-4 focus:ring-[#d97745]/10"
               />
             </div>
 
@@ -120,7 +120,7 @@ export default function Signup() {
                 onChange={(event) => setEmail(event.target.value)}
                 disabled={loading}
                 required
-                className="h-12 w-full rounded-xl border border-[#19231f]/12 bg-white px-4 text-sm placeholder:text-[#9c9589] focus:border-[#d97745] focus:outline-none focus:ring-4 focus:ring-[#d97745]/10"
+                className="h-12 w-full rounded-xl border border-[#c30000]/12 bg-white px-4 text-sm placeholder:text-[#9c9589] focus:border-[#d97745] focus:outline-none focus:ring-4 focus:ring-[#d97745]/10"
               />
             </div>
 
@@ -140,7 +140,7 @@ export default function Signup() {
                   onChange={(event) => setPassword(event.target.value)}
                   disabled={loading}
                   required
-                  className="h-12 w-full rounded-xl border border-[#19231f]/12 bg-white px-4 pr-11 text-sm focus:border-[#d97745] focus:outline-none focus:ring-4 focus:ring-[#d97745]/10"
+                  className="h-12 w-full rounded-xl border border-[#c30000]/12 bg-white px-4 pr-11 text-sm focus:border-[#d97745] focus:outline-none focus:ring-4 focus:ring-[#d97745]/10"
                 />
                 <button
                   type="button"
@@ -172,7 +172,7 @@ export default function Signup() {
                 onChange={(event) => setConfirmPassword(event.target.value)}
                 disabled={loading}
                 required
-                className="h-12 w-full rounded-xl border border-[#19231f]/12 bg-white px-4 text-sm focus:border-[#d97745] focus:outline-none focus:ring-4 focus:ring-[#d97745]/10"
+                className="h-12 w-full rounded-xl border border-[#c30000]/12 bg-white px-4 text-sm focus:border-[#d97745] focus:outline-none focus:ring-4 focus:ring-[#d97745]/10"
               />
             </div>
           </div>
@@ -198,7 +198,7 @@ export default function Signup() {
           <button
             type="submit"
             disabled={loading}
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-[#19231f] text-sm font-semibold text-[#fffaf0] shadow-[0_12px_28px_rgba(25,35,31,0.16)] transition hover:-translate-y-0.5 hover:bg-[#2d3934] disabled:cursor-not-allowed disabled:translate-y-0 disabled:opacity-60"
+            className="flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-[#c30000] text-sm font-semibold text-[#fffaf0] shadow-[0_12px_28px_rgba(195, 0, 0,0.16)] transition hover:-translate-y-0.5 hover:bg-[#2d3934] disabled:cursor-not-allowed disabled:translate-y-0 disabled:opacity-60"
           >
             {loading && <Loader2 className="h-4 w-4 animate-spin" />}
             {loading ? "Creating workspace…" : "Create workspace"}

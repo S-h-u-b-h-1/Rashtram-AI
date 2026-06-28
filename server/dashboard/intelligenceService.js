@@ -1,4 +1,5 @@
 const { query } = require("../db");
+const { getActivityInsights } = require("../activity/activityService");
 
 const SOURCE_REGISTRY = [
   {
@@ -489,8 +490,16 @@ const getDashboardIntelligence = async (userId) => {
 };
 
 const getProfileData = async (userId) => {
-  const [user, activity, coverage, typeCounts, lastRun, recentChats, sources] =
-    await Promise.all([
+  const [
+    user,
+    activity,
+    coverage,
+    typeCounts,
+    lastRun,
+    recentChats,
+    sources,
+    activityInsights,
+  ] = await Promise.all([
       query(
         `SELECT
            id, name, email, avatar, google_id, is_admin, created_at
@@ -585,6 +594,7 @@ const getProfileData = async (userId) => {
       `),
       getRecentUserChats(userId, 12),
       getSourceHealth(),
+      getActivityInsights(userId),
     ]);
 
   if (!user.rows[0]) return null;
@@ -644,6 +654,7 @@ const getProfileData = async (userId) => {
     },
     recentChats,
     sourceConnections: sources,
+    activityInsights,
   };
 };
 

@@ -1,6 +1,7 @@
 import { CircleAlert, CircleCheck, CircleDashed, Clock3 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { formatRelativeTime } from "@/lib/document-links";
+import { summarizePublicSources } from "@/lib/source-branding";
 
 const STATUS_STYLES = {
   Fresh: {
@@ -26,25 +27,30 @@ const STATUS_STYLES = {
 };
 
 export function SourceHealthPanel({ sources }) {
+  const publicSourceGroups = summarizePublicSources(sources);
   return (
     <section className="surface-card p-5 sm:p-6">
       <div>
         <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#9e4937]">
           Provenance monitor
         </p>
-        <h2 className="mt-2 font-serif text-2xl text-[#19231f]">
-          Source coverage & freshness
+        <h2 className="mt-2 font-serif text-2xl text-[#c30000]">
+          Verified Public Legislative Sources
         </h2>
+        <p className="mt-2 max-w-2xl text-sm leading-6 text-[#777066]">
+          Continuously refreshed public legislative records with update
+          timestamps and internal provenance controls.
+        </p>
       </div>
 
       <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-        {sources.map((source) => {
+        {publicSourceGroups.map((source) => {
           const style = STATUS_STYLES[source.status] || STATUS_STYLES.Planned;
           const StatusIcon = style.icon;
           return (
             <article
               key={source.key}
-              className="rounded-2xl border border-[#19231f]/9 bg-[#fffdf8] p-4"
+              className="rounded-2xl border border-[#c30000]/9 bg-[#fffdf8] p-4"
             >
               <div className="flex items-start justify-between gap-3">
                 <div>
