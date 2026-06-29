@@ -13,7 +13,7 @@ import { humanize } from "@/lib/document-links";
 
 function PrivacySwitch({ checked, disabled, label, description, onChange }) {
   return (
-    <div className="flex items-start justify-between gap-4 rounded-2xl border border-[#c30000]/9 bg-[#fffdf8] p-4">
+    <div className="flex items-start justify-between gap-4 rounded-2xl border border-[#8f1d2c]/9 bg-[#f6f2eb] p-4">
       <div>
         <p className="text-sm font-semibold text-[#29312d]">{label}</p>
         <p className="mt-1 max-w-xl text-xs leading-5 text-[#81796e]">
@@ -86,10 +86,10 @@ export function DataPersonalization({ insights, onUpdate }) {
           <ShieldCheck className="h-5 w-5" />
         </div>
         <div>
-          <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#9e4937]">
+          <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#874047]">
             Privacy controls
           </p>
-          <h2 className="mt-2 font-serif text-2xl text-[#c30000]">
+          <h2 className="mt-2 font-serif text-2xl text-[#8f1d2c]">
             Data & Personalization
           </h2>
           <p className="mt-2 max-w-3xl text-sm leading-6 text-[#777066]">
@@ -130,11 +130,11 @@ export function DataPersonalization({ insights, onUpdate }) {
       </div>
 
       {error && (
-        <p className="mt-3 text-xs font-medium text-[#9d3529]">{error}</p>
+        <p className="mt-3 text-xs font-medium text-[#914148]">{error}</p>
       )}
 
       {!activityEnabled ? (
-        <div className="mt-5 rounded-2xl border border-dashed border-[#c30000]/12 bg-[#f7f2e8]/65 p-6">
+        <div className="mt-5 rounded-2xl border border-dashed border-[#8f1d2c]/12 bg-[#f1ece3]/65 p-6">
           <Eye className="h-5 w-5 text-[#8a8277]" />
           <p className="mt-3 text-sm font-semibold text-[#514d46]">
             Activity collection is off
@@ -146,8 +146,8 @@ export function DataPersonalization({ insights, onUpdate }) {
         </div>
       ) : hasInsights ? (
         <div className="mt-5 grid gap-4 lg:grid-cols-2">
-          <div className="rounded-2xl border border-[#c30000]/9 bg-[#fffdf8] p-4">
-            <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-[#9e4937]">
+          <div className="rounded-2xl border border-[#8f1d2c]/9 bg-[#f6f2eb] p-4">
+            <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-[#874047]">
               Research signals
             </p>
             <div className="mt-3 flex flex-wrap gap-2">
@@ -172,8 +172,8 @@ export function DataPersonalization({ insights, onUpdate }) {
             </div>
           </div>
 
-          <div className="rounded-2xl border border-[#c30000]/9 bg-[#fffdf8] p-4">
-            <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-[#9e4937]">
+          <div className="rounded-2xl border border-[#8f1d2c]/9 bg-[#f6f2eb] p-4">
+            <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-[#874047]">
               Recent opted-in activity
             </p>
             <div className="mt-3 space-y-2 text-xs text-[#6f685f]">
@@ -191,7 +191,7 @@ export function DataPersonalization({ insights, onUpdate }) {
           </div>
         </div>
       ) : (
-        <div className="mt-5 rounded-2xl bg-[#f7f2e8] p-5 text-sm text-[#706a61]">
+        <div className="mt-5 rounded-2xl bg-[#f1ece3] p-5 text-sm text-[#706a61]">
           Insights will appear after you use search, filters, documents, and
           research workspaces.
         </div>
@@ -201,9 +201,9 @@ export function DataPersonalization({ insights, onUpdate }) {
         <button
           type="button"
           disabled
-          className="flex cursor-not-allowed items-center gap-3 rounded-2xl border border-[#c30000]/9 bg-[#fffdf8] p-4 text-left opacity-70"
+          className="flex cursor-not-allowed items-center gap-3 rounded-2xl border border-[#8f1d2c]/9 bg-[#f6f2eb] p-4 text-left opacity-70"
         >
-          <Download className="h-4 w-4 text-[#9f4937]" />
+          <Download className="h-4 w-4 text-[#874047]" />
           <span className="text-sm font-semibold text-[#29312d]">
             Export activity data — coming soon
           </span>
@@ -211,7 +211,7 @@ export function DataPersonalization({ insights, onUpdate }) {
         <button
           type="button"
           disabled
-          className="flex cursor-not-allowed items-center gap-3 rounded-2xl border border-[#a33d31]/12 bg-[#fffdf8] p-4 text-left opacity-70"
+          className="flex cursor-not-allowed items-center gap-3 rounded-2xl border border-[#a33d31]/12 bg-[#f6f2eb] p-4 text-left opacity-70"
         >
           <Trash2 className="h-4 w-4 text-[#a33d31]" />
           <span className="text-sm font-semibold text-[#29312d]">

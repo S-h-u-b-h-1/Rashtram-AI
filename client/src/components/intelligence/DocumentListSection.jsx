@@ -21,16 +21,16 @@ export function DocumentListSection({
     <section className="surface-card p-5 sm:p-6">
       <div className="flex items-start justify-between gap-4">
         <div>
-          <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#9e4937]">
+          <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#874047]">
             {eyebrow}
           </p>
-          <h2 className="mt-2 font-serif text-2xl text-[#c30000]">{title}</h2>
+          <h2 className="mt-2 font-serif text-2xl text-[#8f1d2c]">{title}</h2>
         </div>
         {onViewAll && (
           <button
             type="button"
             onClick={onViewAll}
-            className="inline-flex items-center gap-1 rounded-full border border-[#c30000]/10 px-3 py-2 text-xs font-semibold text-[#5f5a52] transition hover:bg-[#c30000] hover:text-white"
+            className="inline-flex items-center gap-1 rounded-full border border-[#8f1d2c]/10 px-3 py-2 text-xs font-semibold text-[#5f5a52] transition hover:bg-[#8f1d2c] hover:text-white"
           >
             View all
             <ArrowRight className="h-3.5 w-3.5" />
@@ -40,7 +40,7 @@ export function DocumentListSection({
 
       <div className="mt-5 space-y-2">
         {documents.length === 0 ? (
-          <div className="rounded-2xl border border-dashed border-[#c30000]/12 bg-[#f7f2e8]/65 p-7 text-center">
+          <div className="rounded-2xl border border-dashed border-[#8f1d2c]/12 bg-[#f1ece3]/65 p-7 text-center">
             <FileText className="mx-auto h-6 w-6 text-[#9b9387]" />
             <p className="mt-3 text-sm text-[#706a61]">{emptyMessage}</p>
           </div>
@@ -48,8 +48,8 @@ export function DocumentListSection({
           documents.slice(0, 6).map((document) => {
             const researchHref = buildResearchHref(document);
             const row = (
-              <div className="group flex items-start gap-3 rounded-xl border border-transparent p-3 transition hover:border-[#c30000]/8 hover:bg-[#f5efe5]">
-                <div className="mt-0.5 grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-[#ebe3d6] text-[#9f4937]">
+              <div className="group flex items-start gap-3 rounded-xl border border-transparent p-3 transition hover:border-[#8f1d2c]/8 hover:bg-[#f5efe5]">
+                <div className="mt-0.5 grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-[#ebe3d6] text-[#874047]">
                   <FileText className="h-4 w-4" />
                 </div>
                 <div className="min-w-0 flex-1">
@@ -63,7 +63,7 @@ export function DocumentListSection({
                   </div>
                 </div>
                 {researchHref ? (
-                  <ArrowRight className="mt-2 h-4 w-4 shrink-0 text-[#aaa195] transition group-hover:translate-x-0.5 group-hover:text-[#9f4937]" />
+                  <ArrowRight className="mt-2 h-4 w-4 shrink-0 text-[#aaa195] transition group-hover:translate-x-0.5 group-hover:text-[#874047]" />
                 ) : (
                   <ExternalLink className="mt-2 h-4 w-4 shrink-0 text-[#aaa195]" />
                 )}

@@ -15,19 +15,19 @@ const evidence = [
 export function PolicyVisual({ compact = false }) {
   return (
     <div
-      className={`policy-visual relative isolate overflow-hidden rounded-[2rem] border border-white/10 bg-[#c30000] text-white shadow-[0_35px_90px_rgba(20,30,26,0.28)] ${
+      className={`policy-visual relative isolate overflow-hidden rounded-[2rem] border border-white/10 bg-[#8f1d2c] text-white shadow-[0_35px_90px_rgba(20,30,26,0.28)] ${
         compact ? "min-h-[360px]" : "min-h-[520px]"
       }`}
       aria-label="Illustration of Rashtram AI analysing a policy document"
     >
       <div className="policy-grid absolute inset-0 opacity-30" />
-      <div className="absolute -right-20 -top-16 h-64 w-64 rounded-full bg-[#d97745]/20 blur-3xl" />
+      <div className="absolute -right-20 -top-16 h-64 w-64 rounded-full bg-[#a85a52]/20 blur-3xl" />
       <div className="absolute -bottom-20 -left-12 h-64 w-64 rounded-full bg-[#3d7669]/25 blur-3xl" />
 
       <div className="relative z-10 flex h-full flex-col p-6 sm:p-8">
         <div className="flex items-center justify-between text-xs text-white/55">
           <span className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1.5">
-            <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-[#efb36f]" />
+            <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-[#c1a06f]" />
             Live policy workspace
           </span>
           <span className="font-mono">IND / 2026</span>
@@ -35,7 +35,7 @@ export function PolicyVisual({ compact = false }) {
 
         <div className="mt-9 rounded-2xl border border-white/10 bg-white/[0.07] p-4 backdrop-blur">
           <div className="flex items-center gap-3">
-            <div className="grid h-10 w-10 place-items-center rounded-xl bg-[#d97745] text-white">
+            <div className="grid h-10 w-10 place-items-center rounded-xl bg-[#a85a52] text-white">
               <FileSearch className="h-5 w-5" />
             </div>
             <div>
@@ -53,11 +53,11 @@ export function PolicyVisual({ compact = false }) {
           <div className="policy-orbit absolute h-64 w-64 rounded-full border border-dashed border-white/15" />
           <div className="policy-orbit policy-orbit-reverse absolute h-44 w-44 rounded-full border border-white/10" />
 
-          <div className="relative z-10 w-[82%] rounded-2xl border border-[#eed0a8]/25 bg-[#fffaf0] p-5 text-[#c30000] shadow-2xl">
+          <div className="relative z-10 w-[82%] rounded-2xl border border-[#eed0a8]/25 bg-[#fffaf0] p-5 text-[#8f1d2c] shadow-2xl">
             <div className="flex items-start justify-between gap-4">
               <div className="flex items-center gap-3">
                 <div className="grid h-9 w-9 place-items-center rounded-lg bg-[#f1e6d3]">
-                  <Landmark className="h-4 w-4 text-[#a33c2f]" />
+                  <Landmark className="h-4 w-4 text-[#91454a]" />
                 </div>
                 <div>
                   <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[#7d7468]">
@@ -68,7 +68,7 @@ export function PolicyVisual({ compact = false }) {
                   </p>
                 </div>
               </div>
-              <Sparkles className="h-4 w-4 text-[#c46b3d]" />
+              <Sparkles className="h-4 w-4 text-[#9d594f]" />
             </div>
 
             <div className="mt-5 space-y-3">

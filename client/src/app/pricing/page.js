@@ -62,7 +62,7 @@ export default function PricingPage() {
               className="relative flex-1 flex items-stretch flex-col p-8 rounded-xl border-2 bg-white shadow-lg transform transition duration-300 ease-in-out hover:scale-105 hover:shadow-2xl"
             >
               <div>
-                <span className="text-pink-800 font-medium">{item.name}</span>
+                <span className="font-medium text-[#8f1d2c]">{item.name}</span>
                 <div className="mt-4 text-gray-800 text-3xl font-semibold">
                   ${item.price}{" "}
                   <span className="text-xl text-gray-600 font-normal">/mo</span>
@@ -73,7 +73,7 @@ export default function PricingPage() {
                   <li key={idx} className="flex items-center gap-5">
                     <svg
                       xmlns="http://www.w3.org/2000/svg"
-                      className="h-5 w-5 text-pink-800"
+                      className="h-5 w-5 text-[#8f1d2c]"
                       viewBox="0 0 20 20"
                       fill="currentColor"
                     >
@@ -88,7 +88,7 @@ export default function PricingPage() {
                 ))}
               </ul>
               <div className="flex-1 flex items-end">
-                <button className="px-3 py-3 rounded-lg w-full font-semibold text-sm duration-150 text-white bg-pink-800 hover:bg-pink-700 active:bg-pink-700">
+                <button className="w-full rounded-lg bg-[#8f1d2c] px-3 py-3 text-sm font-semibold text-white duration-150 hover:bg-[#68131f] active:bg-[#68131f]">
                   Get Started
                 </button>
               </div>

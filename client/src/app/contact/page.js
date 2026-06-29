@@ -35,7 +35,7 @@ export default function ContactForm() {
                 name="first-name"
                 id="first-name"
                 autoComplete="given-name"
-                className="block w-full rounded-md border border-gray-300 px-3.5 py-2 text-gray-900 shadow-sm placeholder:text-gray-400 focus:ring-2 focus:ring-red-500 sm:text-sm"
+                className="block w-full rounded-md border border-gray-300 px-3.5 py-2 text-gray-900 shadow-sm placeholder:text-gray-400 focus:ring-2 focus:ring-[#a85a52] sm:text-sm"
               />
             </div>
           </div>
@@ -49,7 +49,7 @@ export default function ContactForm() {
                 name="last-name"
                 id="last-name"
                 autoComplete="family-name"
-                className="block w-full rounded-md border border-gray-300 px-3.5 py-2 text-gray-900 shadow-sm placeholder:text-gray-400 focus:ring-2 focus:ring-red-500 sm:text-sm"
+                className="block w-full rounded-md border border-gray-300 px-3.5 py-2 text-gray-900 shadow-sm placeholder:text-gray-400 focus:ring-2 focus:ring-[#a85a52] sm:text-sm"
               />
             </div>
           </div>
@@ -64,7 +64,7 @@ export default function ContactForm() {
                 name="company"
                 id="company"
                 autoComplete="organization"
-                className="block w-full rounded-md border border-gray-300 px-3.5 py-2 text-gray-900 shadow-sm placeholder:text-gray-400 focus:ring-2 focus:ring-red-500 sm:text-sm"
+                className="block w-full rounded-md border border-gray-300 px-3.5 py-2 text-gray-900 shadow-sm placeholder:text-gray-400 focus:ring-2 focus:ring-[#a85a52] sm:text-sm"
               />
             </div>
           </div>
@@ -80,7 +80,7 @@ export default function ContactForm() {
                 name="email"
                 id="email"
                 autoComplete="email"
-                className="block w-full rounded-md border border-gray-300 px-3.5 py-2 text-gray-900 shadow-sm placeholder:text-gray-400 focus:ring-2 focus:ring-red-500 sm:text-sm"
+                className="block w-full rounded-md border border-gray-300 px-3.5 py-2 text-gray-900 shadow-sm placeholder:text-gray-400 focus:ring-2 focus:ring-[#a85a52] sm:text-sm"
               />
             </div>
           </div>
@@ -93,7 +93,7 @@ export default function ContactForm() {
               <select
                 id="country"
                 name="country"
-                className="absolute left-0 h-full rounded-md border-0 bg-transparent py-0 pl-4 pr-9 text-gray-400 focus:ring-2 focus:ring-red-500 sm:text-sm"
+                className="absolute left-0 h-full rounded-md border-0 bg-transparent py-0 pl-4 pr-9 text-gray-400 focus:ring-2 focus:ring-[#a85a52] sm:text-sm"
               >
                 <option>IND</option>
                 <option>US</option>
@@ -104,7 +104,7 @@ export default function ContactForm() {
                 name="phone-number"
                 id="phone-number"
                 autoComplete="tel"
-                className="block w-full rounded-md border border-gray-300 px-3.5 py-2 pl-24 text-gray-900 shadow-sm placeholder:text-gray-400 focus:ring-2 focus:ring-red-500 sm:text-sm"
+                className="block w-full rounded-md border border-gray-300 px-3.5 py-2 pl-24 text-gray-900 shadow-sm placeholder:text-gray-400 focus:ring-2 focus:ring-[#a85a52] sm:text-sm"
               />
             </div>
           </div>
@@ -118,7 +118,7 @@ export default function ContactForm() {
                 name="message"
                 id="message"
                 rows={4}
-                className="block w-full rounded-md border border-gray-300 px-3.5 py-2 text-gray-900 shadow-sm placeholder:text-gray-400 focus:ring-2 focus:ring-red-500 sm:text-sm"
+                className="block w-full rounded-md border border-gray-300 px-3.5 py-2 text-gray-900 shadow-sm placeholder:text-gray-400 focus:ring-2 focus:ring-[#a85a52] sm:text-sm"
               ></textarea>
             </div>
           </div>
@@ -127,7 +127,7 @@ export default function ContactForm() {
         <div className="mt-10">
           <button
             type="submit"
-            className="block w-full rounded-md bg-[#b20d38] px-3.5 py-2.5 text-center text-sm font-semibold text-white shadow-sm hover:bg-[#a2062f] focus:outline-none focus:ring-2 focus:ring-offset-2"
+            className="block w-full rounded-md bg-[#9b2638] px-3.5 py-2.5 text-center text-sm font-semibold text-white shadow-sm hover:bg-[#7a1926] focus:outline-none focus:ring-2 focus:ring-offset-2"
           >
             Let&apos;s talk
           </button>

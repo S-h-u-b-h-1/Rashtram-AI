@@ -36,10 +36,10 @@ export function PlatformCoverage({ coverage }) {
     <section className="surface-card p-5 sm:p-6">
       <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
         <div>
-          <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#9e4937]">
+          <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#874047]">
             Platform-wide data
           </p>
-          <h2 className="mt-2 font-serif text-2xl text-[#c30000]">
+          <h2 className="mt-2 font-serif text-2xl text-[#8f1d2c]">
             Rashtram AI coverage
           </h2>
           <p className="mt-2 text-sm text-[#777066]">
@@ -65,10 +65,10 @@ export function PlatformCoverage({ coverage }) {
           return (
             <article
               key={item.label}
-              className="rounded-2xl border border-[#c30000]/9 bg-[#fffdf8] p-4"
+              className="rounded-2xl border border-[#8f1d2c]/9 bg-[#f6f2eb] p-4"
             >
-              <CoverageIcon className="h-4 w-4 text-[#9f4937]" />
-              <p className="mt-4 font-serif text-3xl text-[#c30000]">
+              <CoverageIcon className="h-4 w-4 text-[#874047]" />
+              <p className="mt-4 font-serif text-3xl text-[#8f1d2c]">
                 {item.value.toLocaleString()}
               </p>
               <p className="mt-1 text-[11px] text-[#81796e]">
@@ -80,8 +80,8 @@ export function PlatformCoverage({ coverage }) {
       </div>
 
       <div className="mt-5 grid gap-5 lg:grid-cols-[0.8fr_1.2fr]">
-        <div className="rounded-2xl bg-[#c30000] p-5 text-white">
-          <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[#efb36f]">
+        <div className="rounded-2xl bg-[#8f1d2c] p-5 text-white">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[#c1a06f]">
             Core catalogue
           </p>
           <div className="mt-4 space-y-3">
@@ -99,18 +99,18 @@ export function PlatformCoverage({ coverage }) {
           </div>
         </div>
 
-        <div className="rounded-2xl border border-[#c30000]/9 bg-[#fffdf8] p-5">
-          <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[#9f4937]">
+        <div className="rounded-2xl border border-[#8f1d2c]/9 bg-[#f6f2eb] p-5">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[#874047]">
             Document types present
           </p>
           <div className="mt-4 flex flex-wrap gap-2">
             {coverage.byDocumentType.map((item) => (
               <span
                 key={item.documentType}
-                className="rounded-full border border-[#c30000]/10 bg-[#f4eee4] px-3 py-2 text-xs text-[#514d46]"
+                className="rounded-full border border-[#8f1d2c]/10 bg-[#f4eee4] px-3 py-2 text-xs text-[#514d46]"
               >
                 {humanize(item.documentType)}{" "}
-                <strong className="ml-1 text-[#9f4937]">
+                <strong className="ml-1 text-[#874047]">
                   {item.documents.toLocaleString()}
                 </strong>
               </span>

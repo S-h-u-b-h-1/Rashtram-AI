@@ -59,7 +59,7 @@ export function WorkspaceShell({ activeKey, title, children }) {
   const userName = user?.name || "Researcher";
 
   return (
-    <div className="flex h-screen overflow-hidden bg-[#eee8dc]">
+    <div className="flex h-screen overflow-hidden bg-[#e9e3da]">
       {isMobileMenuOpen && (
         <button
           type="button"
@@ -71,7 +71,7 @@ export function WorkspaceShell({ activeKey, title, children }) {
 
       <aside
         className={cn(
-          "fixed inset-y-0 left-0 z-50 flex w-[280px] flex-col border-r border-white/8 bg-[#c30000] text-white transition-transform duration-300 md:static md:translate-x-0",
+          "fixed inset-y-0 left-0 z-50 flex w-[280px] flex-col border-r border-white/8 bg-[#8f1d2c] text-white transition-transform duration-300 md:static md:translate-x-0",
           isMobileMenuOpen ? "translate-x-0" : "-translate-x-full",
         )}
       >
@@ -104,14 +104,14 @@ export function WorkspaceShell({ activeKey, title, children }) {
                   className={cn(
                     "group flex w-full items-center gap-3 rounded-xl px-3 py-3 text-sm font-medium transition",
                     isActive
-                      ? "bg-[#fffaf0] text-[#c30000] shadow-sm"
+                      ? "bg-[#fffaf0] text-[#8f1d2c] shadow-sm"
                       : "text-white/58 hover:bg-white/7 hover:text-white",
                   )}
                 >
                   <NavigationIcon
                     className={cn(
                       "h-[18px] w-[18px]",
-                      isActive ? "text-[#ad4a36]" : "text-white/42",
+                      isActive ? "text-[#8c4548]" : "text-white/42",
                     )}
                   />
                   {item.label}
@@ -123,7 +123,7 @@ export function WorkspaceShell({ activeKey, title, children }) {
 
         <div className="mx-5 mt-8 rounded-2xl border border-white/8 bg-white/[0.055] p-4">
           <div className="flex items-start gap-3">
-            <div className="mt-1 h-2 w-2 shrink-0 rounded-full bg-[#efb36f]" />
+            <div className="mt-1 h-2 w-2 shrink-0 rounded-full bg-[#c1a06f]" />
             <div>
               <p className="text-xs font-semibold text-white/78">
                 Source-aware research
@@ -140,7 +140,7 @@ export function WorkspaceShell({ activeKey, title, children }) {
           <div className="flex items-center gap-3 rounded-xl bg-white/[0.055] p-3">
             <Link
               href="/app/profile"
-              className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-[#d97745] text-xs font-bold text-white"
+              className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-[#a85a52] text-xs font-bold text-white"
               aria-label="Open profile"
             >
               {getUserInitials(userName)}
@@ -166,19 +166,19 @@ export function WorkspaceShell({ activeKey, title, children }) {
       </aside>
 
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="flex h-20 shrink-0 items-center justify-between border-b border-[#c30000]/9 bg-[#f7f2e8]/85 px-5 backdrop-blur-xl md:px-8">
+        <header className="flex h-20 shrink-0 items-center justify-between border-b border-[#8f1d2c]/9 bg-[#f1ece3]/85 px-5 backdrop-blur-xl md:px-8">
           <div>
-            <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[#9f4937]">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[#874047]">
               Rashtram intelligence
             </p>
-            <h1 className="mt-1 text-sm font-semibold text-[#c30000]">
+            <h1 className="mt-1 text-sm font-semibold text-[#8f1d2c]">
               {title}
             </h1>
           </div>
           <button
             type="button"
             onClick={() => setIsMobileMenuOpen(true)}
-            className="grid h-11 w-11 place-items-center rounded-xl border border-[#c30000]/10 bg-white text-[#c30000] md:hidden"
+            className="grid h-11 w-11 place-items-center rounded-xl border border-[#8f1d2c]/10 bg-white text-[#8f1d2c] md:hidden"
             aria-label="Open navigation"
           >
             {isMobileMenuOpen ? (

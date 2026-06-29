@@ -45,7 +45,7 @@ export function IntelligenceDashboard({ onNavigate }) {
   if (loading) {
     return (
       <div className="space-y-5" aria-label="Loading intelligence dashboard">
-        <div className="h-80 animate-pulse rounded-[1.8rem] bg-[#c30000]/90" />
+        <div className="h-80 animate-pulse rounded-[1.8rem] bg-[#8f1d2c]/90" />
         <div className="grid gap-5 xl:grid-cols-[minmax(0,1.7fr)_minmax(300px,0.8fr)]">
           <div className="h-[520px] animate-pulse rounded-[1.4rem] bg-white/55" />
           <div className="h-[520px] animate-pulse rounded-[1.4rem] bg-white/55" />
@@ -58,24 +58,24 @@ export function IntelligenceDashboard({ onNavigate }) {
     return (
       <div className="surface-card grid min-h-[420px] place-items-center p-8 text-center">
         <div>
-          <p className="font-serif text-2xl text-[#c30000]">
+          <p className="font-serif text-2xl text-[#8f1d2c]">
             The intelligence desk is temporarily unavailable.
           </p>
-          <p className="mt-2 max-w-md text-sm leading-6 text-[#8c4436]">
+          <p className="mt-2 max-w-md text-sm leading-6 text-[#85434a]">
             {error}
           </p>
           <div className="mt-5 flex justify-center gap-3">
             <button
               type="button"
               onClick={() => onNavigate("bills")}
-              className="rounded-full bg-[#c30000] px-4 py-2.5 text-xs font-semibold text-white"
+              className="rounded-full bg-[#8f1d2c] px-4 py-2.5 text-xs font-semibold text-white"
             >
               Open Bills
             </button>
             <button
               type="button"
               onClick={() => onNavigate("acts")}
-              className="rounded-full border border-[#c30000]/12 px-4 py-2.5 text-xs font-semibold text-[#c30000]"
+              className="rounded-full border border-[#8f1d2c]/12 px-4 py-2.5 text-xs font-semibold text-[#8f1d2c]"
             >
               Open Acts
             </button>

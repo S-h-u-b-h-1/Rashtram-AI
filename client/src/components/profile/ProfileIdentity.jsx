@@ -3,14 +3,14 @@ import { formatDate } from "@/lib/document-links";
 
 export function ProfileIdentity({ user }) {
   return (
-    <section className="relative overflow-hidden rounded-[1.8rem] bg-[#c30000] p-6 text-white sm:p-8">
+    <section className="relative overflow-hidden rounded-[1.8rem] bg-[#8f1d2c] p-6 text-white sm:p-8">
       <div className="policy-grid absolute inset-0 opacity-20" />
       <div className="relative flex flex-col gap-6 sm:flex-row sm:items-center">
-        <div className="grid h-20 w-20 shrink-0 place-items-center rounded-3xl bg-[#d97745] font-serif text-2xl font-semibold">
+        <div className="grid h-20 w-20 shrink-0 place-items-center rounded-3xl bg-[#a85a52] font-serif text-2xl font-semibold">
           {user.initials}
         </div>
         <div className="min-w-0">
-          <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[#efb36f]">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[#c1a06f]">
             Research profile
           </p>
           <h2 className="mt-2 truncate font-serif text-3xl sm:text-4xl">

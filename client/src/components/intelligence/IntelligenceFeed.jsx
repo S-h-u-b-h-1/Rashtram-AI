@@ -20,25 +20,25 @@ export function IntelligenceFeed({ events, isFallback }) {
     <section className="surface-card p-5 sm:p-6">
       <div className="flex items-start justify-between gap-4">
         <div>
-          <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#9e4937]">
+          <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#874047]">
             Current activity
           </p>
-          <h2 className="mt-2 font-serif text-2xl text-[#c30000]">
+          <h2 className="mt-2 font-serif text-2xl text-[#8f1d2c]">
             Today in Parliament & policy
           </h2>
         </div>
-        <Radio className="h-5 w-5 text-[#ad4a36]" />
+        <Radio className="h-5 w-5 text-[#8c4548]" />
       </div>
 
       {isFallback && (
-        <div className="mt-5 rounded-xl border border-[#c88b52]/25 bg-[#f8ead7] px-4 py-3 text-xs leading-5 text-[#754b2e]">
+        <div className="mt-5 rounded-xl border border-[#98705d]/25 bg-[#f8ead7] px-4 py-3 text-xs leading-5 text-[#754b2e]">
           No live Parliament events have been ingested yet. Showing recently
           added catalogue documents instead.
         </div>
       )}
 
       {events.length === 0 ? (
-        <div className="mt-5 rounded-2xl border border-dashed border-[#c30000]/12 bg-[#f7f2e8]/65 p-8 text-center">
+        <div className="mt-5 rounded-2xl border border-dashed border-[#8f1d2c]/12 bg-[#f1ece3]/65 p-8 text-center">
           <p className="text-sm font-medium text-[#514d46]">
             No legislative events or catalogue documents are available yet.
           </p>
@@ -48,7 +48,7 @@ export function IntelligenceFeed({ events, isFallback }) {
           </p>
         </div>
       ) : (
-        <div className="mt-5 divide-y divide-[#c30000]/8">
+        <div className="mt-5 divide-y divide-[#8f1d2c]/8">
           {events.slice(0, 10).map((event) => {
             const researchHref = buildResearchHref(event);
             return (
@@ -57,7 +57,7 @@ export function IntelligenceFeed({ events, isFallback }) {
                 className="py-5 first:pt-0"
               >
                 <div className="flex flex-wrap items-center gap-2">
-                  <span className="rounded-full bg-[#c30000] px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.1em] text-white">
+                  <span className="rounded-full bg-[#8f1d2c] px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.1em] text-white">
                     {humanize(event.eventType)}
                   </span>
                   <span className="rounded-full bg-[#eee6d9] px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.1em] text-[#6f4335]">
@@ -78,7 +78,7 @@ export function IntelligenceFeed({ events, isFallback }) {
                 )}
 
                 <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-[#857d72]">
-                  <span className="font-semibold text-[#9f4937]">
+                  <span className="font-semibold text-[#874047]">
                     {getPublicSourceLabel(event.sourceName)}
                   </span>
                   <span>{event.jurisdiction || "India"}</span>
@@ -112,7 +112,7 @@ export function IntelligenceFeed({ events, isFallback }) {
                           },
                         })
                       }
-                      className="inline-flex items-center gap-1.5 rounded-full border border-[#c30000]/12 px-3 py-2 text-xs font-semibold text-[#514d46] transition hover:bg-[#f2ece1]"
+                      className="inline-flex items-center gap-1.5 rounded-full border border-[#8f1d2c]/12 px-3 py-2 text-xs font-semibold text-[#514d46] transition hover:bg-[#f2ece1]"
                     >
                       Open
                       <ArrowUpRight className="h-3.5 w-3.5" />
@@ -136,7 +136,7 @@ export function IntelligenceFeed({ events, isFallback }) {
                           },
                         })
                       }
-                      className="inline-flex items-center gap-1.5 rounded-full bg-[#c30000] px-3 py-2 text-xs font-semibold text-white transition hover:bg-[#2d3a34]"
+                      className="inline-flex items-center gap-1.5 rounded-full bg-[#8f1d2c] px-3 py-2 text-xs font-semibold text-white transition hover:bg-[#2d3a34]"
                     >
                       <BookOpenText className="h-3.5 w-3.5" />
                       Research
@@ -163,7 +163,7 @@ export function IntelligenceFeed({ events, isFallback }) {
                           },
                         })
                       }
-                      className="inline-flex items-center gap-1.5 rounded-full border border-[#c30000]/12 px-3 py-2 text-xs font-semibold text-[#514d46] transition hover:bg-[#f2ece1]"
+                      className="inline-flex items-center gap-1.5 rounded-full border border-[#8f1d2c]/12 px-3 py-2 text-xs font-semibold text-[#514d46] transition hover:bg-[#f2ece1]"
                     >
                       View source
                       <ExternalLink className="h-3.5 w-3.5" />

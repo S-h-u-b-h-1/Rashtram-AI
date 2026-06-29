@@ -33,10 +33,10 @@ export function AccountSettings() {
   return (
     <section className="surface-card p-5 sm:p-6">
       <div>
-        <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#9e4937]">
+        <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#874047]">
           Account controls
         </p>
-        <h2 className="mt-2 font-serif text-2xl text-[#c30000]">
+        <h2 className="mt-2 font-serif text-2xl text-[#8f1d2c]">
           Settings
         </h2>
       </div>
@@ -48,11 +48,11 @@ export function AccountSettings() {
               key={action.label}
               type="button"
               disabled
-              className="flex cursor-not-allowed items-start gap-3 rounded-2xl border border-[#c30000]/9 bg-[#fffdf8] p-4 text-left opacity-75"
+              className="flex cursor-not-allowed items-start gap-3 rounded-2xl border border-[#8f1d2c]/9 bg-[#f6f2eb] p-4 text-left opacity-75"
             >
               <ActionIcon
                 className={`mt-0.5 h-4 w-4 shrink-0 ${
-                  action.destructive ? "text-[#a33d31]" : "text-[#9f4937]"
+                  action.destructive ? "text-[#a33d31]" : "text-[#874047]"
                 }`}
               />
               <span>

@@ -479,7 +479,7 @@ function ActChatContent() {
           </p>
           <button
             onClick={() => router.push("/app/acts")} // Assuming /app/acts exists, or just /app
-            className="px-4 py-2 bg-[#B20F38] text-white rounded-lg hover:bg-[#8A0C2D] transition-colors"
+            className="px-4 py-2 bg-[#9b2638] text-white rounded-lg hover:bg-[#68131f] transition-colors"
           >
             Go to Acts
           </button>
@@ -489,9 +489,9 @@ function ActChatContent() {
   }
 
   return (
-    <div className="flex h-screen overflow-hidden bg-[#eee8dc]">
+    <div className="flex h-screen overflow-hidden bg-[#e9e3da]">
       <div className="flex min-w-0 flex-1 flex-col">
-        <div className="border-b border-white/8 bg-[#c30000] px-4 py-3 text-white sm:px-6">
+        <div className="border-b border-white/8 bg-[#8f1d2c] px-4 py-3 text-white sm:px-6">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-3">
               <button
@@ -509,7 +509,7 @@ function ActChatContent() {
               </button>
               <div className="flex items-center space-x-2">
                 <div className="grid h-9 w-9 place-items-center rounded-xl bg-white/8">
-                  <FileText className="h-4 w-4 text-[#efb36f]" />
+                  <FileText className="h-4 w-4 text-[#c1a06f]" />
                 </div>
                 <div>
                   <h1 className="line-clamp-1 text-sm font-semibold text-white sm:text-base">
@@ -535,7 +535,7 @@ function ActChatContent() {
                 onClick={() => setShowSummary(!showSummary)}
                 className={`flex items-center space-x-2 rounded-xl px-3 py-2 font-medium transition-all duration-200 ${
                   showSummary
-                    ? "bg-[#d97745] text-white"
+                    ? "bg-[#a85a52] text-white"
                     : "border border-white/8 bg-white/6 text-white/60 hover:bg-white/10"
                 }`}
               >
@@ -550,7 +550,7 @@ function ActChatContent() {
           {isLoading ? (
             <div className="flex items-center justify-center h-full">
               <div className="text-center">
-                <Loader2 className="mx-auto mb-3 h-8 w-8 animate-spin text-[#ad4a36]" />
+                <Loader2 className="mx-auto mb-3 h-8 w-8 animate-spin text-[#8c4548]" />
                 <p className="text-sm text-[#706a61]">Preparing the evidence workspace…</p>
               </div>
             </div>
@@ -566,10 +566,10 @@ function ActChatContent() {
                   <div
                     className={`max-w-[88%] rounded-2xl px-4 py-3.5 shadow-sm sm:max-w-[76%] sm:px-5 ${
                       message.sender === "user"
-                        ? "rounded-br-md bg-[#c30000] text-white"
+                        ? "rounded-br-md bg-[#8f1d2c] text-white"
                         : message.isError
                         ? "border border-red-200 bg-red-50 text-red-800"
-                        : "rounded-bl-md border border-[#c30000]/8 bg-[#fffdf8] text-[#29312d]"
+                        : "rounded-bl-md border border-[#8f1d2c]/8 bg-[#f6f2eb] text-[#29312d]"
                     }`}
                   >
                     <div
@@ -598,8 +598,8 @@ function ActChatContent() {
               ))}
               {isSending && (
                 <div className="flex justify-start">
-                  <div className="rounded-2xl rounded-bl-md border border-[#c30000]/8 bg-[#fffdf8] px-5 py-4 text-[#29312d] shadow-sm">
-                    <Loader2 className="h-5 w-5 animate-spin text-[#ad4a36]" />
+                  <div className="rounded-2xl rounded-bl-md border border-[#8f1d2c]/8 bg-[#f6f2eb] px-5 py-4 text-[#29312d] shadow-sm">
+                    <Loader2 className="h-5 w-5 animate-spin text-[#8c4548]" />
                   </div>
                 </div>
               )}
@@ -609,7 +609,7 @@ function ActChatContent() {
         </div>
 
         {!isLoading && (
-          <div className="border-t border-[#c30000]/8 bg-[#f6f0e6]">
+          <div className="border-t border-[#8f1d2c]/8 bg-[#f6f0e6]">
             <button
               onClick={() => {
                 const newState = !showSuggestions;
@@ -676,7 +676,7 @@ function ActChatContent() {
                             textareaRef.current?.focus();
                           }}
                           disabled={isSending}
-                          className="group flex-shrink-0 rounded-full border border-[#c30000]/10 bg-white px-4 py-2 text-left text-xs text-[#5f5a52] transition-all hover:border-[#ad4a36]/35 hover:text-[#9f4937] disabled:cursor-not-allowed disabled:opacity-50"
+                          className="group flex-shrink-0 rounded-full border border-[#8f1d2c]/10 bg-white px-4 py-2 text-left text-xs text-[#5f5a52] transition-all hover:border-[#8c4548]/35 hover:text-[#874047] disabled:cursor-not-allowed disabled:opacity-50"
                         >
                           <div className="flex items-center gap-2 whitespace-nowrap">
                             <span className="text-xs opacity-50 group-hover:opacity-100">
@@ -695,8 +695,8 @@ function ActChatContent() {
           </div>
         )}
 
-        <div className="border-t border-[#c30000]/8 bg-[#fffdf8] px-4 py-4 sm:px-6">
-          <div className="mx-auto flex max-w-4xl items-end gap-3 rounded-2xl border border-[#c30000]/10 bg-white p-2 shadow-[0_12px_36px_rgba(195, 0, 0,0.08)]">
+        <div className="border-t border-[#8f1d2c]/8 bg-[#f6f2eb] px-4 py-4 sm:px-6">
+          <div className="mx-auto flex max-w-4xl items-end gap-3 rounded-2xl border border-[#8f1d2c]/10 bg-white p-2 shadow-[0_12px_36px_rgba(143, 29, 44,0.08)]">
             <textarea
               ref={textareaRef}
               value={inputMessage}
@@ -704,13 +704,13 @@ function ActChatContent() {
               onKeyDown={handleKeyPress}
               placeholder="Ask a question about this act…"
               disabled={isLoading || isSending}
-              className="min-h-12 flex-1 resize-none border-0 bg-transparent px-3 py-3 text-sm text-[#c30000] placeholder:text-[#9b9387] focus:outline-none disabled:cursor-not-allowed disabled:opacity-60"
+              className="min-h-12 flex-1 resize-none border-0 bg-transparent px-3 py-3 text-sm text-[#8f1d2c] placeholder:text-[#9b9387] focus:outline-none disabled:cursor-not-allowed disabled:opacity-60"
               rows={2}
             />
             <button
               onClick={handleSendMessage}
               disabled={!inputMessage.trim() || isLoading || isSending}
-              className="flex h-12 items-center space-x-2 rounded-xl bg-[#c30000] px-4 text-white transition-colors hover:bg-[#2d3934] disabled:cursor-not-allowed disabled:bg-[#d1cabf] sm:px-5"
+              className="flex h-12 items-center space-x-2 rounded-xl bg-[#8f1d2c] px-4 text-white transition-colors hover:bg-[#2d3934] disabled:cursor-not-allowed disabled:bg-[#d1cabf] sm:px-5"
             >
               {isSending ? (
                 <Loader2 className="w-5 h-5 animate-spin" />
@@ -724,7 +724,7 @@ function ActChatContent() {
       </div>
 
       {showSummary && (
-        <div className="fixed right-0 top-0 z-20 flex h-full w-[88vw] max-w-96 flex-col border-l border-[#c30000]/10 bg-[#fffdf8] shadow-2xl md:static">
+        <div className="fixed right-0 top-0 z-20 flex h-full w-[88vw] max-w-96 flex-col border-l border-[#8f1d2c]/10 bg-[#f6f2eb] shadow-2xl md:static">
           <div className="flex items-center justify-between bg-[#24312c] px-6 py-4">
             <div className="flex items-center space-x-2">
               <BarChart3 size={20} className="text-white" />
@@ -741,13 +741,13 @@ function ActChatContent() {
             {isLoading ? (
               <div className="flex items-center justify-center h-32">
                 <div className="text-center">
-                  <Loader2 className="w-6 h-6 text-[#B20F38] animate-spin mx-auto mb-2" />
+                  <Loader2 className="w-6 h-6 text-[#9b2638] animate-spin mx-auto mb-2" />
                   <p className="text-xs text-gray-500">Loading summary...</p>
                 </div>
               </div>
             ) : summary ? (
               <>
-                <div className="rounded-2xl border border-[#c30000]/8 bg-[#f5ede0] p-5">
+                <div className="rounded-2xl border border-[#8f1d2c]/8 bg-[#f5ede0] p-5">
                   <div className="chat-markdown">
                     <ReactMarkdown
                       remarkPlugins={[remarkGfm]}
@@ -778,7 +778,7 @@ export default function ActChatPage() {
     <Suspense
       fallback={
         <div className="flex items-center justify-center h-screen bg-gray-50">
-          <Loader2 className="w-8 h-8 text-[#B20F38] animate-spin" />
+          <Loader2 className="w-8 h-8 text-[#9b2638] animate-spin" />
         </div>
       }
     >
