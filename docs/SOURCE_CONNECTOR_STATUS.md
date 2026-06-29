@@ -1,23 +1,23 @@
 # Source Connector Status
 
-Status reviewed: 28 June 2026.
+Status reviewed: 29 June 2026.
 
 This is an operational snapshot, not a projected catalogue size. Runtime
 counts shown in the product always come from PostgreSQL.
 
 ## Connector matrix
 
-| Connector | Collections and access method | Current limitation |
-| --- | --- | --- |
-| `prs-india` | Parliament/State Bills and Acts through polite official public HTML discovery | Existing production connector; remains the broadest populated source |
-| `digital-sansad` | Parliamentary committee reports from the Parliament Digital Library; current Lok Sabha and Rajya Sabha question listings from Digital Sansad | Private or undocumented application APIs are intentionally not used |
-| `lok-sabha` | Questions, debates, Bulletin I, Bulletin II, and business; official Digital Sansad listings plus paginated Parliament Digital Library collections | Business documents behind interactive filters are reported as blocked when no stable links are exposed |
-| `rajya-sabha` | Questions and committee meetings from server-rendered Digital Sansad listings; official-debate discovery | Session/date-filtered debate downloads may be blocked when the official page exposes no crawlable links |
-| `ministry` | Ministry and department portal links from the current India.gov Web Directory | The old `/my-government/ministries` route returns 404; the replacement directory may load entries interactively |
-| `state-legislature` | Initial official portals for Delhi, Karnataka, Kerala, Maharashtra, Rajasthan, and Tamil Nadu; direct public legislative PDFs first | A reachable portal with no landing-page PDF links is blocked for deeper crawling until a state-specific adapter is reviewed |
-| `state-gazette` | Official Gazette Directory link/PDF discovery | The supplied `/stateGazette` path is unavailable; the current ASP.NET directory requires interactive controls and is marked blocked if no stable links are exposed |
-| `india-code` | Recent Central Acts by default, all-year browsing on request, detail metadata/PDFs, and independently deduplicable rules, regulations, notifications, orders, circulars, ordinances, and statutes linked from Acts | State-wide enumeration needs authoritative collection handles; detail enrichment is deliberately concurrency-bounded |
-| `egazette` | Recent weekly and extraordinary Gazette records, typed rules/orders/ordinances/notifications, official archive PDF URLs, and date filtering within the live feed | Historical date-window search uses interactive ASP.NET state; out-of-feed windows are marked blocked |
+| Connector | Collections and access method | Live status and sample | Limitation / next expansion |
+| --- | --- | --- | --- |
+| `prs-india` | Parliament/State Bills and Acts through polite official public HTML discovery | Existing populated source | Continue incremental refreshes and review the historical duplicate queue |
+| `digital-sansad` | Parliamentary committee reports from Parliament Digital Library; Lok Sabha and Rajya Sabha question listings | **Blocked**; 0 records in the one-page sample; listing timed out | Retry from a scheduled worker and add an adapter only if a stable documented feed becomes available |
+| `lok-sabha` | Questions, debates, Bulletin I, Bulletin II, and business through official Digital Sansad and Parliament Library pages | **Blocked**; 0 records; questions page snapshot captured but its listing is JS-rendered | Keep the existing paginated Library adapters; add stable question/business feeds if Parliament publishes them |
+| `rajya-sabha` | Questions, committee meetings, and official debates | **Blocked**; 0 records; malformed response headers on the question listing | Recheck headers from the production worker and expand stable server-rendered collections independently |
+| `ministry` | Ministry/department portal discovery from the current India.gov Web Directory | **Blocked**; 0 records; current directory returned HTTP 403 | Do not bypass the restriction; use an official sitemap/feed if India.gov publishes one |
+| `state-legislature` | Delhi, Karnataka, Kerala, Maharashtra, Rajasthan, and Tamil Nadu official portals; direct legislative PDF discovery | **Fresh**; 5 records discovered and stored in the bounded run; 6 source records currently in PostgreSQL; PDF discovery working | Add reviewed state-specific listing/pagination adapters; generic landing-page PDFs are filtered by legislative terms |
+| `state-gazette` | Official Gazette Directory link/PDF discovery | **Blocked**; 0 records; page reachable but ASP.NET controls expose no stable listing | Add state-specific Gazette adapters or a documented official feed; do not automate hidden form state |
+| `india-code` | Recent Central Acts, optional all-year browsing, detail metadata/PDFs, and independently deduplicable subordinate legislation | Existing populated source | Add authoritative state collection handles; keep detail enrichment concurrency-bounded |
+| `egazette` | Recent weekly and extraordinary Gazette records, official PDFs, and evidence-based document typing | Existing populated source | Historical date-window search remains behind interactive ASP.NET state |
 
 ## Source inspection findings
 
@@ -52,6 +52,12 @@ npm run ingest:sources --prefix server -- \
   --sources=ministries,state-legislatures,state-gazettes \
   --max-pages=1 --limit=10 --catalog-only --dry-run
 
+# Bounded live run; blocked reasons are persisted to ingestion_runs
+npm run ingest:sources --prefix server -- \
+  --sources=digital-sansad,lok-sabha,rajya-sabha,ministries,state-legislatures,state-gazettes \
+  --max-pages=1 --limit=5 --detail-concurrency=1 \
+  --download-pdfs=false
+
 # Recent Acts plus linked subordinate legislation
 npm run ingest:sources --prefix server -- \
   --sources=indiacode --max-pages=6 --limit=100 \
@@ -68,23 +74,32 @@ npm run ingest:sources --prefix server -- \
   --limit=100 --download-pdfs=false
 ```
 
-## Real database baseline
+## Live verification result
 
-Before this connector expansion, PostgreSQL contained 17,554 canonical
-documents, including 17,544 source records from the legislative-reference
-collector, 10 India Code records, and 7 eGazette records. The six newly
-completed source families had no stored records and therefore appeared as
-`Planned`.
+The bounded live run created ingestion runs 20–25. Five source families
+completed with explicit blocked-access errors and no fabricated records.
+`state-legislature` discovered and stored five Delhi records: four canonical
+documents were created and one matched an existing document. No PDFs were
+downloaded; five official PDF URLs and their provenance were stored.
 
-The code no longer substitutes projected counts. After each successful run,
+After the run, PostgreSQL contained 17,560 canonical documents and 17,244
+documents with PDF URLs. Source counts were: PRS 17,544, India Code 10,
+eGazette 7, and State Legislatures 6. The health sample reported five
+`Blocked` sources and one connected source whose display status was `Fresh`.
+
+The code does not substitute projected counts. After each run,
 `document_sources`, `ingestion_runs`, and source snapshots determine the
 displayed record count, freshness, last success, error count, and refresh age.
 
 ## Verification notes
 
-The local sandbox used for this change blocks DNS for Node and shell processes.
-All eight requested dry-run commands were executed and correctly captured
-`ENOTFOUND` as source errors without writes. Official source availability and
-current records were independently confirmed through the official public pages.
-Production or a network-enabled worker should run the same bounded commands
-before enabling schedules.
+The six-source dry run and bounded live run were both executed against the
+official public pages on 29 June 2026. The health check exposed parser and PDF
+status, latest successful ingestion, latest error, database count, and a
+dashboard-compatible display status for every source.
+
+`catalog:duplicates` still reports historical PRS candidate groups. The new
+State Legislature run created no new reported duplicate group; one record was
+merged by the existing layered dedupe. Server tests, client lint, and client
+production build are the required release gates before scheduling these
+connectors.

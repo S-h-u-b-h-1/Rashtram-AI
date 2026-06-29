@@ -84,6 +84,17 @@ const runIngestion = async (connector, options = {}) => {
     summary.discovered = records.length;
     summary.counters.discovered = records.length;
     summary.errors.push(...(collection.errors || []));
+    for (const diagnostic of collection.diagnostics || []) {
+      if (!["blocked", "error"].includes(diagnostic.type)) continue;
+      summary.errors.push({
+        stage: "access",
+        type: diagnostic.type,
+        collection: diagnostic.collection || summary.collection,
+        message:
+          diagnostic.message ||
+          `Connector reported ${diagnostic.type} access.`,
+      });
+    }
 
     const maximumPdfDownloads = Math.max(0, Number(options.maxPdfs || 100));
     if (options.downloadPdfs) validatePdfStorageOptions(options);

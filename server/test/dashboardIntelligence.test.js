@@ -71,6 +71,21 @@ test("source health safely reports not-run, fresh, stale, degraded, and blocked 
     }),
     "Blocked",
   );
+  assert.equal(
+    deriveSourceStatus({
+      latestRun: {
+        status: "completed_with_errors",
+        errors_json: [
+          {
+            type: "blocked",
+            message: "Interactive source exposed no stable links.",
+          },
+        ],
+      },
+      now,
+    }),
+    "Blocked",
+  );
 });
 
 test("brief summary never invents current Parliament activity", () => {

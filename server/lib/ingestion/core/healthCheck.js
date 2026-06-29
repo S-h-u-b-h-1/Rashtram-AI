@@ -55,6 +55,18 @@ const validateCollectionShape = (collection) => {
     : { valid: true, reason: null };
 };
 
+const displayStatusFor = (status, history = {}) => {
+  if (status === "blocked") return "Blocked";
+  if (["unavailable", "parser changed", "degraded"].includes(status)) {
+    return "Degraded";
+  }
+  if (status === "planned") return "Not Run";
+  if (!history.lastSuccessfulAt) return "Connected";
+  const ageDays =
+    (Date.now() - new Date(history.lastSuccessfulAt).getTime()) / 86_400_000;
+  return ageDays <= 7 ? "Fresh" : "Stale";
+};
+
 const probeConnector = async (
   connector,
   options = {},
@@ -122,11 +134,14 @@ const probeConnector = async (
     return {
       source: connector.name,
       status,
+      displayStatus: displayStatusFor(status, history),
       reachable,
       parserShapeValid: shape.valid,
+      parserStatus: shape.valid ? "Valid" : "Changed",
       parserMessage: shape.reason,
       sampleRecordsDiscovered: discovered,
       samplePdfLinksDiscovered: pdfLinks,
+      pdfDiscoveryStatus: pdfLinks > 0 ? "Discovered" : "Not Discovered",
       snapshotsCaptured: collection.snapshots?.length || 0,
       latestIngestionStatus: history.latestRunStatus || null,
       lastSuccessfulIngestion: history.lastSuccessfulAt || null,
@@ -156,11 +171,14 @@ const probeConnector = async (
     return {
       source: connector.name,
       status: "unavailable",
+      displayStatus: displayStatusFor("unavailable", history),
       reachable: false,
       parserShapeValid: null,
+      parserStatus: "Not Checked",
       parserMessage: null,
       sampleRecordsDiscovered: 0,
       samplePdfLinksDiscovered: 0,
+      pdfDiscoveryStatus: "Not Checked",
       snapshotsCaptured: 0,
       latestIngestionStatus: history.latestRunStatus || null,
       lastSuccessfulIngestion: history.lastSuccessfulAt || null,
@@ -260,6 +278,7 @@ const runConnectorHealthChecks = async (connectors, options = {}) => {
 module.exports = {
   PRODUCTION_CONNECTORS,
   countPdfLinks,
+  displayStatusFor,
   loadIngestionHistory,
   probeConnector,
   runConnectorHealthChecks,

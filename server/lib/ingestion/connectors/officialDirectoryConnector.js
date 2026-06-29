@@ -47,6 +47,14 @@ const parseOfficialDirectory = (html, pageUrl, config) => {
     ) {
       return;
     }
+    if (
+      config.pdfLinkPattern &&
+      !config.pdfLinkPattern.test(
+        `${title} ${new URL(url).pathname.split("/").at(-1) || ""}`,
+      )
+    ) {
+      return;
+    }
     seen.add(url);
     const year = Number.parseInt(
       `${title} ${url}`.match(/\b(18|19|20)\d{2}\b/)?.[0],
