@@ -10,17 +10,39 @@ const { generateResponse } = require("../lib/vectordb");
 const router = express.Router();
 
 const identity = (req) => {
+  const body = req.body || {};
+  const requestQuery = req.query || {};
+  const params = req.params || {};
   const rawId =
-    req.body.documentId || req.query.documentId || req.params.documentId;
-  if (!rawId) throw new Error("Document ID is required.");
+    body.documentId || requestQuery.documentId || params.documentId;
+  if (!rawId) {
+    const error = new Error("Document ID is required.");
+    error.status = 400;
+    throw error;
+  }
+  let documentType;
+  try {
+    documentType = DocumentChat.normalizeType(
+      body.documentType ||
+        requestQuery.documentType ||
+        params.documentType,
+    );
+  } catch (error) {
+    error.status = 400;
+    throw error;
+  }
   return {
-    documentType: DocumentChat.normalizeType(
-      req.body.documentType ||
-        req.query.documentType ||
-        req.params.documentType,
-    ),
+    documentType,
     documentId: String(rawId),
   };
+};
+
+const respondWithError = (res, error, context) => {
+  const status = error.status || 500;
+  if (status >= 500) {
+    console.error(`${context}:`, error);
+  }
+  return res.status(status).json({ error: error.message });
 };
 
 router.get("/document/:documentType/:documentId", async (req, res) => {
@@ -32,7 +54,7 @@ router.get("/document/:documentType/:documentId", async (req, res) => {
     }
     return res.json({ document });
   } catch (error) {
-    return res.status(400).json({ error: error.message });
+    return respondWithError(res, error, "Unified document context failed");
   }
 });
 
@@ -42,8 +64,11 @@ router.post("/process", async (req, res) => {
     const result = await processDocument(documentType, documentId);
     return res.json({ success: true, ...result });
   } catch (error) {
-    console.error("Unified document processing failed:", error);
-    return res.status(error.status || 500).json({ error: error.message });
+    return respondWithError(
+      res,
+      error,
+      "Unified document processing failed",
+    );
   }
 });
 
@@ -62,8 +87,7 @@ router.post("/session", async (req, res) => {
     });
     return res.json({ success: true, chat, document });
   } catch (error) {
-    console.error("Unified chat session failed:", error);
-    return res.status(400).json({ error: error.message });
+    return respondWithError(res, error, "Unified chat session failed");
   }
 });
 
@@ -86,7 +110,7 @@ router.get("/history", async (req, res) => {
     );
     return res.json({ success: true, chat, notes });
   } catch (error) {
-    return res.status(400).json({ error: error.message });
+    return respondWithError(res, error, "Unified chat history failed");
   }
 });
 
@@ -107,7 +131,7 @@ router.post("/message", async (req, res) => {
     if (!chat) return res.status(404).json({ error: "Chat not found." });
     return res.json({ success: true, chat });
   } catch (error) {
-    return res.status(400).json({ error: error.message });
+    return respondWithError(res, error, "Unified chat message save failed");
   }
 });
 
@@ -125,7 +149,7 @@ router.patch("/summary", async (req, res) => {
     );
     return res.json({ success: true, summary: chat?.summary || null });
   } catch (error) {
-    return res.status(400).json({ error: error.message });
+    return respondWithError(res, error, "Unified chat summary update failed");
   }
 });
 
@@ -140,7 +164,7 @@ router.patch("/pin", async (req, res) => {
     );
     return res.json({ success: true, chat });
   } catch (error) {
-    return res.status(400).json({ error: error.message });
+    return respondWithError(res, error, "Unified chat pin update failed");
   }
 });
 
@@ -154,7 +178,7 @@ router.delete("/history", async (req, res) => {
     );
     return res.json({ success: true, chat });
   } catch (error) {
-    return res.status(400).json({ error: error.message });
+    return respondWithError(res, error, "Unified chat clear failed");
   }
 });
 
@@ -171,7 +195,7 @@ router.post("/notes", async (req, res) => {
     );
     return res.status(201).json({ success: true, note });
   } catch (error) {
-    return res.status(400).json({ error: error.message });
+    return respondWithError(res, error, "Unified research note save failed");
   }
 });
 
@@ -196,7 +220,7 @@ router.post("/feedback", async (req, res) => {
     );
     return res.json({ success: true, feedback });
   } catch (error) {
-    return res.status(400).json({ error: error.message });
+    return respondWithError(res, error, "Unified chat feedback save failed");
   }
 });
 
@@ -232,7 +256,7 @@ router.get("/export", async (req, res) => {
     );
     return res.send(markdown);
   } catch (error) {
-    return res.status(400).json({ error: error.message });
+    return respondWithError(res, error, "Unified chat export failed");
   }
 });
 
@@ -293,3 +317,4 @@ router.post("/", async (req, res) => {
 });
 
 module.exports = router;
+module.exports.resolveDocumentIdentity = identity;

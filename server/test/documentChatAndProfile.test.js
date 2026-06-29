@@ -9,6 +9,9 @@ const {
   TYPE_CONFIG,
 } = require("../document/documentResearchService");
 const {
+  resolveDocumentIdentity,
+} = require("../document/documentChatRoute");
+const {
   sanitizeList,
   sanitizeObject,
   sanitizeText,
@@ -42,6 +45,35 @@ test("RAG adapters share one contract for Bills, Acts, and Gazettes", () => {
     assert.equal(typeof config.store, "function");
     assert.match(config.idField, /^(bill|act|gazette)Id$/);
   }
+});
+
+test("document identity accepts bodyless GET requests", () => {
+  assert.deepEqual(
+    resolveDocumentIdentity({
+      params: { documentType: "gazette", documentId: "20438" },
+      query: {},
+    }),
+    {
+      documentType: "gazette",
+      documentId: "20438",
+    },
+  );
+  assert.throws(
+    () =>
+      resolveDocumentIdentity({
+        params: { documentType: "gazette" },
+        query: {},
+      }),
+    /Document ID is required/,
+  );
+  assert.throws(
+    () =>
+      resolveDocumentIdentity({
+        params: { documentType: "password", documentId: "20438" },
+        query: {},
+      }),
+    /Unsupported document type/,
+  );
 });
 
 test("profile input helpers bound and normalize user-controlled fields", () => {
