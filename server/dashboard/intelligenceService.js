@@ -91,7 +91,9 @@ const mapDocument = (row) => ({
   jurisdiction: row.jurisdiction,
   authority: row.authority,
   ministry: row.ministry,
+  department: row.department,
   category: row.category,
+  gazetteNumber: row.gazette_identifier || row.gazette_id || null,
   status: row.status,
   year: row.year,
   sourceName: row.canonical_source || row.source_name,
@@ -171,6 +173,21 @@ const getRecentUserChats = async (userId, limit = 8) => {
          JSONB_ARRAY_LENGTH(messages) AS message_count,
          updated_at
        FROM act_chats
+       WHERE user_id = $1 AND is_active = TRUE
+
+       UNION ALL
+
+       SELECT
+         id,
+         gazette_id AS document_id,
+         'gazette'::TEXT AS document_type,
+         gazette_title AS title,
+         status,
+         pdf_url,
+         LEFT(summary, 280) AS summary,
+         JSONB_ARRAY_LENGTH(messages) AS message_count,
+         GREATEST(last_accessed_at, last_message_at, updated_at) AS updated_at
+       FROM egazette_chats
        WHERE user_id = $1 AND is_active = TRUE
      ) research
      ORDER BY updated_at DESC
@@ -295,6 +312,7 @@ const getDashboardIntelligence = async (userId) => {
     eventsResult,
     recentDocumentsResult,
     activeBillsResult,
+    gazetteNotificationsResult,
     legalUpdatesResult,
     trendingResult,
     refreshResult,
@@ -342,6 +360,27 @@ const getDashboardIntelligence = async (userId) => {
         AND jurisdiction_level IN ('parliament', 'union')
         AND LOWER(COALESCE(status, '')) ~
           '(introduced|pending|consideration|passed|referred|committee)'
+      ORDER BY
+        intelligence_date DESC NULLS LAST,
+        updated_at DESC,
+        id DESC
+      LIMIT 8
+    `),
+    query(`
+      SELECT
+        legislative_documents.*,
+        COALESCE(
+          publication_date,
+          effective_date,
+          first_seen_at::DATE
+        ) AS intelligence_date
+      FROM legislative_documents
+      WHERE (
+        canonical_source IN ('egazette', 'state-gazette')
+        OR source_name IN ('egazette', 'state-gazette')
+        OR gazette_identifier IS NOT NULL
+        OR document_type = 'gazette'
+      )
       ORDER BY
         intelligence_date DESC NULLS LAST,
         updated_at DESC,
@@ -479,6 +518,8 @@ const getDashboardIntelligence = async (userId) => {
     recentDocuments,
     activeBills: activeBillsResult.rows.map(mapDocument),
     latestLegalUpdates: legalUpdatesResult.rows.map(mapDocument),
+    recentGazetteNotifications:
+      gazetteNotificationsResult.rows.map(mapDocument),
     trendingCategories: trendingResult.rows.map((row) => ({
       label: row.label,
       documentCount: row.documents,
@@ -504,6 +545,7 @@ const getProfileData = async (userId) => {
     recentChats,
     sources,
     activityInsights,
+    favoriteGazetteCategories,
   ] = await Promise.all([
       query(
         `SELECT
@@ -527,6 +569,23 @@ const getProfileData = async (userId) => {
            ) AS act_chats,
            (
              SELECT COUNT(*)::INTEGER
+             FROM egazette_chats
+             WHERE user_id = $1 AND is_active = TRUE
+           ) AS gazette_chats,
+           (
+             SELECT COUNT(DISTINCT i.document_id)::INTEGER
+             FROM user_document_interactions i
+             JOIN legislative_documents d ON d.id = i.document_id
+             WHERE i.user_id = $1
+               AND (
+                 d.canonical_source IN ('egazette', 'state-gazette')
+                 OR d.source_name IN ('egazette', 'state-gazette')
+                 OR d.gazette_identifier IS NOT NULL
+                 OR d.document_type = 'gazette'
+               )
+           ) AS gazette_documents_opened,
+           (
+             SELECT COUNT(*)::INTEGER
              FROM bill_chats
              WHERE user_id = $1
                AND is_active = TRUE
@@ -539,6 +598,13 @@ const getProfileData = async (userId) => {
                AND is_active = TRUE
                AND summary IS NOT NULL
                AND summary <> ''
+           ) + (
+             SELECT COUNT(*)::INTEGER
+             FROM egazette_chats
+             WHERE user_id = $1
+               AND is_active = TRUE
+               AND summary IS NOT NULL
+               AND summary <> ''
            ) AS saved_summaries,
            (
              SELECT COALESCE(SUM(JSONB_ARRAY_LENGTH(messages)), 0)::INTEGER
@@ -547,6 +613,10 @@ const getProfileData = async (userId) => {
            ) + (
              SELECT COALESCE(SUM(JSONB_ARRAY_LENGTH(messages)), 0)::INTEGER
              FROM act_chats
+             WHERE user_id = $1 AND is_active = TRUE
+           ) + (
+             SELECT COALESCE(SUM(JSONB_ARRAY_LENGTH(messages)), 0)::INTEGER
+             FROM egazette_chats
              WHERE user_id = $1 AND is_active = TRUE
            ) AS total_messages`,
         [userId],
@@ -575,7 +645,13 @@ const getProfileData = async (userId) => {
           COUNT(*) FILTER (
             WHERE document_type = 'act'
               AND jurisdiction_level = 'state'
-          )::INTEGER AS state_acts
+          )::INTEGER AS state_acts,
+          COUNT(*) FILTER (
+            WHERE canonical_source IN ('egazette', 'state-gazette')
+              OR source_name IN ('egazette', 'state-gazette')
+              OR gazette_identifier IS NOT NULL
+              OR document_type = 'gazette'
+          )::INTEGER AS gazette_documents
         FROM legislative_documents
       `),
       query(`
@@ -600,6 +676,25 @@ const getProfileData = async (userId) => {
       getRecentUserChats(userId, 12),
       getSourceHealth(),
       getActivityInsights(userId),
+      query(
+        `SELECT
+           COALESCE(NULLIF(d.category, ''), NULLIF(d.ministry, ''), d.document_type)
+             AS label,
+           SUM(i.count)::INTEGER AS interactions
+         FROM user_document_interactions i
+         JOIN legislative_documents d ON d.id = i.document_id
+         WHERE i.user_id = $1
+           AND (
+             d.canonical_source IN ('egazette', 'state-gazette')
+             OR d.source_name IN ('egazette', 'state-gazette')
+             OR d.gazette_identifier IS NOT NULL
+             OR d.document_type = 'gazette'
+           )
+         GROUP BY label
+         ORDER BY interactions DESC, label
+         LIMIT 6`,
+        [userId],
+      ),
     ]);
 
   if (!user.rows[0]) return null;
@@ -607,7 +702,9 @@ const getProfileData = async (userId) => {
   const activityRow = activity.rows[0];
   const coverageRow = coverage.rows[0];
   const researchHistoryCount =
-    activityRow.bill_chats + activityRow.act_chats;
+    activityRow.bill_chats +
+    activityRow.act_chats +
+    activityRow.gazette_chats;
 
   return {
     user: {
@@ -628,6 +725,8 @@ const getProfileData = async (userId) => {
     userActivityStats: {
       billChats: activityRow.bill_chats,
       actChats: activityRow.act_chats,
+      gazetteChats: activityRow.gazette_chats,
+      gazetteDocumentsOpened: activityRow.gazette_documents_opened,
       researchHistoryCount,
       documentsOpened: researchHistoryCount,
       savedSummaries: activityRow.saved_summaries,
@@ -642,6 +741,7 @@ const getProfileData = async (userId) => {
       parliamentActs: coverageRow.parliament_acts,
       stateBills: coverageRow.state_bills,
       stateActs: coverageRow.state_acts,
+      gazetteDocuments: coverageRow.gazette_documents,
       byDocumentType: typeCounts.rows.map((row) => ({
         documentType: row.document_type,
         documents: row.documents,
@@ -658,6 +758,13 @@ const getProfileData = async (userId) => {
         : null,
     },
     recentChats,
+    recentGazetteResearch: recentChats.filter(
+      (chat) => chat.documentType === "gazette",
+    ),
+    favoriteGazetteCategories: favoriteGazetteCategories.rows.map((row) => ({
+      label: row.label,
+      interactions: row.interactions,
+    })),
     sourceConnections: sources,
     activityInsights,
   };

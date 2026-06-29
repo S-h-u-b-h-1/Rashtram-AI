@@ -482,6 +482,7 @@ const eventTypeForRecord = (record) => {
     act: "act_published",
     rule: "rule_published",
     ordinance: "ordinance_published",
+    order: "government_order",
     committee_report: "committee_report_published",
     debate: "debate_published",
     question: "question_published",
@@ -491,6 +492,14 @@ const eventTypeForRecord = (record) => {
 };
 
 const updateEventTypeForRecord = (candidate, record) => {
+  if (
+    ["egazette", "state-gazette"].includes(record.sourceName) &&
+    ["gazette", "notification", "rule", "ordinance", "order"].includes(
+      record.documentType,
+    )
+  ) {
+    return "notification_updated";
+  }
   if (
     record.documentType === "bill" &&
     record.status &&

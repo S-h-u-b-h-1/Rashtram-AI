@@ -502,6 +502,133 @@ export const deleteActChat = async (actId) => {
   }
 };
 
+const toQueryString = (values) => {
+  const parameters = new URLSearchParams();
+  Object.entries(values).forEach(([key, value]) => {
+    if (value !== undefined && value !== null && value !== "" && value !== "All") {
+      parameters.set(key, String(value));
+    }
+  });
+  return parameters.toString();
+};
+
+export const fetchEGazettes = async (options = {}) => {
+  return apiRequest(`/egazettes?${toQueryString(options)}`);
+};
+
+export const fetchEGazette = async (gazetteId) => {
+  return apiRequest(`/egazettes/${encodeURIComponent(gazetteId)}`);
+};
+
+export const processEGazette = async (gazetteId) => {
+  return apiRequest("/process-egazette", {
+    method: "POST",
+    body: JSON.stringify({ gazetteId }),
+  });
+};
+
+export const getEGazetteSummary = async (gazetteId) => {
+  return apiRequest(
+    `/egazette-summary?gazetteId=${encodeURIComponent(gazetteId)}`,
+  );
+};
+
+export const getOrCreateEGazetteChat = async (gazette) => {
+  return apiRequest("/egazette-chat/session", {
+    method: "POST",
+    body: JSON.stringify({
+      gazetteId: gazette.id,
+      summary: gazette.summary,
+    }),
+  });
+};
+
+export const getEGazetteChatHistory = async (gazetteId) => {
+  return apiRequest(
+    `/egazette-chat/history?gazetteId=${encodeURIComponent(gazetteId)}`,
+  );
+};
+
+export const addEGazetteChatMessage = async (gazetteId, message) => {
+  return apiRequest("/egazette-chat/message", {
+    method: "POST",
+    body: JSON.stringify({ gazetteId, ...message }),
+  });
+};
+
+export const updateEGazetteChatSummary = async (gazetteId, summary) => {
+  return apiRequest("/egazette-chat/summary", {
+    method: "PATCH",
+    body: JSON.stringify({ gazetteId, summary }),
+  });
+};
+
+export const clearEGazetteChat = async (gazetteId) => {
+  return apiRequest(
+    `/egazette-chat/history?gazetteId=${encodeURIComponent(gazetteId)}`,
+    { method: "DELETE" },
+  );
+};
+
+export const sendEGazetteChatMessage = async (
+  message,
+  gazetteId,
+  onChunk,
+  onComplete,
+  onError,
+) => {
+  const token = getAuthToken();
+  if (!token) {
+    onError(new Error("No authentication token found. Please login."));
+    return;
+  }
+  try {
+    const response = await fetch(`${API_BASE_URL}/egazette-chat`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "auth-token": token,
+      },
+      body: JSON.stringify({ message, gazetteId }),
+    });
+    if (!response.ok) {
+      const payload = await response.json().catch(() => ({}));
+      throw new Error(
+        payload.error ||
+          payload.message ||
+          `Request failed with status ${response.status}`,
+      );
+    }
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+    let sources = [];
+    let fullResponse = "";
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const events = buffer.split("\n\n");
+      buffer = events.pop() || "";
+      for (const event of events) {
+        if (!event.startsWith("data: ")) continue;
+        const raw = event.slice(6);
+        if (raw === "[DONE]") continue;
+        const parsed = JSON.parse(raw);
+        if (parsed.type === "meta") sources = parsed.sources || [];
+        if (parsed.type === "content") {
+          fullResponse += parsed.content;
+          onChunk(parsed.content);
+        }
+        if (parsed.type === "error") throw new Error(parsed.error);
+      }
+    }
+    onComplete({ response: fullResponse, sources });
+  } catch (error) {
+    onError(error);
+  }
+};
+
 
 export const getDashboardData = async () => {
   try {

@@ -30,6 +30,7 @@ export function PlatformCoverage({ coverage }) {
     ["Parliament Acts", coverage.parliamentActs],
     ["State Bills", coverage.stateBills],
     ["State Acts", coverage.stateActs],
+    ["Gazette Documents", coverage.gazetteDocuments],
   ];
 
   return (
@@ -69,7 +70,7 @@ export function PlatformCoverage({ coverage }) {
             >
               <CoverageIcon className="h-4 w-4 text-[#874047]" />
               <p className="mt-4 font-serif text-3xl text-[#8f1d2c]">
-                {item.value.toLocaleString()}
+                {Number(item.value || 0).toLocaleString()}
               </p>
               <p className="mt-1 text-[11px] text-[#81796e]">
                 {item.label}
@@ -92,7 +93,7 @@ export function PlatformCoverage({ coverage }) {
               >
                 <span className="text-white/55">{label}</span>
                 <span className="font-semibold">
-                  {value.toLocaleString()}
+                  {Number(value || 0).toLocaleString()}
                 </span>
               </div>
             ))}

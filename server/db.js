@@ -84,6 +84,34 @@ const initializeSchema = async () => {
     CREATE INDEX IF NOT EXISTS act_chats_user_recent_idx
       ON act_chats (user_id, updated_at DESC);
 
+    CREATE TABLE IF NOT EXISTS egazette_chats (
+      id BIGSERIAL PRIMARY KEY,
+      gazette_id TEXT NOT NULL,
+      user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      gazette_title TEXT NOT NULL,
+      gazette_number TEXT,
+      notification_type TEXT,
+      status TEXT,
+      pdf_url TEXT,
+      source_url TEXT,
+      summary TEXT,
+      messages JSONB NOT NULL DEFAULT '[]'::jsonb,
+      metadata_json JSONB NOT NULL DEFAULT '{}'::jsonb,
+      last_message_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      last_accessed_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      is_active BOOLEAN NOT NULL DEFAULT TRUE,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      UNIQUE (user_id, gazette_id)
+    );
+
+    CREATE INDEX IF NOT EXISTS egazette_chats_user_recent_idx
+      ON egazette_chats (
+        user_id,
+        last_accessed_at DESC,
+        last_message_at DESC
+      );
+
     CREATE TABLE IF NOT EXISTS related_bills (
       bill_id TEXT PRIMARY KEY,
       bill_title TEXT NOT NULL,

@@ -9,6 +9,7 @@ import { PlatformCoverage } from "./PlatformCoverage";
 import { ProfileIdentity } from "./ProfileIdentity";
 import { ResearchActivity } from "./ResearchActivity";
 import { DataPersonalization } from "./DataPersonalization";
+import { GazetteResearch } from "./GazetteResearch";
 
 export function ProfileView() {
   const [profile, setProfile] = useState(null);
@@ -69,6 +70,10 @@ export function ProfileView() {
       <ProfileIdentity user={profile.user} />
       <ResearchActivity stats={profile.userActivityStats} />
       <PlatformCoverage coverage={profile.platformCoverageStats} />
+      <GazetteResearch
+        chats={profile.recentGazetteResearch}
+        categories={profile.favoriteGazetteCategories}
+      />
       <ContinueResearch chats={profile.recentChats} />
       <SourceHealthPanel sources={profile.sourceConnections} />
       <DataPersonalization

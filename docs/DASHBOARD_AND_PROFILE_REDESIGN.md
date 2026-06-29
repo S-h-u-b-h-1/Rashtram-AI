@@ -1,6 +1,6 @@
 # Dashboard and Profile Redesign
 
-Last reviewed: 28 June 2026
+Last reviewed: 29 June 2026
 
 ## Product purpose
 
@@ -29,8 +29,8 @@ The browser never scrapes external sites. Dashboard and profile pages only read
 structured data from the Rashtram AI backend.
 
 PDF extraction, OCR, embeddings, Gemini summaries, and Pinecone indexing remain
-on demand when a user opens a supported Bill or Act. The dashboard does not
-bulk-process documents.
+on demand when a user opens a supported Bill, Act, or eGazette record. The
+dashboard does not bulk-process documents.
 
 ## Official source list
 
@@ -104,6 +104,7 @@ Returns:
 - active Bills with safely recognized statuses;
 - latest Acts, rules, regulations, notifications, Gazettes, policies,
   circulars, ordinances, and orders;
+- a dedicated recent Gazette-notifications collection;
 - real category/ministry trends;
 - source health;
 - recent user chats;
@@ -125,7 +126,7 @@ Returns all nine source groups with:
 Returns:
 
 - safe user identity fields, with no password or token;
-- personal Bill/Act chat, summary, and message counts;
+- personal Bill/Act/eGazette chat, summary, and message counts;
 - research-history and safely inferred opened-document counts;
 - platform catalogue/PDF/resource/jurisdiction counts;
 - coverage by document type;
@@ -149,17 +150,19 @@ All three endpoints use the existing JWT middleware and parameterized SQL.
 10. Recently added documents
 
 Source names, document types, dates, and source links remain visible in the
-feed. Research links are offered only for supported Bill/Act records with PDFs.
+feed. Research links are offered for supported Bill, Act, and eGazette records
+with official PDFs.
 
 ## Profile sections
 
 1. User identity
 2. Personal research activity
 3. Platform-wide coverage
-4. Recent research history
-5. Source connections
-6. Non-destructive settings placeholders
-7. Consent-based Data & Personalization controls and opted-in research insights
+4. Recent Gazette research and favorite Gazette categories
+5. Recent research history
+6. Source connections
+7. Non-destructive settings placeholders
+8. Consent-based Data & Personalization controls and opted-in research insights
 
 Personal activity is labelled separately from shared platform coverage so
 catalogue totals cannot be mistaken for user achievements.

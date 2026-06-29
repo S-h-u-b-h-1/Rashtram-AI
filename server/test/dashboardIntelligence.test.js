@@ -159,6 +159,8 @@ test("document mapping exposes provenance without leaking source metadata", () =
     source_name: "prs-india",
     source_url: "https://prsindia.org/42",
     pdf_url: "https://www.indiacode.nic.in/42.pdf",
+    department: "Department of Legal Affairs",
+    gazette_identifier: "CG-DL-E-42",
     publication_date: "2025-08-22",
     first_seen_at: "2026-06-27T00:00:00.000Z",
     updated_at: "2026-06-27T00:00:00.000Z",
@@ -169,5 +171,7 @@ test("document mapping exposes provenance without leaking source metadata", () =
     document.sourceUrl,
     "https://www.indiacode.nic.in/handle/42",
   );
+  assert.equal(document.department, "Department of Legal Affairs");
+  assert.equal(document.gazetteNumber, "CG-DL-E-42");
   assert.equal("metadataJson" in document, false);
 });

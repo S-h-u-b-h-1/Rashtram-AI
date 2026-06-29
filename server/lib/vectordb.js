@@ -164,6 +164,15 @@ const getActIndex = () =>
     .index(process.env.PINECONE_ACT_INDEX_NAME || "rashtram-acts")
     .namespace(VECTOR_NAMESPACE);
 
+const getEGazetteIndex = () =>
+  getPinecone()
+    .index(
+      process.env.PINECONE_EGAZETTE_INDEX_NAME ||
+        process.env.PINECONE_ACT_INDEX_NAME ||
+        "rashtram-acts",
+    )
+    .namespace(VECTOR_NAMESPACE);
+
 const checkDocumentExists = async (index, idField, id) => {
   try {
     const queryResults = await index.query({
@@ -205,6 +214,18 @@ const checkActExists = async (actId) => {
   return {
     ...result,
     actTitle: result.title,
+  };
+};
+
+const checkEGazetteExists = async (gazetteId) => {
+  const result = await checkDocumentExists(
+    getEGazetteIndex(),
+    "gazetteId",
+    gazetteId,
+  );
+  return {
+    ...result,
+    gazetteTitle: result.title,
   };
 };
 
@@ -257,8 +278,8 @@ const generateEmbedding = async (text) =>
 
 const generateResponse = async (prompt, context = "") => {
   const fullPrompt = `
-You are Rashtram AI, an assistant for researching Indian parliamentary
-documents. Answer using the supplied document context.
+You are Rashtram AI, an assistant for researching Indian legislative, legal,
+and Gazette documents. Answer using the supplied document context.
 
 Document context:
 ${context}
@@ -268,6 +289,8 @@ ${prompt}
 
 Give a comprehensive, accessible answer. Clearly state when the context does
 not contain enough information. Do not invent provisions, dates, or citations.
+When the context contains labels such as [Passage 1], cite the relevant labels
+inline.
 `;
 
   return runGeneration("generateContentStream", fullPrompt);
@@ -300,6 +323,30 @@ const generateBillSummary = (billContent) =>
 const generateActSummary = (actContent) =>
   generateSummary("act", actContent);
 
+const generateEGazetteSummary = async (content) => {
+  const prompt = `
+Prepare a grounded research brief for this Indian Gazette document.
+
+Use only the supplied text. Clearly state "Not identified in the document"
+when evidence is absent. Structure the response with:
+1. Executive summary
+2. Key notifications or operative changes
+3. Affected authorities, ministries, and departments
+4. Affected legislation and related Acts
+5. Implementation, publication, commencement, or compliance dates
+6. Compliance implications and affected persons
+7. Important definitions
+8. Obligations and procedural requirements
+9. Penalties, enforcement, or consequences if mentioned
+10. Related rules, notifications, orders, or Acts identifiable from the text
+
+Gazette content:
+${content}
+`;
+  const response = await runGeneration("generateContent", prompt);
+  return responseText(response);
+};
+
 const searchContent = async (index, idField, id, query, topK = 5) => {
   const queryEmbedding = await generateEmbedding(query);
   const searchResults = await index.query({
@@ -327,6 +374,34 @@ const searchSimilarContent = (query, billId, topK = 5) =>
 const searchSimilarContentForAct = (query, actId, topK = 5) =>
   searchContent(getActIndex(), "actId", actId, query, topK);
 
+const searchSimilarContentForEGazette = (query, gazetteId, topK = 5) =>
+  searchContent(
+    getEGazetteIndex(),
+    "gazetteId",
+    gazetteId,
+    query,
+    topK,
+  );
+
+const searchIndexedEGazetteIds = async (query, topK = 100) => {
+  if (!String(query || "").trim()) return [];
+  const queryEmbedding = await generateEmbedding(query);
+  const result = await getEGazetteIndex().query({
+    vector: queryEmbedding,
+    topK,
+    filter: { gazetteId: { $exists: true } },
+    includeMetadata: true,
+  });
+  return [
+    ...new Set(
+      (result.matches || [])
+        .map((match) => match.metadata?.gazetteId)
+        .filter(Boolean)
+        .map(String),
+    ),
+  ];
+};
+
 const upsertWithRetry = async (index, vectors, retryCount = 0) => {
   const maxRetries = 3;
   try {
@@ -350,6 +425,7 @@ const storeContentInChunks = async ({
   index,
   idField,
   titleField,
+  chunkIdField = "billId",
 }) => {
   let totalStored = 0;
 
@@ -364,19 +440,21 @@ const storeContentInChunks = async ({
       "RETRIEVAL_DOCUMENT",
     );
     const vectors = batch.map((chunk, index) => ({
-        id: chunk.id,
-        values: embeddings[index],
-        metadata: {
-          [idField]: String(chunk.billId),
-          [titleField]: chunk.title,
-          content: chunk.content,
-          chunkIndex: chunk.chunkIndex,
-          totalChunks: chunk.totalChunks,
-          timestamp: new Date().toISOString(),
-          embeddingProvider: EMBEDDING_PROVIDER,
-          ...chunk.metadata,
-        },
-      }));
+      id: chunk.id,
+      values: embeddings[index],
+      metadata: {
+        [idField]: String(
+          chunk[chunkIdField] ?? chunk.billId ?? chunk.documentId,
+        ),
+        [titleField]: chunk.title,
+        content: chunk.content,
+        chunkIndex: chunk.chunkIndex,
+        totalChunks: chunk.totalChunks,
+        timestamp: new Date().toISOString(),
+        embeddingProvider: EMBEDDING_PROVIDER,
+        ...chunk.metadata,
+      },
+    }));
 
     await upsertWithRetry(index, vectors);
     totalStored += vectors.length;
@@ -399,6 +477,15 @@ const storeActContentInChunks = (chunks) =>
     index: getActIndex(),
     idField: "actId",
     titleField: "actTitle",
+  });
+
+const storeEGazetteContentInChunks = (chunks) =>
+  storeContentInChunks({
+    chunks,
+    index: getEGazetteIndex(),
+    idField: "gazetteId",
+    titleField: "gazetteTitle",
+    chunkIdField: "gazetteId",
   });
 
 const splitIntoChunks = (text, chunkSize = 1_000) => {
@@ -468,18 +555,24 @@ const findSimilarBills = async (billId, billTitle, topK = 5) => {
 module.exports = {
   checkActExists,
   checkBillExists,
+  checkEGazetteExists,
   createProbeVector,
   findSimilarBills,
   generateActSummary,
   generateBillSummary,
+  generateEGazetteSummary,
   generateEmbedding,
   generateEmbeddings,
   generateResponse,
   getActIndex,
+  getEGazetteIndex,
   getIndex,
   searchSimilarContent,
   searchSimilarContentForAct,
+  searchSimilarContentForEGazette,
+  searchIndexedEGazetteIds,
   storeActContentInChunks,
   storeBillContent,
   storeBillContentInChunks,
+  storeEGazetteContentInChunks,
 };

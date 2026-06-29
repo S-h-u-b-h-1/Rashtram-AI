@@ -1,6 +1,6 @@
 # Legislative Ingestion Architecture
 
-Last reviewed: 28 June 2026
+Last reviewed: 29 June 2026
 
 ## Purpose
 
@@ -171,6 +171,18 @@ official source
 PDF extraction, Pinecone embeddings, and Gemini summaries remain downstream,
 on-demand operations. Catalogue ingestion records links and content identity;
 it does not make an ingestion run depend on expensive AI work.
+
+The eGazette research module follows this boundary directly: Gazette catalogue
+records are searchable immediately, while an authenticated open action checks
+Pinecone and processes only the selected official PDF. See
+`docs/EGAZETTE_MODULE.md` for its APIs, chat persistence, citations, and
+security boundary.
+
+Gazette intelligence events retain document specificity. New notifications,
+rules, ordinances, and orders emit `gazette_notification`, `rule_published`,
+`ordinance_published`, and `government_order` respectively. A meaningful
+change to an existing eGazette record emits `notification_updated`; unchanged
+source refreshes emit no update.
 
 ## Commands
 

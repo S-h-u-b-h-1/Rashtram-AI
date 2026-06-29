@@ -8,6 +8,7 @@ import {
   Menu,
   PanelLeftClose,
   Scale,
+  ScrollText,
   UserRound,
   X,
 } from "lucide-react";
@@ -19,21 +20,27 @@ import { cn } from "@/lib/utils";
 const NAVIGATION = [
   {
     key: "dashboard",
-    label: "Intelligence",
+    label: "Dashboard",
     href: "/app",
     icon: LayoutDashboard,
   },
   {
     key: "bills",
-    label: "Parliament Bills",
+    label: "Bills",
     href: "/app?view=bills",
     icon: FileText,
   },
   {
     key: "acts",
-    label: "Parliament Acts",
+    label: "Acts",
     href: "/app?view=acts",
     icon: Scale,
+  },
+  {
+    key: "egazette",
+    label: "eGazette",
+    href: "/app/egazette",
+    icon: ScrollText,
   },
   {
     key: "profile",

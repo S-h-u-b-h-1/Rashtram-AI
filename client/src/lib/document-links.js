@@ -1,5 +1,13 @@
 export const buildResearchHref = (document) => {
   const documentType = document.documentType;
+  const isGazette =
+    ["egazette", "state-gazette"].includes(document.sourceName) ||
+    Boolean(document.gazetteNumber) ||
+    documentType === "gazette";
+  if (isGazette) {
+    const id = document.documentId || document.id;
+    return id ? `/app/egazette-chat/${id}` : null;
+  }
   if (!["bill", "act"].includes(documentType) || !document.pdfUrl) return null;
   const payload =
     documentType === "bill"

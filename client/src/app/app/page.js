@@ -34,6 +34,7 @@ function WorkspacePage() {
   const navigateToView = (view) => {
     if (view === "bills") router.push("/app?view=bills");
     else if (view === "acts") router.push("/app?view=acts");
+    else if (view === "egazette") router.push("/app/egazette");
     else router.push("/app");
   };
 

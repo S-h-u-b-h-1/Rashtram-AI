@@ -116,6 +116,14 @@ export function IntelligenceDashboard({ onNavigate }) {
         />
       </div>
 
+      <DocumentListSection
+        eyebrow="Official Gazette"
+        title="Recent Gazette notifications"
+        documents={data.recentGazetteNotifications || []}
+        emptyMessage="No recent Gazette notifications are currently stored."
+        onViewAll={() => onNavigate("egazette")}
+      />
+
       <ContinueResearch chats={data.recentUserChats} />
       <SourceHealthPanel sources={data.sourceHealth} />
 

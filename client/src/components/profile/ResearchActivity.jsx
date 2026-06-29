@@ -5,6 +5,7 @@ import {
   History,
   MessageSquareText,
   ScrollText,
+  Newspaper,
 } from "lucide-react";
 
 export function ResearchActivity({ stats }) {
@@ -18,6 +19,16 @@ export function ResearchActivity({ stats }) {
       label: "Act conversations",
       value: stats.actChats,
       icon: BookOpenText,
+    },
+    {
+      label: "Gazette conversations",
+      value: stats.gazetteChats,
+      icon: Newspaper,
+    },
+    {
+      label: "Gazette documents opened",
+      value: stats.gazetteDocumentsOpened,
+      icon: FolderOpen,
     },
     {
       label: "Research history",
@@ -55,7 +66,7 @@ export function ResearchActivity({ stats }) {
         </p>
       </div>
 
-      <div className="mt-5 grid grid-cols-2 gap-3 lg:grid-cols-3 xl:grid-cols-6">
+      <div className="mt-5 grid grid-cols-2 gap-3 lg:grid-cols-4 xl:grid-cols-8">
         {items.map((item) => {
           const ActivityIcon = item.icon;
           return (
@@ -65,7 +76,7 @@ export function ResearchActivity({ stats }) {
             >
               <ActivityIcon className="h-4 w-4 text-[#874047]" />
               <p className="mt-4 font-serif text-3xl text-[#8f1d2c]">
-                {item.value.toLocaleString()}
+                {Number(item.value || 0).toLocaleString()}
               </p>
               <p className="mt-1 text-[11px] text-[#81796e]">
                 {item.label}
