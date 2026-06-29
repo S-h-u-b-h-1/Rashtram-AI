@@ -15,6 +15,8 @@ const lokSabhaConnector = createParliamentPortalConnector({
       identityCells: [0, 2, 3],
       ministryCell: 5,
       accessMethod: "Digital Sansad server-rendered listing",
+      blockedWhenEmpty: true,
+      blockedReason: "The Lok Sabha questions page requires client-side JavaScript rendering (Next.js hydration) and cannot be crawled statically.",
     },
     {
       collection: "debates",
@@ -24,6 +26,8 @@ const lokSabhaConnector = createParliamentPortalConnector({
       pagination: "offset",
       pageSize: 20,
       accessMethod: "Parliament Digital Library HTML catalogue",
+      blockedWhenEmpty: true,
+      blockedReason: "The Parliament Digital Library debates listing is unreachable due to connection timeouts.",
     },
     {
       collection: "bulletin-i",
@@ -33,6 +37,8 @@ const lokSabhaConnector = createParliamentPortalConnector({
       pagination: "offset",
       pageSize: 20,
       accessMethod: "Parliament Digital Library HTML catalogue",
+      blockedWhenEmpty: true,
+      blockedReason: "The Parliament Digital Library bulletin-i listing is unreachable due to connection timeouts.",
     },
     {
       collection: "bulletin-ii",
@@ -42,6 +48,8 @@ const lokSabhaConnector = createParliamentPortalConnector({
       pagination: "offset",
       pageSize: 20,
       accessMethod: "Parliament Digital Library HTML catalogue",
+      blockedWhenEmpty: true,
+      blockedReason: "The Parliament Digital Library bulletin-ii listing is unreachable due to connection timeouts.",
     },
     {
       collection: "business",

@@ -12,9 +12,9 @@ const config = {
       colors: {
         brand: "hsl(var(--brand))",
         "brand-foreground": "hsl(var(--brand-foreground))",
-        primary: '#B20D38',
-        'primary-dark': '#9A0B31',
-        'primary-light': '#F8D0DA',
+        primary: '#9b2638',
+        'primary-dark': '#6f1420',
+        'primary-light': '#e1c4c6',
       },
       backgroundImage: {
         'gradient-radial': 'radial-gradient(ellipse at center, var(--tw-gradient-stops))',

@@ -184,7 +184,7 @@ export default function BillsSidebarUI() {
 
 
   const BillSkeleton = () => (
-    <div className="animate-pulse rounded-2xl border border-[#c30000]/8 bg-white p-4">
+    <div className="animate-pulse rounded-2xl border border-[#8f1d2c]/8 bg-white p-4">
       <div className="flex items-start justify-between gap-2 mb-2">
         <div className="flex-1 space-y-2">
           <div className="h-4 bg-slate-200 rounded w-3/4"></div>
@@ -206,16 +206,16 @@ export default function BillsSidebarUI() {
   const filteredBills = bills;
 
   return (
-    <div className="surface-card flex h-full min-h-[620px] flex-col overflow-hidden bg-[#fffdf8]">
+    <div className="surface-card flex h-full min-h-[620px] flex-col overflow-hidden bg-[#f6f2eb]">
       {}
-      <div className="border-b border-[#c30000]/8 bg-[#fbf7ef] p-5 sm:p-6">
+      <div className="border-b border-[#8f1d2c]/8 bg-[#f7f2eb] p-5 sm:p-6">
         <div className="mb-5 flex items-center justify-between">
           <div className="flex items-center space-x-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#c30000] shadow-lg">
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#8f1d2c] shadow-lg">
               <FileText size={16} className="text-white" />
             </div>
             <div>
-              <h3 className="font-serif text-xl text-[#c30000]">
+              <h3 className="font-serif text-xl text-[#8f1d2c]">
                 Parliament bills
               </h3>
               <p className="text-xs text-[#817a70]">
@@ -239,14 +239,14 @@ export default function BillsSidebarUI() {
             placeholder="Search bills by title…"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="h-12 w-full rounded-xl border border-[#c30000]/10 bg-white pl-11 pr-4 text-sm text-[#c30000] placeholder:text-[#9a9387] focus:border-[#d97745] focus:outline-none focus:ring-4 focus:ring-[#d97745]/10"
+            className="h-12 w-full rounded-xl border border-[#8f1d2c]/10 bg-white pl-11 pr-4 text-sm text-[#8f1d2c] placeholder:text-[#9a9387] focus:border-[#a85a52] focus:outline-none focus:ring-4 focus:ring-[#a85a52]/10"
           />
         </div>
 
         {}
         <button
           onClick={() => setShowFilters(!showFilters)}
-          className="flex w-full items-center justify-between rounded-xl border border-[#c30000]/8 bg-[#f0e9de] px-4 py-3 text-sm transition hover:bg-[#e9e0d2]"
+          className="flex w-full items-center justify-between rounded-xl border border-[#8f1d2c]/8 bg-[#f0e9de] px-4 py-3 text-sm transition hover:bg-[#e9e0d2]"
         >
           <div className="flex items-center space-x-2 text-[#514d46]">
             <Filter size={14} />
@@ -264,7 +264,7 @@ export default function BillsSidebarUI() {
 
         {}
         {showFilters && (
-          <div className="mt-2 rounded-xl border border-[#c30000]/9 bg-white p-3 shadow-sm">
+          <div className="mt-2 rounded-xl border border-[#8f1d2c]/9 bg-white p-3 shadow-sm">
             <div className="flex items-center justify-between mb-2">
               <span className="text-xs font-semibold text-slate-600 uppercase tracking-wide">
                 Filter Status
@@ -272,7 +272,7 @@ export default function BillsSidebarUI() {
               {selectedStatus !== "All" && (
                 <button
                   onClick={() => setSelectedStatus("All")}
-                  className="text-xs text-[#B20F38] hover:text-[#8A0C2D] font-medium"
+                  className="text-xs text-[#9b2638] hover:text-[#68131f] font-medium"
                 >
                   Clear
                 </button>
@@ -286,7 +286,7 @@ export default function BillsSidebarUI() {
                 }}
                 className={`w-full text-left px-3 py-2 rounded-md text-sm transition-colors ${
                   selectedStatus === "All"
-                    ? "bg-[#c30000] text-white"
+                    ? "bg-[#8f1d2c] text-white"
                     : "hover:bg-slate-50 text-slate-700"
                 }`}
               >
@@ -301,7 +301,7 @@ export default function BillsSidebarUI() {
                   }}
                   className={`w-full text-left px-3 py-2 rounded-md text-sm transition-colors ${
                     selectedStatus === status
-                      ? "bg-[#c30000] text-white"
+                      ? "bg-[#8f1d2c] text-white"
                       : "hover:bg-slate-50 text-slate-700"
                   }`}
                 >
@@ -331,7 +331,7 @@ export default function BillsSidebarUI() {
             <p className="text-slate-500 text-xs mb-3">{error}</p>
             <button
               onClick={() => window.location.reload()}
-              className="px-4 py-2 bg-[#B20F38] text-white text-sm rounded-lg hover:bg-[#8A0C2D] transition-colors"
+              className="px-4 py-2 bg-[#9b2638] text-white text-sm rounded-lg hover:bg-[#68131f] transition-colors"
             >
               Retry
             </button>
@@ -382,16 +382,16 @@ export default function BillsSidebarUI() {
                       });
                       window.open(`/app/bill-chat?bill=${encodeURIComponent(JSON.stringify(billData))}`, '_blank');
                     }}
-                    className="w-full cursor-pointer rounded-2xl border border-[#c30000]/9 bg-white p-4 text-left transition-all hover:-translate-y-0.5 hover:border-[#ad4a36]/30 hover:shadow-[0_14px_35px_rgba(195, 0, 0,0.08)]"
+                    className="w-full cursor-pointer rounded-2xl border border-[#8f1d2c]/9 bg-white p-4 text-left transition-all hover:-translate-y-0.5 hover:border-[#8c4548]/30 hover:shadow-[0_14px_35px_rgba(143, 29, 44,0.08)]"
                     aria-label={`Open research chat for ${bill.title}`}
                   >
                     <div className="flex items-start justify-between gap-2 mb-2">
-                      <h4 className="flex-1 text-sm font-semibold leading-5 text-[#29312d] transition-colors group-hover:text-[#9f4937]">
+                      <h4 className="flex-1 text-sm font-semibold leading-5 text-[#29312d] transition-colors group-hover:text-[#874047]">
                         {bill.title}
                       </h4>
                       <ArrowRight
                         size={14}
-                        className="mt-0.5 shrink-0 text-[#9f4937] transition-all group-hover:translate-x-0.5"
+                        className="mt-0.5 shrink-0 text-[#874047] transition-all group-hover:translate-x-0.5"
                       />
                     </div>
 
@@ -442,7 +442,7 @@ export default function BillsSidebarUI() {
       </div>
 
       {}
-      <div className="border-t border-[#c30000]/8 bg-[#fbf7ef] p-4">
+      <div className="border-t border-[#8f1d2c]/8 bg-[#f7f2eb] p-4">
         <div className="flex items-center justify-between text-xs text-[#777065]">
           <span>
             {filteredBills.length}/{totalBills} bill{filteredBills.length !== 1 ? "s" : ""} loaded

@@ -11,7 +11,7 @@ const footerLinks = [
 
 export default function Footer() {
   return (
-    <footer className="bg-[#c30000] text-white">
+    <footer className="bg-[#8f1d2c] text-white">
       <div className="mx-auto max-w-[1240px] px-5 py-12 sm:px-8 sm:py-16">
         <div className="grid gap-10 border-b border-white/10 pb-12 md:grid-cols-[1.3fr_0.7fr]">
           <div>

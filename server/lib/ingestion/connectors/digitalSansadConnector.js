@@ -15,6 +15,8 @@ const digitalSansadConnector = createParliamentPortalConnector({
       pagination: "offset",
       pageSize: 20,
       accessMethod: "Parliament Digital Library HTML catalogue",
+      blockedWhenEmpty: true,
+      blockedReason: "The Digital Sansad e-Parliament Library is unreachable due to connection timeouts or access controls.",
     },
     {
       collection: "lok-sabha-questions",
@@ -22,8 +24,9 @@ const digitalSansadConnector = createParliamentPortalConnector({
       documentType: "question",
       titleCell: 1,
       identityCells: [0, 2, 3],
-      ministryCell: 5,
       accessMethod: "Digital Sansad server-rendered listing",
+      blockedWhenEmpty: true,
+      blockedReason: "The Lok Sabha questions page requires client-side JavaScript rendering (Next.js hydration) and cannot be crawled statically.",
     },
     {
       collection: "rajya-sabha-questions",
@@ -31,8 +34,9 @@ const digitalSansadConnector = createParliamentPortalConnector({
       documentType: "question",
       titleCell: 1,
       identityCells: [0, 2, 3],
-      ministryCell: 5,
       accessMethod: "Digital Sansad server-rendered listing",
+      blockedWhenEmpty: true,
+      blockedReason: "The Rajya Sabha questions page requires client-side JavaScript rendering and has malformed HTTP response headers.",
     },
   ],
 });

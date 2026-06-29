@@ -32,14 +32,14 @@ export function DashboardHero({ data }) {
   ];
 
   return (
-    <section className="relative overflow-hidden rounded-[1.8rem] bg-[#c30000] p-6 text-white sm:p-8 lg:p-10">
+    <section className="relative overflow-hidden rounded-[1.8rem] bg-[#8f1d2c] p-6 text-white sm:p-8 lg:p-10">
       <div className="policy-grid absolute inset-0 opacity-20" />
-      <div className="absolute -right-20 -top-24 h-72 w-72 rounded-full bg-[#d97745]/18 blur-3xl" />
+      <div className="absolute -right-20 -top-24 h-72 w-72 rounded-full bg-[#a85a52]/18 blur-3xl" />
       <div className="relative">
         <div className="flex flex-col gap-6 xl:flex-row xl:items-start xl:justify-between">
           <div className="max-w-3xl">
             <div className="flex flex-wrap items-center gap-2 text-[11px] text-white/55">
-              <span className="rounded-full border border-white/12 bg-white/6 px-3 py-1.5 font-semibold uppercase tracking-[0.14em] text-[#efb36f]">
+              <span className="rounded-full border border-white/12 bg-white/6 px-3 py-1.5 font-semibold uppercase tracking-[0.14em] text-[#c1a06f]">
                 Parliament Intelligence Brief
               </span>
               <span>{formatDate(data.currentDate)}</span>
@@ -50,14 +50,14 @@ export function DashboardHero({ data }) {
             <p className="mt-4 max-w-2xl text-sm leading-6 text-white/62 sm:text-base">
               {data.briefSummary}
             </p>
-            <p className="mt-4 border-l-2 border-[#efb36f]/70 pl-4 text-sm leading-6 text-white/82">
+            <p className="mt-4 border-l-2 border-[#c1a06f]/70 pl-4 text-sm leading-6 text-white/82">
               {data.whatChangedRecently}
             </p>
           </div>
 
           <div className="min-w-[230px] rounded-2xl border border-white/10 bg-white/[0.055] p-4">
             <div className="flex items-center gap-2 text-xs font-semibold text-white/82">
-              <Clock3 className="h-4 w-4 text-[#efb36f]" />
+              <Clock3 className="h-4 w-4 text-[#c1a06f]" />
               Source freshness
             </div>
             <p className="mt-3 font-serif text-2xl">
@@ -77,7 +77,7 @@ export function DashboardHero({ data }) {
                 key={metric.label}
                 className="rounded-2xl border border-white/9 bg-white/[0.045] p-4"
               >
-                <MetricIcon className="h-4 w-4 text-[#efb36f]" />
+                <MetricIcon className="h-4 w-4 text-[#c1a06f]" />
                 <p className="mt-4 font-serif text-3xl">{metric.value}</p>
                 <p className="mt-1 text-[11px] text-white/42">
                   {metric.label}

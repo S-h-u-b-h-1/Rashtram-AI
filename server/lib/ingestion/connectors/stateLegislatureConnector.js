@@ -51,6 +51,8 @@ const stateLegislatureConnector = {
           authority: `${label} Legislature`,
           jurisdictionLevel: "state",
           jurisdiction: label,
+          pdfLinkPattern:
+            /\b(bill|act|question|answer|debate|bulletin|committee|report|proceeding|business|rule|notification|ordinance|amendment|session|circular|budget)\b/i,
           blockedWhenEmpty: true,
           blockedReason:
             "The official state portal was reachable but exposed no crawlable legislative PDF links on its landing page.",

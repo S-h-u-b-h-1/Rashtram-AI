@@ -23,11 +23,11 @@ export const Cta4 = ({
         <div className="flex justify-center">
           <div className="w-full">
             <div
-              className="flex flex-col items-start justify-between gap-8 rounded-lg bg-[#fcf2f2] px-6 py-10 md:flex-row lg:px-20 lg:py-16">
+              className="flex flex-col items-start justify-between gap-8 rounded-lg bg-[#f1e8e6] px-6 py-10 md:flex-row lg:px-20 lg:py-16">
               <div className="md:w-1/2">
                 <h4 className="mb-1 text-2xl font-bold md:text-3xl">{title}</h4>
                 <p className="text-muted-foreground">{description}</p>
-                <Button className="mt-6 bg-[#b20d38] text-white hover:bg-[#ac0c37]" asChild>
+                <Button className="mt-6 bg-[#9b2638] text-white hover:bg-[#7a1926]" asChild>
                   <a href={buttonUrl}>
                     {buttonText} <ArrowRight className="size-4" />
                   </a>

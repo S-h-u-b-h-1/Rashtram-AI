@@ -2,6 +2,7 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 
 const {
+  displayStatusFor,
   probeConnector,
   validateCollectionShape,
 } = require("../lib/ingestion/core/healthCheck");
@@ -9,6 +10,9 @@ const {
   downloadPdfForRecord,
   validatePdfStorageOptions,
 } = require("../lib/ingestion/core/pdfDownload");
+const {
+  runIngestion,
+} = require("../lib/ingestion/core/ingestionRunner");
 
 test("connector health accepts the universal record shape", async () => {
   const connector = {
@@ -35,8 +39,28 @@ test("connector health accepts the universal record shape", async () => {
     { fetcher: {}, history: {} },
   );
   assert.equal(report.status, "connected");
+  assert.equal(report.displayStatus, "Connected");
+  assert.equal(report.parserStatus, "Valid");
+  assert.equal(report.pdfDiscoveryStatus, "Discovered");
   assert.equal(report.sampleRecordsDiscovered, 1);
   assert.equal(report.samplePdfLinksDiscovered, 1);
+});
+
+test("health display status reports freshness without hiding live failures", () => {
+  assert.equal(
+    displayStatusFor("connected", {
+      lastSuccessfulAt: new Date(Date.now() - 60_000).toISOString(),
+    }),
+    "Fresh",
+  );
+  assert.equal(
+    displayStatusFor("connected", {
+      lastSuccessfulAt: new Date(Date.now() - 8 * 86_400_000).toISOString(),
+    }),
+    "Stale",
+  );
+  assert.equal(displayStatusFor("blocked", {}), "Blocked");
+  assert.equal(displayStatusFor("parser changed", {}), "Degraded");
 });
 
 test("connector health identifies response-shape changes", async () => {
@@ -122,6 +146,32 @@ test("connector health reports interactive official catalogues as blocked", asyn
   );
   assert.equal(report.status, "blocked");
   assert.match(report.error, /Interactive ASP.NET/);
+});
+
+test("blocked diagnostics are retained in ingestion-run summaries", async () => {
+  const summary = await runIngestion(
+    {
+      name: "blocked-source",
+      defaultCollection: "official-directory",
+      async collect() {
+        return {
+          records: [],
+          snapshots: [],
+          errors: [],
+          diagnostics: [
+            {
+              type: "blocked",
+              message: "Interactive source exposed no stable links.",
+            },
+          ],
+        };
+      },
+    },
+    { dryRun: true, fetcher: {} },
+  );
+  assert.equal(summary.status, "completed_with_errors");
+  assert.equal(summary.errors[0].type, "blocked");
+  assert.match(summary.errors[0].message, /no stable links/);
 });
 
 test("controlled PDF download verifies bytes and defaults to URL-only", async () => {

@@ -40,7 +40,7 @@ export default function SettingsPage() {
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <Loader2 className="w-8 h-8 text-[#B20F38] animate-spin" />
+        <Loader2 className="w-8 h-8 text-[#9b2638] animate-spin" />
       </div>
     );
   }
@@ -56,7 +56,7 @@ export default function SettingsPage() {
               </h3>
               <div className="space-y-6 max-w-2xl">
                 <div className="flex items-center gap-6 p-6 bg-white border border-gray-100 rounded-2xl shadow-sm">
-                  <div className="w-20 h-20 rounded-full bg-[#B20F38] flex items-center justify-center text-white text-2xl font-bold shadow-lg shadow-red-900/20">
+                  <div className="flex h-20 w-20 items-center justify-center rounded-full bg-[#9b2638] text-2xl font-bold text-white shadow-lg shadow-[#541018]/15">
                     {userData?.name ? userData.name.substring(0, 2).toUpperCase() : "U"}
                   </div>
                   <div>
@@ -106,7 +106,7 @@ export default function SettingsPage() {
                   <label className="block text-sm font-medium text-gray-700 mb-2 ml-1">
                     Theme
                   </label>
-                  <select className="w-full px-4 py-3 bg-white border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#B20F38]/20 focus:border-[#B20F38] transition-all">
+                  <select className="w-full px-4 py-3 bg-white border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#9b2638]/20 focus:border-[#9b2638] transition-all">
                     <option value="light">Light Mode</option>
                     <option value="dark">Dark Mode</option>
                     <option value="system">System Default</option>
@@ -123,12 +123,12 @@ export default function SettingsPage() {
             <div>
               <h3 className="text-2xl font-bold text-gray-900 mb-6">Security</h3>
               <div className="space-y-4 max-w-2xl">
-                <div className="p-6 border border-gray-200 rounded-2xl hover:border-[#B20F38]/30 transition-colors group bg-white">
-                  <h4 className="font-semibold text-gray-900 mb-2 group-hover:text-[#B20F38] transition-colors">Change Password</h4>
+                <div className="p-6 border border-gray-200 rounded-2xl hover:border-[#9b2638]/30 transition-colors group bg-white">
+                  <h4 className="font-semibold text-gray-900 mb-2 group-hover:text-[#9b2638] transition-colors">Change Password</h4>
                   <p className="text-sm text-gray-500 mb-4">
                     Update your password to keep your account secure
                   </p>
-                  <button className="px-6 py-2.5 bg-gray-900 text-white rounded-xl hover:bg-[#B20F38] transition-all duration-300 font-medium text-sm shadow-lg shadow-gray-900/10 hover:shadow-red-900/20">
+                  <button className="rounded-xl bg-gray-900 px-6 py-2.5 text-sm font-medium text-white shadow-lg shadow-gray-900/10 transition-all duration-300 hover:bg-[#9b2638] hover:shadow-[#541018]/15">
                     Update Password
                   </button>
                 </div>
@@ -151,9 +151,9 @@ export default function SettingsPage() {
                   <a
                     key={i}
                     href="#"
-                    className="block p-6 border border-gray-200 rounded-2xl hover:border-[#B20F38] hover:shadow-lg hover:shadow-red-900/5 transition-all duration-300 bg-white group"
+                    className="group block rounded-2xl border border-gray-200 bg-white p-6 transition-all duration-300 hover:border-[#9b2638] hover:shadow-lg hover:shadow-[#541018]/5"
                   >
-                    <h4 className="font-semibold text-gray-900 mb-1 group-hover:text-[#B20F38] transition-colors">{item.title}</h4>
+                    <h4 className="font-semibold text-gray-900 mb-1 group-hover:text-[#9b2638] transition-colors">{item.title}</h4>
                     <p className="text-sm text-gray-500">{item.desc}</p>
                   </a>
                 ))}
@@ -185,8 +185,8 @@ export default function SettingsPage() {
                     onClick={() => setActiveTab(item.id)}
                     className={`w-full flex items-center gap-4 px-6 py-4 rounded-2xl transition-all duration-300 font-medium ${
                       isActive
-                        ? "bg-[#B20F38] text-white shadow-xl shadow-red-900/20 scale-[1.02]"
-                        : "text-gray-600 hover:bg-white hover:shadow-md hover:text-[#B20F38] bg-transparent"
+                        ? "scale-[1.02] bg-[#9b2638] text-white shadow-xl shadow-[#541018]/15"
+                        : "text-gray-600 hover:bg-white hover:shadow-md hover:text-[#9b2638] bg-transparent"
                     }`}
                   >
                     <Icon size={22} strokeWidth={isActive ? 2.5 : 2} />

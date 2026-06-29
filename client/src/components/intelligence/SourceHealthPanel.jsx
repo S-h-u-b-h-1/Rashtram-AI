@@ -18,11 +18,11 @@ const STATUS_STYLES = {
   },
   Error: {
     icon: CircleAlert,
-    className: "bg-[#f5dfda] text-[#8d372b]",
+    className: "bg-[#e7d8d5] text-[#7f3038]",
   },
   Blocked: {
     icon: CircleAlert,
-    className: "bg-[#f5dfda] text-[#8d372b]",
+    className: "bg-[#e7d8d5] text-[#7f3038]",
   },
   Degraded: {
     icon: CircleAlert,
@@ -43,10 +43,10 @@ export function SourceHealthPanel({ sources }) {
   return (
     <section className="surface-card p-5 sm:p-6">
       <div>
-        <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#9e4937]">
+        <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#874047]">
           Provenance monitor
         </p>
-        <h2 className="mt-2 font-serif text-2xl text-[#c30000]">
+        <h2 className="mt-2 font-serif text-2xl text-[#8f1d2c]">
           Verified Public Legislative Sources
         </h2>
         <p className="mt-2 max-w-2xl text-sm leading-6 text-[#777066]">
@@ -63,7 +63,7 @@ export function SourceHealthPanel({ sources }) {
           return (
             <article
               key={source.key}
-              className="rounded-2xl border border-[#c30000]/9 bg-[#fffdf8] p-4"
+              className="rounded-2xl border border-[#8f1d2c]/9 bg-[#f6f2eb] p-4"
             >
               <div className="flex items-start justify-between gap-3">
                 <div>

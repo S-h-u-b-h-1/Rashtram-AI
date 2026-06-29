@@ -470,7 +470,7 @@ const upsertRelationships = async (client, documentId, record) => {
 
 const eventTypeForRecord = (record) => {
   if (
-    record.sourceName === "egazette" &&
+    ["egazette", "state-gazette"].includes(record.sourceName) &&
     ["gazette", "notification"].includes(record.documentType)
   ) {
     return "gazette_notification";

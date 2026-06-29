@@ -19,11 +19,11 @@ import {
 
 const SolutionCard = ({ icon: Icon, title, description, impact, index }) => (
   <div className="group relative bg-white p-8 hover:shadow-2xl transition-all duration-500 hover:-translate-y-2 border border-gray-100 overflow-hidden">
-    <div className="absolute inset-0 bg-gradient-to-br from-red-50/50 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
+    <div className="absolute inset-0 bg-gradient-to-br from-[#eee0dc]/50 to-transparent opacity-0 transition-opacity duration-500 group-hover:opacity-100"></div>
 
     <div className="relative z-10 flex flex-col h-full">
       <div className="flex items-start justify-between mb-6">
-        <div className="w-14 h-14 bg-gradient-to-br from-[#B20F38] to-[#FF4D6D] flex items-center justify-center shadow-lg shadow-red-500/20 text-white group-hover:scale-110 transition-transform duration-500">
+        <div className="flex h-14 w-14 items-center justify-center bg-gradient-to-br from-[#9b2638] to-[#a66b72] text-white shadow-lg shadow-[#8f1d2c]/15 transition-transform duration-500 group-hover:scale-110">
           <Icon className="w-7 h-7" />
         </div>
         <span className="text-gray-300 font-black text-2xl opacity-20 group-hover:opacity-10 transition-opacity">
@@ -31,7 +31,7 @@ const SolutionCard = ({ icon: Icon, title, description, impact, index }) => (
         </span>
       </div>
 
-      <h3 className="text-2xl font-bold text-gray-900 mb-4 group-hover:text-[#B20F38] transition-colors">
+      <h3 className="text-2xl font-bold text-gray-900 mb-4 group-hover:text-[#9b2638] transition-colors">
         {title}
       </h3>
       <p className="text-gray-600 leading-relaxed mb-8 flex-grow">
@@ -39,7 +39,7 @@ const SolutionCard = ({ icon: Icon, title, description, impact, index }) => (
       </p>
 
       <div className="bg-gray-50 p-4 border border-gray-100 group-hover:bg-white group-hover:shadow-sm transition-all">
-        <div className="flex items-center text-[#B20F38] font-bold text-sm mb-1">
+        <div className="flex items-center text-[#9b2638] font-bold text-sm mb-1">
           <TrendingUp className="w-4 h-4 mr-2" />
           PROJECTED IMPACT
         </div>
@@ -57,7 +57,7 @@ const ImpactStat = ({ number, label, suffix }) => (
       <span className="text-5xl lg:text-6xl font-black tracking-tighter">
         {number}
       </span>
-      <span className="text-2xl font-bold text-[#B20F38] ml-1">{suffix}</span>
+      <span className="text-2xl font-bold text-[#9b2638] ml-1">{suffix}</span>
     </div>
     <div className="text-sm font-bold text-gray-500 uppercase tracking-widest text-center">
       {label}
@@ -67,9 +67,9 @@ const ImpactStat = ({ number, label, suffix }) => (
 
 const ProcessStep = ({ number, title, description }) => (
   <div className="relative pl-12 pb-12 last:pb-0 border-l-2 border-dashed border-gray-200 last:border-0 md:pl-0 md:pb-0 md:border-l-0 md:border-t-2 md:pt-12 md:flex-1">
-    <div className="absolute left-[-9px] top-0 w-4 h-4 rounded-full bg-[#B20F38] ring-4 ring-white md:top-[-9px] md:left-0"></div>
+    <div className="absolute left-[-9px] top-0 w-4 h-4 rounded-full bg-[#9b2638] ring-4 ring-white md:top-[-9px] md:left-0"></div>
 
-    <div className="text-[#B20F38] font-black text-6xl opacity-10 leading-none absolute top-0 right-10 md:top-6 md:left-4 select-none">
+    <div className="text-[#9b2638] font-black text-6xl opacity-10 leading-none absolute top-0 right-10 md:top-6 md:left-4 select-none">
       {number}
     </div>
 
@@ -129,9 +129,9 @@ function SolutionPage() {
   ];
 
   return (
-    <div className="min-h-screen bg-[#FDFDFD] font-sans selection:bg-[#B20F38] selection:text-white overflow-x-hidden">
+    <div className="min-h-screen bg-[#f6f2eb] font-sans selection:bg-[#9b2638] selection:text-white overflow-x-hidden">
       <div className="fixed inset-0 pointer-events-none z-0">
-        <div className="absolute top-[-10%] right-[-5%] w-[600px] h-[600px] bg-red-50/60 rounded-full blur-[100px]"></div>
+        <div className="absolute right-[-5%] top-[-10%] h-[600px] w-[600px] rounded-full bg-[#eee0dc]/60 blur-[100px]"></div>
         <div className="absolute bottom-[10%] left-[-10%] w-[500px] h-[500px] bg-gray-100/60 rounded-full blur-[80px]"></div>
       </div>
 
@@ -140,7 +140,7 @@ function SolutionPage() {
           <div className="max-w-7xl mx-auto text-center">
             <h1 className="text-6xl md:text-8xl font-black text-gray-900 mb-8 tracking-tighter leading-[0.9] animate-fade-in-up delay-100">
               Solve for <br />
-              <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#B20F38] to-[#FF8FA3]">
+              <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#9b2638] to-[#d2a1a6]">
                 Tomorrow.
               </span>
             </h1>
@@ -174,7 +174,7 @@ function SolutionPage() {
               </div>
               <Link
                 href="/signup"
-                className="group flex items-center font-bold text-[#B20F38] text-lg hover:underline decoration-2 underline-offset-4"
+                className="group flex items-center font-bold text-[#9b2638] text-lg hover:underline decoration-2 underline-offset-4"
               >
                 View all models{" "}
                 <ArrowRight className="ml-2 w-5 h-5 group-hover:translate-x-1 transition-transform" />
@@ -219,7 +219,7 @@ function SolutionPage() {
                 description="Refining recommendations through feedback loops to balance diverse needs and maximize welfare."
               />
               <div className="md:pt-12">
-                <div className="w-14 h-14 bg-[#B20F38] flex items-center justify-center text-white shadow-xl shadow-red-500/30 animate-pulse">
+                <div className="flex h-14 w-14 items-center justify-center bg-[#9b2638] text-white shadow-xl shadow-[#8f1d2c]/20">
                   <Check size={28} strokeWidth={3} />
                 </div>
               </div>
@@ -231,13 +231,13 @@ function SolutionPage() {
           <div className="max-w-7xl mx-auto">
             <div className="relative rounded-2xl bg-gray-900 overflow-hidden shadow-2xl p-12 md:p-24 text-center">
               <div className="absolute top-0 left-0 w-full h-full bg-[url('https://www.transparenttextures.com/patterns/stardust.png')] opacity-20"></div>
-              <div className="absolute -top-24 -right-24 w-96 h-96 bg-[#B20F38] rounded-full blur-[100px] opacity-40"></div>
+              <div className="absolute -top-24 -right-24 w-96 h-96 bg-[#9b2638] rounded-full blur-[100px] opacity-40"></div>
               <div className="absolute -bottom-24 -left-24 w-96 h-96 bg-blue-600 rounded-full blur-[100px] opacity-20"></div>
 
               <div className="relative z-10">
                 <h2 className="text-4xl md:text-6xl font-black text-white mb-8 tracking-tight">
                   Ready to shape <br />
-                  <span className="text-transparent bg-clip-text bg-gradient-to-r from-red-400 to-orange-400">
+                  <span className="bg-gradient-to-r from-[#ba6570] to-[#b68a71] bg-clip-text text-transparent">
                     the future?
                   </span>
                 </h2>
@@ -248,7 +248,7 @@ function SolutionPage() {
                 <div className="flex flex-col sm:flex-row gap-5 justify-center">
                   <Link
                     href="/signup"
-                    className="px-12 py-5 bg-[#B20F38] text-white font-bold text-lg rounded-lg hover:bg-[#d61a46] transition-all transform hover:scale-105 shadow-xl shadow-red-900/50"
+                    className="transform rounded-lg bg-[#9b2638] px-12 py-5 text-lg font-bold text-white shadow-xl shadow-[#541018]/25 transition-all hover:scale-105 hover:bg-[#7a1926]"
                   >
                     Get Started Now
                   </Link>

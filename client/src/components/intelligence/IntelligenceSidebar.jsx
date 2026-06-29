@@ -10,15 +10,15 @@ export function IntelligenceSidebar({ trendingCategories }) {
     <div className="space-y-5">
       <section className="surface-card p-5 sm:p-6">
         <div className="flex items-center gap-2">
-          <CalendarDays className="h-4 w-4 text-[#9f4937]" />
-          <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#9e4937]">
+          <CalendarDays className="h-4 w-4 text-[#874047]" />
+          <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#874047]">
             Parliamentary calendar
           </p>
         </div>
-        <h2 className="mt-3 font-serif text-2xl text-[#c30000]">
+        <h2 className="mt-3 font-serif text-2xl text-[#8f1d2c]">
           Business & committee agenda
         </h2>
-        <div className="mt-5 rounded-2xl border border-dashed border-[#c30000]/14 bg-[#f7f2e8] p-5">
+        <div className="mt-5 rounded-2xl border border-dashed border-[#8f1d2c]/14 bg-[#f1ece3] p-5">
           <p className="text-sm font-semibold text-[#3c443f]">
             Calendar feed planned
           </p>
@@ -31,8 +31,8 @@ export function IntelligenceSidebar({ trendingCategories }) {
 
       <section className="surface-card p-5 sm:p-6">
         <div className="flex items-center gap-2">
-          <Tags className="h-4 w-4 text-[#9f4937]" />
-          <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#9e4937]">
+          <Tags className="h-4 w-4 text-[#874047]" />
+          <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#874047]">
             Trending policy areas
           </p>
         </div>
@@ -41,10 +41,10 @@ export function IntelligenceSidebar({ trendingCategories }) {
             trendingCategories.map((category) => (
               <span
                 key={category.label}
-                className="inline-flex items-center gap-2 rounded-full border border-[#c30000]/10 bg-[#fffdf8] px-3 py-2 text-xs font-medium text-[#514d46]"
+                className="inline-flex items-center gap-2 rounded-full border border-[#8f1d2c]/10 bg-[#f6f2eb] px-3 py-2 text-xs font-medium text-[#514d46]"
               >
                 {category.label}
-                <span className="text-[10px] text-[#9f4937]">
+                <span className="text-[10px] text-[#874047]">
                   {category.documentCount}
                 </span>
               </span>
@@ -57,9 +57,9 @@ export function IntelligenceSidebar({ trendingCategories }) {
         </div>
       </section>
 
-      <section className="overflow-hidden rounded-[1.4rem] border border-[#c30000]/10 bg-[#e9dfd0] p-5 sm:p-6">
-        <BellRing className="h-5 w-5 text-[#9f4937]" />
-        <h2 className="mt-4 font-serif text-2xl text-[#c30000]">
+      <section className="overflow-hidden rounded-[1.4rem] border border-[#8f1d2c]/10 bg-[#e9dfd0] p-5 sm:p-6">
+        <BellRing className="h-5 w-5 text-[#874047]" />
+        <h2 className="mt-4 font-serif text-2xl text-[#8f1d2c]">
           Build your watchlist
         </h2>
         <p className="mt-2 text-sm leading-6 text-[#6f685f]">

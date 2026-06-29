@@ -11,7 +11,7 @@ export function BrandMark({
     <Link
       href={href}
       className={cn(
-        "inline-flex items-center gap-3 rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#d97745]",
+        "inline-flex items-center gap-3 rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#a85a52]",
         className,
       )}
       aria-label="Rashtram AI home"
@@ -21,12 +21,12 @@ export function BrandMark({
           "relative grid h-9 w-9 shrink-0 place-items-center overflow-hidden rounded-xl border",
           inverse
             ? "border-white/15 bg-white/10"
-            : "border-[#c30000]/10 bg-[#c30000]",
+            : "border-[#8f1d2c]/10 bg-[#8f1d2c]",
         )}
         aria-hidden="true"
       >
-        <span className="absolute -right-2 -top-2 h-6 w-6 rounded-full bg-[#e69a57]" />
-        <span className="absolute -bottom-3 -left-2 h-7 w-7 rounded-full bg-[#bd3c2d]" />
+        <span className="absolute -right-2 -top-2 h-6 w-6 rounded-full bg-[#a87961]" />
+        <span className="absolute -bottom-3 -left-2 h-7 w-7 rounded-full bg-[#984b4f]" />
         <span
           className={cn(
             "relative font-serif text-lg font-semibold",
@@ -40,7 +40,7 @@ export function BrandMark({
         <span
           className={cn(
             "text-[15px] font-semibold tracking-[-0.02em]",
-            inverse ? "text-white" : "text-[#c30000]",
+            inverse ? "text-white" : "text-[#8f1d2c]",
           )}
         >
           Rashtram <span className="font-normal opacity-60">AI</span>

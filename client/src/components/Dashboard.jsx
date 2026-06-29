@@ -21,15 +21,15 @@ function ResearchList({ title, eyebrow, items, type, onViewAll }) {
     <section className="surface-card flex min-h-[350px] flex-col p-5 sm:p-6">
       <div className="flex items-start justify-between gap-4">
         <div>
-          <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#9e4937]">
+          <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#874047]">
             {eyebrow}
           </p>
-          <h2 className="mt-2 font-serif text-2xl text-[#c30000]">{title}</h2>
+          <h2 className="mt-2 font-serif text-2xl text-[#8f1d2c]">{title}</h2>
         </div>
         <button
           type="button"
           onClick={onViewAll}
-          className="inline-flex items-center gap-1 rounded-full border border-[#c30000]/10 px-3 py-2 text-xs font-semibold text-[#5f5a52] transition hover:bg-[#c30000] hover:text-white"
+          className="inline-flex items-center gap-1 rounded-full border border-[#8f1d2c]/10 px-3 py-2 text-xs font-semibold text-[#5f5a52] transition hover:bg-[#8f1d2c] hover:text-white"
         >
           View all
           <ArrowRight className="h-3.5 w-3.5" />
@@ -38,7 +38,7 @@ function ResearchList({ title, eyebrow, items, type, onViewAll }) {
 
       <div className="mt-6 flex-1 space-y-2">
         {items.length === 0 ? (
-          <div className="grid h-full min-h-52 place-items-center rounded-2xl border border-dashed border-[#c30000]/12 bg-[#f7f2e8]/65 text-center">
+          <div className="grid h-full min-h-52 place-items-center rounded-2xl border border-dashed border-[#8f1d2c]/12 bg-[#f1ece3]/65 text-center">
             <div>
               <EmptyIcon className="mx-auto h-7 w-7 text-[#9b9387]" />
               <p className="mt-3 text-sm font-medium text-[#514d46]">
@@ -60,9 +60,9 @@ function ResearchList({ title, eyebrow, items, type, onViewAll }) {
             return (
               <div
                 key={item._id || `${type}-${titleText}-${updatedAt}`}
-                className="group flex items-center gap-4 rounded-xl border border-transparent p-3 transition hover:border-[#c30000]/8 hover:bg-[#f5efe5]"
+                className="group flex items-center gap-4 rounded-xl border border-transparent p-3 transition hover:border-[#8f1d2c]/8 hover:bg-[#f5efe5]"
               >
-                <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-[#ebe3d6] text-[#9f4937]">
+                <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-[#ebe3d6] text-[#874047]">
                   <BookOpenText className="h-4 w-4" />
                 </div>
                 <div className="min-w-0 flex-1">
@@ -73,7 +73,7 @@ function ResearchList({ title, eyebrow, items, type, onViewAll }) {
                     {status} · {new Date(updatedAt).toLocaleDateString()}
                   </p>
                 </div>
-                <ArrowRight className="h-4 w-4 text-[#aaa195] transition group-hover:translate-x-0.5 group-hover:text-[#9f4937]" />
+                <ArrowRight className="h-4 w-4 text-[#aaa195] transition group-hover:translate-x-0.5 group-hover:text-[#874047]" />
               </div>
             );
           })
@@ -125,7 +125,7 @@ export default function Dashboard({ onNavigate }) {
     return (
       <div className="grid h-full min-h-[420px] place-items-center">
         <div className="text-center">
-          <div className="mx-auto h-9 w-9 animate-spin rounded-full border-2 border-[#c30000]/12 border-t-[#ad4a36]" />
+          <div className="mx-auto h-9 w-9 animate-spin rounded-full border-2 border-[#8f1d2c]/12 border-t-[#8c4548]" />
           <p className="mt-4 text-sm text-[#706a61]">
             Preparing your research desk…
           </p>
@@ -138,10 +138,10 @@ export default function Dashboard({ onNavigate }) {
     return (
       <div className="surface-card grid min-h-[360px] place-items-center p-8 text-center">
         <div>
-          <p className="font-serif text-2xl text-[#c30000]">
+          <p className="font-serif text-2xl text-[#8f1d2c]">
             Your desk is temporarily unavailable.
           </p>
-          <p className="mt-2 text-sm text-[#8c4436]">{error}</p>
+          <p className="mt-2 text-sm text-[#85434a]">{error}</p>
         </div>
       </div>
     );
@@ -155,13 +155,13 @@ export default function Dashboard({ onNavigate }) {
 
   return (
     <div className="space-y-6 pb-4">
-      <section className="relative overflow-hidden rounded-[1.8rem] bg-[#c30000] p-7 text-white sm:p-9">
+      <section className="relative overflow-hidden rounded-[1.8rem] bg-[#8f1d2c] p-7 text-white sm:p-9">
         <div className="policy-grid absolute inset-0 opacity-20" />
-        <div className="absolute -right-14 -top-16 h-56 w-56 rounded-full bg-[#d97745]/20 blur-3xl" />
+        <div className="absolute -right-14 -top-16 h-56 w-56 rounded-full bg-[#a85a52]/20 blur-3xl" />
         <div className="relative z-10 flex flex-col gap-8 lg:flex-row lg:items-end lg:justify-between">
           <div>
             <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-[11px] font-medium text-white/65">
-              <Sparkles className="h-3.5 w-3.5 text-[#efb36f]" />
+              <Sparkles className="h-3.5 w-3.5 text-[#c1a06f]" />
               Evidence workspace ready
             </div>
             <h1 className="mt-5 max-w-2xl font-serif text-4xl leading-tight tracking-[-0.035em] sm:text-5xl">
@@ -176,7 +176,7 @@ export default function Dashboard({ onNavigate }) {
             <button
               type="button"
               onClick={() => onNavigate("Parliament Bills")}
-              className="rounded-full bg-[#fffaf0] px-5 py-3 text-sm font-semibold text-[#c30000] transition hover:-translate-y-0.5"
+              className="rounded-full bg-[#fffaf0] px-5 py-3 text-sm font-semibold text-[#8f1d2c] transition hover:-translate-y-0.5"
             >
               Explore bills
             </button>
@@ -199,11 +199,11 @@ export default function Dashboard({ onNavigate }) {
               key={stat.label}
               className="surface-card flex items-center gap-4 p-5 sm:p-6"
             >
-              <div className="grid h-12 w-12 place-items-center rounded-2xl bg-[#eee5d7] text-[#9f4937]">
+              <div className="grid h-12 w-12 place-items-center rounded-2xl bg-[#eee5d7] text-[#874047]">
                 <Icon className="h-5 w-5" />
               </div>
               <div>
-                <p className="font-serif text-3xl leading-none text-[#c30000]">
+                <p className="font-serif text-3xl leading-none text-[#8f1d2c]">
                   {stat.value}
                 </p>
                 <p className="mt-2 text-xs text-[#797268]">{stat.label}</p>

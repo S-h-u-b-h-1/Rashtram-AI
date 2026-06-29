@@ -15,6 +15,8 @@ const rajyaSabhaConnector = createParliamentPortalConnector({
       identityCells: [0, 2, 3],
       ministryCell: 5,
       accessMethod: "Digital Sansad server-rendered listing",
+      blockedWhenEmpty: true,
+      blockedReason: "The Rajya Sabha questions page requires client-side JavaScript rendering and has malformed HTTP response headers.",
     },
     {
       collection: "committee-meetings",
@@ -25,6 +27,8 @@ const rajyaSabhaConnector = createParliamentPortalConnector({
       statusCell: 5,
       titlePrefix: "Committee meeting",
       accessMethod: "Digital Sansad server-rendered listing",
+      blockedWhenEmpty: true,
+      blockedReason: "The Rajya Sabha committee meetings page requires client-side JavaScript rendering.",
     },
     {
       collection: "official-debates",

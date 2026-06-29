@@ -44,7 +44,7 @@ export function ProfileView() {
   if (loading) {
     return (
       <div className="space-y-5" aria-label="Loading profile">
-        <div className="h-56 animate-pulse rounded-[1.8rem] bg-[#c30000]/90" />
+        <div className="h-56 animate-pulse rounded-[1.8rem] bg-[#8f1d2c]/90" />
         <div className="h-64 animate-pulse rounded-[1.4rem] bg-white/55" />
         <div className="h-80 animate-pulse rounded-[1.4rem] bg-white/55" />
       </div>
@@ -55,10 +55,10 @@ export function ProfileView() {
     return (
       <div className="surface-card grid min-h-[420px] place-items-center p-8 text-center">
         <div>
-          <p className="font-serif text-2xl text-[#c30000]">
+          <p className="font-serif text-2xl text-[#8f1d2c]">
             Your research profile is temporarily unavailable.
           </p>
-          <p className="mt-2 text-sm text-[#8c4436]">{error}</p>
+          <p className="mt-2 text-sm text-[#85434a]">{error}</p>
         </div>
       </div>
     );

@@ -40,25 +40,25 @@ export default function Login() {
           type="button"
           onClick={googleLogin}
           disabled={loading}
-          className="flex h-12 w-full items-center justify-center gap-3 rounded-xl border border-[#c30000]/12 bg-white text-sm font-semibold text-[#26302c] shadow-sm transition hover:border-[#c30000]/22 hover:bg-[#fffdf8] disabled:cursor-not-allowed disabled:opacity-60"
+          className="flex h-12 w-full items-center justify-center gap-3 rounded-xl border border-[#8f1d2c]/12 bg-white text-sm font-semibold text-[#26302c] shadow-sm transition hover:border-[#8f1d2c]/22 hover:bg-[#f6f2eb] disabled:cursor-not-allowed disabled:opacity-60"
         >
           <Chrome className="h-4 w-4" />
           Continue with Google
         </button>
 
         <div className="my-6 flex items-center gap-3">
-          <div className="h-px flex-1 bg-[#c30000]/10" />
+          <div className="h-px flex-1 bg-[#8f1d2c]/10" />
           <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[#898176]">
             or use email
           </span>
-          <div className="h-px flex-1 bg-[#c30000]/10" />
+          <div className="h-px flex-1 bg-[#8f1d2c]/10" />
         </div>
 
         <form onSubmit={handleLogin} className="space-y-5">
           {error && (
             <div
               role="alert"
-              className="rounded-xl border border-[#bd3c2d]/20 bg-[#bd3c2d]/7 px-4 py-3 text-sm text-[#9d3529]"
+              className="rounded-xl border border-[#984b4f]/20 bg-[#984b4f]/7 px-4 py-3 text-sm text-[#914148]"
             >
               {error}
             </div>
@@ -80,7 +80,7 @@ export default function Login() {
               onChange={(event) => setEmail(event.target.value)}
               disabled={loading}
               required
-              className="h-12 w-full rounded-xl border border-[#c30000]/12 bg-white px-4 text-sm text-[#c30000] placeholder:text-[#9c9589] transition focus:border-[#d97745] focus:outline-none focus:ring-4 focus:ring-[#d97745]/10 disabled:opacity-60"
+              className="h-12 w-full rounded-xl border border-[#8f1d2c]/12 bg-white px-4 text-sm text-[#8f1d2c] placeholder:text-[#9c9589] transition focus:border-[#a85a52] focus:outline-none focus:ring-4 focus:ring-[#a85a52]/10 disabled:opacity-60"
             />
           </div>
 
@@ -103,12 +103,12 @@ export default function Login() {
                 onChange={(event) => setPassword(event.target.value)}
                 disabled={loading}
                 required
-                className="h-12 w-full rounded-xl border border-[#c30000]/12 bg-white px-4 pr-12 text-sm text-[#c30000] placeholder:text-[#9c9589] transition focus:border-[#d97745] focus:outline-none focus:ring-4 focus:ring-[#d97745]/10 disabled:opacity-60"
+                className="h-12 w-full rounded-xl border border-[#8f1d2c]/12 bg-white px-4 pr-12 text-sm text-[#8f1d2c] placeholder:text-[#9c9589] transition focus:border-[#a85a52] focus:outline-none focus:ring-4 focus:ring-[#a85a52]/10 disabled:opacity-60"
               />
               <button
                 type="button"
                 onClick={() => setShowPassword((visible) => !visible)}
-                className="absolute inset-y-0 right-0 grid w-12 place-items-center text-[#7e776d] hover:text-[#c30000]"
+                className="absolute inset-y-0 right-0 grid w-12 place-items-center text-[#7e776d] hover:text-[#8f1d2c]"
                 aria-label={showPassword ? "Hide password" : "Show password"}
               >
                 {showPassword ? (
@@ -133,7 +133,7 @@ export default function Login() {
           <button
             type="submit"
             disabled={loading}
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-[#c30000] text-sm font-semibold text-[#fffaf0] shadow-[0_12px_28px_rgba(195, 0, 0,0.16)] transition hover:-translate-y-0.5 hover:bg-[#2d3934] disabled:cursor-not-allowed disabled:translate-y-0 disabled:opacity-60"
+            className="flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-[#8f1d2c] text-sm font-semibold text-[#fffaf0] shadow-[0_12px_28px_rgba(143, 29, 44,0.16)] transition hover:-translate-y-0.5 hover:bg-[#2d3934] disabled:cursor-not-allowed disabled:translate-y-0 disabled:opacity-60"
           >
             {loading && <Loader2 className="h-4 w-4 animate-spin" />}
             {loading ? "Signing in…" : "Sign in"}
@@ -144,7 +144,7 @@ export default function Login() {
           New to Rashtram?{" "}
           <Link
             href="/signup"
-            className="font-semibold text-[#9f3e30] underline decoration-[#9f3e30]/25 underline-offset-4"
+            className="font-semibold text-[#874049] underline decoration-[#874049]/25 underline-offset-4"
           >
             Create an account
           </Link>

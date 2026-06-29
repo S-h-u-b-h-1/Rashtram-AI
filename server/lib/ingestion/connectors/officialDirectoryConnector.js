@@ -47,6 +47,14 @@ const parseOfficialDirectory = (html, pageUrl, config) => {
     ) {
       return;
     }
+    if (
+      config.pdfLinkPattern &&
+      !config.pdfLinkPattern.test(
+        `${title} ${new URL(url).pathname.split("/").at(-1) || ""}`,
+      )
+    ) {
+      return;
+    }
     seen.add(url);
     const year = Number.parseInt(
       `${title} ${url}`.match(/\b(18|19|20)\d{2}\b/)?.[0],
@@ -129,48 +137,67 @@ const createOfficialDirectoryConnector = (config) => {
     defaultCollection: config.collection || "official-directory",
     async collect(options = {}, { fetcher }) {
       const pageUrl = options.url || config.url;
-      const response = await fetcher.getText(pageUrl);
-      const pageHash = sha256(response.body);
-      const records = [
-        ...parseOfficialDirectory(response.body, pageUrl, config),
-        ...parseOfficialPortalLinks(response.body, pageUrl, config),
-      ]
-        .filter(
-          (record, index, all) =>
-            all.findIndex(
-              (candidate) =>
-                candidate.sourceRecordId === record.sourceRecordId,
-            ) === index,
-        )
-        .slice(0, Number(options.limit || 100))
-        .map((record) => ({ ...record, htmlHash: pageHash }));
-      return {
-        records,
-        snapshots: [
-          createSnapshot({
-            sourceName: config.name,
-            sourceUrl: pageUrl,
-            body: response.body,
-            responseStatus: response.status,
-            recordCount: records.length,
-            metadata: {
+      try {
+        const response = await fetcher.getText(pageUrl);
+        const pageHash = sha256(response.body);
+        const records = [
+          ...parseOfficialDirectory(response.body, pageUrl, config),
+          ...parseOfficialPortalLinks(response.body, pageUrl, config),
+        ]
+          .filter(
+            (record, index, all) =>
+              all.findIndex(
+                (candidate) =>
+                  candidate.sourceRecordId === record.sourceRecordId,
+              ) === index,
+          )
+          .slice(0, Number(options.limit || 100))
+          .map((record) => ({ ...record, htmlHash: pageHash }));
+        return {
+          records,
+          snapshots: [
+            createSnapshot({
+              sourceName: config.name,
+              sourceUrl: pageUrl,
+              body: response.body,
+              responseStatus: response.status,
+              recordCount: records.length,
+              metadata: {
+                collection: config.collection,
+                directoryOnly: true,
+              },
+            }),
+          ],
+          errors: [],
+          diagnostics:
+            records.length === 0 && config.blockedWhenEmpty
+              ? [
+                  {
+                    type: "blocked",
+                    collection: config.collection,
+                    message: config.blockedReason,
+                  },
+                ]
+              : [],
+        };
+      } catch (error) {
+        const isBlockedError =
+          /timeout|conn|403|forbidden|parse error|missing expected cr/i.test(
+            error.message || "",
+          );
+        return {
+          records: [],
+          snapshots: [],
+          errors: [{ stage: "directory", message: error.message }],
+          diagnostics: [
+            {
+              type: isBlockedError || config.blockedWhenEmpty ? "blocked" : "error",
               collection: config.collection,
-              directoryOnly: true,
+              message: config.blockedReason || `Request failed: ${error.message}`,
             },
-          }),
-        ],
-        errors: [],
-        diagnostics:
-          records.length === 0 && config.blockedWhenEmpty
-            ? [
-                {
-                  type: "blocked",
-                  collection: config.collection,
-                  message: config.blockedReason,
-                },
-              ]
-            : [],
-      };
+          ],
+        };
+      }
     },
   };
   return attachConnectorLifecycle(connector, [

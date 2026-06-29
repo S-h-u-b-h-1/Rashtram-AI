@@ -114,6 +114,24 @@ test("official directory adapter stores only linked official PDFs", () => {
   assert.equal(records[0].year, 2025);
 });
 
+test("official directory adapter can reject unrelated landing-page PDFs", () => {
+  const records = parseOfficialDirectory(
+    `<a href="/files/history.pdf">About the Assembly</a>
+     <a href="/files/bill-2026.pdf">Public Safety Bill, 2026</a>`,
+    "https://assembly.example.gov.in/",
+    {
+      name: "state-legislature",
+      collection: "example",
+      authority: "Example Legislature",
+      jurisdictionLevel: "state",
+      jurisdiction: "Example",
+      pdfLinkPattern: /\b(bill|act|question|debate|committee)\b/i,
+    },
+  );
+  assert.equal(records.length, 1);
+  assert.equal(records[0].title, "Public Safety Bill, 2026");
+});
+
 test("official directory discovery retains verified ministry portal links", () => {
   const records = parseOfficialPortalLinks(
     `<a href="https://lawmin.gov.in/">Ministry of Law and Justice</a>
@@ -220,6 +238,7 @@ test("every registered connector exposes the operational lifecycle contract", ()
       "fetchDetails",
       "normalize",
       "run",
+      "healthCheck",
     ]) {
       assert.equal(typeof connector[method], "function");
     }
