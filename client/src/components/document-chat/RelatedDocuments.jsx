@@ -1,4 +1,5 @@
 import { ExternalLink } from "lucide-react";
+import Link from "next/link";
 import { humanize } from "@/lib/document-links";
 
 export function RelatedDocuments({ relationships = [], recommendations = [] }) {
@@ -32,16 +33,20 @@ export function RelatedDocuments({ relationships = [], recommendations = [] }) {
             <p className="mt-2 text-xs font-semibold leading-5 text-[#29312d]">
               {item.title}
             </p>
-            {(item.pdfUrl || item.sourceUrl) && (
-              <a
-                href={item.pdfUrl || item.sourceUrl}
-                target="_blank"
-                rel="noreferrer"
+            {(item.id || item.pdfUrl || item.sourceUrl) && (
+              <Link
+                href={
+                  item.id
+                    ? `/app/document/${item.id}`
+                    : item.pdfUrl || item.sourceUrl
+                }
+                target={item.id ? undefined : "_blank"}
+                rel={item.id ? undefined : "noreferrer"}
                 className="mt-2 inline-flex items-center gap-1 text-[10px] font-semibold text-[#874047]"
               >
                 Open
                 <ExternalLink className="h-3 w-3" />
-              </a>
+              </Link>
             )}
           </article>
         ))}

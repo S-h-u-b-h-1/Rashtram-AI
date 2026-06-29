@@ -328,19 +328,6 @@ const initializeSchema = async () => {
     CREATE INDEX IF NOT EXISTS legislative_documents_title_idx
       ON legislative_documents (LOWER(title));
 
-    CREATE INDEX IF NOT EXISTS legislative_documents_publication_idx
-      ON legislative_documents (publication_date DESC NULLS LAST, id DESC);
-
-    CREATE INDEX IF NOT EXISTS legislative_documents_ministry_idx
-      ON legislative_documents (ministry, publication_date DESC NULLS LAST)
-      WHERE ministry IS NOT NULL;
-
-    CREATE INDEX IF NOT EXISTS legislative_documents_source_idx
-      ON legislative_documents (
-        (COALESCE(canonical_source, source_name)),
-        updated_at DESC
-      );
-
     CREATE TABLE IF NOT EXISTS legislative_document_resources (
       id BIGSERIAL PRIMARY KEY,
       document_id BIGINT NOT NULL
@@ -402,6 +389,53 @@ const initializeSchema = async () => {
       ADD COLUMN IF NOT EXISTS content_hash TEXT,
       ADD COLUMN IF NOT EXISTS text_fingerprint TEXT,
       ADD COLUMN IF NOT EXISTS metadata_json JSONB NOT NULL DEFAULT '{}'::jsonb;
+
+    CREATE INDEX IF NOT EXISTS legislative_documents_publication_idx
+      ON legislative_documents (publication_date DESC NULLS LAST, id DESC);
+
+    CREATE INDEX IF NOT EXISTS legislative_documents_ministry_idx
+      ON legislative_documents (ministry, publication_date DESC NULLS LAST)
+      WHERE ministry IS NOT NULL;
+
+    CREATE INDEX IF NOT EXISTS legislative_documents_source_idx
+      ON legislative_documents (
+        (COALESCE(canonical_source, source_name)),
+        updated_at DESC
+      );
+
+    ALTER TABLE legislative_documents
+      ADD COLUMN IF NOT EXISTS search_vector TSVECTOR
+      GENERATED ALWAYS AS (
+        TO_TSVECTOR(
+          'english',
+          COALESCE(title, '') || ' ' ||
+          COALESCE(legal_identifier, '') || ' ' ||
+          COALESCE(bill_number, '') || ' ' ||
+          COALESCE(act_number, '') || ' ' ||
+          COALESCE(gazette_identifier, '') || ' ' ||
+          COALESCE(ministry, '') || ' ' ||
+          COALESCE(department, '') || ' ' ||
+          COALESCE(authority, '') || ' ' ||
+          COALESCE(category, '')
+        )
+      ) STORED;
+
+    CREATE INDEX IF NOT EXISTS legislative_documents_search_idx
+      ON legislative_documents USING GIN (search_vector);
+
+    CREATE INDEX IF NOT EXISTS legislative_documents_type_date_idx
+      ON legislative_documents (
+        document_type,
+        publication_date DESC NULLS LAST,
+        id DESC
+      );
+
+    CREATE INDEX IF NOT EXISTS legislative_documents_authority_idx
+      ON legislative_documents (authority, publication_date DESC NULLS LAST)
+      WHERE authority IS NOT NULL;
+
+    CREATE INDEX IF NOT EXISTS legislative_documents_metadata_idx
+      ON legislative_documents USING GIN (metadata_json);
 
     UPDATE legislative_documents
        SET canonical_id = 'rashtram-' || id

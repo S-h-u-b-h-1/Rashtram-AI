@@ -1,34 +1,6 @@
 export const buildResearchHref = (document) => {
-  const documentType = document.documentType;
-  const isGazette =
-    ["egazette", "state-gazette"].includes(document.sourceName) ||
-    Boolean(document.gazetteNumber) ||
-    documentType === "gazette";
-  if (isGazette) {
-    const id = document.documentId || document.id;
-    return id ? `/app/egazette-chat/${id}` : null;
-  }
-  if (!["bill", "act"].includes(documentType) || !document.pdfUrl) return null;
-  const payload =
-    documentType === "bill"
-      ? {
-          billId: document.documentId || document.id,
-          title: document.title,
-          pdfUrl: document.pdfUrl,
-          link: document.sourceUrl,
-          status: document.status,
-        }
-      : {
-          actId: document.documentId || document.id,
-          title: document.title,
-          pdfUrl: document.pdfUrl,
-          link: document.sourceUrl,
-          status: document.status,
-        };
-  const parameter = documentType === "bill" ? "bill" : "act";
-  return `/app/${documentType}-chat?${parameter}=${encodeURIComponent(
-    JSON.stringify(payload),
-  )}`;
+  const id = document.documentId || document.id;
+  return id ? `/app/document/${id}` : null;
 };
 
 export const formatDate = (value, fallback = "Date unavailable") => {

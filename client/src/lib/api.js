@@ -637,6 +637,88 @@ export const getDocumentResearch = async (documentType, documentId) => {
   );
 };
 
+export const fetchDocuments = async (options = {}) => {
+  return apiRequest(`/documents?${toQueryString(options)}`);
+};
+
+export const searchDocuments = async (query, options = {}) => {
+  return apiRequest(
+    `/documents/search?${toQueryString({
+      ...options,
+      q: query,
+    })}`,
+  );
+};
+
+export const fetchDocument = async (documentId) => {
+  return apiRequest(`/documents/${encodeURIComponent(documentId)}`);
+};
+
+export const fetchDocumentTimeline = async (documentId) => {
+  return apiRequest(
+    `/documents/${encodeURIComponent(documentId)}/timeline`,
+  );
+};
+
+export const fetchDocumentGraph = async (documentId) => {
+  return apiRequest(`/documents/${encodeURIComponent(documentId)}/graph`);
+};
+
+export const sendCrossDocumentChat = async (
+  message,
+  documentIds,
+  onChunk,
+  onComplete,
+  onError,
+) => {
+  const token = getAuthToken();
+  if (!token) {
+    onError(new Error("No authentication token found. Please login."));
+    return;
+  }
+  try {
+    const response = await fetch(`${API_BASE_URL}/documents/chat`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "auth-token": token,
+      },
+      body: JSON.stringify({ message, documentIds }),
+    });
+    if (!response.ok) {
+      const payload = await response.json().catch(() => ({}));
+      throw new Error(payload.error || `Request failed with ${response.status}`);
+    }
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+    let fullResponse = "";
+    let sources = [];
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const events = buffer.split("\n\n");
+      buffer = events.pop() || "";
+      for (const event of events) {
+        if (!event.startsWith("data: ")) continue;
+        const raw = event.slice(6);
+        if (raw === "[DONE]") continue;
+        const parsed = JSON.parse(raw);
+        if (parsed.type === "meta") sources = parsed.sources || [];
+        if (parsed.type === "content") {
+          fullResponse += parsed.content;
+          onChunk(parsed.content);
+        }
+        if (parsed.type === "error") throw new Error(parsed.error);
+      }
+    }
+    onComplete({ response: fullResponse, sources });
+  } catch (error) {
+    onError(error);
+  }
+};
+
 export const processDocumentResearch = async (
   documentType,
   documentId,
@@ -667,6 +749,12 @@ export const getDocumentChatHistory = async (
       documentType,
       documentId,
     })}`,
+  );
+};
+
+export const getRecentDocumentChats = async (limit = 8) => {
+  return apiRequest(
+    `/document-chat/history?${toQueryString({ limit })}`,
   );
 };
 

@@ -8,8 +8,23 @@ import BillsListUI from "@/components/Bills";
 import { IntelligenceDashboard } from "@/components/intelligence/IntelligenceDashboard";
 import ProtectedRoute from "@/components/ProtectedRoute";
 import { WorkspaceShell } from "@/components/workspace/WorkspaceShell";
+import { DocumentExplorer } from "@/components/documents/DocumentExplorer";
+
+function AllDocuments() {
+  return (
+    <DocumentExplorer
+      title="All legislative documents"
+      description="Search every supported central and state document type through one repository, filter engine, semantic index, and research workspace."
+    />
+  );
+}
 
 const VIEWS = {
+  documents: {
+    activeKey: "documents",
+    title: "Universal Document Catalogue",
+    content: AllDocuments,
+  },
   bills: {
     activeKey: "bills",
     title: "Parliament Bills",
@@ -34,6 +49,7 @@ function WorkspacePage() {
   const navigateToView = (view) => {
     if (view === "bills") router.push("/app?view=bills");
     else if (view === "acts") router.push("/app?view=acts");
+    else if (view === "documents") router.push("/app?view=documents");
     else if (view === "egazette") router.push("/app/egazette");
     else router.push("/app");
   };

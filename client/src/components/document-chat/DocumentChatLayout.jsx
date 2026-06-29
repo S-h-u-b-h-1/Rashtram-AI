@@ -41,6 +41,11 @@ const QUESTIONS = {
     "Which authorities and regulated persons are affected?",
     "What compliance dates or penalties are stated?",
   ],
+  default: [
+    "What is this document's purpose and legal or policy effect?",
+    "Which authorities, institutions, and affected groups are involved?",
+    "What obligations, timelines, implementation steps, or risks are stated?",
+  ],
 };
 
 const timeLabel = () =>
@@ -81,7 +86,7 @@ export function DocumentChatLayout({
           entity_type: documentType,
           entity_id: documentId,
           document_id: documentId,
-          page_path: `/app/${documentType}-chat`,
+          page_path: `/app/document/${documentId}`,
           metadata_json: { documentType },
         });
         const history = await getDocumentChatHistory(
@@ -188,7 +193,7 @@ export function DocumentChatLayout({
       entity_type: documentType,
       entity_id: documentId,
       document_id: documentId,
-      page_path: `/app/${documentType}-chat`,
+      page_path: `/app/document/${documentId}`,
       metadata_json: { documentType },
     });
     try {
@@ -374,7 +379,7 @@ export function DocumentChatLayout({
             />
           </div>
           <SuggestedQuestions
-            questions={QUESTIONS[documentType] || QUESTIONS.act}
+            questions={QUESTIONS[documentType] || QUESTIONS.default}
             disabled={!document.pdfUrl || sending}
             onSelect={(question) => submitQuestion(question)}
           />

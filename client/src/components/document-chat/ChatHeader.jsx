@@ -8,6 +8,7 @@ import {
   FileDown,
   Pin,
 } from "lucide-react";
+import { CollectionMenu } from "./CollectionMenu";
 
 export function ChatHeader({
   document,
@@ -53,6 +54,7 @@ export function ChatHeader({
         >
           <Bookmark className="h-4 w-4" />
         </button>
+        <CollectionMenu document={document} />
         <button
           type="button"
           onClick={onPin}

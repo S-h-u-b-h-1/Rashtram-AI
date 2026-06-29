@@ -3,6 +3,8 @@ import { DocumentSummaryPanel } from "./DocumentSummaryPanel";
 import { RelatedDocuments } from "./RelatedDocuments";
 import { ResearchNotes } from "./ResearchNotes";
 import { SourcePanel } from "./SourcePanel";
+import { DocumentTimeline } from "./DocumentTimeline";
+import { KnowledgeGraph } from "./KnowledgeGraph";
 
 export function ChatSidebar({
   document,
@@ -50,6 +52,8 @@ export function ChatSidebar({
         relationships={document.relationships}
         recommendations={document.recommendations}
       />
+      <DocumentTimeline events={document.timeline || []} />
+      <KnowledgeGraph graph={document.graph} />
       <ResearchNotes
         notes={notes}
         onAdd={onAddNote}

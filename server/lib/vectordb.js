@@ -296,21 +296,49 @@ inline.
   return runGeneration("generateContentStream", fullPrompt);
 };
 
-const generateSummary = async (documentType, content) => {
+const SUMMARY_GUIDANCE = {
+  bill: "purpose, clauses, legislative stage, affected groups, fiscal implications, and implementation questions",
+  act: "purpose, operative provisions, rights, duties, authorities, enforcement, penalties, commencement, and amendments",
+  gazette: "operative change, issuing authority, affected persons, legal basis, compliance dates, obligations, enforcement, and linked instruments",
+  notification: "operative change, legal authority, affected persons, compliance dates, obligations, exemptions, and enforcement",
+  rule: "enabling Act, delegated powers, procedures, duties, forms, timelines, enforcement, and commencement",
+  regulation: "regulator, statutory authority, regulated entities, obligations, reporting, timelines, enforcement, and transitional provisions",
+  circular: "issuing authority, audience, instructions, clarification, effective date, compliance action, and referenced law",
+  order: "issuing authority, legal basis, operative direction, affected parties, dates, conditions, and appeal or review",
+  office_memorandum: "issuing department, administrative purpose, applicable personnel or institutions, instructions, dates, and implementation",
+  policy: "objectives, policy instruments, responsible institutions, beneficiaries, funding, implementation, monitoring, and risks",
+  consultation_paper: "problem statement, proposals, questions for consultation, affected stakeholders, evidence, alternatives, and response deadline",
+  committee_report: "mandate, evidence considered, findings, recommendations, government response, and legislative implications",
+  question: "member, ministry, issue raised, answer, data cited, commitments, and follow-up implications",
+  debate: "subject, principal arguments, speakers, government position, disagreements, commitments, and legislative context",
+  proceeding: "institution, agenda, decisions, motions, votes, referrals, and next steps",
+  guideline: "issuing authority, scope, recommended or mandatory actions, standards, implementation, and monitoring",
+  scheme: "objective, eligibility, benefits, delivery institutions, funding, application process, monitoring, and timelines",
+  ordinance: "necessity, operative provisions, legal effect, duration, replacement legislation, and affected parties",
+};
+
+const generateDocumentSummary = async (documentType, content) => {
+  const normalizedType = String(documentType || "document")
+    .trim()
+    .toLowerCase()
+    .replace(/-/g, "_");
+  const guidance =
+    SUMMARY_GUIDANCE[normalizedType] ||
+    "purpose, legal effect, authorities, affected persons, obligations, timelines, implementation, enforcement, and related instruments";
   const prompt = `
-Provide a comprehensive summary of this Indian parliamentary ${documentType}.
-Include:
-1. Main purpose and objectives
-2. Key provisions and sections
-3. Potential impact and applicability
-4. Important dates or timelines
-5. Notable amendments or changes
+Prepare a grounded research brief for this Indian legislative or public-policy
+document.
+
+Document type: ${normalizedType}
+Focus on: ${guidance}.
+
+Use only the supplied text. Distinguish facts stated in the document from
+reasonable implications. Clearly state "Not identified in the document" when
+evidence is absent. Preserve important numbers, dates, sections, authorities,
+and defined terms. Do not invent legal provisions or relationships.
 
 Document content:
 ${content}
-
-Write an accurate, well-structured summary. Do not invent information that is
-not present in the document.
 `;
 
   const response = await runGeneration("generateContent", prompt);
@@ -318,34 +346,13 @@ not present in the document.
 };
 
 const generateBillSummary = (billContent) =>
-  generateSummary("bill", billContent);
+  generateDocumentSummary("bill", billContent);
 
 const generateActSummary = (actContent) =>
-  generateSummary("act", actContent);
+  generateDocumentSummary("act", actContent);
 
-const generateEGazetteSummary = async (content) => {
-  const prompt = `
-Prepare a grounded research brief for this Indian Gazette document.
-
-Use only the supplied text. Clearly state "Not identified in the document"
-when evidence is absent. Structure the response with:
-1. Executive summary
-2. Key notifications or operative changes
-3. Affected authorities, ministries, and departments
-4. Affected legislation and related Acts
-5. Implementation, publication, commencement, or compliance dates
-6. Compliance implications and affected persons
-7. Important definitions
-8. Obligations and procedural requirements
-9. Penalties, enforcement, or consequences if mentioned
-10. Related rules, notifications, orders, or Acts identifiable from the text
-
-Gazette content:
-${content}
-`;
-  const response = await runGeneration("generateContent", prompt);
-  return responseText(response);
-};
+const generateEGazetteSummary = (content) =>
+  generateDocumentSummary("gazette", content);
 
 const searchContent = async (index, idField, id, query, topK = 5) => {
   const queryEmbedding = await generateEmbedding(query);
@@ -560,6 +567,7 @@ module.exports = {
   findSimilarBills,
   generateActSummary,
   generateBillSummary,
+  generateDocumentSummary,
   generateEGazetteSummary,
   generateEmbedding,
   generateEmbeddings,

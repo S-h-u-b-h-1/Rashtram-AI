@@ -1,24 +1,15 @@
 const crypto = require("crypto");
 const { query } = require("../db");
 
-const ALLOWED_DOCUMENT_TYPES = new Set([
-  "bill",
-  "act",
-  "gazette",
-  "policy",
-  "committee_report",
-  "rule",
-  "notification",
-  "circular",
-  "debate",
-]);
+const {
+  DOCUMENT_TYPES,
+  normalizeDocumentType,
+} = require("../document/documentTypes");
+
+const ALLOWED_DOCUMENT_TYPES = DOCUMENT_TYPES;
 
 const normalizeType = (value) => {
-  const type = String(value || "").trim().toLowerCase();
-  if (!ALLOWED_DOCUMENT_TYPES.has(type)) {
-    throw new Error(`Unsupported document type: ${type || "missing"}`);
-  }
-  return type;
+  return normalizeDocumentType(value);
 };
 
 const mapRow = (row) =>

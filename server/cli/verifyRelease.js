@@ -43,15 +43,38 @@ const main = async () => {
   await new Promise((resolve) => server.once("listening", resolve));
   const baseUrl = `http://127.0.0.1:${server.address().port}`;
   try {
-    const [dashboard, profile, bills, acts, gazettes, chats] =
+    const [dashboard, profile, bills, acts, gazettes, documents, chats] =
       await Promise.all([
         request(baseUrl, token, "/api/dashboard/intelligence"),
         request(baseUrl, token, "/api/profile"),
         request(baseUrl, token, "/api/bills?limit=2"),
         request(baseUrl, token, "/api/acts?limit=2"),
         request(baseUrl, token, "/api/egazettes?limit=2"),
+        request(baseUrl, token, "/api/documents?limit=2"),
         request(baseUrl, token, "/api/document-chat/history?limit=2"),
       ]);
+    const universalId = documents.documents?.[0]?.id;
+    const [documentDetail, documentSearch, timeline, graph] =
+      universalId
+        ? await Promise.all([
+            request(baseUrl, token, `/api/documents/${universalId}`),
+            request(
+              baseUrl,
+              token,
+              "/api/documents/search?q=tax&limit=2",
+            ),
+            request(
+              baseUrl,
+              token,
+              `/api/documents/${universalId}/timeline`,
+            ),
+            request(
+              baseUrl,
+              token,
+              `/api/documents/${universalId}/graph`,
+            ),
+          ])
+        : [{}, { documents: [] }, { timeline: [] }, { graph: {} }];
     console.log(
       JSON.stringify(
         {
@@ -62,6 +85,11 @@ const main = async () => {
             bills: bills.bills?.length || 0,
             acts: acts.acts?.length || 0,
             gazettes: gazettes.gazettes?.length || 0,
+            universalDocuments: documents.documents?.length || 0,
+            universalDocumentDetail: Boolean(documentDetail.document?.id),
+            universalSearch: documentSearch.documents?.length || 0,
+            universalTimeline: Array.isArray(timeline.timeline),
+            universalGraph: Array.isArray(graph.graph?.nodes),
             unifiedChats: chats.count || 0,
           },
         },

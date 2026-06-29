@@ -7,15 +7,17 @@ import {
   LogOut,
   Menu,
   PanelLeftClose,
+  Search,
   Scale,
   ScrollText,
   UserRound,
   X,
 } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { BrandMark } from "@/components/BrandMark";
 import { useAuth } from "@/context/AuthContext";
 import { cn } from "@/lib/utils";
+import { GlobalCommandPalette } from "@/components/documents/GlobalCommandPalette";
 
 const NAVIGATION = [
   {
@@ -23,6 +25,12 @@ const NAVIGATION = [
     label: "Dashboard",
     href: "/app",
     icon: LayoutDashboard,
+  },
+  {
+    key: "documents",
+    label: "All documents",
+    href: "/app?view=documents",
+    icon: FileText,
   },
   {
     key: "bills",
@@ -62,8 +70,20 @@ const getUserInitials = (name) => {
 
 export function WorkspaceShell({ activeKey, title, children }) {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false);
   const { logout, user } = useAuth();
   const userName = user?.name || "Researcher";
+
+  useEffect(() => {
+    const openPalette = (event) => {
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
+        event.preventDefault();
+        setIsCommandPaletteOpen(true);
+      }
+    };
+    window.addEventListener("keydown", openPalette);
+    return () => window.removeEventListener("keydown", openPalette);
+  }, []);
 
   return (
     <div className="flex h-screen overflow-hidden bg-[#e9e3da]">
@@ -182,24 +202,42 @@ export function WorkspaceShell({ activeKey, title, children }) {
               {title}
             </h1>
           </div>
-          <button
-            type="button"
-            onClick={() => setIsMobileMenuOpen(true)}
-            className="grid h-11 w-11 place-items-center rounded-xl border border-[#8f1d2c]/10 bg-white text-[#8f1d2c] md:hidden"
-            aria-label="Open navigation"
-          >
-            {isMobileMenuOpen ? (
-              <X className="h-5 w-5" />
-            ) : (
-              <Menu className="h-5 w-5" />
-            )}
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setIsCommandPaletteOpen(true)}
+              className="inline-flex h-11 items-center gap-2 rounded-xl border border-[#8f1d2c]/10 bg-white px-3 text-xs font-semibold text-[#8f1d2c]"
+              aria-label="Open global search"
+            >
+              <Search className="h-4 w-4" />
+              <span className="hidden sm:inline">Search everything</span>
+              <kbd className="hidden rounded-md bg-[#eee0dc] px-1.5 py-0.5 text-[9px] text-[#777066] lg:inline">
+                ⌘K
+              </kbd>
+            </button>
+            <button
+              type="button"
+              onClick={() => setIsMobileMenuOpen(true)}
+              className="grid h-11 w-11 place-items-center rounded-xl border border-[#8f1d2c]/10 bg-white text-[#8f1d2c] md:hidden"
+              aria-label="Open navigation"
+            >
+              {isMobileMenuOpen ? (
+                <X className="h-5 w-5" />
+              ) : (
+                <Menu className="h-5 w-5" />
+              )}
+            </button>
+          </div>
         </header>
 
         <main className="app-scrollbar flex-1 overflow-y-auto p-4 sm:p-6 md:p-8">
           <div className="mx-auto min-h-full max-w-[1440px]">{children}</div>
         </main>
       </div>
+      <GlobalCommandPalette
+        open={isCommandPaletteOpen}
+        onClose={() => setIsCommandPaletteOpen(false)}
+      />
     </div>
   );
 }

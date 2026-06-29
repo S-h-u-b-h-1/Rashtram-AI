@@ -8,6 +8,9 @@ Rashtram AI v1.0 uses one research-chat architecture for Bills, Acts, and
 eGazette documents. The same contract is future-ready for policies, committee
 reports, rules, notifications, circulars, and debates.
 
+Architecture v2 extends this contract to every normalized document type and
+adds bounded cross-document chat. See `ARCHITECTURE_V2.md`.
+
 Legacy Bill, Act, and eGazette endpoints remain available for compatibility,
 but current pages use `/api/document-chat` and the shared `document-chat`
 component system.
