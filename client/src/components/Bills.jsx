@@ -12,11 +12,13 @@ import {
   PauseCircle,
   MinusCircle,
   CheckCircle2,
+  BookmarkPlus,
   Hourglass,
   GitBranch,
 } from "lucide-react";
 import {
   fetchBills,
+  saveSearch,
   trackActivity,
   trackSearchActivity,
 } from "@/lib/api";
@@ -260,6 +262,22 @@ export default function BillsSidebarUI() {
               showFilters ? "rotate-180" : ""
             }`}
           />
+        </button>
+        <button
+          type="button"
+          onClick={() =>
+            saveSearch({
+              name: searchTerm.trim()
+                ? `Bills: ${searchTerm.trim()}`
+                : "Bill filters",
+              query: searchTerm.trim(),
+              filters: { status: selectedStatus },
+            })
+          }
+          className="mt-2 inline-flex items-center gap-1.5 text-[10px] font-semibold text-[#874047]"
+        >
+          <BookmarkPlus className="h-3.5 w-3.5" />
+          Save this search
         </button>
 
         {}

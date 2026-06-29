@@ -6,6 +6,10 @@ import {
   MessageSquareText,
   ScrollText,
   Newspaper,
+  Clock3,
+  Flame,
+  Search,
+  CalendarRange,
 } from "lucide-react";
 
 export function ResearchActivity({ stats }) {
@@ -50,6 +54,37 @@ export function ResearchActivity({ stats }) {
       value: stats.totalMessages,
       icon: MessageSquareText,
     },
+    {
+      label: "Research sessions",
+      value: stats.researchSessions,
+      icon: History,
+    },
+    {
+      label: "Recent searches",
+      value: stats.recentSearches,
+      icon: Search,
+    },
+    {
+      label: "Reading minutes",
+      value: stats.readingTimeMinutes,
+      icon: Clock3,
+    },
+    {
+      label: "Research streak",
+      value: stats.researchStreak,
+      suffix: " days",
+      icon: Flame,
+    },
+    {
+      label: "Weekly activity",
+      value: stats.weeklyActivity,
+      icon: CalendarRange,
+    },
+    {
+      label: "Monthly activity",
+      value: stats.monthlyActivity,
+      icon: CalendarRange,
+    },
   ];
 
   return (
@@ -66,7 +101,7 @@ export function ResearchActivity({ stats }) {
         </p>
       </div>
 
-      <div className="mt-5 grid grid-cols-2 gap-3 lg:grid-cols-4 xl:grid-cols-8">
+      <div className="mt-5 grid grid-cols-2 gap-3 lg:grid-cols-4 xl:grid-cols-7">
         {items.map((item) => {
           const ActivityIcon = item.icon;
           return (
@@ -77,6 +112,7 @@ export function ResearchActivity({ stats }) {
               <ActivityIcon className="h-4 w-4 text-[#874047]" />
               <p className="mt-4 font-serif text-3xl text-[#8f1d2c]">
                 {Number(item.value || 0).toLocaleString()}
+                {item.suffix || ""}
               </p>
               <p className="mt-1 text-[11px] text-[#81796e]">
                 {item.label}

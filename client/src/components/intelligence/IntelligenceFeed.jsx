@@ -21,10 +21,10 @@ export function IntelligenceFeed({ events, isFallback }) {
       <div className="flex items-start justify-between gap-4">
         <div>
           <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#874047]">
-            Current activity
+            Verified parliamentary records
           </p>
           <h2 className="mt-2 font-serif text-2xl text-[#8f1d2c]">
-            Today in Parliament & policy
+            Live Parliament activity
           </h2>
         </div>
         <Radio className="h-5 w-5 text-[#8c4548]" />
@@ -32,8 +32,8 @@ export function IntelligenceFeed({ events, isFallback }) {
 
       {isFallback && (
         <div className="mt-5 rounded-xl border border-[#98705d]/25 bg-[#f8ead7] px-4 py-3 text-xs leading-5 text-[#754b2e]">
-          No live Parliament events have been ingested yet. Showing recently
-          added catalogue documents instead.
+          No current Parliament event is available from the connected public
+          feeds. Blocked and stale sources are shown honestly in source health.
         </div>
       )}
 

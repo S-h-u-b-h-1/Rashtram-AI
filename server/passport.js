@@ -3,7 +3,8 @@ require('dotenv').config();
 const passport = require('passport');
 const User = require('./models/User');
 
-passport.use(new GoogleStrategy({
+if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
+  passport.use(new GoogleStrategy({
     clientID: process.env.GOOGLE_CLIENT_ID,
     clientSecret: process.env.GOOGLE_CLIENT_SECRET,
     callbackURL: process.env.GOOGLE_CALLBACK_URL || "/api/auth/google/callback"
@@ -20,5 +21,10 @@ passport.use(new GoogleStrategy({
     } catch (err) {
       return cb(err);
     }
-  }
-));
+    }
+  ));
+} else {
+  console.warn(
+    "Google OAuth is disabled because its client credentials are not configured.",
+  );
+}

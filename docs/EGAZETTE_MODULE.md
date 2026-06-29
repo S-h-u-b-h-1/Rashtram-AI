@@ -19,6 +19,11 @@ Catalogue ingestion remains separate from AI processing. Collectors store
 metadata and official URLs in PostgreSQL. A PDF is downloaded and indexed only
 after an authenticated user opens that Gazette research workspace.
 
+As of v1.0, Gazette chat uses the same `DocumentChatLayout`,
+`document_chats`, and `/api/document-chat` pipeline as Bills and Acts. The
+Gazette-specific endpoints below remain as compatibility routes for older
+clients. See `DOCUMENT_CHAT_ARCHITECTURE.md`.
+
 ## User experience
 
 Authenticated workspace navigation is ordered Dashboard, Bills, Acts,

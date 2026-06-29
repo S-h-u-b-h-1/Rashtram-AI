@@ -6,6 +6,7 @@ import {
   ArrowDownAZ,
   ArrowUpAZ,
   BookOpenText,
+  BookmarkPlus,
   ChevronLeft,
   ChevronRight,
   ExternalLink,
@@ -16,6 +17,7 @@ import {
 } from "lucide-react";
 import {
   fetchEGazettes,
+  saveSearch,
   trackActivity,
   trackSearchActivity,
 } from "@/lib/api";
@@ -227,7 +229,7 @@ export default function EGazette() {
           </div>
         </div>
 
-        <div className="mt-5 grid gap-3 lg:grid-cols-[minmax(0,1fr)_auto_auto]">
+        <div className="mt-5 grid gap-3 lg:grid-cols-[minmax(0,1fr)_auto_auto_auto]">
           <label className="relative">
             <Search className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-[#918a7f]" />
             <input
@@ -249,6 +251,22 @@ export default function EGazette() {
                 {activeFilterCount}
               </span>
             )}
+          </button>
+          <button
+            type="button"
+            onClick={() =>
+              saveSearch({
+                name: search.trim()
+                  ? `Gazette: ${search.trim()}`
+                  : "Gazette filters",
+                query: search.trim(),
+                filters,
+              })
+            }
+            className="inline-flex h-12 items-center justify-center gap-2 rounded-xl border border-[#8f1d2c]/10 bg-white px-3 text-[10px] font-semibold text-[#874047]"
+          >
+            <BookmarkPlus className="h-3.5 w-3.5" />
+            Save this search
           </button>
           <div className="flex">
             <select

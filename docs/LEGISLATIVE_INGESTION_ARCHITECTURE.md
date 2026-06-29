@@ -184,6 +184,24 @@ rules, ordinances, and orders emit `gazette_notification`, `rule_published`,
 change to an existing eGazette record emits `notification_updated`; unchanged
 source refreshes emit no update.
 
+## v1.0 release verification
+
+The 29 June 2026 release sampled every connector. Accessible source runs
+26–29 produced:
+
+- PRS: 3 discovered, 3 merged/updated, 4 PDF URLs;
+- India Code: a valid current sample with no new records;
+- eGazette: 3 discovered, 1 canonical insert, 2 merges, 3 PDF URLs;
+- Delhi State Legislature: 3 discovered and merged, 3 PDF URLs.
+
+Runs 30–34 persisted exact blocked diagnostics for Digital Sansad, Lok Sabha,
+Rajya Sabha, the ministry directory, and the state Gazette directory. No
+fabricated records or PDF downloads were produced.
+
+Schema initialization now creates the generic chat, profile, saved-content,
+notes, feedback, and session tables; compatibility-backfills legacy chats; and
+installs publication-date, ministry, and canonical-source indexes.
+
 ## Commands
 
 ```bash

@@ -1,6 +1,6 @@
 # Source Connector Status
 
-Status reviewed: 29 June 2026.
+Status reviewed: 29 June 2026 after v1.0 runs 26–34.
 
 This is an operational snapshot, not a projected catalogue size. Runtime
 counts shown in the product always come from PostgreSQL.
@@ -76,20 +76,36 @@ npm run ingest:sources --prefix server -- \
 
 ## Live verification result
 
-The bounded live run created ingestion runs 20–25. Five source families
-completed with explicit blocked-access errors and no fabricated records.
-`state-legislature` discovered and stored five Delhi records: four canonical
-documents were created and one matched an existing document. No PDFs were
-downloaded; five official PDF URLs and their provenance were stored.
+The final v1.0 bounded samples are ingestion runs 26–34:
 
-After the run, PostgreSQL contained 17,560 canonical documents and 17,244
-documents with PDF URLs. Source counts were: PRS 17,544, India Code 10,
-eGazette 7, and State Legislatures 6. The health sample reported five
-`Blocked` sources and one connected source whose display status was `Fresh`.
+- PRS discovered and stored three records. All three safely updated or merged
+  existing canonical documents and exposed four official PDF resources.
+- India Code completed successfully with a valid empty current sample.
+- eGazette discovered and stored three records: one new canonical document,
+  two safe merges/source additions, and three official PDF resources.
+- Delhi State Legislature discovered and stored three records. All three
+  safely updated or merged canonical documents and exposed three official PDF
+  resources.
+- Digital Sansad, Lok Sabha, Rajya Sabha, Ministries, and State Gazettes
+  stored zero records and explicit blocked diagnostics. Their reasons are,
+  respectively: timeout/access control, JavaScript-only listing hydration,
+  malformed headers plus JavaScript-only listing hydration, HTTP 403 on the
+  official directory, and an interactive ASP.NET catalogue without a stable
+  public listing.
+
+After these runs, PostgreSQL contained 17,561 canonical documents, 17,245
+documents with PDF URLs, 32 represented jurisdictions, and four canonical
+source families. Source counts were: PRS 17,544, India Code 10, eGazette 10,
+and State Legislatures 6.
 
 The code does not substitute projected counts. After each run,
 `document_sources`, `ingestion_runs`, and source snapshots determine the
 displayed record count, freshness, last success, error count, and refresh age.
+
+The v1.0 rerun sampled all nine connector families. Exact results are retained
+in `ingestion_runs` 26–34 and summarized in
+`LEGISLATIVE_INGESTION_ARCHITECTURE.md`. No connector substitutes projected
+records for inaccessible public data.
 
 ## Verification notes
 
@@ -98,8 +114,9 @@ official public pages on 29 June 2026. The health check exposed parser and PDF
 status, latest successful ingestion, latest error, database count, and a
 dashboard-compatible display status for every source.
 
-`catalog:duplicates` still reports historical PRS candidate groups. The new
-State Legislature run created no new reported duplicate group; one record was
-merged by the existing layered dedupe. Server tests, client lint, and client
-production build are the required release gates before scheduling these
-connectors.
+`catalog:duplicates` reports zero exact duplicate groups. It also reports 1,085
+probable-title review groups covering 2,379 documents and one pending match
+review. These are review candidates rather than confirmed duplicates; many are
+historical Bill/Ordinance title families in the PRS corpus. The bounded v1.0
+samples used the layered exact/legal-identity/fuzzy reconciliation flow and
+created no known exact duplicates.

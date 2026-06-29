@@ -563,6 +563,7 @@ module.exports = {
   generateEGazetteSummary,
   generateEmbedding,
   generateEmbeddings,
+  generateLocalEmbedding,
   generateResponse,
   getActIndex,
   getEGazetteIndex,

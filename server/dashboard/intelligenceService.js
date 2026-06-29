@@ -145,52 +145,19 @@ const mapChat = (row) => ({
 
 const getRecentUserChats = async (userId, limit = 8) => {
   const result = await query(
-    `SELECT *
-     FROM (
-       SELECT
-         id,
-         bill_id AS document_id,
-         'bill'::TEXT AS document_type,
-         bill_title AS title,
-         bill_status AS status,
-         pdf_url,
-         LEFT(summary, 280) AS summary,
-         JSONB_ARRAY_LENGTH(messages) AS message_count,
-         GREATEST(last_message_at, updated_at) AS updated_at
-       FROM bill_chats
-       WHERE user_id = $1 AND is_active = TRUE
-
-       UNION ALL
-
-       SELECT
-         id,
-         act_id AS document_id,
-         'act'::TEXT AS document_type,
-         act_title AS title,
-         act_status AS status,
-         pdf_url,
-         LEFT(summary, 280) AS summary,
-         JSONB_ARRAY_LENGTH(messages) AS message_count,
-         updated_at
-       FROM act_chats
-       WHERE user_id = $1 AND is_active = TRUE
-
-       UNION ALL
-
-       SELECT
-         id,
-         gazette_id AS document_id,
-         'gazette'::TEXT AS document_type,
-         gazette_title AS title,
-         status,
-         pdf_url,
-         LEFT(summary, 280) AS summary,
-         JSONB_ARRAY_LENGTH(messages) AS message_count,
-         GREATEST(last_accessed_at, last_message_at, updated_at) AS updated_at
-       FROM egazette_chats
-       WHERE user_id = $1 AND is_active = TRUE
-     ) research
-     ORDER BY updated_at DESC
+    `SELECT
+       id,
+       document_id,
+       document_type,
+       document_title AS title,
+       status,
+       pdf_url,
+       LEFT(summary, 280) AS summary,
+       JSONB_ARRAY_LENGTH(messages) AS message_count,
+       GREATEST(last_accessed_at, last_message_at, updated_at) AS updated_at
+     FROM document_chats
+     WHERE user_id = $1 AND is_active = TRUE
+     ORDER BY is_pinned DESC, updated_at DESC
      LIMIT $2`,
     [userId, limit],
   );
@@ -315,6 +282,9 @@ const getDashboardIntelligence = async (userId) => {
     gazetteNotificationsResult,
     legalUpdatesResult,
     trendingResult,
+    ministryActivityResult,
+    developmentCountsResult,
+    recommendedReadingResult,
     refreshResult,
     recentCountsResult,
     sourceHealth,
@@ -421,6 +391,64 @@ const getDashboardIntelligence = async (userId) => {
       LIMIT 12
     `),
     query(`
+      SELECT
+        ministry,
+        COUNT(*)::INTEGER AS documents,
+        MAX(
+          COALESCE(publication_date::TIMESTAMPTZ, updated_at)
+        ) AS latest_activity
+      FROM legislative_documents
+      WHERE ministry IS NOT NULL AND ministry <> ''
+      GROUP BY ministry
+      ORDER BY latest_activity DESC, documents DESC, ministry
+      LIMIT 10
+    `),
+    query(`
+      SELECT document_type, COUNT(*)::INTEGER AS documents
+      FROM legislative_documents
+      WHERE first_seen_at >= NOW() - INTERVAL '30 days'
+      GROUP BY document_type
+      ORDER BY documents DESC, document_type
+    `),
+    query(
+      `WITH preferences AS (
+         SELECT
+           COALESCE(preferred_ministries, '[]'::jsonb) AS ministries,
+           COALESCE(preferred_policy_areas, '[]'::jsonb) AS policy_areas,
+           COALESCE(preferred_jurisdictions, '[]'::jsonb) AS jurisdictions,
+           COALESCE(preferred_document_types, '[]'::jsonb) AS document_types
+         FROM user_profiles
+         WHERE user_id = $1
+       )
+       SELECT
+         d.*,
+         (
+           CASE WHEN preferences.ministries ? COALESCE(d.ministry, '')
+             THEN 4 ELSE 0 END
+           + CASE WHEN preferences.policy_areas ? COALESCE(d.category, '')
+             THEN 3 ELSE 0 END
+           + CASE WHEN preferences.jurisdictions ? COALESCE(d.jurisdiction, '')
+             THEN 2 ELSE 0 END
+           + CASE WHEN preferences.document_types ? d.document_type
+             THEN 2 ELSE 0 END
+         ) AS recommendation_score
+       FROM legislative_documents d
+       CROSS JOIN (
+         SELECT * FROM preferences
+         UNION ALL
+         SELECT '[]'::jsonb, '[]'::jsonb, '[]'::jsonb, '[]'::jsonb
+         WHERE NOT EXISTS (SELECT 1 FROM preferences)
+       ) preferences
+       ORDER BY
+         recommendation_score DESC,
+         d.source_priority ASC,
+         COALESCE(d.publication_date, d.enacted_date, d.introduced_date)
+           DESC NULLS LAST,
+         d.updated_at DESC
+       LIMIT 8`,
+      [userId],
+    ),
+    query(`
       SELECT completed_at, status, source_name
       FROM ingestion_runs
       WHERE completed_at IS NOT NULL
@@ -524,6 +552,16 @@ const getDashboardIntelligence = async (userId) => {
       label: row.label,
       documentCount: row.documents,
     })),
+    ministryActivity: ministryActivityResult.rows.map((row) => ({
+      ministry: row.ministry,
+      documentCount: row.documents,
+      latestActivity: toIso(row.latest_activity),
+    })),
+    majorDevelopments: developmentCountsResult.rows.map((row) => ({
+      documentType: row.document_type,
+      documentCount: row.documents,
+    })),
+    recommendedReading: recommendedReadingResult.rows.map(mapDocument),
     sourceHealth,
     recentUserChats,
     emptyStateFlags: {
@@ -557,21 +595,15 @@ const getProfileData = async (userId) => {
       ),
       query(
         `SELECT
-           (
-             SELECT COUNT(*)::INTEGER
-             FROM bill_chats
-             WHERE user_id = $1 AND is_active = TRUE
-           ) AS bill_chats,
-           (
-             SELECT COUNT(*)::INTEGER
-             FROM act_chats
-             WHERE user_id = $1 AND is_active = TRUE
-           ) AS act_chats,
-           (
-             SELECT COUNT(*)::INTEGER
-             FROM egazette_chats
-             WHERE user_id = $1 AND is_active = TRUE
-           ) AS gazette_chats,
+           COUNT(*) FILTER (
+             WHERE document_type = 'bill'
+           )::INTEGER AS bill_chats,
+           COUNT(*) FILTER (
+             WHERE document_type = 'act'
+           )::INTEGER AS act_chats,
+           COUNT(*) FILTER (
+             WHERE document_type = 'gazette'
+           )::INTEGER AS gazette_chats,
            (
              SELECT COUNT(DISTINCT i.document_id)::INTEGER
              FROM user_document_interactions i
@@ -584,41 +616,13 @@ const getProfileData = async (userId) => {
                  OR d.document_type = 'gazette'
                )
            ) AS gazette_documents_opened,
-           (
-             SELECT COUNT(*)::INTEGER
-             FROM bill_chats
-             WHERE user_id = $1
-               AND is_active = TRUE
-               AND summary IS NOT NULL
-               AND summary <> ''
-           ) + (
-             SELECT COUNT(*)::INTEGER
-             FROM act_chats
-             WHERE user_id = $1
-               AND is_active = TRUE
-               AND summary IS NOT NULL
-               AND summary <> ''
-           ) + (
-             SELECT COUNT(*)::INTEGER
-             FROM egazette_chats
-             WHERE user_id = $1
-               AND is_active = TRUE
-               AND summary IS NOT NULL
-               AND summary <> ''
-           ) AS saved_summaries,
-           (
-             SELECT COALESCE(SUM(JSONB_ARRAY_LENGTH(messages)), 0)::INTEGER
-             FROM bill_chats
-             WHERE user_id = $1 AND is_active = TRUE
-           ) + (
-             SELECT COALESCE(SUM(JSONB_ARRAY_LENGTH(messages)), 0)::INTEGER
-             FROM act_chats
-             WHERE user_id = $1 AND is_active = TRUE
-           ) + (
-             SELECT COALESCE(SUM(JSONB_ARRAY_LENGTH(messages)), 0)::INTEGER
-             FROM egazette_chats
-             WHERE user_id = $1 AND is_active = TRUE
-           ) AS total_messages`,
+           COUNT(*) FILTER (
+             WHERE summary IS NOT NULL AND summary <> ''
+           )::INTEGER AS saved_summaries,
+           COALESCE(SUM(JSONB_ARRAY_LENGTH(messages)), 0)::INTEGER
+             AS total_messages
+         FROM document_chats
+         WHERE user_id = $1 AND is_active = TRUE`,
         [userId],
       ),
       query(`

@@ -2,6 +2,21 @@
 
 Last reviewed: 28 June 2026
 
+## v1.0 account and chat additions
+
+Unified conversations are stored in `document_chats`; private notes and
+explicit response feedback are stored separately. Activity analytics never
+copy chat text or document content.
+
+Profile visibility defaults to private. Saved documents, searches,
+collections, preferences, exports, and sessions are scoped by `user_id`. New
+JWTs are tied to revocable `user_sessions`; session records are excluded from
+user data downloads.
+
+Reading-time analytics use consecutive consented events in one session, with
+each interval capped at 30 minutes. Engagement time is not fabricated when
+tracking is disabled.
+
 ## Public source branding policy
 
 Rashtram AI presents its catalogue publicly as government-verified public

@@ -13,10 +13,12 @@ import {
   Hourglass,
   GitBranch,
   Scale,
+  BookmarkPlus,
 } from "lucide-react";
 import {
   fetchActs,
   fetchActYears,
+  saveSearch,
   trackActivity,
   trackSearchActivity,
 } from "@/lib/api";
@@ -253,6 +255,22 @@ export default function ActsSidebarUI() {
               showFilters ? "rotate-180" : ""
             }`}
           />
+        </button>
+        <button
+          type="button"
+          onClick={() =>
+            saveSearch({
+              name: searchTerm.trim()
+                ? `Acts: ${searchTerm.trim()}`
+                : "Act filters",
+              query: searchTerm.trim(),
+              filters: { year: selectedYear },
+            })
+          }
+          className="mt-2 inline-flex items-center gap-1.5 text-[10px] font-semibold text-[#874047]"
+        >
+          <BookmarkPlus className="h-3.5 w-3.5" />
+          Save this search
         </button>
 
         {}

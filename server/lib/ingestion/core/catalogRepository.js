@@ -807,7 +807,19 @@ const getUniversalStats = async () => {
       SELECT
         COUNT(*)::INTEGER AS probable_duplicate_groups,
         COALESCE(SUM(documents), 0)::INTEGER
-          AS documents_in_probable_groups
+          AS documents_in_probable_groups,
+        (
+          SELECT COUNT(*)::INTEGER
+          FROM (
+            SELECT COALESCE(content_hash, text_fingerprint, pdf_url)
+              AS exact_signature
+            FROM legislative_documents
+            WHERE COALESCE(content_hash, text_fingerprint, pdf_url)
+              IS NOT NULL
+            GROUP BY COALESCE(content_hash, text_fingerprint, pdf_url)
+            HAVING COUNT(*) > 1
+          ) exact_groups
+        ) AS exact_duplicate_groups
       FROM (
         SELECT COUNT(*)::INTEGER AS documents
         FROM legislative_documents

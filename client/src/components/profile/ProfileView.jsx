@@ -68,7 +68,12 @@ export function ProfileView() {
   return (
     <div className="space-y-5 pb-5">
       <ProfileIdentity user={profile.user} />
-      <ResearchActivity stats={profile.userActivityStats} />
+      <ResearchActivity
+        stats={{
+          ...profile.userActivityStats,
+          ...(profile.account?.analytics || {}),
+        }}
+      />
       <PlatformCoverage coverage={profile.platformCoverageStats} />
       <GazetteResearch
         chats={profile.recentGazetteResearch}
@@ -88,7 +93,31 @@ export function ProfileView() {
           }))
         }
       />
-      <AccountSettings />
+      <AccountSettings
+        account={profile.account}
+        onUpdate={(updates) =>
+          setProfile((current) => ({
+            ...current,
+            account: {
+              ...current.account,
+              ...updates,
+            },
+            user: updates.profile
+              ? {
+                  ...current.user,
+                  name: updates.profile.name,
+                  avatar: updates.profile.avatar,
+                  initials: updates.profile.name
+                    .split(" ")
+                    .slice(0, 2)
+                    .map((part) => part[0])
+                    .join("")
+                    .toUpperCase(),
+                }
+              : current.user,
+          }))
+        }
+      />
     </div>
   );
 }

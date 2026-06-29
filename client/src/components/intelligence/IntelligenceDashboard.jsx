@@ -8,6 +8,8 @@ import { DocumentListSection } from "./DocumentListSection";
 import { IntelligenceFeed } from "./IntelligenceFeed";
 import { IntelligenceSidebar } from "./IntelligenceSidebar";
 import { SourceHealthPanel } from "./SourceHealthPanel";
+import { MajorDevelopments } from "./MajorDevelopments";
+import { MinistryActivity } from "./MinistryActivity";
 
 export function IntelligenceDashboard({ onNavigate }) {
   const [data, setData] = useState(null);
@@ -85,17 +87,27 @@ export function IntelligenceDashboard({ onNavigate }) {
     );
   }
 
+  const parliamentEvents = data.intelligenceEvents.filter((event) =>
+    ["digital-sansad", "lok-sabha", "rajya-sabha", "prs-india"].includes(
+      event.sourceName,
+    ),
+  );
+
   return (
     <div className="space-y-5 pb-5">
       <DashboardHero data={data} />
+      <MajorDevelopments developments={data.majorDevelopments || []} />
 
       <div className="grid gap-5 xl:grid-cols-[minmax(0,1.65fr)_minmax(310px,0.75fr)]">
         <IntelligenceFeed
-          events={data.intelligenceEvents}
-          isFallback={data.emptyStateFlags.noLiveEvents}
+          events={parliamentEvents}
+          isFallback={
+            data.emptyStateFlags.noLiveEvents || parliamentEvents.length === 0
+          }
         />
         <IntelligenceSidebar
           trendingCategories={data.trendingCategories}
+          sourceHealth={data.sourceHealth}
         />
       </div>
 
@@ -123,6 +135,16 @@ export function IntelligenceDashboard({ onNavigate }) {
         emptyMessage="No recent Gazette notifications are currently stored."
         onViewAll={() => onNavigate("egazette")}
       />
+
+      <div className="grid gap-5 xl:grid-cols-2">
+        <MinistryActivity ministries={data.ministryActivity || []} />
+        <DocumentListSection
+          eyebrow="Personalized from your preferences"
+          title="Recommended reading"
+          documents={data.recommendedReading || []}
+          emptyMessage="Add research interests in your profile to improve recommendations."
+        />
+      </div>
 
       <ContinueResearch chats={data.recentUserChats} />
       <SourceHealthPanel sources={data.sourceHealth} />

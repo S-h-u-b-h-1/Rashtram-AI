@@ -112,6 +112,160 @@ const initializeSchema = async () => {
         last_message_at DESC
       );
 
+    CREATE TABLE IF NOT EXISTS document_chats (
+      id BIGSERIAL PRIMARY KEY,
+      user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      document_type TEXT NOT NULL,
+      document_id TEXT NOT NULL,
+      document_title TEXT NOT NULL,
+      status TEXT,
+      pdf_url TEXT,
+      source_url TEXT,
+      summary TEXT,
+      messages JSONB NOT NULL DEFAULT '[]'::jsonb,
+      metadata_json JSONB NOT NULL DEFAULT '{}'::jsonb,
+      is_pinned BOOLEAN NOT NULL DEFAULT FALSE,
+      is_active BOOLEAN NOT NULL DEFAULT TRUE,
+      last_message_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      last_accessed_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      UNIQUE (user_id, document_type, document_id)
+    );
+
+    CREATE INDEX IF NOT EXISTS document_chats_user_recent_idx
+      ON document_chats (
+        user_id,
+        last_accessed_at DESC,
+        last_message_at DESC
+      );
+
+    CREATE INDEX IF NOT EXISTS document_chats_document_idx
+      ON document_chats (document_type, document_id);
+
+    CREATE TABLE IF NOT EXISTS research_notes (
+      id BIGSERIAL PRIMARY KEY,
+      user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      document_type TEXT NOT NULL,
+      document_id TEXT NOT NULL,
+      body TEXT NOT NULL,
+      is_pinned BOOLEAN NOT NULL DEFAULT TRUE,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+
+    CREATE INDEX IF NOT EXISTS research_notes_document_idx
+      ON research_notes (user_id, document_type, document_id, updated_at DESC);
+
+    CREATE TABLE IF NOT EXISTS document_chat_feedback (
+      id BIGSERIAL PRIMARY KEY,
+      user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      document_type TEXT NOT NULL,
+      document_id TEXT NOT NULL,
+      message_id TEXT NOT NULL,
+      rating SMALLINT NOT NULL CHECK (rating IN (-1, 1)),
+      reason TEXT,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      UNIQUE (user_id, document_type, document_id, message_id)
+    );
+
+    CREATE TABLE IF NOT EXISTS user_profiles (
+      user_id BIGINT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+      username TEXT UNIQUE,
+      bio TEXT,
+      organization TEXT,
+      designation TEXT,
+      location TEXT,
+      phone TEXT,
+      timezone TEXT NOT NULL DEFAULT 'Asia/Kolkata',
+      language_preference TEXT NOT NULL DEFAULT 'English',
+      theme_preference TEXT NOT NULL DEFAULT 'system',
+      research_visibility TEXT NOT NULL DEFAULT 'private',
+      notification_preferences JSONB NOT NULL DEFAULT '{}'::jsonb,
+      research_interests JSONB NOT NULL DEFAULT '[]'::jsonb,
+      preferred_ministries JSONB NOT NULL DEFAULT '[]'::jsonb,
+      preferred_policy_areas JSONB NOT NULL DEFAULT '[]'::jsonb,
+      preferred_jurisdictions JSONB NOT NULL DEFAULT '[]'::jsonb,
+      preferred_document_types JSONB NOT NULL DEFAULT '[]'::jsonb,
+      preferred_sources JSONB NOT NULL DEFAULT '[]'::jsonb,
+      dashboard_widgets JSONB NOT NULL DEFAULT '[]'::jsonb,
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+
+    CREATE TABLE IF NOT EXISTS saved_content (
+      id BIGSERIAL PRIMARY KEY,
+      user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      item_type TEXT NOT NULL CHECK (
+        item_type IN ('bookmark', 'pinned_document', 'pinned_chat')
+      ),
+      document_type TEXT,
+      document_id TEXT,
+      chat_id BIGINT REFERENCES document_chats(id) ON DELETE CASCADE,
+      title TEXT NOT NULL,
+      metadata_json JSONB NOT NULL DEFAULT '{}'::jsonb,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+
+    CREATE UNIQUE INDEX IF NOT EXISTS saved_content_document_unique_idx
+      ON saved_content (
+        user_id,
+        item_type,
+        COALESCE(document_type, ''),
+        COALESCE(document_id, ''),
+        COALESCE(chat_id, 0)
+      );
+
+    CREATE INDEX IF NOT EXISTS saved_content_user_recent_idx
+      ON saved_content (user_id, created_at DESC);
+
+    CREATE TABLE IF NOT EXISTS saved_searches (
+      id BIGSERIAL PRIMARY KEY,
+      user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      name TEXT NOT NULL,
+      query_text TEXT,
+      filters_json JSONB NOT NULL DEFAULT '{}'::jsonb,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+
+    CREATE INDEX IF NOT EXISTS saved_searches_user_recent_idx
+      ON saved_searches (user_id, updated_at DESC);
+
+    CREATE TABLE IF NOT EXISTS research_collections (
+      id BIGSERIAL PRIMARY KEY,
+      user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      name TEXT NOT NULL,
+      description TEXT,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+
+    CREATE TABLE IF NOT EXISTS research_collection_items (
+      collection_id BIGINT NOT NULL
+        REFERENCES research_collections(id) ON DELETE CASCADE,
+      document_type TEXT NOT NULL,
+      document_id TEXT NOT NULL,
+      title TEXT NOT NULL,
+      metadata_json JSONB NOT NULL DEFAULT '{}'::jsonb,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      PRIMARY KEY (collection_id, document_type, document_id)
+    );
+
+    CREATE TABLE IF NOT EXISTS user_sessions (
+      id TEXT PRIMARY KEY,
+      user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      user_agent TEXT,
+      ip_address TEXT,
+      expires_at TIMESTAMPTZ NOT NULL,
+      last_seen_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      revoked_at TIMESTAMPTZ,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+
+    CREATE INDEX IF NOT EXISTS user_sessions_user_active_idx
+      ON user_sessions (user_id, revoked_at, last_seen_at DESC);
+
     CREATE TABLE IF NOT EXISTS related_bills (
       bill_id TEXT PRIMARY KEY,
       bill_title TEXT NOT NULL,
@@ -173,6 +327,19 @@ const initializeSchema = async () => {
 
     CREATE INDEX IF NOT EXISTS legislative_documents_title_idx
       ON legislative_documents (LOWER(title));
+
+    CREATE INDEX IF NOT EXISTS legislative_documents_publication_idx
+      ON legislative_documents (publication_date DESC NULLS LAST, id DESC);
+
+    CREATE INDEX IF NOT EXISTS legislative_documents_ministry_idx
+      ON legislative_documents (ministry, publication_date DESC NULLS LAST)
+      WHERE ministry IS NOT NULL;
+
+    CREATE INDEX IF NOT EXISTS legislative_documents_source_idx
+      ON legislative_documents (
+        (COALESCE(canonical_source, source_name)),
+        updated_at DESC
+      );
 
     CREATE TABLE IF NOT EXISTS legislative_document_resources (
       id BIGSERIAL PRIMARY KEY,
@@ -571,6 +738,42 @@ const initializeSchema = async () => {
       last_active_at TIMESTAMPTZ,
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
+
+    INSERT INTO document_chats (
+      user_id, document_type, document_id, document_title, status, pdf_url,
+      summary, messages, last_message_at, last_accessed_at, is_active,
+      created_at, updated_at
+    )
+    SELECT
+      user_id, 'bill', bill_id, bill_title, bill_status, pdf_url,
+      summary, messages, last_message_at, updated_at, is_active,
+      created_at, updated_at
+    FROM bill_chats
+    ON CONFLICT (user_id, document_type, document_id) DO NOTHING;
+
+    INSERT INTO document_chats (
+      user_id, document_type, document_id, document_title, status, pdf_url,
+      summary, messages, last_message_at, last_accessed_at, is_active,
+      created_at, updated_at
+    )
+    SELECT
+      user_id, 'act', act_id, act_title, act_status, pdf_url,
+      summary, messages, updated_at, updated_at, is_active,
+      created_at, updated_at
+    FROM act_chats
+    ON CONFLICT (user_id, document_type, document_id) DO NOTHING;
+
+    INSERT INTO document_chats (
+      user_id, document_type, document_id, document_title, status, pdf_url,
+      source_url, summary, messages, metadata_json, last_message_at,
+      last_accessed_at, is_active, created_at, updated_at
+    )
+    SELECT
+      user_id, 'gazette', gazette_id, gazette_title, status, pdf_url,
+      source_url, summary, messages, metadata_json, last_message_at,
+      last_accessed_at, is_active, created_at, updated_at
+    FROM egazette_chats
+    ON CONFLICT (user_id, document_type, document_id) DO NOTHING;
 
     CREATE TABLE IF NOT EXISTS user_document_interactions (
       id BIGSERIAL PRIMARY KEY,
