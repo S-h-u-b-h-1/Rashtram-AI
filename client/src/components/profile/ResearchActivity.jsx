@@ -25,6 +25,11 @@ export function ResearchActivity({ stats }) {
       icon: BookOpenText,
     },
     {
+      label: "Policy conversations",
+      value: stats.policyChats,
+      icon: FileCheck2,
+    },
+    {
       label: "Gazette conversations",
       value: stats.gazetteChats,
       icon: Newspaper,

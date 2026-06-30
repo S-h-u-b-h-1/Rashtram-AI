@@ -3,6 +3,7 @@
 import Link from "next/link";
 import {
   FileSearch,
+  BookOpenText,
   History,
   LayoutDashboard,
   Search,
@@ -23,6 +24,11 @@ const PAGES = [
   { label: "All documents", href: "/app?view=documents", icon: FileSearch },
   { label: "Bills", href: "/app?view=bills", icon: FileSearch },
   { label: "Acts", href: "/app?view=acts", icon: Scale },
+  {
+    label: "Policies",
+    href: "/app?view=policies",
+    icon: BookOpenText,
+  },
   { label: "eGazette", href: "/app/egazette", icon: ScrollText },
   { label: "Profile and collections", href: "/app/profile", icon: Settings },
 ];

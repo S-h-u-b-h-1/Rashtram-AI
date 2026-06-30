@@ -51,6 +51,10 @@ const mapDocument = (row) => {
     sourceName: source,
     sourceUrl,
     pdfUrl: row.pdf_url,
+    fileHash: row.file_hash || null,
+    mimeType: row.mime_type || null,
+    fileSizeBytes:
+      row.file_size_bytes == null ? null : Number(row.file_size_bytes),
     number:
       row.bill_number ||
       row.act_number ||

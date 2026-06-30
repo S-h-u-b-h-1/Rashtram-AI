@@ -37,6 +37,15 @@ test("unified document chat supports current and future research types", () => {
     "notification",
     "circular",
     "debate",
+    "strategy_paper",
+    "white_paper",
+    "manual",
+    "report",
+    "cabinet_decision",
+    "press_release",
+    "government_resolution",
+    "recommendation",
+    "discussion_paper",
   ]) {
     assert.equal(ALLOWED_DOCUMENT_TYPES.has(type), true);
     assert.equal(normalizeType(type.toUpperCase()), type);

@@ -4,6 +4,7 @@ const {
   findCandidates,
   persistRecord,
   storeSnapshots,
+  upsertDirectoryEntries,
 } = require("./catalogRepository");
 const { chooseBestCandidate } = require("./dedupe");
 const { PoliteFetcher } = require("./fetcher");
@@ -62,6 +63,7 @@ const runIngestion = async (connector, options = {}) => {
       reviewsQueued: 0,
       snapshots: 0,
       relationships: 0,
+      directory_entries: 0,
       downloaded_pdfs: 0,
       stored_pdfs: 0,
       pdf_download_errors: 0,
@@ -81,8 +83,12 @@ const runIngestion = async (connector, options = {}) => {
       });
     const collection = await connector.collect(options, { fetcher });
     const records = collection.records || [];
+    const directoryEntries = collection.directoryEntries || [];
     summary.discovered = records.length;
     summary.counters.discovered = records.length;
+    summary.counters.directory_entries = options.dryRun
+      ? directoryEntries.length
+      : await upsertDirectoryEntries(directoryEntries);
     summary.errors.push(...(collection.errors || []));
     for (const diagnostic of collection.diagnostics || []) {
       if (!["blocked", "error"].includes(diagnostic.type)) continue;

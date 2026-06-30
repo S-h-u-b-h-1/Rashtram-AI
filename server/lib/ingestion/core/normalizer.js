@@ -1,27 +1,8 @@
 const { textFingerprint } = require("./hashing");
-
-const DOCUMENT_TYPES = new Set([
-  "bill",
-  "act",
-  "rule",
-  "regulation",
-  "notification",
-  "gazette",
-  "policy",
-  "scheme",
-  "circular",
-  "committee_report",
-  "debate",
-  "question",
-  "proceeding",
-  "office_memorandum",
-  "guideline",
-  "ordinance",
-  "order",
-  "resolution",
-  "report",
-  "other",
-]);
+const {
+  DOCUMENT_TYPES,
+  normalizeDocumentType: normalizeExplicitDocumentType,
+} = require("../../../document/documentTypes");
 
 const SOURCE_PRIORITIES = {
   egazette: 10,
@@ -100,15 +81,29 @@ const sourcePriorityFor = (sourceName) => {
 };
 
 const inferDocumentType = (record) => {
-  const explicit = String(record.documentType || "")
-    .toLowerCase()
-    .replace(/[\s-]+/g, "_");
-  if (DOCUMENT_TYPES.has(explicit)) return explicit;
+  if (record.documentType) {
+    try {
+      return normalizeExplicitDocumentType(record.documentType);
+    } catch {
+      // Continue with evidence-based inference for source-specific labels.
+    }
+  }
 
   const value = `${record.title || ""} ${record.category || ""}`.toLowerCase();
   const matches = [
     ["office memorandum", "office_memorandum"],
     ["committee report", "committee_report"],
+    ["cabinet decision", "cabinet_decision"],
+    ["press release", "press_release"],
+    ["government resolution", "government_resolution"],
+    ["strategy paper", "strategy_paper"],
+    ["strategy document", "strategy_paper"],
+    ["white paper", "white_paper"],
+    ["discussion paper", "discussion_paper"],
+    ["consultation paper", "consultation_paper"],
+    ["manual", "manual"],
+    ["recommendation", "recommendation"],
+    ["report", "report"],
     ["regulation", "regulation"],
     ["notification", "notification"],
     ["ordinance", "ordinance"],
@@ -217,6 +212,11 @@ const normalizeRecord = (record) => {
         ? record.sourcePriority
         : sourcePriorityFor(sourceName),
     contentHash: cleanText(record.contentHash || record.pdfHash),
+    fileHash: cleanText(record.fileHash || record.pdfHash),
+    mimeType: cleanText(record.mimeType),
+    fileSizeBytes: Number.isFinite(Number(record.fileSizeBytes))
+      ? Math.max(0, Math.trunc(Number(record.fileSizeBytes)))
+      : null,
     pdfHash: cleanText(record.pdfHash),
     htmlHash: cleanText(record.htmlHash),
     textFingerprint:

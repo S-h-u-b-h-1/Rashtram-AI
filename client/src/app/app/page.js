@@ -9,6 +9,7 @@ import { IntelligenceDashboard } from "@/components/intelligence/IntelligenceDas
 import ProtectedRoute from "@/components/ProtectedRoute";
 import { WorkspaceShell } from "@/components/workspace/WorkspaceShell";
 import { DocumentExplorer } from "@/components/documents/DocumentExplorer";
+import Policies from "@/components/Policies";
 
 function AllDocuments() {
   return (
@@ -35,6 +36,11 @@ const VIEWS = {
     title: "Parliament Acts",
     content: ActsUI,
   },
+  policies: {
+    activeKey: "policies",
+    title: "Policies & Strategy",
+    content: Policies,
+  },
 };
 
 function WorkspacePage() {
@@ -50,6 +56,7 @@ function WorkspacePage() {
     if (view === "bills") router.push("/app?view=bills");
     else if (view === "acts") router.push("/app?view=acts");
     else if (view === "documents") router.push("/app?view=documents");
+    else if (view === "policies") router.push("/app?view=policies");
     else if (view === "egazette") router.push("/app/egazette");
     else router.push("/app");
   };

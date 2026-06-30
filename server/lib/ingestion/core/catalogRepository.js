@@ -134,6 +134,9 @@ const documentInsertValues = (record) => [
   record.contentHash,
   record.textFingerprint,
   JSON.stringify(record.metadata || {}),
+  record.fileHash,
+  record.mimeType,
+  record.fileSizeBytes,
 ];
 
 const insertDocument = async (client, record) => {
@@ -175,13 +178,16 @@ const insertDocument = async (client, record) => {
        source_priority,
        content_hash,
        text_fingerprint,
-       metadata_json
+       metadata_json,
+       file_hash,
+       mime_type,
+       file_size_bytes
      )
      VALUES (
        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14,
        $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26,
        $27, $28, $29, $30, $31::jsonb, $32, $33, $34, $35, $36,
-       $37::jsonb
+       $37::jsonb, $38, $39, $40
      )
      RETURNING *`,
     documentInsertValues(record),
@@ -237,6 +243,9 @@ const updateCanonicalDocument = async (client, documentId, record) => {
                                  THEN $27 ELSE canonical_url END,
             source_priority = LEAST(source_priority, $2),
             metadata_json = metadata_json || $28::jsonb,
+            file_hash = COALESCE(file_hash, $29),
+            mime_type = COALESCE(mime_type, $30),
+            file_size_bytes = COALESCE(file_size_bytes, $31),
             last_seen_at = NOW(),
             updated_at = NOW()
       WHERE id = $1
@@ -270,6 +279,9 @@ const updateCanonicalDocument = async (client, documentId, record) => {
       record.sourceName,
       record.detailUrl || record.sourceUrl,
       JSON.stringify(record.metadata || {}),
+      record.fileHash,
+      record.mimeType,
+      record.fileSizeBytes,
     ],
   );
   return result.rows[0];
@@ -296,6 +308,9 @@ const upsertSource = async (client, documentId, record) => {
        content_hash,
        pdf_hash,
        html_hash,
+       file_hash,
+       mime_type,
+       file_size_bytes,
        text_fingerprint,
        source_title,
        source_status,
@@ -304,7 +319,7 @@ const upsertSource = async (client, documentId, record) => {
      )
      VALUES (
        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14,
-       $15::jsonb, $15::jsonb
+       $15, $16, $17, $18::jsonb, $18::jsonb
      )
      ON CONFLICT (source_name, source_record_id)
      DO UPDATE SET
@@ -323,6 +338,12 @@ const upsertSource = async (client, documentId, record) => {
        ),
        pdf_hash = COALESCE(EXCLUDED.pdf_hash, document_sources.pdf_hash),
        html_hash = COALESCE(EXCLUDED.html_hash, document_sources.html_hash),
+       file_hash = COALESCE(EXCLUDED.file_hash, document_sources.file_hash),
+       mime_type = COALESCE(EXCLUDED.mime_type, document_sources.mime_type),
+       file_size_bytes = COALESCE(
+         EXCLUDED.file_size_bytes,
+         document_sources.file_size_bytes
+       ),
        text_fingerprint = COALESCE(
          EXCLUDED.text_fingerprint,
          document_sources.text_fingerprint
@@ -352,6 +373,9 @@ const upsertSource = async (client, documentId, record) => {
       record.contentHash,
       record.pdfHash,
       record.htmlHash,
+      record.fileHash,
+      record.mimeType,
+      record.fileSizeBytes,
       record.textFingerprint,
       record.sourceTitle || record.title,
       record.sourceStatus || record.status,
@@ -746,6 +770,61 @@ const storeSnapshots = async (snapshots) => {
 
 const recordSourceSnapshot = async (snapshot) => storeSnapshots([snapshot]);
 
+const upsertDirectoryEntries = async (entries = []) => {
+  let stored = 0;
+  for (const entry of entries) {
+    if (!entry?.sourceName || !entry?.entryKey || !entry?.name) continue;
+    await query(
+      `INSERT INTO source_directory_entries (
+         source_name,
+         entry_key,
+         entity_type,
+         name,
+         jurisdiction,
+         parent_name,
+         official_url,
+         directory_url,
+         metadata_json
+       )
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb)
+       ON CONFLICT (source_name, entry_key)
+       DO UPDATE SET
+         entity_type = EXCLUDED.entity_type,
+         name = EXCLUDED.name,
+         jurisdiction = COALESCE(
+           EXCLUDED.jurisdiction,
+           source_directory_entries.jurisdiction
+         ),
+         parent_name = COALESCE(
+           EXCLUDED.parent_name,
+           source_directory_entries.parent_name
+         ),
+         official_url = COALESCE(
+           EXCLUDED.official_url,
+           source_directory_entries.official_url
+         ),
+         directory_url = EXCLUDED.directory_url,
+         metadata_json =
+           source_directory_entries.metadata_json || EXCLUDED.metadata_json,
+         last_seen_at = NOW(),
+         updated_at = NOW()`,
+      [
+        entry.sourceName,
+        entry.entryKey,
+        entry.entityType || "organization",
+        entry.name,
+        entry.jurisdiction || null,
+        entry.parentName || null,
+        entry.officialUrl || null,
+        entry.directoryUrl,
+        JSON.stringify(entry.metadata || {}),
+      ],
+    );
+    stored += 1;
+  }
+  return stored;
+};
+
 const getUniversalStats = async () => {
   const [
     totals,
@@ -1054,5 +1133,6 @@ module.exports = {
   repairCrossTypeIndiaCodeMerges,
   storeSnapshots,
   upsertCanonicalDocument,
+  upsertDirectoryEntries,
   upsertDocumentSource,
 };

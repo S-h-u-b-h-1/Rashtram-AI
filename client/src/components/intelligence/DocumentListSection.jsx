@@ -13,7 +13,7 @@ import { trackActivity } from "@/lib/api";
 export function DocumentListSection({
   eyebrow,
   title,
-  documents,
+  documents = [],
   emptyMessage,
   onViewAll,
 }) {

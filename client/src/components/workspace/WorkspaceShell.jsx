@@ -3,6 +3,7 @@
 import Link from "next/link";
 import {
   FileText,
+  BookOpenText,
   LayoutDashboard,
   LogOut,
   Menu,
@@ -43,6 +44,12 @@ const NAVIGATION = [
     label: "Acts",
     href: "/app?view=acts",
     icon: Scale,
+  },
+  {
+    key: "policies",
+    label: "Policies",
+    href: "/app?view=policies",
+    icon: BookOpenText,
   },
   {
     key: "egazette",

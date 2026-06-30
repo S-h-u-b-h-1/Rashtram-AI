@@ -17,6 +17,8 @@ or describe that document:
 - `ingestion_runs` records scope, counters, errors, and completion state.
 - `catalog_match_reviews` holds uncertain duplicate candidates for a person to
   accept or reject.
+- `source_directory_entries` stores dynamically discovered public bodies and
+  jurisdictions without misclassifying them as documents.
 
 Existing numeric document IDs remain stable because the frontend and Pinecone
 filters use them. The new `canonical_id` is an additional globally stable ID;
@@ -45,6 +47,7 @@ The canonical row stores:
 | Dates | introduced, passed, assent/enacted, published, commencement/effective |
 | Canonical provenance | `canonical_source`, `canonical_url`, `source_priority` |
 | Content identity | `content_hash`, `text_fingerprint` |
+| File metadata | `file_hash`, `mime_type`, `file_size_bytes` |
 | Compatibility | original source fields used by current bill/act routes |
 
 Unstructured source-only values remain in JSON metadata. Known universal values
@@ -96,6 +99,12 @@ throttling, and stable browse/detail URLs remain unchanged.
 | State legislatures | Configured official state portal, PDF discovery | SHA-256 of official file URL | One state/portal per run | Safe starter |
 | State gazettes | Official eGazette state directory discovery | SHA-256 of official file URL | Directory snapshot | Safe starter |
 | Ministries/departments | National Portal directory or explicit official URL | SHA-256 of official file URL | One directory/site per run | Safe starter |
+| IGOD directories | Ministry/department listings and state/UT site map | Organization URL or official state code | Full bounded directory refresh | Production |
+| NITI Aayog | Official report listing and public files | SHA-256 of official record/file URL | Incremental listing pages | HTTP 403 in current probe |
+| PIB | Official RSS feed | Feed GUID or URL hash | Frequent feed refresh | HTTP 403 in current probe |
+| MyGov | Public consultation listings | SHA-256 of official consultation URL | Recent listing refresh | Production |
+| NDAP / OGD | Public catalogue discovery | SHA-256 of public dataset URL | Recent catalogue sample | NDAP client-rendered; OGD currently HTTP 403 |
+| Regulators | Shared official public-listing adapters | SHA-256 of official record/file URL | One bounded listing page per run | Per-source status documented separately |
 
 Directory connectors are intentionally conservative. A site-specific adapter
 should replace them when an official API, feed, or stable structured listing is
@@ -113,6 +122,10 @@ Every connector emits the same source-record contract. The normalizer:
 - derives the year from trusted dates if needed;
 - maps source authority into a source-priority number;
 - retains source metadata and resources.
+- preserves MIME type, visible file size, and file hash where available;
+- classifies policy, strategy, white paper, discussion, consultation,
+  recommendation, report, Cabinet, press-release, manual, and government
+  resolution records.
 
 A record is rejected before storage unless it has a title, source name, source
 record ID, and source URL.
@@ -183,6 +196,26 @@ rules, ordinances, and orders emit `gazette_notification`, `rule_published`,
 `ordinance_published`, and `government_order` respectively. A meaningful
 change to an existing eGazette record emits `notification_updated`; unchanged
 source refreshes emit no update.
+
+## National policy expansion verification
+
+Runs 35–47 on 30 June 2026 performed bounded, metadata-only production
+collection:
+
+- IGOD stored 53 ministries, 48 departments, and all 36 states/Union
+  Territories in `source_directory_entries`;
+- MyGov stored two public consultations;
+- RBI, SEBI, TRAI, CERC, AICTE, UGC, NCLAT, and the GST Council stored ten
+  source records each;
+- no PDFs were retained, no OCR was performed, no vectors were written, and no
+  AI calls were made;
+- the catalogue reached 17,643 canonical documents, 17,262 PDF URLs, and 13
+  canonical source families;
+- exact content-hash duplicate groups remained zero.
+
+The production-backed release verifier confirms non-empty Policies results,
+all national dashboard arrays, profile policy coverage, universal search,
+document details, related chats, timelines, graphs, and compatibility APIs.
 
 ## v1.0 release verification
 

@@ -120,11 +120,28 @@ export function IntelligenceDashboard({ onNavigate }) {
           onViewAll={() => onNavigate("bills")}
         />
         <DocumentListSection
-          eyebrow="Law & Gazette"
-          title="Latest legal updates"
-          documents={data.latestLegalUpdates}
-          emptyMessage="No recent Acts, rules, notifications, or Gazettes are available."
+          eyebrow="Enacted law"
+          title="Latest Acts"
+          documents={data.latestActs || []}
+          emptyMessage="No recent Acts are currently available."
           onViewAll={() => onNavigate("acts")}
+        />
+      </div>
+
+      <div className="grid gap-5 xl:grid-cols-2">
+        <DocumentListSection
+          eyebrow="National policy"
+          title="Latest Policies"
+          documents={data.latestPolicies || []}
+          emptyMessage="No policy, strategy, white paper, or recommendation records are currently stored."
+          onViewAll={() => onNavigate("policies")}
+        />
+        <DocumentListSection
+          eyebrow="Public participation"
+          title="Public Consultations"
+          documents={data.publicConsultations || []}
+          emptyMessage="No public consultation papers are currently stored."
+          onViewAll={() => onNavigate("policies")}
         />
       </div>
 
@@ -134,6 +151,45 @@ export function IntelligenceDashboard({ onNavigate }) {
         documents={data.recentGazetteNotifications || []}
         emptyMessage="No recent Gazette notifications are currently stored."
         onViewAll={() => onNavigate("egazette")}
+      />
+
+      <div className="grid gap-5 xl:grid-cols-2">
+        <DocumentListSection
+          eyebrow="Union Government"
+          title="Latest Ministry Updates"
+          documents={data.latestMinistryUpdates || []}
+          emptyMessage="No recent ministry policy or announcement records are currently stored."
+          onViewAll={() => onNavigate("policies")}
+        />
+        <DocumentListSection
+          eyebrow="States & Union Territories"
+          title="Latest State Updates"
+          documents={data.latestStateUpdates || []}
+          emptyMessage="No recent state-level documents are currently stored."
+        />
+      </div>
+
+      <div className="grid gap-5 xl:grid-cols-2">
+        <DocumentListSection
+          eyebrow="Regulatory intelligence"
+          title="Latest Regulator Updates"
+          documents={data.latestRegulatorUpdates || []}
+          emptyMessage="No recent regulator documents are currently stored."
+        />
+        <DocumentListSection
+          eyebrow="Executive decisions"
+          title="Cabinet Decisions"
+          documents={data.cabinetDecisions || []}
+          emptyMessage="No Cabinet decision records are currently stored."
+          onViewAll={() => onNavigate("policies")}
+        />
+      </div>
+
+      <DocumentListSection
+        eyebrow="Parliamentary oversight"
+        title="Committee Activity"
+        documents={data.committeeActivity || []}
+        emptyMessage="No recent committee reports are currently stored."
       />
 
       <div className="grid gap-5 xl:grid-cols-2">

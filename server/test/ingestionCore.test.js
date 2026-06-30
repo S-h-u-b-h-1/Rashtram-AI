@@ -89,12 +89,17 @@ test("normalization accepts universal schema aliases", () => {
     commencementDate: "2025-09-01",
     pdfHash: "abc123",
     htmlHash: "def456",
+    mimeType: "application/pdf",
+    fileSizeBytes: 4096,
   });
   assert.equal(record.gazetteIdentifier, "CG-DL-E-1");
   assert.equal(record.enactedDate, "2025-08-22");
   assert.equal(record.effectiveDate, "2025-09-01");
   assert.equal(record.pdfHash, "abc123");
   assert.equal(record.htmlHash, "def456");
+  assert.equal(record.fileHash, "abc123");
+  assert.equal(record.mimeType, "application/pdf");
+  assert.equal(record.fileSizeBytes, 4096);
   assert.equal(record.status, "Published");
 });
 
@@ -121,6 +126,9 @@ test("normalization handles Indian numeric dates and source priority", () => {
   assert.equal(sourcePriorityFor("egazette"), 10);
   assert.equal(sourcePriorityFor("prs-india"), 50);
   assert.equal(normalizeDocumentType("Office Memorandum"), "office_memorandum");
+  assert.equal(normalizeDocumentType("strategy-paper"), "strategy_paper");
+  assert.equal(normalizeDocumentType("cabinet-decisions"), "cabinet_decision");
+  assert.equal(normalizeDocumentType("press-release"), "press_release");
   assert.equal(normalizeJurisdiction(null, "union"), "India");
   assert.equal(normalizeJurisdiction(null, "state"), "Unknown");
 });

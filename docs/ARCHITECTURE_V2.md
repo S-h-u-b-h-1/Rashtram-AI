@@ -4,11 +4,12 @@ Last reviewed: 30 June 2026
 
 ## Architectural objective
 
-Rashtram AI is a universal legislative document platform. Bills, Acts,
-Gazettes, rules, regulations, circulars, orders, office memoranda, policies,
-consultation papers, committee reports, questions, debates, proceedings,
-guidelines, schemes, ordinances, and central/state records share one document
-contract.
+Rashtram AI is a universal legislative and public-policy platform. Bills,
+Acts, Gazettes, rules, regulations, circulars, orders, office memoranda,
+policies, consultations, committee reports, questions, debates, proceedings,
+guidelines, schemes, ordinances, strategy papers, white papers, manuals,
+reports, Cabinet decisions, press releases, government resolutions,
+recommendations, and discussion papers share one document contract.
 
 Adding a document type requires:
 
@@ -48,6 +49,12 @@ relationships
 Legal identifiers, Bill/Act/Gazette numbers, lifecycle dates, provenance,
 content fingerprints, and canonical source identity remain available as
 specialized fields. Type-specific source metadata stays inside `metadata`.
+`file_hash`, `mime_type`, and `file_size_bytes` retain discovered asset
+identity without requiring a bulk file download.
+
+`source_directory_entries` separately stores ministries, departments, states,
+and Union Territories. Directory entities are not fabricated as documents;
+they become authorities and discovery targets for later document collection.
 
 ## Backend layers
 
@@ -123,6 +130,8 @@ Current views:
 - Bills: `type=bill`, Parliament jurisdiction
 - Acts: `type=act`, Parliament jurisdiction
 - eGazette: Gazette/subordinate-law scope
+- Policies: policy, scheme, guideline, consultation, strategy, report,
+  recommendation, resolution, and Cabinet-decision scope
 - All documents: no type restriction
 
 Every result opens `/app/document/:id`. `UniversalDocumentRoute` resolves the
@@ -165,6 +174,9 @@ Cross-document chat accepts one to five canonical IDs. The server:
 4. streams one Gemini response grounded across the selected set.
 
 The browser never supplies PDF URLs to the processing pipeline.
+Policy and regulator documents use the same on-demand legal-instrument
+retrieval family; catalogue collection never triggers OCR, embedding, or AI
+generation.
 
 ## Universal summaries
 
@@ -221,6 +233,19 @@ relationship provenance remain available for verification.
 Existing `research_collections` and `research_collection_items` store generic
 `document_type` and `document_id` values. They are already independent of Bill,
 Act, or Gazette tables and therefore support every current and future type.
+
+## National governance intelligence
+
+The dashboard API returns independent, evidence-backed feeds for latest Bills,
+Acts, policies, Gazette notifications, ministry updates, state updates,
+regulator updates, committee activity, public consultations, and Cabinet
+decisions. Empty feeds render explicit empty states rather than synthetic
+activity.
+
+The profile distinguishes personal research from platform coverage. It reports
+policy conversations and catalogue-wide policy/regulator coverage alongside
+the dynamically discovered ministry, department, state, and Union Territory
+directory.
 
 ## Performance
 

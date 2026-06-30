@@ -11,6 +11,29 @@ const PRODUCTION_CONNECTORS = new Set([
   "ministry",
   "state-legislature",
   "state-gazette",
+  "state-directory",
+  "niti-aayog",
+  "pib",
+  "mygov",
+  "ndap",
+  "ogd-india",
+  "regulator-rbi",
+  "regulator-sebi",
+  "regulator-trai",
+  "regulator-uidai",
+  "regulator-cci",
+  "regulator-cerc",
+  "regulator-irdai",
+  "regulator-pfrda",
+  "regulator-nmc",
+  "regulator-aicte",
+  "regulator-ugc",
+  "regulator-ec",
+  "regulator-nclt",
+  "regulator-nclat",
+  "regulator-gst-council",
+  "regulator-cbdt",
+  "regulator-cbic",
 ]);
 
 const countPdfLinks = (records) =>
@@ -32,7 +55,9 @@ const validateCollectionShape = (collection) => {
     !collection ||
     !Array.isArray(collection.records) ||
     !Array.isArray(collection.snapshots) ||
-    !Array.isArray(collection.errors)
+    !Array.isArray(collection.errors) ||
+    (collection.directoryEntries != null &&
+      !Array.isArray(collection.directoryEntries))
   ) {
     return {
       valid: false,
@@ -95,22 +120,36 @@ const probeConnector = async (
     );
     const shape = validateCollectionShape(collection);
     const discovered = collection.records?.length || 0;
+    const directoryEntries = collection.directoryEntries?.length || 0;
     const pdfLinks = shape.valid ? countPdfLinks(collection.records) : 0;
     const errorCount =
       (collection.errors?.length || 0) + Number(history.errorCount || 0);
     const reachable =
-      (collection.snapshots?.length || 0) > 0 || discovered > 0;
+      (collection.snapshots?.length || 0) > 0 ||
+      discovered > 0 ||
+      directoryEntries > 0;
     const blockedDiagnostic = collection.diagnostics?.find(
       (diagnostic) => diagnostic.type === "blocked",
+    );
+    const blockedError = collection.errors?.find((error) =>
+      /robots|captcha|forbidden|status code 403|\b403\b/i.test(
+        String(error.message || error.error || ""),
+      ),
     );
     let status = "connected";
 
     if (!shape.valid) status = "parser changed";
-    else if (blockedDiagnostic) status = "blocked";
+    else if (blockedDiagnostic || blockedError) status = "blocked";
     else if (!reachable && collection.errors.length) status = "unavailable";
-    else if (discovered > 0 && collection.errors.length) status = "degraded";
+    else if (
+      (discovered > 0 || directoryEntries > 0) &&
+      collection.errors.length
+    ) {
+      status = "degraded";
+    }
     else if (
       discovered === 0 &&
+      directoryEntries === 0 &&
       collection.diagnostics?.some(
         (diagnostic) => diagnostic.type === "empty-source",
       )
@@ -118,16 +157,18 @@ const probeConnector = async (
       status = "no data found";
     } else if (
       discovered === 0 &&
+      directoryEntries === 0 &&
       PRODUCTION_CONNECTORS.has(connector.name)
     ) {
       status = "parser changed";
     } else if (
       discovered === 0 &&
+      directoryEntries === 0 &&
       !history.documentCount &&
       !history.latestRunStatus
     ) {
       status = "planned";
-    } else if (discovered === 0) {
+    } else if (discovered === 0 && directoryEntries === 0) {
       status = "no data found";
     }
 
@@ -140,6 +181,7 @@ const probeConnector = async (
       parserStatus: shape.valid ? "Valid" : "Changed",
       parserMessage: shape.reason,
       sampleRecordsDiscovered: discovered,
+      sampleDirectoryEntriesDiscovered: directoryEntries,
       samplePdfLinksDiscovered: pdfLinks,
       pdfDiscoveryStatus: pdfLinks > 0 ? "Discovered" : "Not Discovered",
       snapshotsCaptured: collection.snapshots?.length || 0,
@@ -158,7 +200,12 @@ const probeConnector = async (
       durationMs: Date.now() - startedAt,
       error:
         status === "blocked"
-          ? blockedDiagnostic.message
+          ? String(
+              blockedDiagnostic?.message ||
+                blockedError?.message ||
+                blockedError?.error ||
+                "The official source rejected automated catalogue access.",
+            ).slice(0, 300)
           : status === "unavailable"
           ? String(
               collection.errors[0]?.message ||
@@ -177,6 +224,7 @@ const probeConnector = async (
       parserStatus: "Not Checked",
       parserMessage: null,
       sampleRecordsDiscovered: 0,
+      sampleDirectoryEntriesDiscovered: 0,
       samplePdfLinksDiscovered: 0,
       pdfDiscoveryStatus: "Not Checked",
       snapshotsCaptured: 0,

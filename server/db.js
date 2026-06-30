@@ -360,6 +360,27 @@ const initializeSchema = async () => {
     CREATE INDEX IF NOT EXISTS source_snapshots_recent_idx
       ON source_collection_snapshots (source_name, fetched_at DESC);
 
+    CREATE TABLE IF NOT EXISTS source_directory_entries (
+      id BIGSERIAL PRIMARY KEY,
+      source_name TEXT NOT NULL,
+      entry_key TEXT NOT NULL,
+      entity_type TEXT NOT NULL,
+      name TEXT NOT NULL,
+      jurisdiction TEXT,
+      parent_name TEXT,
+      official_url TEXT,
+      directory_url TEXT NOT NULL,
+      metadata_json JSONB NOT NULL DEFAULT '{}'::jsonb,
+      first_seen_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      last_seen_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      UNIQUE (source_name, entry_key)
+    );
+
+    CREATE INDEX IF NOT EXISTS source_directory_entries_scope_idx
+      ON source_directory_entries (entity_type, jurisdiction, name);
+
     ALTER TABLE legislative_documents
       DROP CONSTRAINT IF EXISTS legislative_documents_document_type_check;
 
@@ -387,6 +408,9 @@ const initializeSchema = async () => {
       ADD COLUMN IF NOT EXISTS canonical_url TEXT,
       ADD COLUMN IF NOT EXISTS source_priority INTEGER NOT NULL DEFAULT 100,
       ADD COLUMN IF NOT EXISTS content_hash TEXT,
+      ADD COLUMN IF NOT EXISTS file_hash TEXT,
+      ADD COLUMN IF NOT EXISTS mime_type TEXT,
+      ADD COLUMN IF NOT EXISTS file_size_bytes BIGINT,
       ADD COLUMN IF NOT EXISTS text_fingerprint TEXT,
       ADD COLUMN IF NOT EXISTS metadata_json JSONB NOT NULL DEFAULT '{}'::jsonb;
 
@@ -560,6 +584,9 @@ const initializeSchema = async () => {
     ALTER TABLE document_sources
       ADD COLUMN IF NOT EXISTS pdf_hash TEXT,
       ADD COLUMN IF NOT EXISTS html_hash TEXT,
+      ADD COLUMN IF NOT EXISTS file_hash TEXT,
+      ADD COLUMN IF NOT EXISTS mime_type TEXT,
+      ADD COLUMN IF NOT EXISTS file_size_bytes BIGINT,
       ADD COLUMN IF NOT EXISTS source_title TEXT,
       ADD COLUMN IF NOT EXISTS source_status TEXT,
       ADD COLUMN IF NOT EXISTS source_metadata JSONB NOT NULL DEFAULT '{}'::jsonb;

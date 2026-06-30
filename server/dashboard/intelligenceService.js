@@ -47,6 +47,59 @@ const SOURCE_REGISTRY = [
     label: "State Gazettes",
     purpose: "State notifications, rules, orders and ordinances",
   },
+  {
+    key: "state-directory",
+    label: "All States & Union Territories",
+    purpose: "Official IGOD discovery for all 36 state and UT jurisdictions",
+  },
+  {
+    key: "niti-aayog",
+    label: "NITI Aayog",
+    purpose: "Policy reports, strategy papers, white papers and recommendations",
+  },
+  {
+    key: "pib",
+    label: "Press Information Bureau",
+    purpose: "Cabinet decisions, policy announcements and ministry releases",
+  },
+  {
+    key: "mygov",
+    label: "MyGov",
+    purpose: "Public consultations, draft policies and citizen discussions",
+  },
+  {
+    key: "ndap",
+    label: "NDAP",
+    purpose: "Official public-data catalogue discovery",
+  },
+  {
+    key: "ogd-india",
+    label: "Open Government Data Platform India",
+    purpose: "Official public datasets and catalogue metadata",
+  },
+  ...[
+    ["rbi", "Reserve Bank of India"],
+    ["sebi", "Securities and Exchange Board of India"],
+    ["trai", "Telecom Regulatory Authority of India"],
+    ["uidai", "Unique Identification Authority of India"],
+    ["cci", "Competition Commission of India"],
+    ["cerc", "Central Electricity Regulatory Commission"],
+    ["irdai", "Insurance Regulatory and Development Authority"],
+    ["pfrda", "Pension Fund Regulatory and Development Authority"],
+    ["nmc", "National Medical Commission"],
+    ["aicte", "All India Council for Technical Education"],
+    ["ugc", "University Grants Commission"],
+    ["ec", "Election Commission of India"],
+    ["nclt", "National Company Law Tribunal"],
+    ["nclat", "National Company Law Appellate Tribunal"],
+    ["gst-council", "Goods and Services Tax Council"],
+    ["cbdt", "Central Board of Direct Taxes"],
+    ["cbic", "Central Board of Indirect Taxes and Customs"],
+  ].map(([key, label]) => ({
+    key: `regulator-${key}`,
+    label,
+    purpose: "Official regulations, circulars, orders and consultations",
+  })),
 ];
 
 const toIso = (value) => {
@@ -278,6 +331,7 @@ const getDashboardIntelligence = async (userId) => {
     user,
     eventsResult,
     recentDocumentsResult,
+    nationalUpdatesResult,
     activeBillsResult,
     gazetteNotificationsResult,
     legalUpdatesResult,
@@ -315,6 +369,29 @@ const getDashboardIntelligence = async (userId) => {
         updated_at DESC,
         id DESC
       LIMIT 12
+    `),
+    query(`
+      SELECT
+        legislative_documents.*,
+        COALESCE(
+          publication_date,
+          enacted_date,
+          effective_date,
+          first_seen_at::DATE
+        ) AS intelligence_date
+      FROM legislative_documents
+      WHERE document_type IN (
+        'act', 'policy', 'strategy_paper', 'white_paper',
+        'discussion_paper', 'recommendation', 'notification',
+        'gazette', 'committee_report', 'consultation_paper',
+        'cabinet_decision', 'press_release', 'report', 'rule',
+        'regulation', 'circular', 'order', 'office_memorandum',
+        'guideline', 'scheme'
+      )
+         OR source_name LIKE 'regulator-%'
+         OR canonical_source LIKE 'regulator-%'
+      ORDER BY intelligence_date DESC NULLS LAST, updated_at DESC, id DESC
+      LIMIT 100
     `),
     query(`
       SELECT
@@ -484,6 +561,9 @@ const getDashboardIntelligence = async (userId) => {
   ]);
 
   const recentDocuments = recentDocumentsResult.rows.map(mapDocument);
+  const nationalUpdates = nationalUpdatesResult.rows.map(mapDocument);
+  const latestBy = (predicate, limit = 8) =>
+    nationalUpdates.filter(predicate).slice(0, limit);
   const storedEvents = eventsResult.rows.map(mapEvent);
   const intelligenceEvents = storedEvents.length
     ? storedEvents
@@ -544,6 +624,42 @@ const getDashboardIntelligence = async (userId) => {
       : "No live Parliament events have been ingested yet; showing recent catalogue additions.",
     intelligenceEvents,
     recentDocuments,
+    latestActs: latestBy((document) => document.documentType === "act"),
+    latestPolicies: latestBy((document) =>
+      [
+        "policy",
+        "scheme",
+        "guideline",
+        "consultation_paper",
+        "strategy_paper",
+        "white_paper",
+        "discussion_paper",
+        "recommendation",
+        "report",
+        "government_resolution",
+        "cabinet_decision",
+      ].includes(document.documentType),
+    ),
+    latestMinistryUpdates: latestBy(
+      (document) =>
+        Boolean(document.ministry) &&
+        ["pib", "niti-aayog", "ministry"].includes(document.sourceName),
+    ),
+    latestStateUpdates: latestBy(
+      (document) => document.jurisdictionLevel === "state",
+    ),
+    latestRegulatorUpdates: latestBy((document) =>
+      String(document.sourceName || "").startsWith("regulator-"),
+    ),
+    committeeActivity: latestBy(
+      (document) => document.documentType === "committee_report",
+    ),
+    publicConsultations: latestBy(
+      (document) => document.documentType === "consultation_paper",
+    ),
+    cabinetDecisions: latestBy(
+      (document) => document.documentType === "cabinet_decision",
+    ),
     activeBills: activeBillsResult.rows.map(mapDocument),
     latestLegalUpdates: legalUpdatesResult.rows.map(mapDocument),
     recentGazetteNotifications:
@@ -604,6 +720,14 @@ const getProfileData = async (userId) => {
            COUNT(*) FILTER (
              WHERE document_type = 'gazette'
            )::INTEGER AS gazette_chats,
+           COUNT(*) FILTER (
+             WHERE document_type IN (
+               'policy', 'scheme', 'guideline', 'consultation_paper',
+               'strategy_paper', 'white_paper', 'discussion_paper',
+               'recommendation', 'report', 'government_resolution',
+               'cabinet_decision'
+             )
+           )::INTEGER AS policy_chats,
            (
              SELECT COUNT(DISTINCT i.document_id)::INTEGER
              FROM user_document_interactions i
@@ -650,6 +774,28 @@ const getProfileData = async (userId) => {
             WHERE document_type = 'act'
               AND jurisdiction_level = 'state'
           )::INTEGER AS state_acts,
+          COUNT(*) FILTER (
+            WHERE document_type IN (
+              'policy', 'scheme', 'guideline', 'consultation_paper',
+              'strategy_paper', 'white_paper', 'discussion_paper',
+              'recommendation', 'report', 'government_resolution',
+              'cabinet_decision'
+            )
+          )::INTEGER AS policy_documents,
+          COUNT(*) FILTER (
+            WHERE source_name LIKE 'regulator-%'
+               OR canonical_source LIKE 'regulator-%'
+          )::INTEGER AS regulator_documents,
+          (
+            SELECT COUNT(*)::INTEGER
+            FROM source_directory_entries
+            WHERE entity_type = 'ministry'
+          ) AS ministries_discovered,
+          (
+            SELECT COUNT(*)::INTEGER
+            FROM source_directory_entries
+            WHERE entity_type = 'state_or_union_territory'
+          ) AS states_discovered,
           COUNT(*) FILTER (
             WHERE canonical_source IN ('egazette', 'state-gazette')
               OR source_name IN ('egazette', 'state-gazette')
@@ -708,6 +854,7 @@ const getProfileData = async (userId) => {
   const researchHistoryCount =
     activityRow.bill_chats +
     activityRow.act_chats +
+    activityRow.policy_chats +
     activityRow.gazette_chats;
 
   return {
@@ -729,6 +876,7 @@ const getProfileData = async (userId) => {
     userActivityStats: {
       billChats: activityRow.bill_chats,
       actChats: activityRow.act_chats,
+      policyChats: activityRow.policy_chats,
       gazetteChats: activityRow.gazette_chats,
       gazetteDocumentsOpened: activityRow.gazette_documents_opened,
       researchHistoryCount,
@@ -745,6 +893,10 @@ const getProfileData = async (userId) => {
       parliamentActs: coverageRow.parliament_acts,
       stateBills: coverageRow.state_bills,
       stateActs: coverageRow.state_acts,
+      policyDocuments: coverageRow.policy_documents,
+      regulatorDocuments: coverageRow.regulator_documents,
+      ministriesDiscovered: coverageRow.ministries_discovered,
+      statesDiscovered: coverageRow.states_discovered,
       gazetteDocuments: coverageRow.gazette_documents,
       byDocumentType: typeCounts.rows.map((row) => ({
         documentType: row.document_type,

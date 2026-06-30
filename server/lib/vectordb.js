@@ -314,6 +314,15 @@ const SUMMARY_GUIDANCE = {
   proceeding: "institution, agenda, decisions, motions, votes, referrals, and next steps",
   guideline: "issuing authority, scope, recommended or mandatory actions, standards, implementation, and monitoring",
   scheme: "objective, eligibility, benefits, delivery institutions, funding, application process, monitoring, and timelines",
+  strategy_paper: "strategic objective, evidence base, scenarios, priorities, institutional responsibilities, milestones, risks, and evaluation",
+  white_paper: "problem definition, evidence, government position, policy options, recommendations, implementation, and unresolved questions",
+  discussion_paper: "problem statement, evidence, options, stakeholder questions, trade-offs, and response process",
+  manual: "scope, intended users, procedures, responsibilities, controls, forms, escalation paths, and revision history",
+  report: "mandate, methodology, evidence, findings, recommendations, limitations, and responsible institutions",
+  cabinet_decision: "decision, approving authority, affected ministries, programme or legal impact, funding, timelines, and implementation",
+  press_release: "announcement, issuing authority, policy or legislative context, commitments, dates, and linked official instruments",
+  government_resolution: "issuing authority, legal or administrative basis, operative resolution, affected institutions, dates, and implementation",
+  recommendation: "issuing body, evidence, recommended action, addressee, rationale, implementation, and follow-up",
   ordinance: "necessity, operative provisions, legal effect, duration, replacement legislation, and affected parties",
 };
 

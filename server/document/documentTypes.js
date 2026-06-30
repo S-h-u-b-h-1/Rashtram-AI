@@ -16,6 +16,16 @@ const DOCUMENT_TYPES = new Set([
   "proceeding",
   "guideline",
   "scheme",
+  "strategy_paper",
+  "white_paper",
+  "manual",
+  "report",
+  "cabinet_decision",
+  "press_release",
+  "government_resolution",
+  "resolution",
+  "recommendation",
+  "discussion_paper",
   "ordinance",
   "other",
 ]);
@@ -36,6 +46,21 @@ const TYPE_ALIASES = {
   proceedings: "proceeding",
   guidelines: "guideline",
   schemes: "scheme",
+  "strategy-paper": "strategy_paper",
+  "strategy-papers": "strategy_paper",
+  "white-paper": "white_paper",
+  "white-papers": "white_paper",
+  manuals: "manual",
+  reports: "report",
+  "cabinet-decision": "cabinet_decision",
+  "cabinet-decisions": "cabinet_decision",
+  "press-release": "press_release",
+  "press-releases": "press_release",
+  "government-resolution": "government_resolution",
+  "government-resolutions": "government_resolution",
+  recommendations: "recommendation",
+  "discussion-paper": "discussion_paper",
+  "discussion-papers": "discussion_paper",
   rules: "rule",
   regulations: "regulation",
   circulars: "circular",
@@ -51,7 +76,7 @@ const TYPE_ALIASES = {
 const normalizeDocumentType = (value, { optional = false } = {}) => {
   const raw = String(value || "").trim().toLowerCase();
   if (!raw && optional) return null;
-  const normalized = TYPE_ALIASES[raw] || raw.replace(/-/g, "_");
+  const normalized = TYPE_ALIASES[raw] || raw.replace(/[\s-]+/g, "_");
   if (!DOCUMENT_TYPES.has(normalized)) {
     const error = new Error(
       `Unsupported document type: ${normalized || "missing"}`,

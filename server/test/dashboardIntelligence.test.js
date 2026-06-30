@@ -11,21 +11,35 @@ const {
 } = require("../dashboard/intelligenceService");
 
 test("source registry distinguishes all requested official source groups", () => {
-  assert.equal(SOURCE_REGISTRY.length, 9);
-  assert.deepEqual(
-    SOURCE_REGISTRY.map((source) => source.key),
-    [
-      "prs-india",
-      "digital-sansad",
-      "lok-sabha",
-      "rajya-sabha",
-      "egazette",
-      "india-code",
-      "ministry",
-      "state-legislature",
-      "state-gazette",
-    ],
-  );
+  const keys = new Set(SOURCE_REGISTRY.map((source) => source.key));
+  for (const key of [
+    "prs-india",
+    "digital-sansad",
+    "lok-sabha",
+    "rajya-sabha",
+    "egazette",
+    "india-code",
+    "ministry",
+    "state-legislature",
+    "state-gazette",
+    "state-directory",
+    "niti-aayog",
+    "pib",
+    "mygov",
+    "ndap",
+    "ogd-india",
+    "regulator-rbi",
+    "regulator-sebi",
+    "regulator-trai",
+    "regulator-nclt",
+    "regulator-nclat",
+    "regulator-gst-council",
+    "regulator-cbdt",
+    "regulator-cbic",
+  ]) {
+    assert.equal(keys.has(key), true, `${key} is registered`);
+  }
+  assert.equal(keys.size, SOURCE_REGISTRY.length);
 });
 
 test("source health safely reports not-run, fresh, stale, degraded, and blocked states", () => {

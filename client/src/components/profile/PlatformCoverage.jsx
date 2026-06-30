@@ -1,4 +1,12 @@
-import { Database, FileText, Globe2, Link2 } from "lucide-react";
+import {
+  Building2,
+  Database,
+  FileText,
+  Globe2,
+  Landmark,
+  Link2,
+  Scale,
+} from "lucide-react";
 import { formatDate, humanize } from "@/lib/document-links";
 import { getPublicSourceLabel } from "@/lib/source-branding";
 
@@ -22,6 +30,26 @@ export function PlatformCoverage({ coverage }) {
     {
       label: "Jurisdictions",
       value: coverage.jurisdictions,
+      icon: Globe2,
+    },
+    {
+      label: "Policy documents",
+      value: coverage.policyDocuments,
+      icon: Landmark,
+    },
+    {
+      label: "Regulator documents",
+      value: coverage.regulatorDocuments,
+      icon: Scale,
+    },
+    {
+      label: "Ministries discovered",
+      value: coverage.ministriesDiscovered,
+      icon: Building2,
+    },
+    {
+      label: "States & UTs discovered",
+      value: coverage.statesDiscovered,
       icon: Globe2,
     },
   ];

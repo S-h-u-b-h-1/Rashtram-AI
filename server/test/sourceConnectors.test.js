@@ -26,6 +26,20 @@ const {
 const {
   subordinateRecordsFor,
 } = require("../lib/ingestion/connectors/indiaCodeConnector");
+const {
+  parseListing,
+} = require("../lib/ingestion/connectors/publicListingConnector");
+const {
+  createRssConnector,
+} = require("../lib/ingestion/connectors/rssConnector");
+const {
+  ministryConnector,
+  parseGovernmentDirectory,
+} = require("../lib/ingestion/connectors/ministryConnector");
+const {
+  parseStateDirectory,
+  STATE_AND_UTS,
+} = require("../lib/ingestion/connectors/stateDirectoryConnector");
 
 test("IndiaCode parser discovers year buckets and canonical act rows", () => {
   const years = parseYearLinks(
@@ -149,6 +163,124 @@ test("official directory discovery retains verified ministry portal links", () =
   assert.equal(records.length, 1);
   assert.equal(records[0].sourceUrl, "https://lawmin.gov.in/");
   assert.equal(records[0].metadata.directoryEntry, true);
+});
+
+test("IGOD ministry discovery stores directory entities rather than fake documents", () => {
+  const entries = parseGovernmentDirectory(
+    `<article>
+       <h3>Ministry of Law and Justice</h3>
+       <a href="/organization/ministry-of-law-and-justice">Details</a>
+     </article>`,
+    "https://igod.gov.in/ug/E002/organizations",
+    { entityType: "ministry", parentName: "Union Government" },
+  );
+  assert.equal(entries.length, 1);
+  assert.equal(entries[0].entityType, "ministry");
+  assert.equal(entries[0].name, "Ministry of Law and Justice");
+});
+
+test("IGOD ministry connector follows the official incremental directory fragments", async () => {
+  const htmlFor = (name, id, resultCount = null) => `
+    ${resultCount == null ? "" : `<div>${resultCount} Results</div>`}
+    <div class="search-row">
+      <div class="search-title">${name}</div>
+      <a href="/organization/${id}" class="btn-detail">Details</a>
+    </div>`;
+  let incrementalHeader = null;
+  const result = await ministryConnector.collect(
+    { limit: 10, maxPages: 2 },
+    {
+      fetcher: {
+        async getText(url, options = {}) {
+          if (url.includes("organizations_list_more")) {
+            incrementalHeader = options.headers?.["X-Requested-With"];
+            return {
+              status: 200,
+              body: htmlFor("Ministry Two", "ministry-2"),
+            };
+          }
+          if (url.includes("/E002/")) {
+            return {
+              status: 200,
+              body: htmlFor("Ministry One", "ministry-1", 2),
+            };
+          }
+          return {
+            status: 200,
+            body: htmlFor("Department One", "department-1", 1),
+          };
+        },
+      },
+    },
+  );
+  assert.equal(result.directoryEntries.length, 3);
+  assert.equal(incrementalHeader, "XMLHttpRequest");
+  assert.equal(result.records.length, 0);
+});
+
+test("state directory always represents all 28 states and 8 union territories", () => {
+  const entries = parseStateDirectory(
+    `<a href="/sg/DL/categories">Delhi</a>`,
+  );
+  assert.equal(Object.keys(STATE_AND_UTS).length, 36);
+  assert.equal(entries.length, 36);
+  assert.equal(entries.find((entry) => entry.entryKey === "DL").name, "Delhi");
+});
+
+test("public listing parser preserves file metadata and policy types", () => {
+  const [record] = parseListing(
+    `<article>
+       <h3>National Strategy Paper 2026</h3>
+       <p>30 June 2026 · 1.5 MB</p>
+       <a href="/reports/strategy-2026.pdf">Download</a>
+     </article>`,
+    "https://policy.gov.in/reports",
+    {
+      name: "policy-source",
+      collection: "reports",
+      itemSelector: "article",
+      linkPattern: /\.pdf/i,
+      allowedHosts: ["policy.gov.in"],
+      authority: "Government of India",
+      documentType: () => "strategy_paper",
+    },
+  );
+  assert.equal(record.documentType, "strategy_paper");
+  assert.equal(record.mimeType, "application/pdf");
+  assert.equal(record.fileSizeBytes, 1.5 * 1024 * 1024);
+  assert.equal(record.publicationDate, "2026-06-30");
+});
+
+test("RSS connector normalizes official public announcements", async () => {
+  const connector = createRssConnector({
+    name: "official-feed",
+    collection: "announcements",
+    url: "https://example.gov.in/feed.xml",
+    authority: "Government of India",
+    documentType: (value) =>
+      value.includes("Cabinet") ? "cabinet_decision" : "press_release",
+  });
+  const result = await connector.collect(
+    { limit: 5 },
+    {
+      fetcher: {
+        async getText() {
+          return {
+            status: 200,
+            body: `<rss><channel><item>
+              <title>Cabinet approves public programme</title>
+              <link>https://example.gov.in/release/42</link>
+              <guid>release-42</guid>
+              <pubDate>Tue, 30 Jun 2026 10:00:00 GMT</pubDate>
+            </item></channel></rss>`,
+          };
+        },
+      },
+    },
+  );
+  assert.equal(result.records.length, 1);
+  assert.equal(result.records[0].documentType, "cabinet_decision");
+  assert.equal(result.records[0].publicationDate, "2026-06-30");
 });
 
 test("Parliament listing parser normalizes questions and official PDFs", () => {

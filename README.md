@@ -1,8 +1,10 @@
 # Rashtram AI
 
-Rashtram AI is a full-stack parliamentary research application for exploring
-Indian bills and acts. It retrieves public records from PRS India, processes
-the associated PDFs, creates AI summaries, and supports source-grounded chat.
+Rashtram AI is a full-stack legislative and public-policy intelligence
+platform for exploring Indian Bills, Acts, Gazettes, policies, consultations,
+regulatory instruments, and related official records. It preserves source
+provenance, processes selected public documents on demand, creates grounded AI
+summaries, and supports source-grounded chat.
 
 ## Architecture
 
@@ -15,8 +17,12 @@ the associated PDFs, creates AI summaries, and supports source-grounded chat.
 Detailed references:
 
 - [Project understanding](docs/PROJECT_UNDERSTANDING.md)
+- [Architecture v2](docs/ARCHITECTURE_V2.md)
 - [Legislative data catalogue](docs/DATA_CATALOG.md)
 - [Legislative ingestion architecture](docs/LEGISLATIVE_INGESTION_ARCHITECTURE.md)
+- [Policy platform architecture](docs/POLICY_PLATFORM_ARCHITECTURE.md)
+- [State connector architecture](docs/STATE_CONNECTOR_ARCHITECTURE.md)
+- [Source connector status](docs/SOURCE_CONNECTOR_STATUS.md)
 - [Dashboard and profile redesign](docs/DASHBOARD_AND_PROFILE_REDESIGN.md)
 - [Data trust and privacy](docs/DATA_TRUST_AND_PRIVACY.md)
 
