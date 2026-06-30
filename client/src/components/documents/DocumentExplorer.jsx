@@ -216,7 +216,7 @@ export function DocumentExplorer({
         ) : documents.length === 0 ? (
           <div className="grid min-h-[460px] place-items-center p-8 text-center">
             <p className="text-sm text-[#706a61]">
-              No documents match these filters.
+              No recent documents are available for these filters.
             </p>
           </div>
         ) : (

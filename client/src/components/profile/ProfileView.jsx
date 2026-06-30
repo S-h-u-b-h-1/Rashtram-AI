@@ -3,13 +3,11 @@
 import { useEffect, useState } from "react";
 import * as api from "@/lib/api";
 import { ContinueResearch } from "@/components/intelligence/ContinueResearch";
-import { SourceHealthPanel } from "@/components/intelligence/SourceHealthPanel";
 import { AccountSettings } from "./AccountSettings";
 import { PlatformCoverage } from "./PlatformCoverage";
 import { ProfileIdentity } from "./ProfileIdentity";
 import { ResearchActivity } from "./ResearchActivity";
 import { DataPersonalization } from "./DataPersonalization";
-import { GazetteResearch } from "./GazetteResearch";
 
 export function ProfileView() {
   const [profile, setProfile] = useState(null);
@@ -74,25 +72,7 @@ export function ProfileView() {
           ...(profile.account?.analytics || {}),
         }}
       />
-      <PlatformCoverage coverage={profile.platformCoverageStats} />
-      <GazetteResearch
-        chats={profile.recentGazetteResearch}
-        categories={profile.favoriteGazetteCategories}
-      />
       <ContinueResearch chats={profile.recentChats} />
-      <SourceHealthPanel sources={profile.sourceConnections} />
-      <DataPersonalization
-        insights={profile.activityInsights}
-        onUpdate={(preferences) =>
-          setProfile((current) => ({
-            ...current,
-            activityInsights: {
-              ...current.activityInsights,
-              ...preferences,
-            },
-          }))
-        }
-      />
       <AccountSettings
         account={profile.account}
         onUpdate={(updates) =>
@@ -118,6 +98,19 @@ export function ProfileView() {
           }))
         }
       />
+      <DataPersonalization
+        insights={profile.activityInsights}
+        onUpdate={(preferences) =>
+          setProfile((current) => ({
+            ...current,
+            activityInsights: {
+              ...current.activityInsights,
+              ...preferences,
+            },
+          }))
+        }
+      />
+      <PlatformCoverage coverage={profile.platformCoverageStats} />
     </div>
   );
 }

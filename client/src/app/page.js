@@ -28,7 +28,7 @@ const capabilities = [
     eyebrow: "Interrogate",
     title: "Ask questions grounded in the text",
     description:
-      "Explore a bill or act conversationally while keeping every answer anchored to the document context.",
+      "Explore legislation and policy conversationally while keeping every answer anchored to original document context.",
     color: "bg-[#d8e5df] text-[#285e50]",
   },
   {
@@ -44,9 +44,9 @@ const capabilities = [
 const workflow = [
   {
     number: "01",
-    title: "Choose a bill or act",
+    title: "Choose a public record",
     description:
-      "Search the live parliamentary catalogue by title, year, or status.",
+      "Search Parliament and State legislation, Gazette notifications, policies, schemes, and reports.",
   },
   {
     number: "02",
@@ -115,9 +115,9 @@ export default function Home() {
             </h1>
 
             <p className="mt-7 max-w-xl text-base leading-7 text-[#69635a] sm:text-lg sm:leading-8">
-              Rashtram AI turns India&apos;s bills and acts into a living
-              research workspace—clear summaries, grounded conversations, and
-              connected legislative context.
+              Rashtram AI turns India&apos;s legislation and public policy
+              records into a living research workspace—clear summaries,
+              grounded conversations, and connected institutional context.
             </p>
 
             <div className="mt-9 flex flex-col gap-3 sm:flex-row">
@@ -139,7 +139,7 @@ export default function Home() {
             <div className="mt-10 flex flex-wrap gap-x-6 gap-y-3 text-xs text-[#6f695f]">
               {[
                 "Source-grounded answers",
-                "Bills and acts",
+                "Legislation, Gazette and policy",
                 "Private workspace",
               ].map((item) => (
                 <span key={item} className="inline-flex items-center gap-2">
@@ -158,10 +158,10 @@ export default function Home() {
         <div className="mx-auto flex max-w-[1240px] flex-wrap items-center justify-between gap-5 text-xs font-semibold uppercase tracking-[0.16em] text-[#777065]">
           <span>Built for India&apos;s policy ecosystem</span>
           <div className="flex flex-wrap gap-x-8 gap-y-3 text-[#3f4742]">
-            <span>Parliament Bills</span>
-            <span>Verified Public Legislative Sources</span>
-            <span>Official Public Records</span>
-            <span>Legislative research</span>
+            <span>Parliament & State law</span>
+            <span>Gazette notifications</span>
+            <span>Policies & schemes</span>
+            <span>Official public records</span>
           </div>
         </div>
       </section>

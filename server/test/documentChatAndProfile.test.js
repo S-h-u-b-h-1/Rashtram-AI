@@ -124,6 +124,25 @@ test("universal repository filters remain parameterized across all fields", () =
   assert.deepEqual(filters.parameters[0], ["committee_report"]);
 });
 
+test("policy libraries separate national and state records without new tables", () => {
+  const national = buildFilters({
+    type: "policy,scheme,guideline",
+    scope: "policy-national",
+  });
+  const state = buildFilters({
+    type: "policy,scheme,guideline",
+    scope: "policy-state",
+  });
+  assert.match(national.where, /jurisdiction_level IS NULL/);
+  assert.match(national.where, /jurisdiction_level <> 'state'/);
+  assert.match(state.where, /jurisdiction_level = 'state'/);
+  assert.deepEqual(national.parameters[0], [
+    "policy",
+    "scheme",
+    "guideline",
+  ]);
+});
+
 test("universal repository exposes the stable document contract", () => {
   const document = mapDocument({
     id: 42,

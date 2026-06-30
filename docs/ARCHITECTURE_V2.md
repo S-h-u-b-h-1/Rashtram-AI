@@ -128,7 +128,9 @@ pagination, source/PDF access, selection, and research navigation are shared.
 Current views:
 
 - Bills: `type=bill`, Parliament jurisdiction
+- State Bills: `type=bill`, State jurisdiction
 - Acts: `type=act`, Parliament jurisdiction
+- State Acts: `type=act`, State jurisdiction
 - eGazette: Gazette/subordinate-law scope
 - Policies: policy, scheme, guideline, consultation, strategy, report,
   recommendation, resolution, and Cabinet-decision scope
@@ -138,6 +140,12 @@ Every result opens `/app/document/:id`. `UniversalDocumentRoute` resolves the
 document type from the API and renders the existing shared
 `DocumentChatLayout`. Future document types therefore use the same summary,
 source, notes, timeline, graph, related-document, and chat UI.
+
+On wide screens, `DocumentChatLayout` presents a three-pane research workspace:
+the official PDF, the evidence brief and document intelligence, and the
+grounded conversation. Smaller screens retain the same information through a
+progressively disclosed document panel. Processing failure is controlled and
+retryable; it never replaces the source PDF with a blank workspace.
 
 ## Global search and command palette
 

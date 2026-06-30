@@ -1,80 +1,15 @@
 "use client";
 
-import Link from "next/link";
-import { ArrowRight, Sparkles } from "lucide-react";
 import { useEffect, useState } from "react";
 import * as api from "@/lib/api";
 import { ContinueResearch } from "./ContinueResearch";
 import { DashboardHero } from "./DashboardHero";
 import { DocumentListSection } from "./DocumentListSection";
-import { IntelligenceFeed } from "./IntelligenceFeed";
+import { LegislativeUpdateGrid } from "./LegislativeUpdateGrid";
 import { SourceHealthPanel } from "./SourceHealthPanel";
+import { TrendingMinistries } from "./TrendingMinistries";
 
-function DemoHighlights({ documents = [] }) {
-  if (!documents.length) return null;
-  return (
-    <section className="surface-card border-[#c1a06f]/25 p-5 sm:p-6">
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#874047]">
-            Internal demo mode
-          </p>
-          <h2 className="mt-2 font-serif text-2xl text-[#8f1d2c]">
-            Strong real examples
-          </h2>
-          <p className="mt-2 text-xs leading-5 text-[#777066]">
-            These are source-backed catalogue records selected for a concise
-            product walkthrough. No sample records are inserted.
-          </p>
-        </div>
-        <Sparkles className="h-5 w-5 text-[#9d7240]" />
-      </div>
-      <div className="mt-5 grid gap-3 md:grid-cols-2">
-        {documents.slice(0, 4).map((document) => (
-          <Link
-            key={document.id}
-            href={`/app/document/${document.id}`}
-            className="group rounded-2xl border border-[#8f1d2c]/9 bg-[#f6f2eb] p-4"
-          >
-            <p className="line-clamp-2 text-sm font-semibold leading-5 text-[#29312d]">
-              {document.title}
-            </p>
-            <span className="mt-3 inline-flex items-center gap-1 text-[11px] font-semibold text-[#8f1d2c]">
-              Open research workspace
-              <ArrowRight className="h-3.5 w-3.5 transition group-hover:translate-x-0.5" />
-            </span>
-          </Link>
-        ))}
-      </div>
-    </section>
-  );
-}
-
-function Trends({ categories = [] }) {
-  if (categories.length < 3) return null;
-  return (
-    <section className="surface-card p-5 sm:p-6">
-      <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#874047]">
-        Catalogue signal
-      </p>
-      <h2 className="mt-2 font-serif text-2xl text-[#8f1d2c]">
-        Topics with sufficient coverage
-      </h2>
-      <div className="mt-4 flex flex-wrap gap-2">
-        {categories.slice(0, 8).map((category) => (
-          <span
-            key={category.label}
-            className="rounded-full border border-[#8f1d2c]/9 bg-[#f6f2eb] px-3 py-2 text-xs text-[#514d46]"
-          >
-            {category.label} · {category.documentCount}
-          </span>
-        ))}
-      </div>
-    </section>
-  );
-}
-
-export function IntelligenceDashboard({ onNavigate, demoMode = false }) {
+export function IntelligenceDashboard({ onNavigate }) {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -145,35 +80,73 @@ export function IntelligenceDashboard({ onNavigate, demoMode = false }) {
         }
       />
 
-      {demoMode && <DemoHighlights documents={data.demoHighlights} />}
+      <LegislativeUpdateGrid
+        groups={[
+          {
+            label: "Parliament Bills",
+            documents: data.activeBills || [],
+            href: "/app?view=bills",
+          },
+          {
+            label: "State Bills",
+            documents: data.latestStateBills || [],
+            href: "/app/state-bills",
+          },
+          {
+            label: "Parliament Acts",
+            documents: (data.latestActs || []).filter(
+              (document) => document.jurisdictionLevel !== "state",
+            ),
+            href: "/app?view=acts",
+          },
+          {
+            label: "State Acts",
+            documents: (data.latestActs || []).filter(
+              (document) => document.jurisdictionLevel === "state",
+            ),
+            href: "/app/state-acts",
+          },
+          {
+            label: "Gazette Notifications",
+            documents: data.recentGazetteNotifications || [],
+            href: "/app/egazette",
+          },
+          {
+            label: "Policies",
+            documents: data.latestPolicies || [],
+            href: "/app?view=policies",
+          },
+          {
+            label: "Committee Reports",
+            documents: data.committeeActivity || [],
+            href: "/app?view=documents",
+          },
+        ]}
+      />
 
       <ContinueResearch chats={data.recentUserChats || []} />
 
-      <IntelligenceFeed
-        events={data.intelligenceEvents || []}
-        isFallback={data.emptyStateFlags?.noLiveEvents}
-      />
+      {(data.recommendedReading || []).length > 0 && (
+        <DocumentListSection
+          eyebrow="High-confidence recommendations"
+          title="Recommended reading"
+          documents={data.recommendedReading}
+          emptyMessage="No sufficiently supported policy recommendation is available yet."
+          onViewAll={() => onNavigate("documents")}
+        />
+      )}
 
       <div className="grid gap-5 xl:grid-cols-2">
+        <TrendingMinistries ministries={data.ministryActivity || []} />
         <DocumentListSection
-          eyebrow="Verified policy coverage"
-          title="What should I read?"
-          documents={(data.recommendedReading || []).length
-            ? data.recommendedReading
-            : data.latestPolicies || []}
-          emptyMessage="No sufficiently supported policy recommendation is available yet."
+          eyebrow="Policies, schemes and consultations"
+          title="Recent policy updates"
+          documents={data.latestPolicies || []}
+          emptyMessage="No recent policy records are available from connected sources."
           onViewAll={() => onNavigate("policies")}
-        />
-        <DocumentListSection
-          eyebrow="State legislatures"
-          title="Recent State Bills"
-          documents={data.latestStateBills || []}
-          emptyMessage="No recent state-level records are currently stored."
-          onViewAll={() => onNavigate("state-bills")}
         />
       </div>
 
-      <Trends categories={data.trendingCategories || []} />
       <SourceHealthPanel sources={data.sourceHealth || []} compact />
     </div>
   );

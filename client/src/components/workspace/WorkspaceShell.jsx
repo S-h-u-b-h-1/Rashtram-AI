@@ -2,10 +2,10 @@
 
 import Link from "next/link";
 import {
+  ChevronDown,
   FileText,
   BookOpenText,
   LayoutDashboard,
-  Landmark,
   LogOut,
   Menu,
   PanelLeftClose,
@@ -31,20 +31,36 @@ const NAVIGATION = [
   {
     key: "bills",
     label: "Bills",
-    href: "/app?view=bills",
     icon: FileText,
-  },
-  {
-    key: "state-bills",
-    label: "State Bills",
-    href: "/app/state-bills",
-    icon: Landmark,
+    children: [
+      {
+        key: "bills",
+        label: "Parliament Bills",
+        href: "/app?view=bills",
+      },
+      {
+        key: "state-bills",
+        label: "State Bills",
+        href: "/app/state-bills",
+      },
+    ],
   },
   {
     key: "acts",
     label: "Acts",
-    href: "/app?view=acts",
     icon: Scale,
+    children: [
+      {
+        key: "acts",
+        label: "Parliament Acts",
+        href: "/app?view=acts",
+      },
+      {
+        key: "state-acts",
+        label: "State Acts",
+        href: "/app/state-acts",
+      },
+    ],
   },
   {
     key: "egazette",
@@ -128,8 +144,49 @@ export function WorkspaceShell({ activeKey, title, children }) {
           </p>
           <nav className="mt-3 space-y-1.5" aria-label="Workspace navigation">
             {NAVIGATION.map((item) => {
-              const isActive = activeKey === item.key;
+              const isActive =
+                activeKey === item.key ||
+                item.children?.some((child) => child.key === activeKey);
               const NavigationIcon = item.icon;
+              if (item.children) {
+                return (
+                  <details key={item.key} open className="group/nav">
+                    <summary
+                      className={cn(
+                        "flex cursor-pointer list-none items-center gap-3 rounded-xl px-3 py-3 text-sm font-medium transition [&::-webkit-details-marker]:hidden",
+                        isActive
+                          ? "bg-white/10 text-white"
+                          : "text-white/58 hover:bg-white/7 hover:text-white",
+                      )}
+                    >
+                      <NavigationIcon className="h-[18px] w-[18px] text-white/48" />
+                      <span className="flex-1">{item.label}</span>
+                      <ChevronDown className="h-3.5 w-3.5 transition group-open/nav:rotate-180" />
+                    </summary>
+                    <div className="ml-5 mt-1 space-y-1 border-l border-white/10 pl-3">
+                      {item.children.map((child) => {
+                        const childActive = activeKey === child.key;
+                        return (
+                          <Link
+                            key={child.key}
+                            href={child.href}
+                            onClick={() => setIsMobileMenuOpen(false)}
+                            aria-current={childActive ? "page" : undefined}
+                            className={cn(
+                              "block rounded-lg px-3 py-2 text-[12px] transition",
+                              childActive
+                                ? "bg-[#fffaf0] font-semibold text-[#8f1d2c]"
+                                : "text-white/48 hover:bg-white/7 hover:text-white",
+                            )}
+                          >
+                            {child.label}
+                          </Link>
+                        );
+                      })}
+                    </div>
+                  </details>
+                );
+              }
               return (
                 <Link
                   key={item.key}

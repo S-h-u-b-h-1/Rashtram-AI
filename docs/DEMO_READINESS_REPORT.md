@@ -9,13 +9,20 @@ deployment and smoke checks recorded in the Final Deployment Report.
 
 ## Demo-safe capabilities
 
-- Evidence-first dashboard with recent verified activity, recent research,
-  policy reading, State Bills, metadata trends, and compact source health.
+- Evidence-first dashboard with grouped recent legislative updates, recent
+  research, confidence-gated recommendations, ministry metadata, policy
+  updates, and compact source health.
 - Universal catalogue search and filters across Bills, State Bills, Acts,
-  Gazette records, policies, circulars, consultations, guidelines, and reports.
-- One reusable document workspace for metadata, source, PDF, summary, timeline,
-  relationships, related documents, bookmarks, notes, and grounded chat.
-- Internal Demo Mode at `/app?demo=1`, populated only from real database rows.
+  State Acts, Gazette records, policies, circulars, consultations, guidelines,
+  and reports.
+- One reusable three-pane document workspace for the original PDF, metadata,
+  source, summary, timeline, relationships, related documents, bookmarks,
+  notes, export, and grounded chat.
+- Hindi, English, bilingual, native-text, and OCR-backed PDF processing with a
+  visible controlled failure and retry path.
+- Policies are a first-class library with national, state, scheme, guideline,
+  memorandum, consultation, circular, framework, report, and white-paper
+  views.
 - Profile editing, preferences, saved content, collections, activity analytics,
   export, password management, and session management.
 
@@ -31,7 +38,7 @@ deployment and smoke checks recorded in the Final Deployment Report.
 
 ## Verification gates
 
-- Backend: 71 passed, 1 intentionally skipped database fixture.
+- Backend: 76 passed, 1 intentionally skipped database fixture.
 - Frontend lint: passed with no findings.
 - Frontend production build: passed.
 - Official policy connector health: Connected, parser valid, PDFs discovered.

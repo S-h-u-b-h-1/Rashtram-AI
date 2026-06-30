@@ -110,6 +110,13 @@ const buildFilters = (options = {}) => {
       `document_type = ANY(${addParameter(parameters, types)}::TEXT[])`,
     );
   }
+  if (options.scope === "policy-national") {
+    conditions.push(
+      `(jurisdiction_level IS NULL OR jurisdiction_level <> 'state')`,
+    );
+  } else if (options.scope === "policy-state") {
+    conditions.push(`jurisdiction_level = 'state'`);
+  }
 
   const exactFilters = [
     ["status", "status"],

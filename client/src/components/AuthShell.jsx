@@ -5,7 +5,7 @@ import { BrandMark } from "@/components/BrandMark";
 const assurances = [
   "Evidence-linked policy answers",
   "Private research workspace",
-  "Bills and acts in one place",
+  "Legislation, Gazette and policy in one place",
 ];
 
 export function AuthShell({ eyebrow, title, description, children }) {

@@ -1,7 +1,7 @@
 "use client";
 
-import { Loader2 } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { Loader2, RefreshCw } from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   addDocumentChatMessage,
   addDocumentNote,
@@ -23,6 +23,7 @@ import { ChatHeader } from "./ChatHeader";
 import { ChatHistory } from "./ChatHistory";
 import { ChatInput } from "./ChatInput";
 import { ChatSidebar } from "./ChatSidebar";
+import { DocumentPdfViewer } from "./DocumentPdfViewer";
 import { SuggestedQuestions } from "./SuggestedQuestions";
 
 const QUESTIONS = {
@@ -66,11 +67,41 @@ export function DocumentChatLayout({
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(true);
   const [processing, setProcessing] = useState(false);
+  const [processingError, setProcessingError] = useState("");
   const [sending, setSending] = useState(false);
   const [isPinned, setIsPinned] = useState(false);
   const [error, setError] = useState("");
   const [responseLanguage, setResponseLanguage] = useState("English");
   const messagesEndRef = useRef(null);
+
+  const prepareDocument = useCallback(async (canonicalDocument) => {
+    if (!canonicalDocument?.pdfUrl) return "";
+    setProcessing(true);
+    setProcessingError("");
+    try {
+      const result = await processDocumentResearch(
+        documentType,
+        documentId,
+      );
+      const generatedSummary = result.summary || "";
+      if (result.textArtifact) {
+        setDocument((current) => ({
+          ...current,
+          textArtifact: result.textArtifact,
+        }));
+      }
+      setSummary(generatedSummary);
+      return generatedSummary;
+    } catch (processingFailure) {
+      const message =
+        processingFailure.message ||
+        "The document could not be prepared for AI research.";
+      setProcessingError(message);
+      return "";
+    } finally {
+      setProcessing(false);
+    }
+  }, [documentId, documentType]);
 
   useEffect(() => {
     let cancelled = false;
@@ -108,24 +139,7 @@ export function DocumentChatLayout({
 
         let generatedSummary = "";
         if (canonical.pdfUrl) {
-          setProcessing(true);
-          try {
-            const result = await processDocumentResearch(
-              documentType,
-              documentId,
-            );
-            generatedSummary = result.summary || "";
-            if (result.textArtifact) {
-              setDocument((current) => ({
-                ...current,
-                textArtifact: result.textArtifact,
-              }));
-            }
-          } catch (processingError) {
-            setError(
-              `The official record opened, but document processing is unavailable: ${processingError.message}`,
-            );
-          }
+          generatedSummary = await prepareDocument(canonical);
         }
         if (cancelled) return;
         setSummary(generatedSummary);
@@ -170,7 +184,7 @@ export function DocumentChatLayout({
     return () => {
       cancelled = true;
     };
-  }, [documentId, documentType, initialDocument]);
+  }, [documentId, documentType, initialDocument, prepareDocument]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -324,6 +338,16 @@ export function DocumentChatLayout({
     });
   };
 
+  const retryProcessing = async () => {
+    const generatedSummary = await prepareDocument(document);
+    if (!generatedSummary) return;
+    await updateDocumentChatSummary(
+      documentType,
+      documentId,
+      generatedSummary,
+    ).catch(() => undefined);
+  };
+
   if (loading) {
     return (
       <div className="grid h-screen place-items-center bg-[#e9e3da]">
@@ -331,7 +355,7 @@ export function DocumentChatLayout({
           <Loader2 className="mx-auto h-9 w-9 animate-spin text-[#8f1d2c]" />
           <p className="mt-4 text-sm text-[#706a61]">
             {processing
-              ? "Preparing the official document for research…"
+              ? "Preparing AI Research Workspace…"
               : "Opening the research workspace…"}
           </p>
         </div>
@@ -366,6 +390,21 @@ export function DocumentChatLayout({
           {error}
         </p>
       )}
+      {processingError && (
+        <div className="flex shrink-0 items-center justify-between gap-3 bg-[#f4dfdc] px-4 py-2 text-xs text-[#85434a] xl:hidden">
+          <span className="line-clamp-2">
+            Processing failed. {processingError}
+          </span>
+          <button
+            type="button"
+            onClick={retryProcessing}
+            className="inline-flex shrink-0 items-center gap-1 rounded-lg bg-[#8f1d2c] px-2.5 py-1.5 text-[10px] font-semibold text-white"
+          >
+            <RefreshCw className="h-3 w-3" />
+            Retry
+          </button>
+        </div>
+      )}
       <details className="shrink-0 border-b border-[#8f1d2c]/8 bg-[#f7f2eb] xl:hidden">
         <summary className="cursor-pointer px-4 py-3 text-xs font-semibold text-[#874047]">
           Document brief, sources, relationships, and notes
@@ -380,7 +419,24 @@ export function DocumentChatLayout({
           />
         </div>
       </details>
-      <div className="grid min-h-0 flex-1 xl:grid-cols-[minmax(0,1fr)_360px]">
+      <div className="grid min-h-0 flex-1 xl:grid-cols-[minmax(360px,0.9fr)_minmax(440px,1.1fr)] 2xl:grid-cols-[minmax(380px,0.9fr)_340px_minmax(460px,1.1fr)]">
+        <div className="hidden min-h-0 xl:block">
+          <DocumentPdfViewer
+            document={document}
+            processing={processing}
+            processingError={processingError}
+            onRetry={retryProcessing}
+          />
+        </div>
+        <aside className="app-scrollbar hidden overflow-y-auto border-r border-[#8f1d2c]/8 bg-[#f7f2eb] p-5 2xl:block">
+          <ChatSidebar
+            document={document}
+            summary={summary}
+            notes={notes}
+            onAddNote={addNote}
+            onDeleteNote={removeNote}
+          />
+        </aside>
         <main id="research-chat" className="flex min-h-0 flex-col">
           <div className="paper-grid app-scrollbar flex-1 overflow-y-auto p-4 sm:p-6">
             <ChatHistory
@@ -406,15 +462,6 @@ export function DocumentChatLayout({
             onResponseLanguageChange={setResponseLanguage}
           />
         </main>
-        <aside className="app-scrollbar hidden overflow-y-auto border-l border-[#8f1d2c]/8 bg-[#f7f2eb] p-5 xl:block">
-          <ChatSidebar
-            document={document}
-            summary={summary}
-            notes={notes}
-            onAddNote={addNote}
-            onDeleteNote={removeNote}
-          />
-        </aside>
       </div>
     </div>
   );

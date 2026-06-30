@@ -1,11 +1,7 @@
-"use client";
 import { Geist, Geist_Mono, Newsreader } from "next/font/google";
 import "./globals.css";
-import { AuthProvider } from "../context/AuthContext";
-import Navbar from "../components/Navbar";
-import FooterDemo from "../components/Footer";
-import { usePathname } from "next/navigation";
 import { Analytics } from "@vercel/analytics/next";
+import { ClientShell } from "@/components/ClientShell";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -22,23 +18,24 @@ const newsreader = Newsreader({
   subsets: ["latin"],
 });
 
-export default function RootLayout({ children }) {
-  const pathname = usePathname();
-  const isApplicationRoute =
-    pathname === "/login" ||
-    pathname === "/signup" ||
-    pathname.startsWith("/app");
+export const metadata = {
+  title: {
+    default: "Rashtram AI | Legislative & Public Policy Intelligence",
+    template: "%s | Rashtram AI",
+  },
+  description:
+    "Research Parliament and State Bills, Acts, Gazette notifications, policies, schemes, guidelines, and public records with source-grounded AI.",
+};
 
+export default function RootLayout({ children }) {
   return (
-    <html lang="en" data-scroll-behavior="smooth">
-      <body
-        className={`${geistSans.variable} ${geistMono.variable} ${newsreader.variable} antialiased`}
-      >
-        <AuthProvider>
-          {!isApplicationRoute && <Navbar />}
-          {children}
-          {!isApplicationRoute && <FooterDemo />}
-        </AuthProvider>
+    <html
+      lang="en"
+      data-scroll-behavior="smooth"
+      className={`${geistSans.variable} ${geistMono.variable} ${newsreader.variable}`}
+    >
+      <body className="antialiased">
+        <ClientShell>{children}</ClientShell>
         <Analytics />
       </body>
     </html>

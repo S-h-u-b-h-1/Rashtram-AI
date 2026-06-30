@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import {
+  getProfile,
   getRecentDocumentChats,
   searchDocuments,
 } from "@/lib/api";
@@ -24,7 +25,8 @@ const PAGES = [
   { label: "Dashboard", href: "/app", icon: LayoutDashboard },
   { label: "Bills", href: "/app?view=bills", icon: FileSearch },
   { label: "State Bills", href: "/app/state-bills", icon: Landmark },
-  { label: "Acts", href: "/app?view=acts", icon: Scale },
+  { label: "Parliament Acts", href: "/app?view=acts", icon: Scale },
+  { label: "State Acts", href: "/app/state-acts", icon: Landmark },
   {
     label: "Policies",
     href: "/app?view=policies",
@@ -39,13 +41,25 @@ export function GlobalCommandPalette({ open, onClose }) {
   const [query, setQuery] = useState("");
   const [documents, setDocuments] = useState([]);
   const [chats, setChats] = useState([]);
+  const [recentSearches, setRecentSearches] = useState([]);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     if (!open) return;
-    getRecentDocumentChats(6)
-      .then((response) => setChats(response.chats || []))
-      .catch(() => setChats([]));
+    Promise.allSettled([getRecentDocumentChats(6), getProfile()]).then(
+      ([chatResult, profileResult]) => {
+        setChats(
+          chatResult.status === "fulfilled"
+            ? chatResult.value.chats || []
+            : [],
+        );
+        setRecentSearches(
+          profileResult.status === "fulfilled"
+            ? profileResult.value.account?.savedSearches?.slice(0, 5) || []
+            : [],
+        );
+      },
+    );
   }, [open]);
 
   useEffect(() => {
@@ -180,6 +194,26 @@ export function GlobalCommandPalette({ open, onClose }) {
                   className="block truncate rounded-xl px-3 py-3 text-sm text-[#29312d] hover:bg-[#eee0dc]"
                 >
                   {chat.title}
+                </Link>
+              ))}
+            </div>
+          )}
+          {!normalizedQuery && recentSearches.length > 0 && (
+            <div className="mt-2 border-t border-[#8f1d2c]/7 pt-2">
+              <p className="flex items-center gap-2 px-3 py-2 text-[10px] font-bold uppercase tracking-[0.14em] text-[#874047]">
+                <Search className="h-3.5 w-3.5" />
+                Saved searches
+              </p>
+              {recentSearches.map((search) => (
+                <Link
+                  key={search.id}
+                  href={`/app?view=documents&q=${encodeURIComponent(
+                    search.query || "",
+                  )}`}
+                  onClick={onClose}
+                  className="block truncate rounded-xl px-3 py-3 text-sm text-[#29312d] hover:bg-[#eee0dc]"
+                >
+                  {search.name}
                 </Link>
               ))}
             </div>
