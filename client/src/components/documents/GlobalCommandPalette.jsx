@@ -6,6 +6,8 @@ import {
   History,
   LayoutDashboard,
   Search,
+  Scale,
+  ScrollText,
   Settings,
   X,
 } from "lucide-react";
@@ -19,6 +21,9 @@ import { humanize } from "@/lib/document-links";
 const PAGES = [
   { label: "Dashboard", href: "/app", icon: LayoutDashboard },
   { label: "All documents", href: "/app?view=documents", icon: FileSearch },
+  { label: "Bills", href: "/app?view=bills", icon: FileSearch },
+  { label: "Acts", href: "/app?view=acts", icon: Scale },
+  { label: "eGazette", href: "/app/egazette", icon: ScrollText },
   { label: "Profile and collections", href: "/app/profile", icon: Settings },
 ];
 
@@ -67,9 +72,13 @@ export function GlobalCommandPalette({ open, onClose }) {
   }, [onClose, open]);
 
   if (!open) return null;
-  const visibleChats = query.trim()
+  const normalizedQuery = query.trim().toLowerCase();
+  const visiblePages = normalizedQuery
+    ? PAGES.filter((page) => page.label.toLowerCase().includes(normalizedQuery))
+    : PAGES;
+  const visibleChats = normalizedQuery
     ? chats.filter((chat) =>
-        chat.title?.toLowerCase().includes(query.trim().toLowerCase()),
+        chat.title?.toLowerCase().includes(normalizedQuery),
       )
     : chats;
 
@@ -106,12 +115,12 @@ export function GlobalCommandPalette({ open, onClose }) {
           </button>
         </div>
         <div className="app-scrollbar max-h-[65vh] overflow-y-auto p-3">
-          {!query.trim() && (
+          {visiblePages.length > 0 && (
             <div>
               <p className="px-3 py-2 text-[10px] font-bold uppercase tracking-[0.14em] text-[#874047]">
-                Navigate
+                {normalizedQuery ? "Pages and commands" : "Navigate"}
               </p>
-              {PAGES.map(({ label, href, icon: Icon }) => (
+              {visiblePages.map(({ label, href, icon: Icon }) => (
                 <Link
                   key={href}
                   href={href}

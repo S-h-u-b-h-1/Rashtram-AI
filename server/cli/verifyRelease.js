@@ -87,6 +87,9 @@ const main = async () => {
             gazettes: gazettes.gazettes?.length || 0,
             universalDocuments: documents.documents?.length || 0,
             universalDocumentDetail: Boolean(documentDetail.document?.id),
+            universalRelatedChats: Array.isArray(
+              documentDetail.document?.relatedChats,
+            ),
             universalSearch: documentSearch.documents?.length || 0,
             universalTimeline: Array.isArray(timeline.timeline),
             universalGraph: Array.isArray(graph.graph?.nodes),

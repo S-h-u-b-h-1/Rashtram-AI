@@ -79,7 +79,10 @@ export function DocumentChatLayout({
         setError("");
         const detail = await getDocumentResearch(documentType, documentId);
         if (cancelled) return;
-        const canonical = detail.document || initialDocument;
+        const canonical = {
+          ...(initialDocument || {}),
+          ...(detail.document || {}),
+        };
         setDocument(canonical);
         trackActivity({
           event_type: "chat_started",

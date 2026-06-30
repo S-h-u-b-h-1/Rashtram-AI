@@ -139,6 +139,7 @@ test("universal repository exposes the stable document contract", () => {
   assert.equal(document.source, "egazette");
   assert.equal(document.pdfUrl, "https://example.invalid/rule.pdf");
   assert.deepEqual(document.metadata, { language: "English" });
+  assert.deepEqual(document.relationships, []);
 });
 
 test("profile input helpers bound and normalize user-controlled fields", () => {

@@ -57,11 +57,12 @@ const getFilterOptions = async (options = {}) => {
 const getById = async (id, userId = null) => {
   const document = await DocumentRepository.getById(id);
   if (!document) return null;
-  const [resources, relationships, recommendations, summary] =
+  const [resources, relationships, recommendations, relatedChats, summary] =
     await Promise.all([
       DocumentRepository.getResources(document.id),
       DocumentRepository.getRelated(document.id),
       DocumentRepository.getRecommendations(document.id, userId),
+      DocumentRepository.getRelatedChats(document.id, userId),
       DocumentRepository.getSummary(document.id, userId),
     ]);
   const [timeline, graph] = await Promise.all([
@@ -82,6 +83,7 @@ const getById = async (id, userId = null) => {
     resources,
     relationships,
     recommendations,
+    relatedChats,
     timeline,
     graph,
   };

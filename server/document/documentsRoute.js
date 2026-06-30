@@ -163,12 +163,19 @@ router.get("/:id/relationships", async (req, res) => {
 
 router.get("/:id/recommendations", async (req, res) => {
   try {
-    const recommendations = await DocumentService.getRecommendations(
-      req.params.id,
-      req.user.id,
-      req.query.limit,
-    );
-    return res.json({ recommendations });
+    const [recommendations, relatedChats] = await Promise.all([
+      DocumentService.getRecommendations(
+        req.params.id,
+        req.user.id,
+        req.query.limit,
+      ),
+      DocumentService.getRelatedChats(
+        req.params.id,
+        req.user.id,
+        req.query.limit,
+      ),
+    ]);
+    return res.json({ recommendations, relatedChats });
   } catch (error) {
     return sendError(res, error, "Universal recommendations failed");
   }

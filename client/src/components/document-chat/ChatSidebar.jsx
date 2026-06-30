@@ -51,6 +51,7 @@ export function ChatSidebar({
       <RelatedDocuments
         relationships={document.relationships}
         recommendations={document.recommendations}
+        relatedChats={document.relatedChats}
       />
       <DocumentTimeline events={document.timeline || []} />
       <KnowledgeGraph graph={document.graph} />

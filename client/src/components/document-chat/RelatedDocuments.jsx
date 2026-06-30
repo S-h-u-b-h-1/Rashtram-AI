@@ -1,8 +1,12 @@
-import { ExternalLink } from "lucide-react";
+import { ExternalLink, MessageSquareText } from "lucide-react";
 import Link from "next/link";
 import { humanize } from "@/lib/document-links";
 
-export function RelatedDocuments({ relationships = [], recommendations = [] }) {
+export function RelatedDocuments({
+  relationships = [],
+  recommendations = [],
+  relatedChats = [],
+}) {
   const items = [
     ...relationships.map((item) => ({
       ...item.document,
@@ -57,6 +61,30 @@ export function RelatedDocuments({ relationships = [], recommendations = [] }) {
           </p>
         )}
       </div>
+      {relatedChats.length > 0 && (
+        <div className="mt-5 border-t border-[#8f1d2c]/8 pt-4">
+          <p className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.18em] text-[#874047]">
+            <MessageSquareText className="h-3.5 w-3.5" />
+            Related research
+          </p>
+          <div className="mt-3 space-y-2">
+            {relatedChats.map((chat) => (
+              <Link
+                key={chat.id}
+                href={`/app/document/${chat.documentId}`}
+                className="block rounded-xl border border-[#8f1d2c]/8 bg-white p-3 hover:bg-[#fbf8f2]"
+              >
+                <p className="text-xs font-semibold leading-5 text-[#29312d]">
+                  {chat.title}
+                </p>
+                <p className="mt-1 text-[9px] uppercase tracking-[0.1em] text-[#874047]">
+                  {humanize(chat.documentType)} research chat
+                </p>
+              </Link>
+            ))}
+          </div>
+        </div>
+      )}
     </section>
   );
 }

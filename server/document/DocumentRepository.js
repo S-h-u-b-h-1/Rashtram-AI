@@ -63,6 +63,7 @@ const mapDocument = (row) => {
     category: row.category,
     metadata,
     summary: row.summary || null,
+    relationships: [],
     firstSeenAt: toIso(row.first_seen_at),
     updatedAt: toIso(row.updated_at),
     link: sourceUrl,
@@ -324,6 +325,7 @@ const getResources = async (id) => {
 const getRelated = async (id) => {
   const result = await query(
     `SELECT
+       r.from_document_id, r.to_document_id,
        r.relationship_type, r.confidence,
        r.source_name AS relationship_source_name,
        r.source_url AS relationship_source_url,
@@ -341,6 +343,8 @@ const getRelated = async (id) => {
     [id],
   );
   return result.rows.map((row) => ({
+    direction:
+      String(row.from_document_id) === String(id) ? "outgoing" : "incoming",
     relationshipType: row.relationship_type,
     confidence: row.confidence == null ? null : Number(row.confidence),
     sourceName: row.relationship_source_name,
@@ -439,6 +443,83 @@ const getRecommendations = async (id, userId = null, limit = 8) => {
   return result.rows.map(mapDocument);
 };
 
+const getRelatedChats = async (id, userId = null, limit = 6) => {
+  if (!userId) return [];
+  const safeLimit = clampInteger(limit, 6, 1, 20);
+  const result = await query(
+    `WITH current_document AS (
+       SELECT *
+       FROM legislative_documents
+       WHERE id = $1
+     ),
+     ranked_chats AS (
+       SELECT
+         chat.id,
+         chat.document_type,
+         chat.document_id,
+         chat.document_title,
+         chat.summary,
+         chat.is_pinned,
+         chat.last_message_at,
+         chat.last_accessed_at,
+         chat.updated_at,
+         (
+           CASE WHEN candidate.ministry IS NOT NULL
+             AND candidate.ministry = current.ministry THEN 4 ELSE 0 END
+           + CASE WHEN candidate.authority IS NOT NULL
+             AND candidate.authority = current.authority THEN 3 ELSE 0 END
+           + CASE WHEN candidate.category IS NOT NULL
+             AND candidate.category = current.category THEN 2 ELSE 0 END
+           + CASE WHEN candidate.jurisdiction IS NOT NULL
+             AND candidate.jurisdiction = current.jurisdiction THEN 1 ELSE 0 END
+           + CASE WHEN EXISTS (
+               SELECT 1
+               FROM document_relationships relationship
+               WHERE (
+                 relationship.from_document_id = current.id
+                 AND relationship.to_document_id = candidate.id
+               ) OR (
+                 relationship.to_document_id = current.id
+                 AND relationship.from_document_id = candidate.id
+               )
+             ) THEN 8 ELSE 0 END
+         ) AS related_score
+       FROM document_chats chat
+       JOIN legislative_documents candidate
+         ON candidate.id::TEXT = chat.document_id
+         OR candidate.canonical_id = chat.document_id
+       CROSS JOIN current_document current
+       WHERE chat.user_id = $2
+         AND chat.is_active = TRUE
+         AND candidate.id <> current.id
+     )
+     SELECT
+       *
+     FROM ranked_chats
+     WHERE related_score > 0
+     ORDER BY related_score DESC,
+       is_pinned DESC,
+       GREATEST(
+         last_accessed_at,
+         last_message_at,
+         updated_at
+       ) DESC
+     LIMIT $3`,
+    [id, userId, safeLimit],
+  );
+  return result.rows.map((row) => ({
+    id: String(row.id),
+    documentType: row.document_type,
+    documentId: row.document_id,
+    title: row.document_title,
+    summary: row.summary,
+    isPinned: row.is_pinned,
+    lastMessageAt: toIso(row.last_message_at),
+    lastAccessedAt: toIso(row.last_accessed_at),
+    relatedScore: Number(row.related_score || 0),
+  }));
+};
+
 const getTimeline = async (
   id,
   documentValue = null,
@@ -513,7 +594,7 @@ const getGraph = async (
   const nodes = [
     {
       id: `document:${document.id}`,
-      kind: "document",
+      kind: document.type,
       label: document.title,
       document,
     },
@@ -523,21 +604,35 @@ const getGraph = async (
     const related = relationship.document;
     nodes.push({
       id: `document:${related.id}`,
-      kind: "document",
+      kind: related.type,
       label: related.title,
       document: related,
     });
+    const outgoing = relationship.direction !== "incoming";
     edges.push({
-      from: `document:${document.id}`,
-      to: `document:${related.id}`,
+      from: outgoing
+        ? `document:${document.id}`
+        : `document:${related.id}`,
+      to: outgoing
+        ? `document:${related.id}`
+        : `document:${document.id}`,
       type: relationship.relationshipType,
       confidence: relationship.confidence,
     });
   }
+  const committee =
+    document.metadata?.committee ||
+    document.metadata?.committeeName ||
+    document.metadata?.committee_name ||
+    (document.type === "committee_report" ? document.authority : null);
   for (const [kind, label] of [
     ["authority", document.authority],
     ["ministry", document.ministry],
-    ["jurisdiction", document.jurisdiction],
+    [
+      document.jurisdictionLevel === "state" ? "state" : "jurisdiction",
+      document.jurisdiction,
+    ],
+    ["committee", committee],
   ]) {
     if (!label) continue;
     const nodeId = `${kind}:${label}`;
@@ -548,7 +643,7 @@ const getGraph = async (
       type: kind === "authority" ? "issued_by" : "belongs_to",
     });
   }
-  return { nodes, edges };
+  return { rootId: `document:${document.id}`, nodes, edges };
 };
 
 const getFilterOptions = async (options = {}) => {
@@ -591,6 +686,7 @@ module.exports = {
   getGraph,
   getPDF,
   getRecommendations,
+  getRelatedChats,
   getRelated,
   getResources,
   getSummary,

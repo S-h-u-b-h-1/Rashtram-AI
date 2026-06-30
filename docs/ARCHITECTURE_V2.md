@@ -1,6 +1,6 @@
 # Rashtram AI Architecture v2
 
-Last reviewed: 29 June 2026
+Last reviewed: 30 June 2026
 
 ## Architectural objective
 
@@ -190,8 +190,11 @@ evidence is absent.
 - related
 
 The API also derives document-to-authority, document-to-ministry, and
-document-to-jurisdiction edges. The document workspace exposes the bounded
-one-hop graph and provides links back into the generic document route.
+document-to-jurisdiction edges. State jurisdictions and committee metadata are
+represented as explicit state and committee nodes. Relationship direction is
+preserved for edges such as `amends`, `repeals`, `implements`, `refers_to`,
+`supersedes`, and `uses`. The document workspace exposes the bounded one-hop
+graph and provides links back into the generic document route.
 
 The timeline combines canonical lifecycle dates, verified intelligence events,
 and dated related documents. It supports Bill introduction, committee/debate
@@ -208,7 +211,10 @@ Recommendations rank:
 - recent verified Parliament/intelligence activity;
 - the user’s prior document activity.
 
-The source record and relationship provenance remain available for verification.
+The document workspace also suggests the user’s existing research chats when
+their documents share verified relationships, ministries, authorities,
+categories, or jurisdictions with the current record. The source record and
+relationship provenance remain available for verification.
 
 ## Collections
 
@@ -229,6 +235,8 @@ Act, or Gazette tables and therefore support every current and future type.
 - PDF chunks and summaries are reused before processing.
 - Cross-document retrieval is capped at five documents and twelve passages.
 - The frontend ships one catalogue component and one document workspace.
+- Unused Bill-, Act-, and Gazette-specific client API wrappers were removed;
+  the browser uses only the universal document and chat clients.
 
 ## Compatibility and deprecation
 
@@ -257,4 +265,3 @@ The required regression gates are:
 - dashboard, profile, authentication, privacy, ingestion, and dedupe tests;
 - frontend lint and production build;
 - production-backed `/api/documents` smoke verification.
-
