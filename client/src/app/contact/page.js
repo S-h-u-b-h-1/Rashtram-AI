@@ -1,138 +1,111 @@
 "use client";
 
-import React from "react";
+import { useState } from "react";
+import { submitContactRequest } from "@/lib/api";
 
-export default function ContactForm() {
+const EMPTY_FORM = {
+  firstName: "",
+  lastName: "",
+  organization: "",
+  email: "",
+  phone: "",
+  message: "",
+};
+
+export default function ContactPage() {
+  const [form, setForm] = useState(EMPTY_FORM);
+  const [status, setStatus] = useState({ loading: false, message: "", error: "" });
+
+  const update = (event) =>
+    setForm((current) => ({
+      ...current,
+      [event.target.name]: event.target.value,
+    }));
+
+  const submit = async (event) => {
+    event.preventDefault();
+    setStatus({ loading: true, message: "", error: "" });
+    try {
+      const result = await submitContactRequest(form);
+      setForm(EMPTY_FORM);
+      setStatus({
+        loading: false,
+        message: `Message received. Reference ${result.requestId}.`,
+        error: "",
+      });
+    } catch (error) {
+      setStatus({ loading: false, message: "", error: error.message });
+    }
+  };
+
+  const fieldClass =
+    "mt-2 h-12 w-full rounded-xl border border-[#8f1d2c]/12 bg-white px-4 text-sm text-[#29312d] outline-none focus:border-[#a85a52] focus:ring-4 focus:ring-[#a85a52]/10";
+
   return (
-    <div className="isolate bg-white px-6 py-24 sm:py-32 lg:px-8 relative overflow-hidden">
-      <div
-        className="absolute inset-x-0 top-[-10rem] -z-10 transform-gpu blur-3xl sm:top-[-20rem]"
-        aria-hidden="true"
-      >
-      </div>
-
-      <div className="mx-auto max-w-2xl text-center">
-        <h2 className="text-3xl font-bold tracking-tight text-gray-900 sm:text-4xl">
-          Contact Us
-        </h2>
-        <p className="mt-2 text-lg leading-8 text-gray-600">
-          Feel Free to Contact Us. We will reply within 24 hours.
+    <main className="min-h-screen bg-[#eee8df] px-5 py-16 sm:py-24">
+      <section className="mx-auto max-w-2xl rounded-[2rem] border border-[#8f1d2c]/9 bg-[#f8f4ed] p-6 shadow-sm sm:p-10">
+        <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#874047]">
+          Contact Rashtram AI
         </p>
-      </div>
+        <h1 className="mt-3 font-serif text-4xl text-[#8f1d2c]">
+          Tell us what you are researching
+        </h1>
+        <p className="mt-3 text-sm leading-6 text-[#706a61]">
+          Send a product question, data-source issue, or research workflow
+          request. Your message is stored securely for review.
+        </p>
 
-      <form
-        method="post"
-        className="mx-auto mt-16 max-w-xl sm:mt-20"
-      >
-        <div className="grid grid-cols-1 gap-x-8 gap-y-6 sm:grid-cols-2">
-          <div>
-            <label htmlFor="first-name" className="block text-sm font-semibold leading-6 text-gray-900">
-              First name
-            </label>
-            <div className="mt-2.5">
+        <form onSubmit={submit} className="mt-8 grid gap-5 sm:grid-cols-2">
+          {[
+            ["firstName", "First name", true],
+            ["lastName", "Last name", false],
+            ["organization", "Organization", false],
+            ["email", "Email", true],
+            ["phone", "Phone", false],
+          ].map(([name, label, required]) => (
+            <label
+              key={name}
+              className={name === "organization" ? "sm:col-span-2" : ""}
+            >
+              <span className="text-xs font-semibold text-[#514d46]">{label}</span>
               <input
-                type="text"
-                name="first-name"
-                id="first-name"
-                autoComplete="given-name"
-                className="block w-full rounded-md border border-gray-300 px-3.5 py-2 text-gray-900 shadow-sm placeholder:text-gray-400 focus:ring-2 focus:ring-[#a85a52] sm:text-sm"
+                name={name}
+                type={name === "email" ? "email" : name === "phone" ? "tel" : "text"}
+                required={required}
+                value={form[name]}
+                onChange={update}
+                className={fieldClass}
               />
-            </div>
-          </div>
-          <div>
-            <label htmlFor="last-name" className="block text-sm font-semibold leading-6 text-gray-900">
-              Last name
             </label>
-            <div className="mt-2.5">
-              <input
-                type="text"
-                name="last-name"
-                id="last-name"
-                autoComplete="family-name"
-                className="block w-full rounded-md border border-gray-300 px-3.5 py-2 text-gray-900 shadow-sm placeholder:text-gray-400 focus:ring-2 focus:ring-[#a85a52] sm:text-sm"
-              />
-            </div>
-          </div>
-
+          ))}
+          <label className="sm:col-span-2">
+            <span className="text-xs font-semibold text-[#514d46]">Message</span>
+            <textarea
+              name="message"
+              required
+              rows={6}
+              value={form.message}
+              onChange={update}
+              className={`${fieldClass} h-auto py-3`}
+            />
+          </label>
           <div className="sm:col-span-2">
-            <label htmlFor="company" className="block text-sm font-semibold leading-6 text-gray-900">
-              Company
-            </label>
-            <div className="mt-2.5">
-              <input
-                type="text"
-                name="company"
-                id="company"
-                autoComplete="organization"
-                className="block w-full rounded-md border border-gray-300 px-3.5 py-2 text-gray-900 shadow-sm placeholder:text-gray-400 focus:ring-2 focus:ring-[#a85a52] sm:text-sm"
-              />
-            </div>
+            <button
+              type="submit"
+              disabled={status.loading}
+              className="h-12 w-full rounded-xl bg-[#8f1d2c] px-5 text-sm font-semibold text-white disabled:opacity-60"
+            >
+              {status.loading ? "Sending…" : "Send message"}
+            </button>
+            {status.message && (
+              <p className="mt-3 text-sm text-[#315a49]">{status.message}</p>
+            )}
+            {status.error && (
+              <p className="mt-3 text-sm text-[#9b2638]">{status.error}</p>
+            )}
           </div>
-
-          {}
-          <div className="sm:col-span-2">
-            <label htmlFor="email" className="block text-sm font-semibold leading-6 text-gray-900">
-              Email
-            </label>
-            <div className="mt-2.5">
-              <input
-                type="email"
-                name="email"
-                id="email"
-                autoComplete="email"
-                className="block w-full rounded-md border border-gray-300 px-3.5 py-2 text-gray-900 shadow-sm placeholder:text-gray-400 focus:ring-2 focus:ring-[#a85a52] sm:text-sm"
-              />
-            </div>
-          </div>
-
-          <div className="sm:col-span-2">
-            <label htmlFor="phone-number" className="block text-sm font-semibold leading-6 text-gray-900">
-              Phone number
-            </label>
-            <div className="relative mt-2.5">
-              <select
-                id="country"
-                name="country"
-                className="absolute left-0 h-full rounded-md border-0 bg-transparent py-0 pl-4 pr-9 text-gray-400 focus:ring-2 focus:ring-[#a85a52] sm:text-sm"
-              >
-                <option>IND</option>
-                <option>US</option>
-                <option>EU</option>
-              </select>
-              <input
-                type="tel"
-                name="phone-number"
-                id="phone-number"
-                autoComplete="tel"
-                className="block w-full rounded-md border border-gray-300 px-3.5 py-2 pl-24 text-gray-900 shadow-sm placeholder:text-gray-400 focus:ring-2 focus:ring-[#a85a52] sm:text-sm"
-              />
-            </div>
-          </div>
-
-          <div className="sm:col-span-2">
-            <label htmlFor="message" className="block text-sm font-semibold leading-6 text-gray-900">
-              Message
-            </label>
-            <div className="mt-2.5">
-              <textarea
-                name="message"
-                id="message"
-                rows={4}
-                className="block w-full rounded-md border border-gray-300 px-3.5 py-2 text-gray-900 shadow-sm placeholder:text-gray-400 focus:ring-2 focus:ring-[#a85a52] sm:text-sm"
-              ></textarea>
-            </div>
-          </div>
-
-          </div>
-        <div className="mt-10">
-          <button
-            type="submit"
-            className="block w-full rounded-md bg-[#9b2638] px-3.5 py-2.5 text-center text-sm font-semibold text-white shadow-sm hover:bg-[#7a1926] focus:outline-none focus:ring-2 focus:ring-offset-2"
-          >
-            Let&apos;s talk
-          </button>
-        </div>
-      </form>
-    </div>
+        </form>
+      </section>
+    </main>
   );
 }

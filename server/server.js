@@ -22,6 +22,7 @@ const dashboardRouter = require("./dashboard/route");
 const profileRouter = require("./profile/route");
 const catalogIngestionRouter = require("./catalog/ingestionRoute");
 const activityRouter = require("./activity/route");
+const contactRouter = require("./contact/route");
 const { connectDB } = require("./db");
 const cors = require("cors");
 const {
@@ -61,6 +62,7 @@ app.use(express.urlencoded({ extended: true }));
 app.use(generalLimiter);
 
 app.use("/api/auth", authLimiter, authRouter);
+app.use("/api/contact", contactRouter);
 app.use("/api/chat", fetchUser, chatRouter);
 app.use("/api/bill-summary", fetchUser, billSummaryRouter);
 app.use("/api/bills", fetchUser, billsRouter);

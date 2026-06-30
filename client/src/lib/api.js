@@ -45,6 +45,19 @@ export const apiRequest = async (endpoint, options = {}) => {
   return response.json();
 };
 
+export const submitContactRequest = async (payload) => {
+  const response = await fetch(`${API_BASE_URL}/contact`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  const result = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(result.error || "Unable to send your message.");
+  }
+  return result;
+};
+
 
 const toQueryString = (values) => {
   const parameters = new URLSearchParams();

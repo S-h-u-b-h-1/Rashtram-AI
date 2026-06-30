@@ -354,6 +354,20 @@ ${content}
   return responseText(response);
 };
 
+const generateDashboardOverview = async (evidence) => {
+  const prompt = `
+Write a concise two-sentence legislative intelligence overview of no more than
+70 words. Use only the supplied JSON evidence. Do not call an item recent,
+active, important, or recommended unless the evidence explicitly supports it.
+Do not infer legal effects. If evidence is sparse, say so plainly.
+
+Evidence:
+${JSON.stringify(evidence)}
+`;
+  const response = await runGeneration("generateContent", prompt);
+  return responseText(response).trim().slice(0, 600);
+};
+
 const generateBillSummary = (billContent) =>
   generateDocumentSummary("bill", billContent);
 
@@ -577,6 +591,7 @@ module.exports = {
   generateActSummary,
   generateBillSummary,
   generateDocumentSummary,
+  generateDashboardOverview,
   generateEGazetteSummary,
   generateEmbedding,
   generateEmbeddings,

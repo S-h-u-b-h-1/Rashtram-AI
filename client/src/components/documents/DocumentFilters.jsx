@@ -23,13 +23,22 @@ export function DocumentFilters({
   filters,
   options,
   showType = true,
+  filterKeys,
+  filterLabels = {},
+  sortBy = "publicationDate",
+  sortDirection = "desc",
   onQueryChange,
   onFilterChange,
+  onSortChange,
+  onSortDirectionChange,
   onClear,
 }) {
-  const visibleOptions = showType
+  const availableOptions = showType
     ? OPTIONS
     : OPTIONS.filter(([key]) => key !== "type");
+  const visibleOptions = filterKeys?.length
+    ? availableOptions.filter(([key]) => filterKeys.includes(key))
+    : availableOptions;
   const activeCount = Object.values(filters).filter(Boolean).length;
 
   return (
@@ -48,7 +57,7 @@ export function DocumentFilters({
         {visibleOptions.map(([key, optionLabel, source]) => (
           <label key={key} className="min-w-[150px] flex-1 space-y-1">
             <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[#777066]">
-              {optionLabel}
+              {filterLabels[key] || optionLabel}
             </span>
             <select
               value={filters[key] || ""}
@@ -80,6 +89,42 @@ export function DocumentFilters({
             <option value="false">Unavailable</option>
           </select>
         </label>
+        {onSortChange && (
+          <label className="min-w-[150px] space-y-1">
+            <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[#777066]">
+              Sort
+            </span>
+            <select
+              value={sortBy}
+              onChange={(event) => onSortChange(event.target.value)}
+              className="h-10 w-full rounded-xl border border-[#8f1d2c]/10 bg-white px-3 text-xs text-[#29312d]"
+            >
+              <option value="publicationDate">Publication date</option>
+              <option value="updatedAt">Recently updated</option>
+              <option value="year">Year</option>
+              <option value="title">Title</option>
+              <option value="ministry">Ministry</option>
+              {query.trim() && <option value="relevance">Relevance</option>}
+            </select>
+          </label>
+        )}
+        {onSortDirectionChange && sortBy !== "relevance" && (
+          <label className="space-y-1">
+            <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[#777066]">
+              Direction
+            </span>
+            <select
+              value={sortDirection}
+              onChange={(event) =>
+                onSortDirectionChange(event.target.value)
+              }
+              className="h-10 rounded-xl border border-[#8f1d2c]/10 bg-white px-3 text-xs text-[#29312d]"
+            >
+              <option value="desc">Newest first</option>
+              <option value="asc">Oldest first</option>
+            </select>
+          </label>
+        )}
         {activeCount > 0 && (
           <button
             type="button"

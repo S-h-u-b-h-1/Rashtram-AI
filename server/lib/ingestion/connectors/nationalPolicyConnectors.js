@@ -10,8 +10,17 @@ const policyType = (value) => {
     return "strategy_paper";
   }
   if (text.includes("discussion paper")) return "discussion_paper";
+  if (text.includes("office memorandum")) return "office_memorandum";
+  if (text.includes("circular")) return "circular";
+  if (text.includes("scheme")) return "scheme";
   if (text.includes("policy")) return "policy";
-  if (text.includes("guideline") || text.includes("toolkit")) {
+  if (
+    text.includes("guideline") ||
+    text.includes("toolkit") ||
+    text.includes("framework") ||
+    text.includes("manual") ||
+    text.includes("standard operating procedure")
+  ) {
     return "guideline";
   }
   if (text.includes("recommendation")) return "recommendation";
@@ -106,7 +115,25 @@ const ogdConnector = createPublicListingConnector({
     "The OGD catalogue was reachable but exposed no crawlable catalogue links in the bounded server-rendered sample.",
 });
 
+const ministryEnvironmentConnector = createPublicListingConnector({
+  name: "ministry-environment",
+  collection: "new-guidelines",
+  url: "https://moef.gov.in/new-guidelines",
+  authority: "Ministry of Environment, Forest and Climate Change",
+  ministry: "Ministry of Environment, Forest and Climate Change",
+  jurisdictionLevel: "union",
+  jurisdiction: "India",
+  itemSelector: "li",
+  linkSelector: ".content-box a[href]",
+  linkPattern: /\.(pdf|docx?)(?:$|[?#])/i,
+  title: ($, anchor) => anchor.text() || anchor.attr("title"),
+  documentType: policyType,
+  category: "environment-policy",
+  allowedHosts: ["moef.gov.in"],
+});
+
 module.exports = {
+  ministryEnvironmentConnector,
   myGovConnector,
   ndapConnector,
   nitiAayogConnector,

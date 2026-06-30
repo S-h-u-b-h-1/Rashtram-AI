@@ -16,7 +16,6 @@ const ALLOWED_ACTIVITY_EVENTS = new Set([
   "profile_viewed",
   "research_continued",
   "export_clicked",
-  "watchlist_placeholder_clicked",
 ]);
 
 const DOCUMENT_INTERACTION_EVENTS = new Set([

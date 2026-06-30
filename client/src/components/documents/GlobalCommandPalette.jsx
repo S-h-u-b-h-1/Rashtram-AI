@@ -6,6 +6,7 @@ import {
   BookOpenText,
   History,
   LayoutDashboard,
+  Landmark,
   Search,
   Scale,
   ScrollText,
@@ -21,15 +22,16 @@ import { humanize } from "@/lib/document-links";
 
 const PAGES = [
   { label: "Dashboard", href: "/app", icon: LayoutDashboard },
-  { label: "All documents", href: "/app?view=documents", icon: FileSearch },
   { label: "Bills", href: "/app?view=bills", icon: FileSearch },
+  { label: "State Bills", href: "/app/state-bills", icon: Landmark },
   { label: "Acts", href: "/app?view=acts", icon: Scale },
   {
     label: "Policies",
     href: "/app?view=policies",
     icon: BookOpenText,
   },
-  { label: "eGazette", href: "/app/egazette", icon: ScrollText },
+  { label: "Gazette", href: "/app/egazette", icon: ScrollText },
+  { label: "Demo mode", href: "/app?demo=1", icon: LayoutDashboard },
   { label: "Profile and collections", href: "/app/profile", icon: Settings },
 ];
 

@@ -373,7 +373,7 @@ export function DocumentChatLayout({
         </div>
       </details>
       <div className="grid min-h-0 flex-1 xl:grid-cols-[minmax(0,1fr)_360px]">
-        <main className="flex min-h-0 flex-col">
+        <main id="research-chat" className="flex min-h-0 flex-col">
           <div className="paper-grid app-scrollbar flex-1 overflow-y-auto p-4 sm:p-6">
             <ChatHistory
               messages={messages}

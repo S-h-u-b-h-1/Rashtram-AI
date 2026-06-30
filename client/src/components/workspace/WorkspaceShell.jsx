@@ -5,6 +5,7 @@ import {
   FileText,
   BookOpenText,
   LayoutDashboard,
+  Landmark,
   LogOut,
   Menu,
   PanelLeftClose,
@@ -28,16 +29,16 @@ const NAVIGATION = [
     icon: LayoutDashboard,
   },
   {
-    key: "documents",
-    label: "All documents",
-    href: "/app?view=documents",
-    icon: FileText,
-  },
-  {
     key: "bills",
     label: "Bills",
     href: "/app?view=bills",
     icon: FileText,
+  },
+  {
+    key: "state-bills",
+    label: "State Bills",
+    href: "/app/state-bills",
+    icon: Landmark,
   },
   {
     key: "acts",
@@ -46,16 +47,16 @@ const NAVIGATION = [
     icon: Scale,
   },
   {
+    key: "egazette",
+    label: "Gazette",
+    href: "/app/egazette",
+    icon: ScrollText,
+  },
+  {
     key: "policies",
     label: "Policies",
     href: "/app?view=policies",
     icon: BookOpenText,
-  },
-  {
-    key: "egazette",
-    label: "eGazette",
-    href: "/app/egazette",
-    icon: ScrollText,
   },
   {
     key: "profile",
@@ -163,8 +164,8 @@ export function WorkspaceShell({ activeKey, title, children }) {
                 Source-aware research
               </p>
               <p className="mt-1 text-[11px] leading-5 text-white/38">
-                Live items show provenance. Planned feeds are never presented
-                as current news.
+                Every result retains its official source and availability
+                status.
               </p>
             </div>
           </div>

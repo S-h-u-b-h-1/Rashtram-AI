@@ -15,16 +15,21 @@ import {
 import { getPublicSourceLabel } from "@/lib/source-branding";
 import { trackActivity } from "@/lib/api";
 
-export function IntelligenceFeed({ events, isFallback }) {
+export function IntelligenceFeed({
+  events,
+  isFallback,
+  eyebrow = "Verified official records",
+  title = "What happened recently",
+}) {
   return (
     <section className="surface-card p-5 sm:p-6">
       <div className="flex items-start justify-between gap-4">
         <div>
           <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#874047]">
-            Verified parliamentary records
+            {eyebrow}
           </p>
           <h2 className="mt-2 font-serif text-2xl text-[#8f1d2c]">
-            Live Parliament activity
+            {title}
           </h2>
         </div>
         <Radio className="h-5 w-5 text-[#8c4548]" />
@@ -32,8 +37,8 @@ export function IntelligenceFeed({ events, isFallback }) {
 
       {isFallback && (
         <div className="mt-5 rounded-xl border border-[#98705d]/25 bg-[#f8ead7] px-4 py-3 text-xs leading-5 text-[#754b2e]">
-          No current Parliament event is available from the connected public
-          feeds. Blocked and stale sources are shown honestly in source health.
+          No current event record is available. The list below contains recent
+          catalogue additions from verified sources.
         </div>
       )}
 

@@ -17,6 +17,7 @@ const PRODUCTION_CONNECTORS = new Set([
   "mygov",
   "ndap",
   "ogd-india",
+  "ministry-environment",
   "regulator-rbi",
   "regulator-sebi",
   "regulator-trai",
@@ -167,7 +168,7 @@ const probeConnector = async (
       !history.documentCount &&
       !history.latestRunStatus
     ) {
-      status = "planned";
+      status = "not run";
     } else if (discovered === 0 && directoryEntries === 0) {
       status = "no data found";
     }

@@ -5,6 +5,7 @@ const { lokSabhaConnector } = require("./lokSabhaConnector");
 const { ministryConnector } = require("./ministryConnector");
 const {
   myGovConnector,
+  ministryEnvironmentConnector,
   ndapConnector,
   nitiAayogConnector,
   ogdConnector,
@@ -33,6 +34,7 @@ const CONNECTORS = [
   stateLegislatureConnector,
   stateGazetteConnector,
   ministryConnector,
+  ministryEnvironmentConnector,
   stateDirectoryConnector,
   nitiAayogConnector,
   pibConnector,
@@ -53,7 +55,14 @@ const CONNECTOR_ALIASES = {
 
 const SOURCE_GROUPS = {
   directories: ["ministry", "state-directory"],
-  policies: ["niti-aayog", "pib", "mygov", "ndap", "ogd-india"],
+  policies: [
+    "niti-aayog",
+    "pib",
+    "mygov",
+    "ndap",
+    "ogd-india",
+    "ministry-environment",
+  ],
   regulators: regulatorConnectors.map((connector) => connector.name),
   national: [
     "prs-india",
@@ -67,6 +76,7 @@ const SOURCE_GROUPS = {
     "mygov",
     "ndap",
     "ogd-india",
+    "ministry-environment",
   ],
 };
 

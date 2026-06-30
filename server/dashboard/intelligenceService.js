@@ -1,5 +1,12 @@
 const { query } = require("../db");
 const { getActivityInsights } = require("../activity/activityService");
+const { generateDashboardOverview } = require("../lib/vectordb");
+
+let overviewCache = {
+  key: null,
+  value: null,
+  expiresAt: 0,
+};
 
 const SOURCE_REGISTRY = [
   {
@@ -36,6 +43,11 @@ const SOURCE_REGISTRY = [
     key: "ministry",
     label: "Ministries & Departments",
     purpose: "Policies, schemes, guidelines and consultations",
+  },
+  {
+    key: "ministry-environment",
+    label: "Ministry of Environment, Forest and Climate Change",
+    purpose: "Official environmental guidelines, schemes and reports",
   },
   {
     key: "state-legislature",
@@ -161,6 +173,10 @@ const mapDocument = (row) => ({
   ),
   firstSeenAt: toIso(row.first_seen_at),
   updatedAt: toIso(row.updated_at),
+  recommendationScore:
+    row.recommendation_score == null
+      ? null
+      : Number(row.recommendation_score),
 });
 
 const mapEvent = (row) => ({
@@ -326,12 +342,51 @@ const findLatestDatedEvent = (events) =>
       : latest;
   }, null);
 
+const getGreeting = (name) => {
+  const hour = Number(
+    new Intl.DateTimeFormat("en-IN", {
+      timeZone: "Asia/Kolkata",
+      hour: "2-digit",
+      hour12: false,
+    }).format(new Date()),
+  );
+  const greeting =
+    hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening";
+  return name ? `${greeting}, ${name.split(" ")[0]}` : greeting;
+};
+
+const getGroundedOverview = async (evidence, fallback) => {
+  if (!process.env.GEMINI_API_KEY) return fallback;
+  const key = JSON.stringify(evidence);
+  if (
+    overviewCache.key === key &&
+    overviewCache.value &&
+    overviewCache.expiresAt > Date.now()
+  ) {
+    return overviewCache.value;
+  }
+  try {
+    const value = await generateDashboardOverview(evidence);
+    if (!value) return fallback;
+    overviewCache = {
+      key,
+      value,
+      expiresAt: Date.now() + 15 * 60 * 1_000,
+    };
+    return value;
+  } catch (error) {
+    console.warn("Dashboard overview generation unavailable:", error.message);
+    return fallback;
+  }
+};
+
 const getDashboardIntelligence = async (userId) => {
   const [
     user,
     eventsResult,
     recentDocumentsResult,
     nationalUpdatesResult,
+    latestStateBillsResult,
     activeBillsResult,
     gazetteNotificationsResult,
     legalUpdatesResult,
@@ -392,6 +447,26 @@ const getDashboardIntelligence = async (userId) => {
          OR canonical_source LIKE 'regulator-%'
       ORDER BY intelligence_date DESC NULLS LAST, updated_at DESC, id DESC
       LIMIT 100
+    `),
+    query(`
+      SELECT
+        legislative_documents.*,
+        COALESCE(
+          introduced_date,
+          publication_date,
+          CASE
+            WHEN year BETWEEN 1800 AND 2200 THEN MAKE_DATE(year, 1, 1)
+          END,
+          first_seen_at::DATE
+        ) AS intelligence_date
+      FROM legislative_documents
+      WHERE document_type = 'bill'
+        AND jurisdiction_level = 'state'
+      ORDER BY
+        intelligence_date DESC NULLS LAST,
+        updated_at DESC,
+        id DESC
+      LIMIT 8
     `),
     query(`
       SELECT
@@ -592,11 +667,34 @@ const getDashboardIntelligence = async (userId) => {
     recentCountsResult.rows[0]?.recent_documents || 0;
   const latestEvent = findLatestDatedEvent(storedEvents);
   const userRow = user.rows[0];
+  const fallbackBrief = buildBriefSummary({
+    recentEventCount,
+    freshSourceCount,
+    recentDocumentCount,
+  });
+  const briefSummary = await getGroundedOverview(
+    {
+      verifiedEventsLast7Days: Number(recentEventCount),
+      cataloguedDocumentsLast7Days: Number(recentDocumentCount),
+      freshSourceCount,
+      latestVerifiedEvent: latestEvent
+        ? {
+            title: latestEvent.title,
+            date: latestEvent.eventDate,
+            type: latestEvent.documentType,
+          }
+        : null,
+      recentCatalogueTitles: recentDocuments.slice(0, 3).map((document) => ({
+        title: document.title,
+        type: document.documentType,
+        date: document.eventDate,
+      })),
+    },
+    fallbackBrief,
+  );
 
   return {
-    userGreeting: userRow?.name
-      ? `Good to see you, ${userRow.name.split(" ")[0]}`
-      : "Welcome to your intelligence desk",
+    userGreeting: getGreeting(userRow?.name),
     currentDate: new Date().toISOString(),
     lastRefresh: toIso(refreshResult.rows[0]?.completed_at),
     freshnessStatus: {
@@ -608,11 +706,7 @@ const getDashboardIntelligence = async (userId) => {
           ? `${freshSourceCount} sources fresh`
           : "Awaiting source refresh",
     },
-    briefSummary: buildBriefSummary({
-      recentEventCount,
-      freshSourceCount,
-      recentDocumentCount,
-    }),
+    briefSummary,
     recentActivity: buildRecentActivity({
       recentEventCount24h,
       recentEventCount,
@@ -630,6 +724,8 @@ const getDashboardIntelligence = async (userId) => {
         "policy",
         "scheme",
         "guideline",
+        "office_memorandum",
+        "circular",
         "consultation_paper",
         "strategy_paper",
         "white_paper",
@@ -648,6 +744,7 @@ const getDashboardIntelligence = async (userId) => {
     latestStateUpdates: latestBy(
       (document) => document.jurisdictionLevel === "state",
     ),
+    latestStateBills: latestStateBillsResult.rows.map(mapDocument),
     latestRegulatorUpdates: latestBy((document) =>
       String(document.sourceName || "").startsWith("regulator-"),
     ),
@@ -664,10 +761,12 @@ const getDashboardIntelligence = async (userId) => {
     latestLegalUpdates: legalUpdatesResult.rows.map(mapDocument),
     recentGazetteNotifications:
       gazetteNotificationsResult.rows.map(mapDocument),
-    trendingCategories: trendingResult.rows.map((row) => ({
-      label: row.label,
-      documentCount: row.documents,
-    })),
+    trendingCategories: trendingResult.rows
+      .filter((row) => Number(row.documents) >= 2)
+      .map((row) => ({
+        label: row.label,
+        documentCount: row.documents,
+      })),
     ministryActivity: ministryActivityResult.rows.map((row) => ({
       ministry: row.ministry,
       documentCount: row.documents,
@@ -677,14 +776,33 @@ const getDashboardIntelligence = async (userId) => {
       documentType: row.document_type,
       documentCount: row.documents,
     })),
-    recommendedReading: recommendedReadingResult.rows.map(mapDocument),
+    recommendedReading: recommendedReadingResult.rows
+      .map(mapDocument)
+      .filter((document) => document.recommendationScore >= 3),
+    demoHighlights: [
+      latestBy((document) => document.documentType === "act", 1)[0],
+      activeBillsResult.rows.map(mapDocument)[0],
+      latestStateBillsResult.rows.map(mapDocument)[0],
+      latestBy((document) =>
+        [
+          "policy",
+          "scheme",
+          "guideline",
+          "consultation_paper",
+        ].includes(document.documentType),
+      1)[0],
+      gazetteNotificationsResult.rows.map(mapDocument)[0],
+    ].filter(
+      (document, index, documents) =>
+        document &&
+        documents.findIndex((candidate) => candidate?.id === document.id) ===
+          index,
+    ),
     sourceHealth,
     recentUserChats,
     emptyStateFlags: {
       noLiveEvents: storedEvents.length === 0,
       noActiveBills: activeBillsResult.rows.length === 0,
-      parliamentCalendarNotConnected: true,
-      watchlistNotAvailable: true,
     },
   };
 };
@@ -713,7 +831,22 @@ const getProfileData = async (userId) => {
         `SELECT
            COUNT(*) FILTER (
              WHERE document_type = 'bill'
+               AND NOT EXISTS (
+                 SELECT 1
+                 FROM legislative_documents d
+                 WHERE d.id = document_chats.document_id
+                   AND d.jurisdiction_level = 'state'
+               )
            )::INTEGER AS bill_chats,
+           COUNT(*) FILTER (
+             WHERE document_type = 'bill'
+               AND EXISTS (
+                 SELECT 1
+                 FROM legislative_documents d
+                 WHERE d.id = document_chats.document_id
+                   AND d.jurisdiction_level = 'state'
+               )
+           )::INTEGER AS state_bill_chats,
            COUNT(*) FILTER (
              WHERE document_type = 'act'
            )::INTEGER AS act_chats,
@@ -853,6 +986,7 @@ const getProfileData = async (userId) => {
   const coverageRow = coverage.rows[0];
   const researchHistoryCount =
     activityRow.bill_chats +
+    activityRow.state_bill_chats +
     activityRow.act_chats +
     activityRow.policy_chats +
     activityRow.gazette_chats;
@@ -875,12 +1009,12 @@ const getProfileData = async (userId) => {
     },
     userActivityStats: {
       billChats: activityRow.bill_chats,
+      stateBillChats: activityRow.state_bill_chats,
       actChats: activityRow.act_chats,
       policyChats: activityRow.policy_chats,
       gazetteChats: activityRow.gazette_chats,
       gazetteDocumentsOpened: activityRow.gazette_documents_opened,
       researchHistoryCount,
-      documentsOpened: researchHistoryCount,
       savedSummaries: activityRow.saved_summaries,
       totalMessages: activityRow.total_messages,
     },

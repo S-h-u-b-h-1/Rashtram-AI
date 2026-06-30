@@ -32,14 +32,32 @@ const STATUS_STYLES = {
     icon: CircleDashed,
     className: "bg-[#ece8e1] text-[#777066]",
   },
-  Planned: {
-    icon: CircleDashed,
-    className: "bg-[#ece8e1] text-[#777066]",
-  },
 };
 
-export function SourceHealthPanel({ sources }) {
+export function SourceHealthPanel({ sources, compact = false }) {
   const publicSourceGroups = summarizePublicSources(sources);
+  if (compact) {
+    const connected = publicSourceGroups.filter((source) =>
+      ["Fresh", "Connected", "Stale", "Degraded"].includes(source.status),
+    ).length;
+    const records = publicSourceGroups.reduce(
+      (total, source) => total + Number(source.documentCount || 0),
+      0,
+    );
+    return (
+      <section className="surface-card flex flex-wrap items-center justify-between gap-3 px-5 py-4">
+        <div>
+          <p className="text-xs font-semibold text-[#29312d]">Official source health</p>
+          <p className="mt-1 text-[11px] text-[#777066]">
+            {connected} of {publicSourceGroups.length} source groups connected
+          </p>
+        </div>
+        <p className="text-xs font-semibold text-[#8f1d2c]">
+          {records.toLocaleString("en-IN")} source-backed records
+        </p>
+      </section>
+    );
+  }
   return (
     <section className="surface-card p-5 sm:p-6">
       <div>

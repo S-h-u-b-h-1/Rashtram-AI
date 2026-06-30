@@ -38,8 +38,12 @@ export function DocumentExplorer({
   title,
   description,
   eyebrow = "Universal legislative catalogue",
+  filterKeys,
+  filterLabels,
+  dataNote,
+  initialQuery = "",
 }) {
-  const [query, setQuery] = useState("");
+  const [query, setQuery] = useState(initialQuery);
   const [filters, setFilters] = useState(EMPTY_FILTERS);
   const [documents, setDocuments] = useState([]);
   const [filterOptions, setFilterOptions] = useState({});
@@ -53,6 +57,8 @@ export function DocumentExplorer({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [selectedIds, setSelectedIds] = useState([]);
+  const [sortBy, setSortBy] = useState("publicationDate");
+  const [sortDirection, setSortDirection] = useState("desc");
 
   const requestFilters = useMemo(
     () => ({
@@ -75,6 +81,8 @@ export function DocumentExplorer({
           semantic: query.trim().length >= 3,
           page,
           limit: 20,
+          sortBy,
+          sortDirection,
         });
         setDocuments(response.documents || []);
         setPagination(response.pagination || {});
@@ -87,7 +95,7 @@ export function DocumentExplorer({
       }
     }, 250);
     return () => clearTimeout(timer);
-  }, [page, query, requestFilters]);
+  }, [page, query, requestFilters, sortBy, sortDirection]);
 
   useEffect(() => {
     setPage(1);
@@ -149,11 +157,22 @@ export function DocumentExplorer({
             filters={filters}
             options={filterOptions}
             showType={!type && !scope}
+            filterKeys={filterKeys}
+            filterLabels={filterLabels}
+            sortBy={sortBy}
+            sortDirection={sortDirection}
             onQueryChange={setQuery}
             onFilterChange={updateFilter}
+            onSortChange={setSortBy}
+            onSortDirectionChange={setSortDirection}
             onClear={() => setFilters(EMPTY_FILTERS)}
           />
         </div>
+        {dataNote && (
+          <p className="mt-3 rounded-xl border border-[#8f1d2c]/8 bg-white/55 px-3 py-2 text-[11px] leading-5 text-[#706a61]">
+            {dataNote}
+          </p>
+        )}
         <button
           type="button"
           onClick={() =>
@@ -239,6 +258,7 @@ export function DocumentExplorer({
                         document.number,
                         document.ministry || document.authority,
                         document.jurisdiction,
+                        document.category && humanize(document.category),
                         formatDate(
                           document.publicationDate,
                           document.year || "Date unavailable",
@@ -251,6 +271,22 @@ export function DocumentExplorer({
                   <div className="flex flex-wrap items-start gap-2 md:justify-end">
                     <Link
                       href={`/app/document/${document.id}`}
+                      onClick={() =>
+                        trackActivity({
+                          event_type: "document_opened",
+                          entity_type: document.type,
+                          entity_id: document.id,
+                          document_id: document.id,
+                          page_path: "/app",
+                          metadata_json: { documentType: document.type },
+                        })
+                      }
+                      className="inline-flex items-center gap-1.5 rounded-xl border border-[#8f1d2c]/10 bg-white px-3 py-2 text-[10px] font-semibold text-[#8f1d2c]"
+                    >
+                      Open
+                    </Link>
+                    <Link
+                      href={`/app/document/${document.id}#research-chat`}
                       onClick={() =>
                         trackActivity({
                           event_type: "document_opened",

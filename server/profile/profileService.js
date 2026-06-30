@@ -268,6 +268,13 @@ const getAccountData = async (userId) => {
     })),
     analytics: {
       documentsOpened: analyticsRow.documents_opened || 0,
+      savedDocuments: saved.rows.filter(
+        (row) => row.item_type !== "bookmark",
+      ).length,
+      bookmarks: saved.rows.filter(
+        (row) => row.item_type === "bookmark",
+      ).length,
+      readingHistory: analyticsRow.documents_opened || 0,
       researchSessions: analyticsRow.research_sessions || 0,
       recentSearches: analyticsRow.searches || 0,
       readingTimeMinutes: analyticsRow.reading_minutes || 0,

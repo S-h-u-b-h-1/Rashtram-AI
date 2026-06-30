@@ -759,8 +759,7 @@ const initializeSchema = async () => {
           'source_opened',
           'profile_viewed',
           'research_continued',
-          'export_clicked',
-          'watchlist_placeholder_clicked'
+          'export_clicked'
         )
       ),
       entity_type TEXT,
@@ -782,6 +781,50 @@ const initializeSchema = async () => {
     CREATE INDEX IF NOT EXISTS user_activity_events_document_idx
       ON user_activity_events (document_id, created_at DESC)
       WHERE document_id IS NOT NULL;
+
+    DELETE FROM user_activity_events
+      WHERE event_type = 'watchlist_placeholder_clicked';
+
+    ALTER TABLE user_activity_events
+      DROP CONSTRAINT IF EXISTS user_activity_events_event_type_check;
+
+    ALTER TABLE user_activity_events
+      ADD CONSTRAINT user_activity_events_event_type_check CHECK (
+        event_type IN (
+          'login',
+          'logout',
+          'dashboard_viewed',
+          'document_opened',
+          'bill_opened',
+          'act_opened',
+          'search_performed',
+          'filter_used',
+          'chat_started',
+          'chat_message_sent',
+          'summary_viewed',
+          'source_opened',
+          'profile_viewed',
+          'research_continued',
+          'export_clicked'
+        )
+      );
+
+    CREATE TABLE IF NOT EXISTS contact_requests (
+      id BIGSERIAL PRIMARY KEY,
+      first_name TEXT NOT NULL,
+      last_name TEXT,
+      organization TEXT,
+      email TEXT NOT NULL,
+      phone TEXT,
+      message TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'new' CHECK (
+        status IN ('new', 'reviewed', 'closed')
+      ),
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+
+    CREATE INDEX IF NOT EXISTS contact_requests_recent_idx
+      ON contact_requests (created_at DESC);
 
     CREATE INDEX IF NOT EXISTS user_activity_events_type_idx
       ON user_activity_events (event_type, created_at DESC);

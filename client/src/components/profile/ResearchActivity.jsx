@@ -3,17 +3,19 @@ import {
   FileCheck2,
   FolderOpen,
   History,
-  MessageSquareText,
   ScrollText,
   Newspaper,
-  Clock3,
-  Flame,
-  Search,
-  CalendarRange,
+  Bookmark,
+  MapPinned,
 } from "lucide-react";
 
 export function ResearchActivity({ stats }) {
   const items = [
+    {
+      label: "State Bill conversations",
+      value: stats.stateBillChats,
+      icon: MapPinned,
+    },
     {
       label: "Bill conversations",
       value: stats.billChats,
@@ -35,60 +37,19 @@ export function ResearchActivity({ stats }) {
       icon: Newspaper,
     },
     {
-      label: "Gazette documents opened",
-      value: stats.gazetteDocumentsOpened,
-      icon: FolderOpen,
-    },
-    {
-      label: "Research history",
-      value: stats.researchHistoryCount,
+      label: "Saved documents",
+      value: stats.savedDocuments,
       icon: History,
     },
     {
-      label: "Documents opened",
-      value: stats.documentsOpened,
+      label: "Bookmarks",
+      value: stats.bookmarks,
+      icon: Bookmark,
+    },
+    {
+      label: "Reading history",
+      value: stats.readingHistory,
       icon: FolderOpen,
-    },
-    {
-      label: "Saved summaries",
-      value: stats.savedSummaries,
-      icon: FileCheck2,
-    },
-    {
-      label: "Research messages",
-      value: stats.totalMessages,
-      icon: MessageSquareText,
-    },
-    {
-      label: "Research sessions",
-      value: stats.researchSessions,
-      icon: History,
-    },
-    {
-      label: "Recent searches",
-      value: stats.recentSearches,
-      icon: Search,
-    },
-    {
-      label: "Reading minutes",
-      value: stats.readingTimeMinutes,
-      icon: Clock3,
-    },
-    {
-      label: "Research streak",
-      value: stats.researchStreak,
-      suffix: " days",
-      icon: Flame,
-    },
-    {
-      label: "Weekly activity",
-      value: stats.weeklyActivity,
-      icon: CalendarRange,
-    },
-    {
-      label: "Monthly activity",
-      value: stats.monthlyActivity,
-      icon: CalendarRange,
     },
   ];
 
@@ -106,7 +67,7 @@ export function ResearchActivity({ stats }) {
         </p>
       </div>
 
-      <div className="mt-5 grid grid-cols-2 gap-3 lg:grid-cols-4 xl:grid-cols-7">
+      <div className="mt-5 grid grid-cols-2 gap-3 lg:grid-cols-4">
         {items.map((item) => {
           const ActivityIcon = item.icon;
           return (

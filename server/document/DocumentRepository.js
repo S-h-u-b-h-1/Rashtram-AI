@@ -46,7 +46,7 @@ const mapDocument = (row) => {
     effectiveDate: toIso(row.effective_date),
     commencementDate: toIso(row.commencement_date),
     year: row.year,
-    status: row.status || "Published",
+    status: row.status || null,
     source,
     sourceName: source,
     sourceUrl,
@@ -67,6 +67,10 @@ const mapDocument = (row) => {
     category: row.category,
     metadata,
     summary: row.summary || null,
+    recommendationScore:
+      row.recommendation_score == null
+        ? null
+        : Number(row.recommendation_score),
     relationships: [],
     firstSeenAt: toIso(row.first_seen_at),
     updatedAt: toIso(row.updated_at),
