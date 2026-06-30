@@ -834,7 +834,7 @@ const getProfileData = async (userId) => {
                AND NOT EXISTS (
                  SELECT 1
                  FROM legislative_documents d
-                 WHERE d.id = document_chats.document_id
+                 WHERE d.id::TEXT = document_chats.document_id::TEXT
                    AND d.jurisdiction_level = 'state'
                )
            )::INTEGER AS bill_chats,
@@ -843,7 +843,7 @@ const getProfileData = async (userId) => {
                AND EXISTS (
                  SELECT 1
                  FROM legislative_documents d
-                 WHERE d.id = document_chats.document_id
+                 WHERE d.id::TEXT = document_chats.document_id::TEXT
                    AND d.jurisdiction_level = 'state'
                )
            )::INTEGER AS state_bill_chats,
