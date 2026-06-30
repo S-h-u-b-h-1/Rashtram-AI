@@ -10,6 +10,8 @@ export function ChatInput({
   onSend,
   onRegenerate,
   onClear,
+  responseLanguage,
+  onResponseLanguageChange,
 }) {
   return (
     <div className="border-t border-[#8f1d2c]/8 bg-[#f7f2eb] p-4">
@@ -47,12 +49,26 @@ export function ChatInput({
             )}
           </button>
         </div>
-        <div className="mt-2 flex items-center justify-between">
+        <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
           <p className="text-[10px] text-[#8a8277]">
             Answers cite retrieved passages. Verify important conclusions
             against the original record.
           </p>
-          <div className="flex gap-3">
+          <div className="flex items-center gap-3">
+            <label className="flex items-center gap-1.5 text-[10px] font-semibold text-[#874047]">
+              Response language
+              <select
+                value={responseLanguage}
+                onChange={(event) =>
+                  onResponseLanguageChange(event.target.value)
+                }
+                disabled={sending}
+                className="rounded-lg border border-[#8f1d2c]/10 bg-white px-2 py-1 text-[10px] text-[#514d46]"
+              >
+                <option value="English">English</option>
+                <option value="Hindi">हिन्दी</option>
+              </select>
+            </label>
             <button
               type="button"
               onClick={onRegenerate}

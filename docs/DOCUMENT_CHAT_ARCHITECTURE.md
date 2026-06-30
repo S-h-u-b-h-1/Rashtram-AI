@@ -105,6 +105,24 @@ open document
 
 Bulk PDF processing remains prohibited.
 
+## Hindi and bilingual processing
+
+Every on-demand PDF process detects language and script after native PDF text
+extraction. If a scanned PDF does not contain usable embedded text, the service
+uses Gemini PDF OCR with an exact-transcription prompt. Devanagari text is
+Unicode-normalized without translation and chunked using Hindi danda sentence
+boundaries.
+
+`document_text_artifacts` stores the complete original-language text,
+language/script metadata, extraction method, and OCR status separately from the
+English research summary. Pinecone citation content remains the original text.
+For Hindi documents, embedding input combines each original Hindi chunk with
+the English document summary to support multilingual discovery without
+replacing the cited source.
+
+Single- and multi-document chat accept an explicit English or Hindi response
+language. Quoted citations remain in the source language.
+
 ## Testing and roadmap
 
 Tests cover the generic type allowlist, adapter contract, deterministic local

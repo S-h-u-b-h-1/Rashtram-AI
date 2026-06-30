@@ -276,7 +276,18 @@ const generateEmbeddings = async (
 const generateEmbedding = async (text) =>
   (await generateEmbeddings([text], "RETRIEVAL_QUERY"))[0];
 
-const generateResponse = async (prompt, context = "") => {
+const normalizeResponseLanguage = (value) =>
+  String(value || "").toLowerCase().startsWith("hi") ||
+  String(value || "").toLowerCase() === "hindi"
+    ? "Hindi"
+    : "English";
+
+const generateResponse = async (
+  prompt,
+  context = "",
+  { responseLanguage = "English" } = {},
+) => {
+  const language = normalizeResponseLanguage(responseLanguage);
   const fullPrompt = `
 You are Rashtram AI, an assistant for researching Indian legislative, legal,
 and Gazette documents. Answer using the supplied document context.
@@ -290,7 +301,8 @@ ${prompt}
 Give a comprehensive, accessible answer. Clearly state when the context does
 not contain enough information. Do not invent provisions, dates, or citations.
 When the context contains labels such as [Passage 1], cite the relevant labels
-inline.
+inline. Respond in ${language}. Preserve quoted source text in its original
+language and explain it in ${language} when needed.
 `;
 
   return runGeneration("generateContentStream", fullPrompt);
@@ -326,7 +338,11 @@ const SUMMARY_GUIDANCE = {
   ordinance: "necessity, operative provisions, legal effect, duration, replacement legislation, and affected parties",
 };
 
-const generateDocumentSummary = async (documentType, content) => {
+const generateDocumentSummary = async (
+  documentType,
+  content,
+  { sourceLanguage = "und" } = {},
+) => {
   const normalizedType = String(documentType || "document")
     .trim()
     .toLowerCase()
@@ -339,12 +355,15 @@ Prepare a grounded research brief for this Indian legislative or public-policy
 document.
 
 Document type: ${normalizedType}
+Detected source language: ${sourceLanguage}
 Focus on: ${guidance}.
 
 Use only the supplied text. Distinguish facts stated in the document from
 reasonable implications. Clearly state "Not identified in the document" when
 evidence is absent. Preserve important numbers, dates, sections, authorities,
-and defined terms. Do not invent legal provisions or relationships.
+and defined terms. Do not invent legal provisions or relationships. Write the
+brief in English. When translating Hindi terms, retain the important original
+Hindi term in parentheses on first use.
 
 Document content:
 ${content}
@@ -466,7 +485,7 @@ const storeContentInChunks = async ({
   ) {
     const batch = chunks.slice(start, start + EMBEDDING_BATCH_SIZE);
     const embeddings = await generateEmbeddings(
-      batch.map((chunk) => chunk.content),
+      batch.map((chunk) => chunk.embeddingText || chunk.content),
       "RETRIEVAL_DOCUMENT",
     );
     const vectors = batch.map((chunk, index) => ({

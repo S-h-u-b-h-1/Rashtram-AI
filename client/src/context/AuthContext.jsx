@@ -2,7 +2,12 @@
 
 import React, { createContext, useState, useContext, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { trackActivity } from "@/lib/api";
+import {
+  clearAuthTokens,
+  getAuthToken,
+  storeAuthToken,
+  trackActivity,
+} from "@/lib/api";
 
 const AuthContext = createContext();
 
@@ -32,8 +37,7 @@ export const AuthProvider = ({ children }) => {
 
     if (tokenFromUrl) {
 
-      localStorage.setItem('auth-token', tokenFromUrl);
-      sessionStorage.setItem('auth-token', tokenFromUrl);
+      storeAuthToken(tokenFromUrl, { persistent: true });
 
       window.history.replaceState({}, document.title, window.location.pathname);
 
@@ -55,7 +59,7 @@ export const AuthProvider = ({ children }) => {
 
   const checkAuthStatus = async () => {
     try {
-      const token = localStorage.getItem('auth-token') || sessionStorage.getItem('auth-token');
+      const token = getAuthToken();
       if (!token) {
         setLoading(false);
         return;
@@ -75,14 +79,12 @@ export const AuthProvider = ({ children }) => {
         setIsAuthenticated(true);
       } else {
 
-        localStorage.removeItem('auth-token');
-        sessionStorage.removeItem('auth-token');
+        clearAuthTokens();
         setIsAuthenticated(false);
       }
     } catch (error) {
       console.error('Auth check failed:', error);
-      localStorage.removeItem('auth-token');
-      sessionStorage.removeItem('auth-token');
+      clearAuthTokens();
       setIsAuthenticated(false);
     } finally {
       setLoading(false);
@@ -104,11 +106,7 @@ export const AuthProvider = ({ children }) => {
 
       if (response.ok) {
 
-        if (rememberMe) {
-          localStorage.setItem('auth-token', data.authToken);
-        } else {
-          sessionStorage.setItem('auth-token', data.authToken);
-        }
+        storeAuthToken(data.authToken, { persistent: rememberMe });
 
 
         await checkAuthStatus();
@@ -153,7 +151,7 @@ export const AuthProvider = ({ children }) => {
 
       if (response.ok) {
 
-        localStorage.setItem('auth-token', data.authToken);
+        storeAuthToken(data.authToken, { persistent: true });
 
 
         await checkAuthStatus();
@@ -189,8 +187,7 @@ export const AuthProvider = ({ children }) => {
       entity_type: "account",
       page_path: window.location.pathname,
     });
-    localStorage.removeItem('auth-token');
-    sessionStorage.removeItem('auth-token');
+    clearAuthTokens();
     setUser(null);
     setIsAuthenticated(false);
     router.push('/');

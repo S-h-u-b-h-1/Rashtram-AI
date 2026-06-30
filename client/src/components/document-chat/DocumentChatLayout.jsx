@@ -69,6 +69,7 @@ export function DocumentChatLayout({
   const [sending, setSending] = useState(false);
   const [isPinned, setIsPinned] = useState(false);
   const [error, setError] = useState("");
+  const [responseLanguage, setResponseLanguage] = useState("English");
   const messagesEndRef = useRef(null);
 
   useEffect(() => {
@@ -114,6 +115,12 @@ export function DocumentChatLayout({
               documentId,
             );
             generatedSummary = result.summary || "";
+            if (result.textArtifact) {
+              setDocument((current) => ({
+                ...current,
+                textArtifact: result.textArtifact,
+              }));
+            }
           } catch (processingError) {
             setError(
               `The official record opened, but document processing is unavailable: ${processingError.message}`,
@@ -253,6 +260,7 @@ export function DocumentChatLayout({
           );
           setSending(false);
         },
+        responseLanguage,
       );
     } catch (requestError) {
       setError(requestError.message);
@@ -394,6 +402,8 @@ export function DocumentChatLayout({
             onSend={submitQuestion}
             onRegenerate={regenerate}
             onClear={clear}
+            responseLanguage={responseLanguage}
+            onResponseLanguageChange={setResponseLanguage}
           />
         </main>
         <aside className="app-scrollbar hidden overflow-y-auto border-l border-[#8f1d2c]/8 bg-[#f7f2eb] p-5 xl:block">

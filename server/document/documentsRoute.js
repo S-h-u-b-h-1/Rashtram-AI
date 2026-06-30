@@ -123,7 +123,14 @@ router.post("/chat", async (req, res) => {
         })),
       })}\n\n`,
     );
-    const stream = await generateResponse(message, context);
+    const responseLanguage =
+      String(req.body.responseLanguage || "").toLowerCase().startsWith("hi") ||
+      String(req.body.responseLanguage || "").toLowerCase() === "hindi"
+        ? "Hindi"
+        : "English";
+    const stream = await generateResponse(message, context, {
+      responseLanguage,
+    });
     for await (const chunk of stream) {
       const content =
         typeof chunk.text === "function" ? chunk.text() : chunk.text || "";

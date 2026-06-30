@@ -304,7 +304,9 @@ Areas that should be strengthened:
 - Some historical records do not include a PDF or ministry.
 - Catalogue metadata is complete to the extent exposed by source pages; full
   PDF text is processed on demand rather than copied wholesale into PostgreSQL.
-- Scanned PDFs may have weak or no extractable text without OCR.
+- Scanned PDFs fall back to bounded Gemini PDF OCR. If both native extraction
+  and OCR fail, processing returns a clear 422 response and retains catalogue
+  metadata and source access.
 
 ### AI and retrieval
 

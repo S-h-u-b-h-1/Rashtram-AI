@@ -1,4 +1,5 @@
 const { pdfProcessor } = require("../lib/pdfProcessor");
+const { query } = require("../db");
 const {
   checkActExists,
   checkBillExists,
@@ -69,6 +70,91 @@ const typeConfig = (documentType) => {
   return config;
 };
 
+const getTextArtifact = async (documentId) => {
+  const result = await query(
+    `SELECT
+       language_code,
+       script,
+       language_confidence,
+       english_summary,
+       extraction_method,
+       ocr_used,
+       metadata_json,
+       updated_at
+     FROM document_text_artifacts
+     WHERE document_id = $1
+     LIMIT 1`,
+    [documentId],
+  );
+  const row = result.rows[0];
+  if (!row) return null;
+  return {
+    languageCode: row.language_code,
+    script: row.script,
+    languageConfidence:
+      row.language_confidence == null
+        ? null
+        : Number(row.language_confidence),
+    englishSummary: row.english_summary,
+    extractionMethod: row.extraction_method,
+    ocrUsed: row.ocr_used,
+    metadata: row.metadata_json || {},
+    updatedAt: row.updated_at,
+  };
+};
+
+const saveTextArtifact = async (
+  documentId,
+  {
+    language,
+    originalText,
+    englishSummary,
+    extractionMethod,
+    ocrUsed,
+    metadata = {},
+  },
+) => {
+  await query(
+    `INSERT INTO document_text_artifacts (
+       document_id,
+       language_code,
+       script,
+       language_confidence,
+       original_text,
+       english_summary,
+       extraction_method,
+       ocr_used,
+       metadata_json
+     )
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb)
+     ON CONFLICT (document_id)
+     DO UPDATE SET
+       language_code = EXCLUDED.language_code,
+       script = EXCLUDED.script,
+       language_confidence = EXCLUDED.language_confidence,
+       original_text = EXCLUDED.original_text,
+       english_summary = EXCLUDED.english_summary,
+       extraction_method = EXCLUDED.extraction_method,
+       ocr_used = EXCLUDED.ocr_used,
+       metadata_json = EXCLUDED.metadata_json,
+       updated_at = NOW()`,
+    [
+      documentId,
+      language.languageCode,
+      language.script,
+      language.confidence,
+      originalText,
+      englishSummary || null,
+      extractionMethod,
+      Boolean(ocrUsed),
+      JSON.stringify(metadata),
+    ],
+  );
+  for (const key of contextCache.keys()) {
+    if (key.endsWith(`:${documentId}`)) contextCache.delete(key);
+  }
+};
+
 const getDocument = async (documentType, documentId) => {
   const requestedType = normalizeDocumentType(documentType);
   const document = await DocumentRepository.getById(documentId);
@@ -99,11 +185,12 @@ const getDocumentContext = async (documentType, documentId) => {
   }
   const document = await getDocument(documentType, documentId);
   if (!document) return null;
-  const [resources, relationships, recommendations] =
+  const [resources, relationships, recommendations, textArtifact] =
     await Promise.all([
       DocumentRepository.getResources(documentId),
       DocumentRepository.getRelated(documentId),
       DocumentRepository.getRecommendations(documentId),
+      getTextArtifact(documentId),
     ]);
   const [timeline, graph] = await Promise.all([
     DocumentRepository.getTimeline(documentId, document, relationships),
@@ -116,6 +203,7 @@ const getDocumentContext = async (documentType, documentId) => {
     recommendations,
     timeline,
     graph,
+    textArtifact,
   };
   contextCache.set(cacheKey, { cachedAt: Date.now(), value });
   if (contextCache.size > 500) {
@@ -145,6 +233,7 @@ const processDocument = async (documentType, documentId) => {
     throw error;
   }
   const config = typeConfig(documentType);
+  const storedArtifact = await getTextArtifact(documentId);
   const existence = await config.check(documentId);
   if (existence.exists && existence.summary) {
     return {
@@ -152,6 +241,7 @@ const processDocument = async (documentType, documentId) => {
       summary: existence.summary,
       chunksStored: existence.chunksCount || 0,
       document,
+      textArtifact: storedArtifact,
     };
   }
 
@@ -162,7 +252,22 @@ const processDocument = async (documentType, documentId) => {
       .filter(Boolean)
       .join("\n\n");
     if (context) {
-      const summary = await generateDocumentSummary(documentType, context);
+      const language = pdfProcessor.detectLanguage(context);
+      const summary = await generateDocumentSummary(documentType, context, {
+        sourceLanguage: language.languageCode,
+      });
+      await saveTextArtifact(documentId, {
+        language,
+        originalText: context,
+        englishSummary: summary,
+        extractionMethod:
+          matches[0]?.metadata?.extractionMethod || "pdf_text",
+        ocrUsed: Boolean(matches[0]?.metadata?.ocrUsed),
+        metadata: {
+          reconstructedFromIndexedChunks: true,
+          chunks: matches.length,
+        },
+      });
       await Promise.all(
         matches.map((match) =>
           config.index().update({
@@ -176,6 +281,7 @@ const processDocument = async (documentType, documentId) => {
         summary,
         chunksStored: matches.length,
         document,
+        textArtifact: await getTextArtifact(documentId),
       };
     }
   }
@@ -200,16 +306,31 @@ const processDocument = async (documentType, documentId) => {
   const summary = await generateDocumentSummary(
     documentType,
     summaryContext,
+    { sourceLanguage: processed.language.languageCode },
   );
+  await saveTextArtifact(documentId, {
+    language: processed.language,
+    originalText: processed.originalText,
+    englishSummary: summary,
+    extractionMethod: processed.extractionMethod,
+    ocrUsed: processed.ocrUsed,
+    metadata: processed.pdfMetadata,
+  });
   const chunks = processed.chunks.map((chunk, index) => ({
     ...chunk,
     id: `${documentType}-${documentId}-chunk-${index}`,
     [config.idField]: String(documentId),
+    embeddingText: processed.language.languageCode.startsWith("hi")
+      ? `${chunk.content}\n\nEnglish document summary: ${summary}`
+      : chunk.content,
     metadata: {
       ...chunk.metadata,
       documentType,
       sourceUrl: document.sourceUrl,
       summary,
+      languageCode: processed.language.languageCode,
+      script: processed.language.script,
+      originalLanguage: processed.language.languageCode,
     },
   }));
   const stored = await config.store(chunks);
@@ -219,6 +340,7 @@ const processDocument = async (documentType, documentId) => {
     chunksStored: stored.chunksStored,
     totalChunks: processed.totalChunks,
     document,
+    textArtifact: await getTextArtifact(documentId),
   };
 };
 
@@ -239,6 +361,10 @@ const retrievePassages = async (
     content: String(match.metadata?.content || match.content || ""),
     source: match.metadata?.source || "Official document PDF",
     pdfUrl: match.metadata?.pdfUrl || null,
+    languageCode:
+      match.metadata?.languageCode ||
+      match.metadata?.originalLanguage ||
+      "und",
   }));
 };
 
@@ -277,6 +403,8 @@ module.exports = {
   getDocument,
   getDocumentContext,
   processDocument,
+  getTextArtifact,
   retrievePassages,
+  saveTextArtifact,
   searchAcrossIndexedDocuments,
 };

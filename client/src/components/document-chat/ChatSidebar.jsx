@@ -22,6 +22,24 @@ export function ChatSidebar({
     ["Year", document.year],
     ["Published", formatDate(document.publicationDate, null)],
     ["Gazette number", document.gazetteNumber],
+    [
+      "Source language",
+      document.textArtifact?.languageCode === "hi"
+        ? "Hindi"
+        : document.textArtifact?.languageCode === "hi-en"
+          ? "Hindi + English"
+          : document.textArtifact?.languageCode === "en"
+            ? "English"
+            : null,
+    ],
+    [
+      "Text extraction",
+      document.textArtifact
+        ? document.textArtifact.ocrUsed
+          ? "OCR"
+          : "Embedded PDF text"
+        : null,
+    ],
   ].filter(([, value]) => value);
 
   return (

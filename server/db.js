@@ -347,6 +347,26 @@ const initializeSchema = async () => {
     CREATE INDEX IF NOT EXISTS legislative_resources_document_idx
       ON legislative_document_resources (document_id);
 
+    CREATE TABLE IF NOT EXISTS document_text_artifacts (
+      document_id BIGINT PRIMARY KEY
+        REFERENCES legislative_documents(id) ON DELETE CASCADE,
+      language_code TEXT NOT NULL DEFAULT 'und',
+      script TEXT NOT NULL DEFAULT 'Unknown',
+      language_confidence NUMERIC(5, 4),
+      original_text TEXT NOT NULL,
+      english_summary TEXT,
+      extraction_method TEXT NOT NULL CHECK (
+        extraction_method IN ('pdf_text', 'gemini_ocr')
+      ),
+      ocr_used BOOLEAN NOT NULL DEFAULT FALSE,
+      metadata_json JSONB NOT NULL DEFAULT '{}'::jsonb,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+
+    CREATE INDEX IF NOT EXISTS document_text_artifacts_language_idx
+      ON document_text_artifacts (language_code, updated_at DESC);
+
     CREATE TABLE IF NOT EXISTS source_collection_snapshots (
       id BIGSERIAL PRIMARY KEY,
       source_name TEXT NOT NULL,

@@ -3,11 +3,23 @@
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5001/api';
 
 
-const getAuthToken = () => {
+export const getAuthToken = () => {
   if (typeof window === 'undefined') return null;
-  return localStorage.getItem('auth-token') || sessionStorage.getItem('auth-token');
+  return sessionStorage.getItem('auth-token') || localStorage.getItem('auth-token');
 };
 
+export const clearAuthTokens = () => {
+  if (typeof window === "undefined") return;
+  localStorage.removeItem("auth-token");
+  sessionStorage.removeItem("auth-token");
+};
+
+export const storeAuthToken = (token, { persistent = false } = {}) => {
+  clearAuthTokens();
+  if (!token || typeof window === "undefined") return;
+  const storage = persistent ? localStorage : sessionStorage;
+  storage.setItem("auth-token", token);
+};
 
 export const apiRequest = async (endpoint, options = {}) => {
   const token = getAuthToken();
@@ -30,8 +42,7 @@ export const apiRequest = async (endpoint, options = {}) => {
   if (!response.ok) {
     if (response.status === 401) {
 
-      localStorage.removeItem('auth-token');
-      sessionStorage.removeItem('auth-token');
+      if (getAuthToken() === token) clearAuthTokens();
       throw new Error('Session expired. Please login again.');
     }
     const error = await response.json().catch(() => ({}));
@@ -111,6 +122,7 @@ export const sendCrossDocumentChat = async (
   onChunk,
   onComplete,
   onError,
+  responseLanguage = "English",
 ) => {
   const token = getAuthToken();
   if (!token) {
@@ -124,7 +136,7 @@ export const sendCrossDocumentChat = async (
         "Content-Type": "application/json",
         "auth-token": token,
       },
-      body: JSON.stringify({ message, documentIds }),
+      body: JSON.stringify({ message, documentIds, responseLanguage }),
     });
     if (!response.ok) {
       const payload = await response.json().catch(() => ({}));
@@ -283,6 +295,7 @@ export const sendDocumentChatMessage = async (
   onChunk,
   onComplete,
   onError,
+  responseLanguage = "English",
 ) => {
   const token = getAuthToken();
   if (!token) {
@@ -296,7 +309,12 @@ export const sendDocumentChatMessage = async (
         "Content-Type": "application/json",
         "auth-token": token,
       },
-      body: JSON.stringify({ message, documentType, documentId }),
+      body: JSON.stringify({
+        message,
+        documentType,
+        documentId,
+        responseLanguage,
+      }),
     });
     if (!response.ok) {
       const payload = await response.json().catch(() => ({}));
@@ -501,6 +519,10 @@ export const trackActivity = async (event) => {
       body: JSON.stringify(payload),
       keepalive: true,
     });
+    if (response.status === 401) {
+      if (getAuthToken() === token) clearAuthTokens();
+      return { tracked: false, reason: "session_expired" };
+    }
     return await response.json().catch(() => ({ tracked: false }));
   } catch {
     return { tracked: false };

@@ -59,11 +59,32 @@ router.get("/document/:documentType/:documentId", async (req, res) => {
 });
 
 router.post("/process", async (req, res) => {
+  const startedAt = Date.now();
   try {
     const { documentType, documentId } = identity(req);
+    console.log("[document-process] started", {
+      documentType,
+      documentId,
+    });
     const result = await processDocument(documentType, documentId);
+    console.log("[document-process] completed", {
+      documentType,
+      documentId,
+      chunksStored: result.chunksStored,
+      alreadyProcessed: result.alreadyProcessed,
+      durationMs: Date.now() - startedAt,
+      languageCode: result.textArtifact?.languageCode || null,
+      ocrUsed: result.textArtifact?.ocrUsed || false,
+    });
     return res.json({ success: true, ...result });
   } catch (error) {
+    console.error("[document-process] failed", {
+      message: error.message,
+      status: error.status || 500,
+      durationMs: Date.now() - startedAt,
+      documentType: req.body?.documentType,
+      documentId: req.body?.documentId,
+    });
     return respondWithError(
       res,
       error,
@@ -292,7 +313,14 @@ router.post("/", async (req, res) => {
         sources,
       })}\n\n`,
     );
-    const stream = await generateResponse(message, context);
+    const responseLanguage =
+      String(req.body.responseLanguage || "").toLowerCase().startsWith("hi") ||
+      String(req.body.responseLanguage || "").toLowerCase() === "hindi"
+        ? "Hindi"
+        : "English";
+    const stream = await generateResponse(message, context, {
+      responseLanguage,
+    });
     for await (const chunk of stream) {
       const content =
         typeof chunk.text === "function" ? chunk.text() : chunk.text || "";
