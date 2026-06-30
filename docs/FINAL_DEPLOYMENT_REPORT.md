@@ -7,8 +7,14 @@ Release status: deployed and verified.
 ## Release contents
 
 - Dedicated State Bills module.
-- Simplified evidence-first dashboard and real-data Demo Mode.
+- Dedicated State Acts module and structured Bills/Acts navigation.
+- First-class policy sub-libraries for national, state, scheme, guideline,
+  memorandum, consultation, circular, framework, report, and white-paper
+  research.
+- Simplified evidence-first dashboard grouped by genuine document families.
 - Confidence-gated recommendations and coverage-gated trends.
+- Three-pane PDF, evidence brief, and research-chat workspace with controlled
+  processing failure and retry.
 - Expanded official policy coverage.
 - Accurate null-status handling.
 - Profile research analytics including State Bills, saves, bookmarks, and
@@ -21,11 +27,12 @@ Release status: deployed and verified.
 
 | Service | Production alias | Immutable deployment | Status |
 |---|---|---|---|
-| Frontend | https://rashtram-ai.vercel.app | https://rashtram-eidx12188-shubh1s-projects.vercel.app | READY |
-| Backend | https://rashtram-ai-backend.vercel.app | https://rashtram-ai-backend-qgb4lnyrd-shubh1s-projects.vercel.app | READY |
+| Frontend | https://rashtram-ai.vercel.app | https://rashtram-fej5rkb6t-shubh1s-projects.vercel.app | READY |
+| Backend | https://rashtram-ai-backend.vercel.app | https://rashtram-ai-backend-ojsd6w8ec-shubh1s-projects.vercel.app | READY |
 
-- Frontend deployment: `dpl_HRUEKY1gz9ZETE8Rzvg5DU7xFeTy`
-- Backend deployment: `dpl_9cQZHTGq9ZXZdaqNoYDUP9sharyN`
+- Frontend deployment: `dpl_GVN3N919egK1Ay6GM77YKhngvgig`
+- Backend deployment: `dpl_7SoqWc52dFNER1mTHJifRnot7if9`
+- Release candidate commit: `8f39fd9`
 - Bilingual/OCR release commit: `76ea51b`
 - Branch: `codex/sync-shourya-rashtramai`
 
@@ -34,10 +41,15 @@ Release status: deployed and verified.
 - Backend `/health`: HTTP 200, PostgreSQL connected, Gemini configured.
 - Frontend `/`: HTTP 200.
 - Frontend `/app/state-bills`: HTTP 200.
-- Frontend `/contact`: HTTP 200.
-- Production Sign In page: rendered without console errors, overlay, or overflow.
+- Frontend `/app/state-acts`: HTTP 200.
+- Unauthenticated document and dashboard API requests: controlled HTTP 401.
+- Public landing, Sign In, and Sign Up pages: rendered without console errors,
+  error overlays, or horizontal overflow at 390 px.
 - Release verification: passed every Dashboard, Profile, catalogue, detail,
   search, timeline, graph, and unified-chat check.
+- Automated gates: 76 backend tests passed, one database-write fixture skipped
+  intentionally, frontend lint passed, and the 19-route production build
+  completed.
 - Frontend runtime errors in the final 30-minute scan: none.
 - Backend runtime errors in the final 30-minute scan: none.
 
