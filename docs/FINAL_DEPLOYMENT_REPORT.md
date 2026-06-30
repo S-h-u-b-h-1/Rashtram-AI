@@ -21,13 +21,12 @@ Release status: deployed and verified.
 
 | Service | Production alias | Immutable deployment | Status |
 |---|---|---|---|
-| Frontend | https://rashtram-ai.vercel.app | https://rashtram-3npnajfsi-shubh1s-projects.vercel.app | READY |
-| Backend | https://rashtram-ai-backend.vercel.app | https://rashtram-ai-backend-jg58y0vni-shubh1s-projects.vercel.app | READY |
+| Frontend | https://rashtram-ai.vercel.app | https://rashtram-eidx12188-shubh1s-projects.vercel.app | READY |
+| Backend | https://rashtram-ai-backend.vercel.app | https://rashtram-ai-backend-qgb4lnyrd-shubh1s-projects.vercel.app | READY |
 
-- Frontend deployment: `dpl_B59g3EY5cDC32eR4XGR5SGQxjoS5`
-- Backend deployment: `dpl_BGfF6L55gyRjLAiUuiYTAPv3gL4K`
-- Release commit: `0a033f5`
-- Profile verification fix: `0ad0122`
+- Frontend deployment: `dpl_HRUEKY1gz9ZETE8Rzvg5DU7xFeTy`
+- Backend deployment: `dpl_9cQZHTGq9ZXZdaqNoYDUP9sharyN`
+- Bilingual/OCR release commit: `76ea51b`
 - Branch: `codex/sync-shourya-rashtramai`
 
 ## Production verification
@@ -41,6 +40,20 @@ Release status: deployed and verified.
   search, timeline, graph, and unified-chat check.
 - Frontend runtime errors in the final 30-minute scan: none.
 - Backend runtime errors in the final 30-minute scan: none.
+
+## Hindi and authentication hotfix
+
+- Confirmed the reported 500 was a four-page scanned Hindi PDF with no usable
+  embedded text.
+- Added bounded Gemini PDF OCR, Hindi/bilingual language detection,
+  Devanagari-safe cleanup and chunking, multilingual embedding input,
+  original-language citations, separate original-text/English-summary storage,
+  and English/Hindi chat selection.
+- Corrected stale-token precedence that caused `/api/activity` to send an old
+  persistent token after a new session login.
+- The production Gemini key is present as an encrypted Vercel variable.
+- The processing route retains authentication protection and returns 401
+  without a valid session.
 
 ## Release note
 
