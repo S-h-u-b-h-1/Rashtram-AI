@@ -5,6 +5,7 @@ import { AuthProvider } from "../context/AuthContext";
 import Navbar from "../components/Navbar";
 import FooterDemo from "../components/Footer";
 import { usePathname } from "next/navigation";
+import { Analytics } from "@vercel/analytics/next";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -38,6 +39,7 @@ export default function RootLayout({ children }) {
           {children}
           {!isApplicationRoute && <FooterDemo />}
         </AuthProvider>
+        <Analytics />
       </body>
     </html>
   );
