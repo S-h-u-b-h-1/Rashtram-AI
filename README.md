@@ -27,6 +27,7 @@ Detailed references:
 - [Data trust and privacy](docs/DATA_TRUST_AND_PRIVACY.md)
 - [Multilingual document pipeline](docs/MULTILINGUAL_DOCUMENT_PIPELINE.md)
 - [OpenAI migration](docs/OPENAI_MIGRATION.md)
+- [Contact form setup](docs/CONTACT_FORM_SETUP.md)
 
 ## Prerequisites
 
@@ -125,6 +126,9 @@ Deploy `client/` and `server/` as separate Vercel projects:
 
 Set `NEXT_PUBLIC_API_URL` on the frontend to the backend production URL with
 the `/api` suffix.
+
+Set `NEXT_PUBLIC_FORMSPREE_CONTACT_ENDPOINT` on the frontend to the verified
+Formspree form endpoint. See `docs/CONTACT_FORM_SETUP.md`.
 
 The backend requires these encrypted Vercel environment variables:
 

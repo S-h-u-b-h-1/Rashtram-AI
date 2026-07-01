@@ -57,14 +57,27 @@ export const apiRequest = async (endpoint, options = {}) => {
 };
 
 export const submitContactRequest = async (payload) => {
-  const response = await fetch(`${API_BASE_URL}/contact`, {
+  const endpoint = process.env.NEXT_PUBLIC_FORMSPREE_CONTACT_ENDPOINT;
+  if (!endpoint) {
+    throw new Error("Contact form delivery is not configured.");
+  }
+
+  const response = await fetch(endpoint, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: {
+      Accept: "application/json",
+      "Content-Type": "application/json",
+    },
     body: JSON.stringify(payload),
   });
   const result = await response.json().catch(() => ({}));
   if (!response.ok) {
-    throw new Error(result.error || "Unable to send your message.");
+    const formError = Array.isArray(result.errors)
+      ? result.errors.map((error) => error.message).filter(Boolean).join(" ")
+      : "";
+    throw new Error(
+      formError || result.error || "Unable to send your message.",
+    );
   }
   return result;
 };
