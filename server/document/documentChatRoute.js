@@ -5,6 +5,7 @@ const {
   processDocument,
   retrievePassages,
 } = require("./documentResearchService");
+const DocumentRepository = require("./DocumentRepository");
 const { generateResponse } = require("../lib/vectordb");
 
 const router = express.Router();
@@ -60,13 +61,24 @@ router.get("/document/:documentType/:documentId", async (req, res) => {
 
 router.post("/process", async (req, res) => {
   const startedAt = Date.now();
+  let documentId = null;
   try {
-    const { documentType, documentId } = identity(req);
+    const identityValue = identity(req);
+    const { documentType } = identityValue;
+    documentId = identityValue.documentId;
+    await DocumentRepository.updateProcessingStatus(
+      documentId,
+      "processing",
+    );
     console.log("[document-process] started", {
       documentType,
       documentId,
     });
     const result = await processDocument(documentType, documentId);
+    await DocumentRepository.updateProcessingStatus(
+      documentId,
+      "ready",
+    );
     console.log("[document-process] completed", {
       documentType,
       documentId,
@@ -78,6 +90,15 @@ router.post("/process", async (req, res) => {
     });
     return res.json({ success: true, ...result });
   } catch (error) {
+    if (documentId) {
+      await DocumentRepository.updateProcessingStatus(
+        documentId,
+        "failed",
+        error.message,
+      ).catch((statusError) => {
+        console.error("[document-process] status update failed", statusError);
+      });
+    }
     console.error("[document-process] failed", {
       message: error.message,
       status: error.status || 500,
@@ -313,6 +334,17 @@ router.post("/", async (req, res) => {
         sources,
       })}\n\n`,
     );
+    if (!context.trim()) {
+      res.write(
+        `data: ${JSON.stringify({
+          type: "content",
+          content:
+            "I could not find enough grounded context in this document to answer reliably.",
+        })}\n\n`,
+      );
+      res.write("data: [DONE]\n\n");
+      return res.end();
+    }
     const responseLanguage = req.body.responseLanguage || "Auto";
     const stream = await generateResponse(message, context, {
       responseLanguage,

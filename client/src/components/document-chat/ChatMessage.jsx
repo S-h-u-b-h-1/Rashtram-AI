@@ -26,7 +26,8 @@ export function ChatMessage({ message, onFeedback }) {
     >
       <div className={`chat-markdown ${isUser ? "user-message" : ""}`}>
         <ReactMarkdown remarkPlugins={[remarkGfm]}>
-          {message.text || ""}
+          {message.text ||
+            (message.isStreaming ? "Preparing grounded response…" : "")}
         </ReactMarkdown>
       </div>
       {message.isStreaming && (

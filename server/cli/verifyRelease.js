@@ -24,6 +24,32 @@ const request = async (baseUrl, token, endpoint) => {
   return payload;
 };
 
+const documentDate = (document) => {
+  for (const value of [
+    document.publicationDate,
+    document.introducedDate,
+    document.passedDate,
+    document.enactedDate,
+    document.effectiveDate,
+    document.commencementDate,
+    document.year ? `${document.year}-01-01` : null,
+    document.firstSeenAt,
+    document.updatedAt,
+  ]) {
+    const timestamp = value ? new Date(value).getTime() : NaN;
+    if (Number.isFinite(timestamp)) return timestamp;
+  }
+  return 0;
+};
+
+const ordered = (documents, direction) =>
+  documents.every((document, index) => {
+    if (index === 0) return true;
+    const previous = documentDate(documents[index - 1]);
+    const current = documentDate(document);
+    return direction === "asc" ? previous <= current : previous >= current;
+  });
+
 const main = async () => {
   await connectDB();
   const user = await query("SELECT id FROM users ORDER BY id LIMIT 1");
@@ -68,7 +94,14 @@ const main = async () => {
         request(baseUrl, token, "/api/document-chat/history?limit=2"),
       ]);
     const universalId = documents.documents?.[0]?.id;
-    const [documentDetail, documentSearch, timeline, graph] =
+    const [
+      documentDetail,
+      documentSearch,
+      timeline,
+      graph,
+      newestDocuments,
+      oldestDocuments,
+    ] =
       universalId
         ? await Promise.all([
             request(baseUrl, token, `/api/documents/${universalId}`),
@@ -87,10 +120,29 @@ const main = async () => {
               token,
               `/api/documents/${universalId}/graph`,
             ),
+            request(
+              baseUrl,
+              token,
+              "/api/documents?sortBy=publicationDate&sortDirection=desc&limit=20",
+            ),
+            request(
+              baseUrl,
+              token,
+              "/api/documents?sortBy=publicationDate&sortDirection=asc&limit=20",
+            ),
           ])
-        : [{}, { documents: [] }, { timeline: [] }, { graph: {} }];
+        : [
+            {},
+            { documents: [] },
+            { timeline: [] },
+            { graph: {} },
+            { documents: [] },
+            { documents: [] },
+          ];
     const checks = {
       dashboard: Boolean(dashboard.currentDate),
+      dashboardCoverage:
+        Number(dashboard.platformCoverage?.totalDocuments || 0) > 0,
       nationalDashboardSections: [
         "latestPolicies",
         "latestMinistryUpdates",
@@ -115,10 +167,17 @@ const main = async () => {
       universalSearch: documentSearch.documents?.length || 0,
       universalTimeline: Array.isArray(timeline.timeline),
       universalGraph: Array.isArray(graph.graph?.nodes),
+      newestSort:
+        newestDocuments.documents?.length > 1 &&
+        ordered(newestDocuments.documents, "desc"),
+      oldestSort:
+        oldestDocuments.documents?.length > 1 &&
+        ordered(oldestDocuments.documents, "asc"),
       unifiedChats: chats.count || 0,
     };
     for (const required of [
       "dashboard",
+      "dashboardCoverage",
       "nationalDashboardSections",
       "profile",
       "profilePolicyCoverage",
@@ -131,6 +190,8 @@ const main = async () => {
       "universalRelatedChats",
       "universalTimeline",
       "universalGraph",
+      "newestSort",
+      "oldestSort",
     ]) {
       if (!checks[required]) {
         throw new Error(`Release verification failed: ${required}`);

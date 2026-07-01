@@ -29,6 +29,16 @@ const EMPTY_FILTERS = {
   jurisdiction: "",
   source: "",
   hasPdf: "",
+  publicationFrom: "",
+  publicationTo: "",
+};
+
+const READINESS_LABELS = {
+  research_ready: "Research Ready",
+  pdf_available: "PDF Available",
+  processing_failed: "Processing Failed",
+  source_only: "Source Only",
+  missing_pdf: "Missing PDF",
 };
 
 export function DocumentExplorer({
@@ -223,6 +233,12 @@ export function DocumentExplorer({
           <div className="divide-y divide-[#8f1d2c]/7">
             {documents.map((document) => {
               const selected = selectedIds.includes(document.id);
+              const readiness =
+                document.readiness ||
+                (document.pdfUrl ? "pdf_available" : "source_only");
+              const canPrepare =
+                readiness === "research_ready" ||
+                readiness === "pdf_available";
               return (
                 <article
                   key={document.id}
@@ -235,6 +251,7 @@ export function DocumentExplorer({
                     <input
                       type="checkbox"
                       checked={selected}
+                      disabled={!document.researchReady}
                       onChange={() => toggleSelected(document.id)}
                       className="accent-[#8f1d2c]"
                     />
@@ -249,6 +266,17 @@ export function DocumentExplorer({
                           {document.status}
                         </span>
                       )}
+                      <span
+                        className={
+                          readiness === "research_ready"
+                            ? "rounded-full bg-[#e2ece6] px-2 py-1 text-[9px] font-semibold text-[#315a49]"
+                            : readiness === "processing_failed"
+                              ? "rounded-full bg-[#f4dfdc] px-2 py-1 text-[9px] font-semibold text-[#85434a]"
+                              : "rounded-full bg-[#eee7dc] px-2 py-1 text-[9px] font-semibold text-[#706a61]"
+                        }
+                      >
+                        {READINESS_LABELS[readiness] || "Available"}
+                      </span>
                     </div>
                     <h3 className="mt-2 font-serif text-lg leading-6 text-[#29312d]">
                       {document.title}
@@ -269,23 +297,37 @@ export function DocumentExplorer({
                     </p>
                   </div>
                   <div className="flex flex-wrap items-start gap-2 md:justify-end">
-                    <Link
-                      href={`/app/document/${document.id}#research-chat`}
-                      onClick={() =>
-                        trackActivity({
-                          event_type: "document_opened",
-                          entity_type: document.type,
-                          entity_id: document.id,
-                          document_id: document.id,
-                          page_path: "/app",
-                          metadata_json: { documentType: document.type },
-                        })
-                      }
-                      className="inline-flex items-center gap-1.5 rounded-xl bg-[#8f1d2c] px-3 py-2 text-[10px] font-semibold text-white"
-                    >
-                      Research
-                      <ArrowRight className="h-3.5 w-3.5" />
-                    </Link>
+                    {canPrepare ? (
+                      <Link
+                        href={`/app/document/${document.id}#research-chat`}
+                        onClick={() =>
+                          trackActivity({
+                            event_type: "document_opened",
+                            entity_type: document.type,
+                            entity_id: document.id,
+                            document_id: document.id,
+                            page_path: "/app",
+                            metadata_json: { documentType: document.type },
+                          })
+                        }
+                        className="inline-flex items-center gap-1.5 rounded-xl bg-[#8f1d2c] px-3 py-2 text-[10px] font-semibold text-white"
+                      >
+                        {document.researchReady
+                          ? "Research"
+                          : "Prepare research"}
+                        <ArrowRight className="h-3.5 w-3.5" />
+                      </Link>
+                    ) : (
+                      <span
+                        title={
+                          document.processingError ||
+                          "A readable, indexed PDF is required for research."
+                        }
+                        className="inline-flex cursor-not-allowed items-center rounded-xl bg-[#ddd5ca] px-3 py-2 text-[10px] font-semibold text-[#81796e]"
+                      >
+                        Research unavailable
+                      </span>
+                    )}
                     {document.pdfUrl && (
                       <a
                         href={document.pdfUrl}

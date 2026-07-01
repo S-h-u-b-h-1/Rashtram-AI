@@ -1,5 +1,11 @@
 export const buildResearchHref = (document) => {
   const id = document.documentId || document.id;
+  if (
+    document.researchReady === false ||
+    (document.readiness && document.readiness !== "research_ready")
+  ) {
+    return null;
+  }
   return id ? `/app/document/${id}` : null;
 };
 

@@ -12,7 +12,6 @@ import {
   Search,
   Scale,
   ScrollText,
-  UserRound,
   X,
 } from "lucide-react";
 import { useEffect, useState } from "react";
@@ -73,12 +72,6 @@ const NAVIGATION = [
     label: "Policies",
     href: "/app?view=policies",
     icon: BookOpenText,
-  },
-  {
-    key: "profile",
-    label: "Profile",
-    href: "/app/profile",
-    icon: UserRound,
   },
 ];
 
@@ -237,14 +230,17 @@ export function WorkspaceShell({ activeKey, title, children }) {
             >
               {getUserInitials(userName)}
             </Link>
-            <div className="min-w-0 flex-1">
+            <Link
+              href="/app/profile"
+              className="min-w-0 flex-1 rounded-md focus:outline-none focus:ring-2 focus:ring-white/40"
+            >
               <p className="truncate text-sm font-medium text-white/85">
                 {userName}
               </p>
               <p className="truncate text-[11px] text-white/35">
-                Legislative researcher
+                Open research profile
               </p>
-            </div>
+            </Link>
             <button
               type="button"
               onClick={logout}

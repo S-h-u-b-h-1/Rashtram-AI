@@ -4,8 +4,8 @@ import { useEffect, useState } from "react";
 import * as api from "@/lib/api";
 import { ContinueResearch } from "@/components/intelligence/ContinueResearch";
 import { AccountSettings } from "./AccountSettings";
-import { PlatformCoverage } from "./PlatformCoverage";
 import { ProfileIdentity } from "./ProfileIdentity";
+import { ProfileSupportForms } from "./ProfileSupportForms";
 import { ResearchActivity } from "./ResearchActivity";
 import { DataPersonalization } from "./DataPersonalization";
 
@@ -110,7 +110,7 @@ export function ProfileView() {
           }))
         }
       />
-      <PlatformCoverage coverage={profile.platformCoverageStats} />
+      <ProfileSupportForms defaultEmail={profile.user.email} />
     </div>
   );
 }

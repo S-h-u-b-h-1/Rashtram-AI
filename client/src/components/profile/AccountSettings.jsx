@@ -74,6 +74,19 @@ export function AccountSettings({ account, onUpdate }) {
     }
   };
 
+  const cancelProfile = () => {
+    setForm({
+      ...initial,
+      researchInterests: join(initial.researchInterests),
+      preferredMinistries: join(initial.preferredMinistries),
+      preferredPolicyAreas: join(initial.preferredPolicyAreas),
+      preferredJurisdictions: join(initial.preferredJurisdictions),
+      preferredDocumentTypes: join(initial.preferredDocumentTypes),
+      preferredSources: join(initial.preferredSources),
+    });
+    setNotice("Unsaved profile changes were discarded.");
+  };
+
   const updatePassword = async () => {
     setSaving(true);
     setNotice("");
@@ -135,6 +148,20 @@ export function AccountSettings({ account, onUpdate }) {
             </h3>
           </div>
           <div className="mt-4 grid gap-3 sm:grid-cols-2">
+            <label className="space-y-1.5 sm:col-span-2">
+              <span className="text-[10px] font-semibold uppercase tracking-[0.1em] text-[#81796e]">
+                Account email
+              </span>
+              <input
+                value={form.email || ""}
+                readOnly
+                aria-readonly="true"
+                className="h-11 w-full rounded-xl border border-[#8f1d2c]/8 bg-[#eee8de] px-3 text-sm text-[#706a61]"
+              />
+              <span className="block text-[10px] text-[#8a8277]">
+                Email changes require a verified account-security flow.
+              </span>
+            </label>
             {[
               ["name", "Name"],
               ["username", "Username"],
@@ -234,21 +261,60 @@ export function AccountSettings({ account, onUpdate }) {
                 </label>
               ))}
             </div>
+            <fieldset className="rounded-xl border border-[#8f1d2c]/8 bg-white p-3">
+              <legend className="px-1 text-[10px] font-semibold uppercase tracking-[0.1em] text-[#81796e]">
+                Notifications
+              </legend>
+              <div className="mt-2 flex flex-wrap gap-4">
+                {[
+                  ["researchUpdates", "Research updates"],
+                  ["productUpdates", "Product updates"],
+                ].map(([key, label]) => (
+                  <label
+                    key={key}
+                    className="flex items-center gap-2 text-xs text-[#514d46]"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={Boolean(form.notificationPreferences?.[key])}
+                      onChange={(event) =>
+                        change("notificationPreferences", {
+                          ...(form.notificationPreferences || {}),
+                          [key]: event.target.checked,
+                        })
+                      }
+                      className="accent-[#8f1d2c]"
+                    />
+                    {label}
+                  </label>
+                ))}
+              </div>
+            </fieldset>
           </div>
         </div>
       </div>
 
       <div className="flex flex-wrap items-center justify-between gap-3 border-y border-[#8f1d2c]/8 bg-[#f7f2eb] px-5 py-4 sm:px-6">
         <p className="text-xs text-[#706a61]">{notice}</p>
-        <button
-          type="button"
-          disabled={saving}
-          onClick={saveProfile}
-          className="inline-flex items-center gap-2 rounded-full bg-[#8f1d2c] px-4 py-2.5 text-xs font-semibold text-white disabled:opacity-50"
-        >
-          <Save className="h-3.5 w-3.5" />
-          Save profile
-        </button>
+        <div className="flex gap-2">
+          <button
+            type="button"
+            disabled={saving}
+            onClick={cancelProfile}
+            className="rounded-full border border-[#8f1d2c]/12 bg-white px-4 py-2.5 text-xs font-semibold text-[#8f1d2c] disabled:opacity-50"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            disabled={saving}
+            onClick={saveProfile}
+            className="inline-flex items-center gap-2 rounded-full bg-[#8f1d2c] px-4 py-2.5 text-xs font-semibold text-white disabled:opacity-50"
+          >
+            <Save className="h-3.5 w-3.5" />
+            {saving ? "Saving…" : "Save profile"}
+          </button>
+        </div>
       </div>
 
       <div className="grid gap-6 p-5 sm:p-6 xl:grid-cols-3">
@@ -304,6 +370,29 @@ export function AccountSettings({ account, onUpdate }) {
                   >
                     {search.name}
                   </span>
+                ))}
+              </div>
+            </div>
+          )}
+          {(account?.notes || []).length > 0 && (
+            <div className="mt-4 border-t border-[#8f1d2c]/8 pt-3">
+              <p className="text-[9px] font-semibold uppercase tracking-[0.1em] text-[#8a8277]">
+                Research notes
+              </p>
+              <div className="mt-2 space-y-2">
+                {account.notes.slice(0, 5).map((note) => (
+                  <article
+                    key={note.id}
+                    className="rounded-xl border border-[#8f1d2c]/8 bg-[#fffaf2] p-3"
+                  >
+                    <p className="line-clamp-3 text-xs leading-5 text-[#514d46]">
+                      {note.body}
+                    </p>
+                    <p className="mt-1 text-[9px] text-[#8a8277]">
+                      {humanize(note.documentType)} ·{" "}
+                      {formatDate(note.updatedAt)}
+                    </p>
+                  </article>
                 ))}
               </div>
             </div>

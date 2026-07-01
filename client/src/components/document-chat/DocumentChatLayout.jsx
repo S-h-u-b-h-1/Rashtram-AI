@@ -67,6 +67,9 @@ export function DocumentChatLayout({
   const [loading, setLoading] = useState(true);
   const [processing, setProcessing] = useState(false);
   const [processingError, setProcessingError] = useState("");
+  const [researchReady, setResearchReady] = useState(
+    Boolean(initialDocument?.researchReady),
+  );
   const [sending, setSending] = useState(false);
   const [isPinned, setIsPinned] = useState(false);
   const [error, setError] = useState("");
@@ -90,12 +93,14 @@ export function DocumentChatLayout({
         }));
       }
       setSummary(generatedSummary);
+      setResearchReady(true);
       return generatedSummary;
     } catch (processingFailure) {
       const message =
         processingFailure.message ||
         "The document could not be prepared for AI research.";
       setProcessingError(message);
+      setResearchReady(false);
       return "";
     } finally {
       setProcessing(false);
@@ -115,6 +120,9 @@ export function DocumentChatLayout({
           ...(detail.document || {}),
         };
         setDocument(canonical);
+        setResearchReady(
+          Boolean(canonical.researchReady || canonical.textArtifact),
+        );
         trackActivity({
           event_type: "chat_started",
           entity_type: documentType,
@@ -191,7 +199,7 @@ export function DocumentChatLayout({
 
   const submitQuestion = async (question) => {
     const text = String(question || input).trim();
-    if (!text || sending || !document?.pdfUrl) return;
+    if (!text || sending || !researchReady) return;
     const userMessage = {
       text,
       sender: "user",
@@ -434,14 +442,14 @@ export function DocumentChatLayout({
           </div>
           <SuggestedQuestions
             questions={suggestedQuestions}
-            disabled={!document.pdfUrl || sending}
+            disabled={!researchReady || sending}
             onSelect={(question) => submitQuestion(question)}
           />
           <ChatInput
             input={input}
             setInput={setInput}
             sending={sending}
-            disabled={!document.pdfUrl}
+            disabled={!researchReady}
             onSend={submitQuestion}
             onRegenerate={regenerate}
             onClear={clear}

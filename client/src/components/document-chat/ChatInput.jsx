@@ -29,7 +29,7 @@ export function ChatInput({
             disabled={disabled || sending}
             placeholder={
               disabled
-                ? "Grounded chat requires a verified official PDF"
+                ? "Grounded chat becomes available after the PDF is indexed"
                 : "Ask a grounded question about this document…"
             }
             rows={2}

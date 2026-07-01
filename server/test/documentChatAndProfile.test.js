@@ -9,6 +9,7 @@ const {
   TYPE_CONFIG,
 } = require("../document/documentResearchService");
 const {
+  DOCUMENT_DATE_EXPRESSION,
   buildFilters,
   mapDocument,
 } = require("../document/DocumentRepository");
@@ -166,8 +167,55 @@ test("universal repository exposes the stable document contract", () => {
   assert.equal(document.subtype, "Tax");
   assert.equal(document.source, "egazette");
   assert.equal(document.pdfUrl, "https://example.invalid/rule.pdf");
+  assert.equal(document.readiness, "pdf_available");
+  assert.equal(document.researchReady, false);
   assert.deepEqual(document.metadata, { language: "English" });
   assert.deepEqual(document.relationships, []);
+});
+
+test("newest and oldest sorting use the complete deterministic date fallback", () => {
+  for (const column of [
+    "publication_date",
+    "introduced_date",
+    "passed_date",
+    "enacted_date",
+    "first_seen_at",
+    "updated_at",
+    "created_at",
+  ]) {
+    assert.match(DOCUMENT_DATE_EXPRESSION, new RegExp(column));
+  }
+  assert.match(DOCUMENT_DATE_EXPRESSION, /MAKE_DATE\(year, 1, 1\)/);
+});
+
+test("document readiness never presents an unindexed or failed PDF as ready", () => {
+  const failed = mapDocument({
+    id: 1,
+    title: "Unreadable notification",
+    document_type: "notification",
+    pdf_url: "https://example.invalid/broken.pdf",
+    source_url: "https://example.invalid/source",
+    processing_status: "failed",
+    processing_error: "PDF extraction failed",
+  });
+  const ready = mapDocument({
+    id: 2,
+    title: "Indexed Act",
+    document_type: "act",
+    pdf_url: "https://example.invalid/act.pdf",
+    research_ready: true,
+  });
+  const sourceOnly = mapDocument({
+    id: 3,
+    title: "Source record",
+    document_type: "policy",
+    source_url: "https://example.invalid/policy",
+  });
+  assert.equal(failed.readiness, "processing_failed");
+  assert.equal(failed.researchReady, false);
+  assert.equal(ready.readiness, "research_ready");
+  assert.equal(ready.researchReady, true);
+  assert.equal(sourceOnly.readiness, "source_only");
 });
 
 test("profile input helpers bound and normalize user-controlled fields", () => {

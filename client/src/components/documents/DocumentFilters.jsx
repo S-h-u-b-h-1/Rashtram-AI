@@ -89,6 +89,19 @@ export function DocumentFilters({
             <option value="false">Unavailable</option>
           </select>
         </label>
+        {["publicationFrom", "publicationTo"].map((key) => (
+          <label key={key} className="space-y-1">
+            <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[#777066]">
+              {key === "publicationFrom" ? "From date" : "To date"}
+            </span>
+            <input
+              type="date"
+              value={filters[key] || ""}
+              onChange={(event) => onFilterChange(key, event.target.value)}
+              className="h-10 rounded-xl border border-[#8f1d2c]/10 bg-white px-3 text-xs text-[#29312d]"
+            />
+          </label>
+        ))}
         {onSortChange && (
           <label className="min-w-[150px] space-y-1">
             <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[#777066]">
@@ -120,8 +133,16 @@ export function DocumentFilters({
               }
               className="h-10 rounded-xl border border-[#8f1d2c]/10 bg-white px-3 text-xs text-[#29312d]"
             >
-              <option value="desc">Newest first</option>
-              <option value="asc">Oldest first</option>
+              <option value="desc">
+                {sortBy === "title" || sortBy === "ministry"
+                  ? "Z–A"
+                  : "Newest first"}
+              </option>
+              <option value="asc">
+                {sortBy === "title" || sortBy === "ministry"
+                  ? "A–Z"
+                  : "Oldest first"}
+              </option>
             </select>
           </label>
         )}

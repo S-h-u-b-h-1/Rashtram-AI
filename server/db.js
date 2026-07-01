@@ -422,6 +422,9 @@ const initializeSchema = async () => {
       DROP CONSTRAINT IF EXISTS legislative_documents_jurisdiction_level_check;
 
     ALTER TABLE legislative_documents
+      ADD COLUMN IF NOT EXISTS processing_status TEXT,
+      ADD COLUMN IF NOT EXISTS processing_error TEXT,
+      ADD COLUMN IF NOT EXISTS processed_at TIMESTAMPTZ,
       ADD COLUMN IF NOT EXISTS canonical_id TEXT,
       ADD COLUMN IF NOT EXISTS normalized_title TEXT,
       ADD COLUMN IF NOT EXISTS authority TEXT,

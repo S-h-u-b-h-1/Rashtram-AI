@@ -6,6 +6,7 @@ import { ContinueResearch } from "./ContinueResearch";
 import { DashboardHero } from "./DashboardHero";
 import { DocumentListSection } from "./DocumentListSection";
 import { LegislativeUpdateGrid } from "./LegislativeUpdateGrid";
+import { PlatformCoverageOverview } from "./PlatformCoverageOverview";
 import { SourceHealthPanel } from "./SourceHealthPanel";
 import { TrendingMinistries } from "./TrendingMinistries";
 
@@ -16,27 +17,38 @@ export function IntelligenceDashboard({ onNavigate }) {
 
   useEffect(() => {
     let active = true;
-    api
-      .getDashboardIntelligence()
-      .then((intelligence) => {
-        if (!active) return;
-        setData(intelligence);
-        api.trackActivity({
-          event_type: "dashboard_viewed",
-          entity_type: "dashboard",
-          page_path: "/app",
+    let firstLoad = true;
+    const loadDashboard = () =>
+      api
+        .getDashboardIntelligence()
+        .then((intelligence) => {
+          if (!active) return;
+          setData(intelligence);
+          setError("");
+          if (firstLoad) {
+            api.trackActivity({
+              event_type: "dashboard_viewed",
+              entity_type: "dashboard",
+              page_path: "/app",
+            });
+          }
+        })
+        .catch(() => {
+          if (active && firstLoad) {
+            setError("The intelligence desk could not be loaded.");
+          }
+        })
+        .finally(() => {
+          if (active && firstLoad) {
+            firstLoad = false;
+            setLoading(false);
+          }
         });
-      })
-      .catch(() => {
-        if (active) {
-          setError("The intelligence desk could not be loaded.");
-        }
-      })
-      .finally(() => {
-        if (active) setLoading(false);
-      });
+    loadDashboard();
+    const refreshTimer = window.setInterval(loadDashboard, 60_000);
     return () => {
       active = false;
+      window.clearInterval(refreshTimer);
     };
   }, []);
 
@@ -123,6 +135,8 @@ export function IntelligenceDashboard({ onNavigate }) {
           },
         ]}
       />
+
+      <PlatformCoverageOverview coverage={data.platformCoverage || {}} />
 
       <ContinueResearch chats={data.recentUserChats || []} />
 

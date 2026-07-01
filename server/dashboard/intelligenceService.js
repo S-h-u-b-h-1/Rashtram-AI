@@ -164,6 +164,14 @@ const mapDocument = (row) => ({
   sourceName: row.canonical_source || row.source_name,
   sourceUrl: row.canonical_url || row.detail_url || row.source_url,
   pdfUrl: row.pdf_url,
+  readiness: !row.pdf_url
+    ? "source_only"
+    : row.processing_status === "ready"
+      ? "research_ready"
+      : row.processing_status === "failed"
+        ? "processing_failed"
+        : "pdf_available",
+  researchReady: row.processing_status === "ready",
   eventDate: toIso(
     row.intelligence_date ||
       row.publication_date ||
@@ -189,6 +197,14 @@ const mapEvent = (row) => ({
   sourceName: row.source_name,
   sourceUrl: row.source_url,
   pdfUrl: row.pdf_url,
+  readiness: !row.pdf_url
+    ? "source_only"
+    : row.processing_status === "ready"
+      ? "research_ready"
+      : row.processing_status === "failed"
+        ? "processing_failed"
+        : "pdf_available",
+  researchReady: row.processing_status === "ready",
   jurisdiction: row.jurisdiction,
   authority: row.authority,
   ministry: row.ministry,
@@ -396,6 +412,8 @@ const getDashboardIntelligence = async (userId) => {
     recommendedReadingResult,
     refreshResult,
     recentCountsResult,
+    coverageResult,
+    coverageTypesResult,
     sourceHealth,
     recentUserChats,
   ] = await Promise.all([
@@ -407,7 +425,7 @@ const getDashboardIntelligence = async (userId) => {
       [userId],
     ),
     query(`
-      SELECT e.*, d.pdf_url
+      SELECT e.*, d.pdf_url, d.processing_status
       FROM intelligence_events e
       LEFT JOIN legislative_documents d ON d.id = e.document_id
       ORDER BY
@@ -631,6 +649,44 @@ const getDashboardIntelligence = async (userId) => {
           WHERE first_seen_at >= NOW() - INTERVAL '7 days'
         ) AS recent_documents
     `),
+    query(`
+      SELECT
+        COUNT(*)::INTEGER AS total_documents,
+        COUNT(pdf_url)::INTEGER AS documents_with_pdf,
+        COUNT(DISTINCT jurisdiction)::INTEGER AS jurisdictions,
+        COUNT(*) FILTER (
+          WHERE document_type = 'bill'
+            AND jurisdiction_level IN ('parliament', 'union')
+        )::INTEGER AS parliament_bills,
+        COUNT(*) FILTER (
+          WHERE document_type = 'bill'
+            AND jurisdiction_level = 'state'
+        )::INTEGER AS state_bills,
+        COUNT(*) FILTER (
+          WHERE document_type = 'act'
+        )::INTEGER AS acts,
+        COUNT(*) FILTER (
+          WHERE canonical_source IN ('egazette', 'state-gazette')
+             OR source_name IN ('egazette', 'state-gazette')
+             OR gazette_identifier IS NOT NULL
+             OR document_type = 'gazette'
+        )::INTEGER AS gazette_documents,
+        COUNT(*) FILTER (
+          WHERE document_type IN (
+            'policy', 'scheme', 'guideline', 'consultation_paper',
+            'strategy_paper', 'white_paper', 'discussion_paper',
+            'recommendation', 'report', 'government_resolution',
+            'cabinet_decision'
+          )
+        )::INTEGER AS policy_documents
+      FROM legislative_documents
+    `),
+    query(`
+      SELECT document_type, COUNT(*)::INTEGER AS documents
+      FROM legislative_documents
+      GROUP BY document_type
+      ORDER BY documents DESC, document_type
+    `),
     getSourceHealth(),
     getRecentUserChats(userId, 8),
   ]);
@@ -667,6 +723,7 @@ const getDashboardIntelligence = async (userId) => {
     recentCountsResult.rows[0]?.recent_documents || 0;
   const latestEvent = findLatestDatedEvent(storedEvents);
   const userRow = user.rows[0];
+  const coverage = coverageResult.rows[0] || {};
   const fallbackBrief = buildBriefSummary({
     recentEventCount,
     freshSourceCount,
@@ -799,6 +856,21 @@ const getDashboardIntelligence = async (userId) => {
           index,
     ),
     sourceHealth,
+    platformCoverage: {
+      totalDocuments: coverage.total_documents || 0,
+      parliamentBills: coverage.parliament_bills || 0,
+      stateBills: coverage.state_bills || 0,
+      acts: coverage.acts || 0,
+      gazetteDocuments: coverage.gazette_documents || 0,
+      policyDocuments: coverage.policy_documents || 0,
+      documentsWithPdf: coverage.documents_with_pdf || 0,
+      jurisdictions: coverage.jurisdictions || 0,
+      lastRefresh: toIso(refreshResult.rows[0]?.completed_at),
+      byDocumentType: coverageTypesResult.rows.map((row) => ({
+        documentType: row.document_type,
+        documents: row.documents,
+      })),
+    },
     recentUserChats,
     emptyStateFlags: {
       noLiveEvents: storedEvents.length === 0,

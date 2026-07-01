@@ -25,6 +25,14 @@ const mapDocument = (row) => {
     ...(row.source_metadata || {}),
     ...(row.metadata_json || {}),
   };
+  const processingStatus = row.processing_status || null;
+  const readiness = !row.pdf_url
+    ? (sourceUrl ? "source_only" : "missing_pdf")
+    : processingStatus === "failed"
+      ? "processing_failed"
+      : processingStatus === "ready" || row.research_ready
+        ? "research_ready"
+        : "pdf_available";
   return {
     id: String(row.id),
     documentId: String(row.id),
@@ -51,6 +59,11 @@ const mapDocument = (row) => {
     sourceName: source,
     sourceUrl,
     pdfUrl: row.pdf_url,
+    processingStatus,
+    processingError: row.processing_error || null,
+    processedAt: toIso(row.processed_at),
+    readiness,
+    researchReady: readiness === "research_ready",
     fileHash: row.file_hash || null,
     mimeType: row.mime_type || null,
     fileSizeBytes:
@@ -219,9 +232,22 @@ const buildFilters = (options = {}) => {
   };
 };
 
+const DOCUMENT_DATE_EXPRESSION = `COALESCE(
+  publication_date,
+  introduced_date,
+  passed_date,
+  enacted_date,
+  effective_date,
+  commencement_date,
+  CASE WHEN year BETWEEN 1800 AND 2200 THEN MAKE_DATE(year, 1, 1) END,
+  first_seen_at::DATE,
+  updated_at::DATE,
+  created_at::DATE
+)`;
+
 const SORT_COLUMNS = {
   relevance: "search_rank",
-  publicationDate: "publication_date",
+  publicationDate: DOCUMENT_DATE_EXPRESSION,
   updatedAt: "updated_at",
   title: "title",
   year: "year",
@@ -252,7 +278,13 @@ const find = async (options = {}) => {
 
   const [documents, count] = await Promise.all([
     query(
-      `SELECT *, ${rankExpression} AS search_rank
+      `SELECT *,
+         EXISTS (
+           SELECT 1
+           FROM document_text_artifacts artifact
+           WHERE artifact.document_id = legislative_documents.id
+         ) AS research_ready,
+         ${rankExpression} AS search_rank
        FROM legislative_documents
        WHERE ${filters.where}
        ORDER BY ${sortBy} ${sortDirection} NULLS LAST,
@@ -285,7 +317,12 @@ const search = (options = {}) => find(options);
 
 const getById = async (id) => {
   const result = await query(
-    `SELECT *
+    `SELECT *,
+       EXISTS (
+         SELECT 1
+         FROM document_text_artifacts artifact
+         WHERE artifact.document_id = legislative_documents.id
+       ) AS research_ready
      FROM legislative_documents
      WHERE id::TEXT = $1 OR canonical_id = $1
      LIMIT 1`,
@@ -317,6 +354,18 @@ const updatePDF = async (id, pdfUrl) => {
      SET pdf_url = $2, updated_at = NOW()
      WHERE id = $1`,
     [id, pdfUrl],
+  );
+};
+
+const updateProcessingStatus = async (id, status, error = null) => {
+  await query(
+    `UPDATE legislative_documents
+     SET processing_status = $2,
+         processing_error = $3,
+         processed_at = CASE WHEN $2 = 'ready' THEN NOW() ELSE processed_at END,
+         updated_at = NOW()
+     WHERE id = $1`,
+    [id, status, error ? String(error).slice(0, 1_000) : null],
   );
 };
 
@@ -692,6 +741,7 @@ const getFilterOptions = async (options = {}) => {
 };
 
 module.exports = {
+  DOCUMENT_DATE_EXPRESSION,
   buildFilters,
   find,
   findBySourceUrl,
@@ -710,4 +760,5 @@ module.exports = {
   mapDocument,
   search,
   updatePDF,
+  updateProcessingStatus,
 };

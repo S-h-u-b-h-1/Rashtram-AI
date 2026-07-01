@@ -40,16 +40,26 @@ export function RelatedDocuments({
             {(item.id || item.pdfUrl || item.sourceUrl) && (
               <Link
                 href={
-                  item.id
+                  item.id && item.readiness !== "processing_failed"
                     ? `/app/document/${item.id}`
                     : item.pdfUrl || item.sourceUrl
                 }
-                target={item.id ? undefined : "_blank"}
-                rel={item.id ? undefined : "noreferrer"}
+                target={
+                  item.id && item.readiness !== "processing_failed"
+                    ? undefined
+                    : "_blank"
+                }
+                rel={
+                  item.id && item.readiness !== "processing_failed"
+                    ? undefined
+                    : "noreferrer"
+                }
                 className="mt-2 inline-flex items-center gap-1 text-[10px] font-semibold text-[#874047]"
               >
-                {item.id
+                {item.researchReady
                   ? "Research"
+                  : item.id && item.pdfUrl
+                    ? "Prepare research"
                   : item.pdfUrl
                     ? "View PDF"
                     : "View source"}

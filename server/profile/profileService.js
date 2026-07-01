@@ -47,7 +47,7 @@ const mapProfile = (row) => ({
 });
 
 const getAccountData = async (userId) => {
-  const [profile, saved, searches, collections, sessions, analytics] =
+  const [profile, saved, searches, collections, sessions, analytics, notes] =
     await Promise.all([
     query(
       `SELECT u.*, p.*
@@ -206,6 +206,14 @@ const getAccountData = async (userId) => {
          ) AS active_days`,
       [userId],
     ),
+    query(
+      `SELECT id, document_type, document_id, body, created_at, updated_at
+       FROM research_notes
+       WHERE user_id = $1
+       ORDER BY updated_at DESC
+       LIMIT 50`,
+      [userId],
+    ),
   ]);
   const analyticsRow = analytics.rows[0] || {};
   const activeDays = (analyticsRow.active_days || []).map((day) =>
@@ -286,6 +294,14 @@ const getAccountData = async (userId) => {
       chatsCreated: analyticsRow.chats_created || 0,
       messagesExchanged: analyticsRow.messages_exchanged || 0,
     },
+    notes: notes.rows.map((row) => ({
+      id: String(row.id),
+      documentType: row.document_type,
+      documentId: row.document_id,
+      body: row.body,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+    })),
   };
 };
 
