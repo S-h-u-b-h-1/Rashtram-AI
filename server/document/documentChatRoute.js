@@ -313,11 +313,7 @@ router.post("/", async (req, res) => {
         sources,
       })}\n\n`,
     );
-    const responseLanguage =
-      String(req.body.responseLanguage || "").toLowerCase().startsWith("hi") ||
-      String(req.body.responseLanguage || "").toLowerCase() === "hindi"
-        ? "Hindi"
-        : "English";
+    const responseLanguage = req.body.responseLanguage || "Auto";
     const stream = await generateResponse(message, context, {
       responseLanguage,
     });

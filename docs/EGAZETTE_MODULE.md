@@ -10,7 +10,7 @@ research surface alongside Bills and Acts. It provides:
 - a searchable, filterable, server-paginated Gazette catalogue;
 - verified metadata, official PDF, and source links;
 - on-demand PDF extraction, chunking, and vector indexing;
-- a structured Gemini research brief;
+- a structured OpenAI research brief;
 - evidence-grounded, streaming document chat with retrieved passage citations;
 - persistent user chat history and profile/dashboard integration;
 - related-document and recommendation context.
@@ -109,7 +109,7 @@ open Gazette workspace
     -> user asks a question
     -> embed query
     -> retrieve top Gazette-ID-filtered chunks
-    -> stream Gemini answer with [Passage N] labels
+    -> stream OpenAI answer with [Passage N] labels
     -> display and persist answer plus cited passage metadata
 ```
 
@@ -162,7 +162,7 @@ visually distinguished from verified relationships.
 
 ## Configuration and verification
 
-The module uses existing PostgreSQL, Gemini, Pinecone, JWT, and frontend API
+The module uses existing PostgreSQL, OpenAI, Pinecone, JWT, and frontend API
 environment variables. `PINECONE_EGAZETTE_INDEX_NAME` is optional. No
 credentials are committed to the repository.
 

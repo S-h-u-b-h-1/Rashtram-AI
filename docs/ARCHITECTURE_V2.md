@@ -179,7 +179,7 @@ Cross-document chat accepts one to five canonical IDs. The server:
 1. loads each canonical document;
 2. retrieves bounded passages using its mapped retrieval family;
 3. labels every passage with its document title and source;
-4. streams one Gemini response grounded across the selected set.
+4. streams one OpenAI response grounded across the selected set.
 
 The browser never supplies PDF URLs to the processing pipeline.
 Policy and regulator documents use the same on-demand legal-instrument

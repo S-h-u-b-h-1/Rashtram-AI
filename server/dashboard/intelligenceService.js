@@ -356,7 +356,7 @@ const getGreeting = (name) => {
 };
 
 const getGroundedOverview = async (evidence, fallback) => {
-  if (!process.env.GEMINI_API_KEY) return fallback;
+  if (!process.env.OPENAI_API_KEY) return fallback;
   const key = JSON.stringify(evidence);
   if (
     overviewCache.key === key &&

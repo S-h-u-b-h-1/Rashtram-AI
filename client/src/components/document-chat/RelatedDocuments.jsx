@@ -48,7 +48,11 @@ export function RelatedDocuments({
                 rel={item.id ? undefined : "noreferrer"}
                 className="mt-2 inline-flex items-center gap-1 text-[10px] font-semibold text-[#874047]"
               >
-                Open
+                {item.id
+                  ? "Research"
+                  : item.pdfUrl
+                    ? "View PDF"
+                    : "View source"}
                 <ExternalLink className="h-3 w-3" />
               </Link>
             )}

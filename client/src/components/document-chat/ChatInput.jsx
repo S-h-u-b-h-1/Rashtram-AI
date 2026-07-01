@@ -65,6 +65,7 @@ export function ChatInput({
                 disabled={sending}
                 className="rounded-lg border border-[#8f1d2c]/10 bg-white px-2 py-1 text-[10px] text-[#514d46]"
               >
+                <option value="Auto">Auto</option>
                 <option value="English">English</option>
                 <option value="Hindi">हिन्दी</option>
               </select>

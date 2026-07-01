@@ -115,7 +115,7 @@ similarity.
 
 ## What is not bulk-copied
 
-Full PDF text, embeddings, and Gemini summaries are intentionally generated on
+Full PDF text, embeddings, and OpenAI summaries are intentionally generated on
 demand when a user opens a document. This avoids:
 
 - consuming large amounts of database storage;

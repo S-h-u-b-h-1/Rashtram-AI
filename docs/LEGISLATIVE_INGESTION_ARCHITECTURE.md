@@ -181,7 +181,7 @@ official source
     -> ingestion run counters/errors
 ```
 
-PDF extraction, Pinecone embeddings, and Gemini summaries remain downstream,
+PDF extraction, Pinecone embeddings, and OpenAI summaries remain downstream,
 on-demand operations. Catalogue ingestion records links and content identity;
 it does not make an ingestion run depend on expensive AI work.
 
@@ -316,7 +316,7 @@ npm run ingest:health --prefix server -- \
 The report checks reachability, universal record shape, sample discovery, PDF
 links, latest ingestion state, last successful ingestion, refresh age, stored
 record count, and errors. Its safe mode never writes catalogue rows, downloads
-PDFs, invokes Gemini, or updates vectors. Interactive catalogues that cannot be
+PDFs, invokes OpenAI, or updates vectors. Interactive catalogues that cannot be
 enumerated without browser state are marked `blocked` with a reason; an
 implemented connector with no run history is `Not Run`, not `Planned`.
 
@@ -368,7 +368,7 @@ question, and ministry-policy events. Unchanged refreshes do not create events.
 - Hash PDFs before using content identity as a cross-source merge signal.
 - Preserve snapshots even when some records fail.
 - Keep secrets in local/Vercel environment variables only.
-- Do not log database, OAuth, Gemini, or Pinecone credentials.
+- Do not log database, OAuth, OpenAI, or Pinecone credentials.
 
 ## Known next steps
 

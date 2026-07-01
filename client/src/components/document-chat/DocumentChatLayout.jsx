@@ -23,7 +23,6 @@ import { ChatHeader } from "./ChatHeader";
 import { ChatHistory } from "./ChatHistory";
 import { ChatInput } from "./ChatInput";
 import { ChatSidebar } from "./ChatSidebar";
-import { DocumentPdfViewer } from "./DocumentPdfViewer";
 import { SuggestedQuestions } from "./SuggestedQuestions";
 
 const QUESTIONS = {
@@ -71,7 +70,7 @@ export function DocumentChatLayout({
   const [sending, setSending] = useState(false);
   const [isPinned, setIsPinned] = useState(false);
   const [error, setError] = useState("");
-  const [responseLanguage, setResponseLanguage] = useState("English");
+  const [responseLanguage, setResponseLanguage] = useState("Auto");
   const messagesEndRef = useRef(null);
 
   const prepareDocument = useCallback(async (canonicalDocument) => {
@@ -376,6 +375,11 @@ export function DocumentChatLayout({
     );
   }
 
+  const suggestedQuestions =
+    document.textArtifact?.metadata?.suggestedQuestions?.length > 0
+      ? document.textArtifact.metadata.suggestedQuestions
+      : QUESTIONS[documentType] || QUESTIONS.default;
+
   return (
     <div className="flex h-screen flex-col overflow-hidden bg-[#e9e3da]">
       <ChatHeader
@@ -419,24 +423,7 @@ export function DocumentChatLayout({
           />
         </div>
       </details>
-      <div className="grid min-h-0 flex-1 xl:grid-cols-[minmax(360px,0.9fr)_minmax(440px,1.1fr)] 2xl:grid-cols-[minmax(380px,0.9fr)_340px_minmax(460px,1.1fr)]">
-        <div className="hidden min-h-0 xl:block">
-          <DocumentPdfViewer
-            document={document}
-            processing={processing}
-            processingError={processingError}
-            onRetry={retryProcessing}
-          />
-        </div>
-        <aside className="app-scrollbar hidden overflow-y-auto border-r border-[#8f1d2c]/8 bg-[#f7f2eb] p-5 2xl:block">
-          <ChatSidebar
-            document={document}
-            summary={summary}
-            notes={notes}
-            onAddNote={addNote}
-            onDeleteNote={removeNote}
-          />
-        </aside>
+      <div className="grid min-h-0 flex-1 xl:grid-cols-[minmax(0,1fr)_380px]">
         <main id="research-chat" className="flex min-h-0 flex-col">
           <div className="paper-grid app-scrollbar flex-1 overflow-y-auto p-4 sm:p-6">
             <ChatHistory
@@ -446,7 +433,7 @@ export function DocumentChatLayout({
             />
           </div>
           <SuggestedQuestions
-            questions={QUESTIONS[documentType] || QUESTIONS.default}
+            questions={suggestedQuestions}
             disabled={!document.pdfUrl || sending}
             onSelect={(question) => submitQuestion(question)}
           />
@@ -462,6 +449,15 @@ export function DocumentChatLayout({
             onResponseLanguageChange={setResponseLanguage}
           />
         </main>
+        <aside className="app-scrollbar hidden overflow-y-auto border-l border-[#8f1d2c]/8 bg-[#f7f2eb] p-5 xl:block">
+          <ChatSidebar
+            document={document}
+            summary={summary}
+            notes={notes}
+            onAddNote={addNote}
+            onDeleteNote={removeNote}
+          />
+        </aside>
       </div>
     </div>
   );

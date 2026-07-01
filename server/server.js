@@ -99,7 +99,7 @@ app.get("/health", async (req, res) => {
     res.status(200).json({
       status: "OK",
       database: "connected",
-      aiProvider: "gemini",
+      aiProvider: "openai",
       timestamp: new Date().toISOString(),
     });
   } catch (error) {

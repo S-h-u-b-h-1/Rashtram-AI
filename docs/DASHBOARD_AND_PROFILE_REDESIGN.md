@@ -28,7 +28,7 @@ Official and trusted sources
 The browser never scrapes external sites. Dashboard and profile pages only read
 structured data from the Rashtram AI backend.
 
-PDF extraction, OCR, embeddings, Gemini summaries, and Pinecone indexing remain
+PDF extraction, OCR, embeddings, OpenAI summaries, and Pinecone indexing remain
 on demand when a user opens a supported Bill, Act, or eGazette record. The
 dashboard does not bulk-process documents.
 

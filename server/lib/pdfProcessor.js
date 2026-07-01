@@ -6,17 +6,12 @@ const LATIN_PATTERN = /[A-Za-z]/g;
 const LETTER_PATTERN = /[\p{L}\p{M}]/gu;
 const MAX_INLINE_OCR_BYTES = 18 * 1024 * 1024;
 
-const responseText = (response) => {
-  if (typeof response?.text === "function") return response.text();
-  return response?.text || "";
-};
-
 class PDFProcessor {
   constructor({ ocrExtractor } = {}) {
     this.chunkSize = 4500;
     this.overlap = 450;
     this.ocrExtractor = ocrExtractor;
-    this.geminiClientPromise = null;
+    this.openAIClientPromise = null;
   }
 
   detectLanguage(text) {
@@ -45,6 +40,7 @@ class PDFProcessor {
     return {
       languageCode,
       script,
+      isBilingual: languageCode === "hi-en",
       confidence:
         identified > 0
           ? Number((Math.max(devanagari, latin) / identified).toFixed(3))
@@ -61,6 +57,8 @@ class PDFProcessor {
       .replace(/\u00ad/g, "")
       .replace(/[\x00-\x08\x0b\x0c\x0e-\x1f\x7f-\x9f]/g, "")
       .replace(/[ \t]+/g, " ")
+      .replace(/\s+([\u093a-\u094d\u0951-\u0957])/gu, "$1")
+      .replace(/([क-ह])\s+([़])/gu, "$1$2")
       .replace(/ *([।॥])/gu, "$1 ")
       .replace(/\n[ \t]+/g, "\n")
       .replace(/[ \t]+\n/g, "\n")
@@ -69,8 +67,46 @@ class PDFProcessor {
       .trim();
   }
 
+  cleanPageArtifacts(text) {
+    const pageNumber = /^(?:(?:page|पृष्ठ)\s*)?\d+(?:\s*(?:of|\/)\s*\d+)?$/iu;
+    const pages = String(text || "").split(/\f+/);
+    const boundaryCounts = new Map();
+    const pageLines = pages.map((page) =>
+      page
+        .split("\n")
+        .map((line) => line.trim())
+        .filter(Boolean),
+    );
+
+    for (const lines of pageLines) {
+      for (const line of [...lines.slice(0, 2), ...lines.slice(-2)]) {
+        if (line.length <= 140 && !pageNumber.test(line)) {
+          boundaryCounts.set(line, (boundaryCounts.get(line) || 0) + 1);
+        }
+      }
+    }
+    const repeatedBoundaries = new Set(
+      [...boundaryCounts.entries()]
+        .filter(
+          ([, count]) => pages.length >= 2 && count >= pages.length,
+        )
+        .map(([line]) => line),
+    );
+
+    return pageLines
+      .map((lines) =>
+        lines
+          .filter(
+            (line) =>
+              !pageNumber.test(line) && !repeatedBoundaries.has(line),
+          )
+          .join("\n"),
+      )
+      .join("\n\n");
+  }
+
   cleanText(text, languageCode = "und") {
-    const normalized = String(text || "")
+    const normalized = this.cleanPageArtifacts(text)
       .normalize("NFC")
       .replace(/\u00ad/g, "")
       .replace(/[\x00-\x08\x0b\x0c\x0e-\x1f\x7f-\x9f]/g, "")
@@ -94,8 +130,8 @@ class PDFProcessor {
 
   sentenceUnits(text, languageCode = "und") {
     const boundary = languageCode.startsWith("hi")
-      ? /(?<=[.!?।॥])\s+|\n{2,}/u
-      : /(?<=[.!?])\s+|\n{2,}/u;
+      ? /(?<=[.!?।॥])\s+|\n{2,}|(?=\n(?:धारा|अध्याय|भाग|अनुसूची|\d+[.)]))/u
+      : /(?<=[.!?])\s+|\n{2,}|(?=\n(?:section|chapter|part|schedule|\d+[.)]))/iu;
     return String(text || "")
       .split(boundary)
       .map((unit) => unit.trim())
@@ -132,11 +168,11 @@ class PDFProcessor {
         appendOversizedUnit(unit);
         continue;
       }
-      const candidate = current ? `${current} ${unit}` : unit;
+      const candidate = current ? `${current}\n\n${unit}` : unit;
       if (candidate.length > chunkSize && current) {
         pushChunk(current);
         const overlapText = current.slice(-overlap).replace(/^\S*\s*/, "");
-        current = `${overlapText} ${unit}`.trim();
+        current = `${overlapText}\n\n${unit}`.trim();
       } else {
         current = candidate;
       }
@@ -169,21 +205,21 @@ class PDFProcessor {
     };
   }
 
-  async getGemini() {
-    if (!process.env.GEMINI_API_KEY) {
+  async getOpenAI() {
+    if (!process.env.OPENAI_API_KEY) {
       const error = new Error(
-        "OCR is unavailable because GEMINI_API_KEY is not configured.",
+        "OCR is unavailable because OPENAI_API_KEY is not configured.",
       );
       error.status = 422;
       throw error;
     }
-    if (!this.geminiClientPromise) {
-      this.geminiClientPromise = import("@google/genai").then(
-        ({ GoogleGenAI }) =>
-          new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY }),
+    if (!this.openAIClientPromise) {
+      this.openAIClientPromise = import("openai").then(
+        ({ default: OpenAI }) =>
+          new OpenAI({ apiKey: process.env.OPENAI_API_KEY }),
       );
     }
-    return this.geminiClientPromise;
+    return this.openAIClientPromise;
   }
 
   async extractTextWithOcr(buffer) {
@@ -195,20 +231,24 @@ class PDFProcessor {
       error.status = 422;
       throw error;
     }
-    const ai = await this.getGemini();
-    const response = await ai.models.generateContent({
-      model: process.env.GEMINI_OCR_MODEL || "gemini-2.5-flash",
-      contents: [
+    const openai = await this.getOpenAI();
+    const response = await openai.responses.create({
+      model:
+        process.env.OPENAI_OCR_MODEL ||
+        process.env.OPENAI_MODEL ||
+        "gpt-5.4-mini",
+      max_output_tokens: 32_000,
+      input: [
         {
           role: "user",
-          parts: [
+          content: [
             {
-              inlineData: {
-                mimeType: "application/pdf",
-                data: buffer.toString("base64"),
-              },
+              type: "input_file",
+              filename: "government-document.pdf",
+              file_data: `data:application/pdf;base64,${buffer.toString("base64")}`,
             },
             {
+              type: "input_text",
               text: [
                 "Transcribe this scanned Indian government document exactly.",
                 "Preserve the original language, Devanagari text, numbers,",
@@ -221,7 +261,7 @@ class PDFProcessor {
         },
       ],
     });
-    return responseText(response);
+    return response.output_text || "";
   }
 
   async processPDFByPages(pdfUrl) {
@@ -230,10 +270,12 @@ class PDFProcessor {
     let fullText = native.fullText;
     let extractionMethod = "pdf_text";
     let ocrUsed = false;
+    let ocrRequired = false;
 
     if (!this.hasUsableText(fullText, native.numPages)) {
+      ocrRequired = true;
       fullText = await this.extractTextWithOcr(buffer);
-      extractionMethod = "gemini_ocr";
+      extractionMethod = "openai_ocr";
       ocrUsed = true;
     }
     if (!this.hasUsableText(fullText, native.numPages)) {
@@ -254,6 +296,7 @@ class PDFProcessor {
       cleanedLength: cleanedText.length,
       extractionMethod,
       ocrUsed,
+      ocrRequired,
       language,
       fileSizeBytes: buffer.length,
     };
@@ -269,6 +312,7 @@ class PDFProcessor {
       language: result.language,
       extractionMethod: result.extractionMethod,
       ocrUsed: result.ocrUsed,
+      ocrRequired: result.ocrRequired,
     };
   }
 
@@ -309,6 +353,8 @@ class PDFProcessor {
         script: pdfData.language.script,
         extractionMethod: pdfData.extractionMethod,
         ocrUsed: pdfData.ocrUsed,
+        ocrRequired: pdfData.ocrRequired,
+        isBilingual: pdfData.language.isBilingual,
       },
     }));
 
@@ -321,6 +367,7 @@ class PDFProcessor {
       language: pdfData.language,
       extractionMethod: pdfData.extractionMethod,
       ocrUsed: pdfData.ocrUsed,
+      ocrRequired: pdfData.ocrRequired,
       pdfMetadata: {
         numPages: pdfData.numPages,
         info: pdfData.info,

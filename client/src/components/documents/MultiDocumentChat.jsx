@@ -23,7 +23,7 @@ export function MultiDocumentChat({ documentIds }) {
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState("");
-  const [responseLanguage, setResponseLanguage] = useState("English");
+  const [responseLanguage, setResponseLanguage] = useState("Auto");
   const messagesEndRef = useRef(null);
 
   useEffect(() => {

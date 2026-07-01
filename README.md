@@ -11,8 +11,8 @@ summaries, and supports source-grounded chat.
 - `client/`: Next.js 15 and React 19 web application
 - `server/`: Express API, authentication, document processing, and AI services
 - PostgreSQL: users, chats, related-bill cache, and the legislative catalogue
-- Pinecone: separate vector indexes for bills and acts
-- Gemini: embeddings, summaries, and streamed chat responses
+- Pinecone: vector retrieval for Bills, Acts, and universal documents
+- OpenAI: multilingual embeddings, OCR, summaries, and streamed chat responses
 
 Detailed references:
 
@@ -25,12 +25,14 @@ Detailed references:
 - [Source connector status](docs/SOURCE_CONNECTOR_STATUS.md)
 - [Dashboard and profile redesign](docs/DASHBOARD_AND_PROFILE_REDESIGN.md)
 - [Data trust and privacy](docs/DATA_TRUST_AND_PRIVACY.md)
+- [Multilingual document pipeline](docs/MULTILINGUAL_DOCUMENT_PIPELINE.md)
+- [OpenAI migration](docs/OPENAI_MIGRATION.md)
 
 ## Prerequisites
 
 - Node.js 22
 - PostgreSQL (Neon is supported)
-- Gemini API access
+- OpenAI API access
 - Pinecone account with two 768-dimension indexes:
   - `rashtram-bills` (or the value of `PINECONE_INDEX_NAME`)
   - `rashtram-acts`
@@ -132,12 +134,16 @@ The backend requires these encrypted Vercel environment variables:
 - `GOOGLE_CLIENT_ID`
 - `GOOGLE_CLIENT_SECRET`
 - `GOOGLE_CALLBACK_URL`
-- `GEMINI_API_KEY`
-- `GEMINI_MODEL`
-- `GEMINI_EMBEDDING_MODEL`
+- `OPENAI_API_KEY`
+- `OPENAI_MODEL`
+- `OPENAI_FALLBACK_MODEL`
+- `OPENAI_OCR_MODEL`
+- `OPENAI_EMBEDDING_MODEL`
+- `EMBEDDING_PROVIDER=openai`
 - `PINECONE_API_KEY`
 - `PINECONE_INDEX_NAME`
 - `PINECONE_ACT_INDEX_NAME`
+- `PINECONE_NAMESPACE=openai-text-embedding-3-large-768-v1`
 
 ## Security
 

@@ -354,11 +354,13 @@ const initializeSchema = async () => {
       script TEXT NOT NULL DEFAULT 'Unknown',
       language_confidence NUMERIC(5, 4),
       original_text TEXT NOT NULL,
+      is_bilingual BOOLEAN NOT NULL DEFAULT FALSE,
       english_summary TEXT,
       extraction_method TEXT NOT NULL CHECK (
-        extraction_method IN ('pdf_text', 'gemini_ocr')
+        extraction_method IN ('pdf_text', 'gemini_ocr', 'openai_ocr')
       ),
       ocr_used BOOLEAN NOT NULL DEFAULT FALSE,
+      ocr_required BOOLEAN NOT NULL DEFAULT FALSE,
       metadata_json JSONB NOT NULL DEFAULT '{}'::jsonb,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
@@ -366,6 +368,18 @@ const initializeSchema = async () => {
 
     CREATE INDEX IF NOT EXISTS document_text_artifacts_language_idx
       ON document_text_artifacts (language_code, updated_at DESC);
+
+    ALTER TABLE document_text_artifacts
+      ADD COLUMN IF NOT EXISTS is_bilingual BOOLEAN NOT NULL DEFAULT FALSE;
+    ALTER TABLE document_text_artifacts
+      ADD COLUMN IF NOT EXISTS ocr_required BOOLEAN NOT NULL DEFAULT FALSE;
+    ALTER TABLE document_text_artifacts
+      DROP CONSTRAINT IF EXISTS document_text_artifacts_extraction_method_check;
+    ALTER TABLE document_text_artifacts
+      ADD CONSTRAINT document_text_artifacts_extraction_method_check
+      CHECK (
+        extraction_method IN ('pdf_text', 'gemini_ocr', 'openai_ocr')
+      );
 
     CREATE TABLE IF NOT EXISTS source_collection_snapshots (
       id BIGSERIAL PRIMARY KEY,

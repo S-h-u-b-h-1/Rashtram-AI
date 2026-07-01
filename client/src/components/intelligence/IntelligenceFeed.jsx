@@ -119,7 +119,7 @@ export function IntelligenceFeed({
                       }
                       className="inline-flex items-center gap-1.5 rounded-full border border-[#8f1d2c]/12 px-3 py-2 text-xs font-semibold text-[#514d46] transition hover:bg-[#f2ece1]"
                     >
-                      Open
+                      View PDF
                       <ArrowUpRight className="h-3.5 w-3.5" />
                     </a>
                   )}

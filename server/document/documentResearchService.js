@@ -10,6 +10,7 @@ const {
   generateEGazetteSummary,
   generateDocumentSummary,
   generateEmbedding,
+  generateSuggestedQuestions,
   getActIndex,
   getEGazetteIndex,
   getIndex,
@@ -76,9 +77,11 @@ const getTextArtifact = async (documentId) => {
        language_code,
        script,
        language_confidence,
+       is_bilingual,
        english_summary,
        extraction_method,
        ocr_used,
+       ocr_required,
        metadata_json,
        updated_at
      FROM document_text_artifacts
@@ -95,9 +98,11 @@ const getTextArtifact = async (documentId) => {
       row.language_confidence == null
         ? null
         : Number(row.language_confidence),
+    isBilingual: row.is_bilingual,
     englishSummary: row.english_summary,
     extractionMethod: row.extraction_method,
     ocrUsed: row.ocr_used,
+    ocrRequired: row.ocr_required,
     metadata: row.metadata_json || {},
     updatedAt: row.updated_at,
   };
@@ -111,6 +116,7 @@ const saveTextArtifact = async (
     englishSummary,
     extractionMethod,
     ocrUsed,
+    ocrRequired,
     metadata = {},
   },
 ) => {
@@ -121,21 +127,25 @@ const saveTextArtifact = async (
        script,
        language_confidence,
        original_text,
+       is_bilingual,
        english_summary,
        extraction_method,
        ocr_used,
+       ocr_required,
        metadata_json
      )
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11::jsonb)
      ON CONFLICT (document_id)
      DO UPDATE SET
        language_code = EXCLUDED.language_code,
        script = EXCLUDED.script,
        language_confidence = EXCLUDED.language_confidence,
        original_text = EXCLUDED.original_text,
+       is_bilingual = EXCLUDED.is_bilingual,
        english_summary = EXCLUDED.english_summary,
        extraction_method = EXCLUDED.extraction_method,
        ocr_used = EXCLUDED.ocr_used,
+       ocr_required = EXCLUDED.ocr_required,
        metadata_json = EXCLUDED.metadata_json,
        updated_at = NOW()`,
     [
@@ -144,9 +154,11 @@ const saveTextArtifact = async (
       language.script,
       language.confidence,
       originalText,
+      Boolean(language.isBilingual),
       englishSummary || null,
       extractionMethod,
       Boolean(ocrUsed),
+      Boolean(ocrRequired),
       JSON.stringify(metadata),
     ],
   );
@@ -256,6 +268,10 @@ const processDocument = async (documentType, documentId) => {
       const summary = await generateDocumentSummary(documentType, context, {
         sourceLanguage: language.languageCode,
       });
+      const suggestedQuestions = await generateSuggestedQuestions(
+        documentType,
+        summary,
+      );
       await saveTextArtifact(documentId, {
         language,
         originalText: context,
@@ -263,9 +279,11 @@ const processDocument = async (documentType, documentId) => {
         extractionMethod:
           matches[0]?.metadata?.extractionMethod || "pdf_text",
         ocrUsed: Boolean(matches[0]?.metadata?.ocrUsed),
+        ocrRequired: Boolean(matches[0]?.metadata?.ocrRequired),
         metadata: {
           reconstructedFromIndexedChunks: true,
           chunks: matches.length,
+          suggestedQuestions,
         },
       });
       await Promise.all(
@@ -308,13 +326,21 @@ const processDocument = async (documentType, documentId) => {
     summaryContext,
     { sourceLanguage: processed.language.languageCode },
   );
+  const suggestedQuestions = await generateSuggestedQuestions(
+    documentType,
+    summary,
+  );
   await saveTextArtifact(documentId, {
     language: processed.language,
     originalText: processed.originalText,
     englishSummary: summary,
     extractionMethod: processed.extractionMethod,
     ocrUsed: processed.ocrUsed,
-    metadata: processed.pdfMetadata,
+    ocrRequired: processed.ocrRequired,
+    metadata: {
+      ...processed.pdfMetadata,
+      suggestedQuestions,
+    },
   });
   const chunks = processed.chunks.map((chunk, index) => ({
     ...chunk,

@@ -270,22 +270,6 @@ export function DocumentExplorer({
                   </div>
                   <div className="flex flex-wrap items-start gap-2 md:justify-end">
                     <Link
-                      href={`/app/document/${document.id}`}
-                      onClick={() =>
-                        trackActivity({
-                          event_type: "document_opened",
-                          entity_type: document.type,
-                          entity_id: document.id,
-                          document_id: document.id,
-                          page_path: "/app",
-                          metadata_json: { documentType: document.type },
-                        })
-                      }
-                      className="inline-flex items-center gap-1.5 rounded-xl border border-[#8f1d2c]/10 bg-white px-3 py-2 text-[10px] font-semibold text-[#8f1d2c]"
-                    >
-                      Open
-                    </Link>
-                    <Link
                       href={`/app/document/${document.id}#research-chat`}
                       onClick={() =>
                         trackActivity({

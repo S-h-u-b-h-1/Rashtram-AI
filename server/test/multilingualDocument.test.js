@@ -1,6 +1,10 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const { PDFProcessor } = require("../lib/pdfProcessor");
+const {
+  normalizeResponseLanguage,
+  parseSuggestedQuestions,
+} = require("../lib/vectordb");
 
 test("language detection distinguishes English, Hindi, and bilingual text", () => {
   const processor = new PDFProcessor();
@@ -60,7 +64,35 @@ test("scanned PDFs use OCR only when native text is insufficient", async () => {
 
   const result = await processor.processPDFByPages("https://example.gov.in/a.pdf");
   assert.equal(result.ocrUsed, true);
-  assert.equal(result.extractionMethod, "gemini_ocr");
+  assert.equal(result.extractionMethod, "openai_ocr");
   assert.equal(result.language.languageCode, "hi");
   assert.match(result.originalText, /मूल हिन्दी पाठ/);
+});
+
+test("automatic response language follows the user's question", () => {
+  assert.equal(
+    normalizeResponseLanguage("Auto", "इस अधिनियम का उद्देश्य क्या है?"),
+    "Hindi",
+  );
+  assert.equal(
+    normalizeResponseLanguage("Auto", "What is the purpose of this Act?"),
+    "English",
+  );
+  assert.equal(
+    normalizeResponseLanguage("Hindi", "Summarize the document"),
+    "Hindi",
+  );
+});
+
+test("suggested question parsing keeps a bounded clean list", () => {
+  assert.deepEqual(
+    parseSuggestedQuestions(
+      '["What changed?", "किस पर प्रभाव पड़ेगा?", "What are the dates?"]',
+    ),
+    [
+      "What changed?",
+      "किस पर प्रभाव पड़ेगा?",
+      "What are the dates?",
+    ],
+  );
 });

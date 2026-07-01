@@ -1,6 +1,6 @@
 # Unified Document Chat Architecture
 
-Last reviewed: 29 June 2026
+Last reviewed: 1 July 2026
 
 ## Purpose
 
@@ -99,7 +99,7 @@ open document
        generate structured summary
   -> retrieve six typed passages
   -> label [Passage N]
-  -> stream Gemini answer
+  -> stream OpenAI answer through Server-Sent Events
   -> persist answer and citations
 ```
 
@@ -109,7 +109,7 @@ Bulk PDF processing remains prohibited.
 
 Every on-demand PDF process detects language and script after native PDF text
 extraction. If a scanned PDF does not contain usable embedded text, the service
-uses Gemini PDF OCR with an exact-transcription prompt. Devanagari text is
+uses OpenAI PDF OCR with an exact-transcription prompt. Devanagari text is
 Unicode-normalized without translation and chunked using Hindi danda sentence
 boundaries.
 
@@ -120,8 +120,9 @@ For Hindi documents, embedding input combines each original Hindi chunk with
 the English document summary to support multilingual discovery without
 replacing the cited source.
 
-Single- and multi-document chat accept an explicit English or Hindi response
-language. Quoted citations remain in the source language.
+Single- and multi-document chat accept Auto, English, or Hindi. Auto follows
+the language of the user's question. Quoted citations and source snippets
+remain in the source language.
 
 ## Testing and roadmap
 

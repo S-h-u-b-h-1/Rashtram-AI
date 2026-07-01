@@ -15,7 +15,7 @@ The product combines five capabilities:
 2. **Document preparation** — download a source PDF, extract its text, divide it
    into overlapping semantic chunks, and store searchable vectors.
 3. **Grounded research chat** — retrieve the most relevant chunks for a
-   question and stream a Gemini answer based on that context.
+   question and stream an OpenAI answer based on that context.
 4. **Research continuity** — retain summaries, messages, and recent work for
    each authenticated user.
 5. **National legislative catalogue** — reconcile the same bill, act, rule,
@@ -54,7 +54,7 @@ Express API on Vercel
    |        |         |
    |        |         +--> PRS, IndiaCode, eGazette, Sansad and official sites
    |        |
-   |        +--> Gemini generation
+   |        +--> OpenAI generation
    |
    +--> PostgreSQL / Neon
    |      users, chats, legislative catalogue, ingestion history
@@ -104,7 +104,7 @@ Important backend locations:
 - `server/lib/ingestion/connectors/` — source-specific acquisition adapters.
 - `server/cli/` — ingestion, coverage, duplicate, and review operations.
 - `server/lib/pdfProcessor.js` — PDF extraction and text chunking.
-- `server/lib/vectordb.js` — embeddings, Pinecone access, retrieval, and Gemini.
+- `server/lib/vectordb.js` — OpenAI embeddings/generation, Pinecone access, and retrieval.
 - `server/models/` — PostgreSQL-backed compatibility models.
 
 ## 4. Core data flows
@@ -158,7 +158,7 @@ Processing happens when a user opens a document that is not yet in Pinecone:
 7. Generate a summary and attach it to chunk metadata.
 
 The default embedding provider is the local deterministic hash embedding. A
-Gemini embedding provider can be enabled through environment configuration.
+OpenAI multilingual embeddings are enabled through environment configuration.
 
 ### 4.4 Grounded chat
 
@@ -168,7 +168,7 @@ For each question:
 2. Filter Pinecone by the selected bill or act ID.
 3. Retrieve the five nearest chunks.
 4. Build a context-only prompt.
-5. Stream Gemini output to the browser using Server-Sent Events.
+5. Stream OpenAI output to the browser using Server-Sent Events.
 6. Return source snippets and relevance scores.
 7. Persist the user and assistant messages in the user's PostgreSQL chat.
 
@@ -304,7 +304,7 @@ Areas that should be strengthened:
 - Some historical records do not include a PDF or ministry.
 - Catalogue metadata is complete to the extent exposed by source pages; full
   PDF text is processed on demand rather than copied wholesale into PostgreSQL.
-- Scanned PDFs fall back to bounded Gemini PDF OCR. If both native extraction
+- Scanned PDFs fall back to bounded OpenAI PDF OCR. If both native extraction
   and OCR fail, processing returns a clear 422 response and retains catalogue
   metadata and source access.
 
@@ -315,7 +315,7 @@ Areas that should be strengthened:
 - The local hash embedding is inexpensive and deterministic but less semantic
   than a modern learned embedding model.
 - There are no retrieval or answer-quality evaluations.
-- Pinecone writes and Gemini generation occur in request paths and may exceed
+- Pinecone writes and OpenAI generation occur in request paths and may exceed
   serverless time limits for large PDFs.
 
 ### Engineering
