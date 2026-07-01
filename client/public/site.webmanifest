@@ -1,0 +1,35 @@
+{
+  "name": "Rashtram AI",
+  "short_name": "Rashtram AI",
+  "description": "Evidence-grounded intelligence for Indian legislation and public policy.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#eee8df",
+  "theme_color": "#8f1d2c",
+  "icons": [
+    {
+      "src": "/android-chrome-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/android-chrome-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/maskable-icon-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/maskable-icon-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}

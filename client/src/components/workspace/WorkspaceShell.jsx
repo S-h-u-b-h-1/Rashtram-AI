@@ -259,13 +259,16 @@ export function WorkspaceShell({ activeKey, title, children }) {
 
       <div className="flex min-w-0 flex-1 flex-col">
         <header className="flex h-20 shrink-0 items-center justify-between border-b border-[#8f1d2c]/9 bg-[#f1ece3]/85 px-5 backdrop-blur-xl md:px-8">
-          <div>
-            <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[#874047]">
-              Rashtram intelligence
-            </p>
-            <h1 className="mt-1 text-sm font-semibold text-[#8f1d2c]">
-              {title}
-            </h1>
+          <div className="flex items-center gap-3">
+            <BrandMark compact className="md:hidden" />
+            <div>
+              <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[#874047]">
+                Rashtram intelligence
+              </p>
+              <h1 className="mt-1 text-sm font-semibold text-[#8f1d2c]">
+                {title}
+              </h1>
+            </div>
           </div>
           <div className="flex items-center gap-2">
             <button
