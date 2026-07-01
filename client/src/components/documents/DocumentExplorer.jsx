@@ -41,6 +41,25 @@ const READINESS_LABELS = {
   missing_pdf: "Missing PDF",
 };
 
+const documentDateLabel = (document) => {
+  const legislativeDate =
+    document.publicationDate ||
+    document.introducedDate ||
+    document.passedDate ||
+    document.enactedDate ||
+    document.effectiveDate ||
+    document.commencementDate;
+  if (legislativeDate) return formatDate(legislativeDate);
+  if (document.year) return String(document.year);
+  if (document.firstSeenAt) {
+    return `Catalogued ${formatDate(document.firstSeenAt)}`;
+  }
+  if (document.updatedAt) {
+    return `Updated ${formatDate(document.updatedAt)}`;
+  }
+  return "Date unavailable";
+};
+
 export function DocumentExplorer({
   type,
   scope,
@@ -287,10 +306,7 @@ export function DocumentExplorer({
                         document.ministry || document.authority,
                         document.jurisdiction,
                         document.category && humanize(document.category),
-                        formatDate(
-                          document.publicationDate,
-                          document.year || "Date unavailable",
-                        ),
+                        documentDateLabel(document),
                       ]
                         .filter(Boolean)
                         .join(" · ")}
