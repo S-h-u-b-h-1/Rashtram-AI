@@ -16,6 +16,12 @@ const ALLOWED_ACTIVITY_EVENTS = new Set([
   "profile_viewed",
   "research_continued",
   "export_clicked",
+  "comparison_created",
+  "documents_compared",
+  "recommendation_viewed",
+  "recommendation_opened",
+  "recommendation_added_to_compare",
+  "business_problem_searched",
 ]);
 
 const DOCUMENT_INTERACTION_EVENTS = new Set([
@@ -25,6 +31,9 @@ const DOCUMENT_INTERACTION_EVENTS = new Set([
   "summary_viewed",
   "source_opened",
   "research_continued",
+  "recommendation_viewed",
+  "recommendation_opened",
+  "recommendation_added_to_compare",
 ]);
 
 const SENSITIVE_KEY_PATTERN =

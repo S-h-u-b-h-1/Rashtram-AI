@@ -141,6 +141,11 @@ All routes require authenticated access.
 | `GET` | `/api/documents/:id/summary` | Current user summary |
 | `GET` | `/api/documents/:id/relationships` | Verified graph edges |
 | `GET` | `/api/documents/:id/recommendations` | Ranked related reading |
+| `POST` | `/api/recommendations/problem` | Business/problem-based catalogue recommendations |
+| `GET` | `/api/recommendations/recent` | Recent grounded recommendations |
+| `POST` | `/api/documents/compare` | Grounded comparison for two to five documents |
+| `GET` | `/api/documents/compare/:id` | Saved comparison lookup |
+| `DELETE` | `/api/documents/compare/:id` | Delete an owned comparison |
 | `GET` | `/api/documents/:id/timeline` | Lifecycle and relationship events |
 | `GET` | `/api/documents/:id/graph` | Document/entity nodes and edges |
 | `POST` | `/api/documents/chat` | Streamed one-to-five-document RAG chat |

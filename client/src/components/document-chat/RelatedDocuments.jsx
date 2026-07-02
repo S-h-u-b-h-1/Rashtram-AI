@@ -1,29 +1,42 @@
+"use client";
+
 import { ExternalLink, MessageSquareText } from "lucide-react";
 import Link from "next/link";
 import { humanize } from "@/lib/document-links";
+import { RecommendationCard } from "@/components/recommendations/RecommendationCard";
 
 export function RelatedDocuments({
   relationships = [],
   recommendations = [],
   relatedChats = [],
 }) {
-  const items = [
-    ...relationships.map((item) => ({
-      ...item.document,
-      relation: item.relationshipType,
-      verified: true,
-    })),
-    ...recommendations.map((item) => ({
-      ...item,
-      relation: "recommended",
-      verified: false,
-    })),
-  ].slice(0, 10);
+  const items = relationships.slice(0, 6).map((item) => ({
+    ...item.document,
+    relation: item.relationshipType,
+    verified: true,
+  }));
   return (
     <section>
       <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-[#874047]">
-        Related documents
+        Related documents to refer
       </p>
+      {recommendations.length > 0 && (
+        <div className="mt-3 space-y-3">
+          {recommendations.slice(0, 6).map((recommendation) => (
+            <RecommendationCard
+              key={recommendation.id}
+              recommendation={recommendation}
+              pagePath={`/app/document/${recommendation.id}`}
+              compact
+            />
+          ))}
+        </div>
+      )}
+      {items.length > 0 && (
+        <p className="mt-5 text-[9px] font-semibold uppercase tracking-[0.12em] text-[#81796e]">
+          Verified catalogue relationships
+        </p>
+      )}
       <div className="mt-3 space-y-2">
         {items.map((item) => (
           <article
@@ -31,8 +44,7 @@ export function RelatedDocuments({
             className="rounded-xl border border-[#8f1d2c]/8 bg-white p-3"
           >
             <p className="text-[9px] font-semibold uppercase tracking-[0.1em] text-[#874047]">
-              {item.verified ? "Verified · " : "Suggested · "}
-              {humanize(item.relation)}
+              Verified · {humanize(item.relation)}
             </p>
             <p className="mt-2 text-xs font-semibold leading-5 text-[#29312d]">
               {item.title}
@@ -68,7 +80,7 @@ export function RelatedDocuments({
             )}
           </article>
         ))}
-        {!items.length && (
+        {!items.length && !recommendations.length && (
           <p className="rounded-xl border border-dashed border-[#8f1d2c]/10 p-4 text-[11px] leading-5 text-[#81796e]">
             Related records will appear when catalogue relationships are
             verified.

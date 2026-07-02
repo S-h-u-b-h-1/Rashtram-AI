@@ -67,6 +67,17 @@ registry and source records.
 The six documents processed before schema v2 were backfilled from verified
 legacy processing success. Future processing writes the actual chunk count.
 
+## Comparison and recommendation intelligence
+
+`document_comparisons` stores the authenticated user, selected document IDs,
+mode, language, optional focused question, structured grounded result,
+follow-up recommendation snapshot, and timestamps.
+
+`recommendations` stores expiring user-scoped recommendation snapshots with the
+candidate document, type, normalized score, reason, confidence, and
+source/problem context in `reason_json`. Catalogue documents remain the
+authoritative record.
+
 ## Search and performance
 
 The schema includes B-tree indexes for document type, jurisdiction, state,

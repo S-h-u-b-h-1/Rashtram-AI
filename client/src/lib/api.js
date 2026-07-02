@@ -134,8 +134,39 @@ export const getDocumentComparison = async (comparisonId) => {
   );
 };
 
+export const deleteDocumentComparison = async (comparisonId) => {
+  return apiRequest(
+    `/documents/compare/${encodeURIComponent(comparisonId)}`,
+    { method: "DELETE" },
+  );
+};
+
 export const getDocumentComparisons = async (limit = 30) => {
   return apiRequest(`/profile/comparisons?limit=${encodeURIComponent(limit)}`);
+};
+
+export const getDocumentRecommendations = async (
+  documentId,
+  options = {},
+) => {
+  return apiRequest(
+    `/documents/${encodeURIComponent(documentId)}/recommendations?${toQueryString(
+      options,
+    )}`,
+  );
+};
+
+export const getRecentRecommendations = async (limit = 12) => {
+  return apiRequest(
+    `/profile/recommendations?limit=${encodeURIComponent(limit)}`,
+  );
+};
+
+export const recommendForProblem = async (payload) => {
+  return apiRequest("/recommendations/problem", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
 };
 
 export const fetchDocumentTimeline = async (documentId) => {

@@ -17,6 +17,9 @@ const {
 const {
   getComparisons,
 } = require("../document/documentComparisonService");
+const {
+  getRecentRecommendations,
+} = require("../document/recommendationService");
 
 const router = express.Router();
 
@@ -44,6 +47,22 @@ router.get("/comparisons", fetchuser, async (req, res) => {
   } catch (error) {
     console.error("Comparison history fetch error:", error);
     return res.status(500).json({ error: "Unable to load comparison history." });
+  }
+});
+
+router.get("/recommendations", fetchuser, async (req, res) => {
+  try {
+    return res.json({
+      recommendations: await getRecentRecommendations(
+        req.user.id,
+        req.query.limit,
+      ),
+    });
+  } catch (error) {
+    console.error("Recommendation history fetch error:", error);
+    return res.status(500).json({
+      error: "Unable to load recommendation history.",
+    });
   }
 });
 

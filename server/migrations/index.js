@@ -11,4 +11,8 @@ module.exports = [
     name: "003_quarantine_navigation_artifacts.js",
     migration: require("./003_quarantine_navigation_artifacts"),
   },
+  {
+    name: "004_comparison_recommendation_intelligence.js",
+    migration: require("./004_comparison_recommendation_intelligence"),
+  },
 ];

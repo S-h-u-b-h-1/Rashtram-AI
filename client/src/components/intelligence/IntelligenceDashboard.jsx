@@ -9,6 +9,7 @@ import { LegislativeUpdateGrid } from "./LegislativeUpdateGrid";
 import { PlatformCoverageOverview } from "./PlatformCoverageOverview";
 import { SourceHealthPanel } from "./SourceHealthPanel";
 import { TrendingMinistries } from "./TrendingMinistries";
+import { RecommendationSection } from "@/components/recommendations/RecommendationSection";
 
 export function IntelligenceDashboard({ onNavigate }) {
   const [data, setData] = useState(null);
@@ -141,12 +142,12 @@ export function IntelligenceDashboard({ onNavigate }) {
       <ContinueResearch chats={data.recentUserChats || []} />
 
       {(data.recommendedReading || []).length > 0 && (
-        <DocumentListSection
+        <RecommendationSection
           eyebrow="High-confidence recommendations"
           title="Recommended reading"
-          documents={data.recommendedReading}
+          recommendations={data.recommendedReading}
           emptyMessage="No sufficiently supported policy recommendation is available yet."
-          onViewAll={() => onNavigate("documents")}
+          pagePath="/app"
         />
       )}
 

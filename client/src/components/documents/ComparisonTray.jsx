@@ -22,9 +22,23 @@ export function ComparisonTray() {
             {documents.map((document) => (
               <span
                 key={document.id}
-                className="inline-flex max-w-[250px] shrink-0 items-center gap-2 rounded-xl bg-white/10 px-3 py-2 text-[11px]"
+                className="inline-flex max-w-[290px] shrink-0 items-center gap-2 rounded-xl bg-white/10 px-3 py-2 text-[11px]"
               >
-                <span className="truncate">{document.title}</span>
+                <span className="min-w-0">
+                  <span className="block truncate">{document.title}</span>
+                  <span className="mt-0.5 block truncate text-[9px] text-white/45">
+                    {[
+                      document.type,
+                      document.ministry ||
+                        document.state ||
+                        document.jurisdiction,
+                      document.year,
+                      document.researchReady ? "Research ready" : null,
+                    ]
+                      .filter(Boolean)
+                      .join(" · ")}
+                  </span>
+                </span>
                 <button
                   type="button"
                   onClick={() => removeDocument(document.id)}

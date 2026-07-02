@@ -10,13 +10,15 @@ test("comparison accepts two to five unique documents", () => {
   assert.deepEqual(
     normalizeRequest({
       documentIds: ["11", "12"],
-      mode: "legal",
-      language: "Hindi",
+      comparisonMode: "clause",
+      language: "hindi",
+      userQuestion: "How do the duties differ?",
     }),
     {
       documentIds: ["11", "12"],
-      mode: "legal",
-      language: "Hindi",
+      mode: "clause",
+      language: "hindi",
+      userQuestion: "How do the duties differ?",
     },
   );
   assert.equal(
@@ -70,7 +72,7 @@ test("comparison readiness exposes specific disabled reasons", () => {
       pdfUrl: "https://example.test/a.pdf",
       researchReady: false,
     }),
-    "Document not indexed yet",
+    "Research workspace unavailable",
   );
   assert.equal(
     readinessReason({
@@ -78,7 +80,56 @@ test("comparison readiness exposes specific disabled reasons", () => {
       title: "Bill",
       pdfUrl: "https://example.test/a.pdf",
       researchReady: true,
+      extractionStatus: "ready",
+      embeddingStatus: "ready",
+      chunksCount: 3,
     }),
     null,
+  );
+});
+
+test("comparison accepts the public API contract and legacy aliases", () => {
+  assert.deepEqual(
+    normalizeRequest({
+      documentIds: [1, 2],
+      comparisonMode: "compliance",
+      language: "auto",
+    }),
+    {
+      documentIds: ["1", "2"],
+      mode: "compliance",
+      language: "auto",
+      userQuestion: "",
+    },
+  );
+  assert.equal(
+    normalizeRequest({
+      documentIds: [1, 2],
+      mode: "comprehensive",
+      language: "English",
+    }).mode,
+    "full",
+  );
+});
+
+test("comparison readiness distinguishes pending and unusable text", () => {
+  assert.equal(
+    readinessReason({
+      id: "1",
+      title: "Policy",
+      pdfUrl: "https://example.test/policy.pdf",
+      extractionStatus: "pending",
+    }),
+    "Text extraction pending",
+  );
+  assert.equal(
+    readinessReason({
+      id: "1",
+      title: "Policy",
+      pdfUrl: "https://example.test/policy.pdf",
+      extractionStatus: "ready",
+      chunksCount: 0,
+    }),
+    "No extractable text found",
   );
 });

@@ -15,8 +15,12 @@ const {
 } = require("../lib/sse");
 const {
   createComparison,
+  deleteComparison,
   getComparison,
 } = require("./documentComparisonService");
+const {
+  getDocumentRecommendations,
+} = require("./recommendationService");
 
 const router = express.Router();
 
@@ -111,7 +115,15 @@ router.delete("/chat/history", async (req, res) => {
 router.post("/compare", async (req, res) => {
   try {
     const comparison = await createComparison(req.user.id, req.body);
-    return res.status(201).json({ comparison });
+    return res.status(201).json({
+      comparison,
+      comparisonId: comparison.id,
+      documents: comparison.result.documents || [],
+      summary: comparison.result.executiveSummary || "",
+      ...comparison.result,
+      recommendedDocuments: comparison.recommendedDocuments,
+      createdAt: comparison.createdAt,
+    });
   } catch (error) {
     return sendError(res, error, "Document comparison failed");
   }
@@ -126,9 +138,29 @@ router.get("/compare/:comparisonId", async (req, res) => {
     if (!comparison) {
       return res.status(404).json({ error: "Comparison not found." });
     }
-    return res.json({ comparison });
+    return res.json({
+      comparison,
+      comparisonId: comparison.id,
+      documents: comparison.result.documents || [],
+      summary: comparison.result.executiveSummary || "",
+      ...comparison.result,
+      recommendedDocuments: comparison.recommendedDocuments,
+      createdAt: comparison.createdAt,
+    });
   } catch (error) {
     return sendError(res, error, "Document comparison lookup failed");
+  }
+});
+
+router.delete("/compare/:comparisonId", async (req, res) => {
+  try {
+    const deleted = await deleteComparison(
+      req.user.id,
+      req.params.comparisonId,
+    );
+    return res.status(deleted ? 200 : 404).json({ deleted });
+  } catch (error) {
+    return sendError(res, error, "Document comparison delete failed");
   }
 });
 
@@ -301,18 +333,23 @@ router.get("/:id/relationships", async (req, res) => {
 router.get("/:id/recommendations", async (req, res) => {
   try {
     const [recommendations, relatedChats] = await Promise.all([
-      DocumentService.getRecommendations(
-        req.params.id,
-        req.user.id,
-        req.query.limit,
-      ),
+      getDocumentRecommendations(req.params.id, req.user.id, {
+        type: req.query.type,
+        limit: req.query.limit,
+        includeNonReady: req.query.includeNonReady,
+        useUserProfile: req.query.useUserProfile,
+      }),
       DocumentService.getRelatedChats(
         req.params.id,
         req.user.id,
         req.query.limit,
       ),
     ]);
-    return res.json({ recommendations, relatedChats });
+    return res.json({
+      documentId: String(req.params.id),
+      recommendations,
+      relatedChats,
+    });
   } catch (error) {
     return sendError(res, error, "Universal recommendations failed");
   }

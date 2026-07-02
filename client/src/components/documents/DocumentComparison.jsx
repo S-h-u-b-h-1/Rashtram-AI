@@ -13,17 +13,21 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import {
   createDocumentComparison,
   getDocumentComparison,
+  trackActivity,
 } from "@/lib/api";
 import { useComparison } from "@/context/ComparisonContext";
+import { RecommendationSection } from "@/components/recommendations/RecommendationSection";
 
 const SECTION_CONFIG = [
   ["similarities", "Similarities"],
   ["differences", "Differences"],
   ["keyClauses", "Key clauses"],
   ["stakeholders", "Stakeholders"],
+  ["complianceImpact", "Compliance and policy impact"],
   ["timeline", "Timeline"],
   ["authorityDifferences", "Authority differences"],
   ["impactAssessment", "Impact assessment"],
+  ["keyFindings", "Key findings"],
 ];
 
 const itemText = (item) => {
@@ -82,8 +86,9 @@ export function DocumentComparison() {
     [searchParams],
   );
   const comparisonId = searchParams.get("comparison");
-  const [mode, setMode] = useState("comprehensive");
-  const [language, setLanguage] = useState("English");
+  const [mode, setMode] = useState("full");
+  const [language, setLanguage] = useState("auto");
+  const [userQuestion, setUserQuestion] = useState("");
   const [comparison, setComparison] = useState(null);
   const [loading, setLoading] = useState(Boolean(comparisonId));
   const [error, setError] = useState("");
@@ -96,10 +101,35 @@ export function DocumentComparison() {
     try {
       const response = await createDocumentComparison({
         documentIds: ids,
-        mode,
+        comparisonMode: mode,
         language,
+        userQuestion,
       });
       setComparison(response.comparison);
+      trackActivity({
+        event_type: "comparison_created",
+        entity_type: "document_comparison",
+        entity_id: response.comparison.id,
+        page_path: "/app/compare",
+        metadata_json: {
+          comparisonMode: mode,
+          documentCount: ids.length,
+          documentIds: ids,
+        },
+      });
+      ids.forEach((documentId) => {
+        trackActivity({
+          event_type: "documents_compared",
+          entity_type: "document",
+          entity_id: documentId,
+          document_id: documentId,
+          page_path: "/app/compare",
+          metadata_json: {
+            comparisonId: response.comparison.id,
+            comparisonMode: mode,
+          },
+        });
+      });
       router.replace(
         `/app/compare?comparison=${response.comparison.id}&ids=${ids.join(",")}`,
         { scroll: false },
@@ -121,6 +151,7 @@ export function DocumentComparison() {
           setComparison(response.comparison);
           setMode(response.comparison.mode);
           setLanguage(response.comparison.language);
+          setUserQuestion(response.comparison.userQuestion || "");
         }
       })
       .catch((requestError) => active && setError(requestError.message))
@@ -195,7 +226,7 @@ export function DocumentComparison() {
                 onChange={(event) => setMode(event.target.value)}
                 className="h-10 rounded-xl bg-white/10 px-3 text-white outline-none"
               >
-                {["comprehensive", "legal", "policy", "timeline", "stakeholder"].map(
+                {["full", "summary", "clause", "impact", "timeline", "compliance"].map(
                   (value) => (
                     <option key={value} value={value} className="text-black">
                       {value[0].toUpperCase() + value.slice(1)}
@@ -212,8 +243,9 @@ export function DocumentComparison() {
                 onChange={(event) => setLanguage(event.target.value)}
                 className="h-10 rounded-xl bg-white/10 px-3 text-white outline-none"
               >
-                <option className="text-black">English</option>
-                <option className="text-black">Hindi</option>
+                <option value="auto" className="text-black">Auto</option>
+                <option value="english" className="text-black">English</option>
+                <option value="hindi" className="text-black">हिन्दी</option>
               </select>
             </label>
             {ids.length >= 2 && (
@@ -236,6 +268,20 @@ export function DocumentComparison() {
               </Link>
             )}
           </div>
+          <label className="mt-4 block max-w-3xl">
+            <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-white/60">
+              Optional focused question
+            </span>
+            <textarea
+              value={userQuestion}
+              disabled={loading}
+              onChange={(event) => setUserQuestion(event.target.value)}
+              maxLength={1500}
+              rows={2}
+              placeholder="For example: How do their compliance obligations and implementation timelines differ?"
+              className="mt-2 w-full resize-none rounded-xl border border-white/10 bg-white/10 px-3 py-2 text-sm text-white placeholder:text-white/35 outline-none focus:border-white/30"
+            />
+          </label>
         </div>
         {error && (
           <p role="alert" className="bg-[#f4dfdc] px-5 py-3 text-sm text-[#85434a]">
@@ -255,6 +301,31 @@ export function DocumentComparison() {
         </div>
       ) : result ? (
         <>
+          <section className="surface-card p-5 sm:p-6">
+            <h3 className="font-serif text-2xl text-[#8f1d2c]">
+              Documents compared
+            </h3>
+            <div className="mt-4 grid gap-3 lg:grid-cols-2">
+              {(result.documents || []).map((document) => (
+                <article
+                  key={document.id}
+                  className="rounded-xl border border-[#8f1d2c]/8 bg-[#f7f2eb] p-4"
+                >
+                  <p className="text-sm font-semibold text-[#29312d]">
+                    {document.title}
+                  </p>
+                  <p className="mt-2 text-[10px] uppercase tracking-[0.1em] text-[#81796e]">
+                    {[document.type, document.ministry || document.authority,
+                      document.state || document.jurisdiction,
+                      document.year]
+                      .filter(Boolean)
+                      .join(" · ")}
+                  </p>
+                </article>
+              ))}
+            </div>
+          </section>
+
           <section className="surface-card p-5 sm:p-6">
             <h3 className="font-serif text-2xl text-[#8f1d2c]">
               Executive summary
@@ -349,6 +420,17 @@ export function DocumentComparison() {
               </div>
             </section>
           )}
+
+          <RecommendationSection
+            title="Recommended follow-up documents"
+            eyebrow="Continue the research"
+            recommendations={
+              comparison?.recommendedDocuments ||
+              result.recommendedDocuments ||
+              []
+            }
+            pagePath="/app/compare"
+          />
         </>
       ) : null}
     </div>

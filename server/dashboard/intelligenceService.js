@@ -179,14 +179,19 @@ const mapDocument = (row) => ({
   sourceName: row.canonical_source || row.source_name,
   sourceUrl: row.canonical_url || row.detail_url || row.source_url,
   pdfUrl: row.pdf_url,
+  state: row.state || row.metadata_json?.state || null,
+  qualityScore:
+    row.quality_score == null ? null : Number(row.quality_score),
   readiness: !row.pdf_url
     ? "source_only"
-    : row.processing_status === "ready"
+    : row.schema_research_ready || row.processing_status === "ready"
       ? "research_ready"
       : row.processing_status === "failed"
         ? "processing_failed"
         : "pdf_available",
-  researchReady: row.processing_status === "ready",
+  researchReady: Boolean(
+    row.schema_research_ready || row.processing_status === "ready",
+  ),
   eventDate: toIso(
     row.intelligence_date ||
       row.publication_date ||
@@ -633,6 +638,9 @@ const getDashboardIntelligence = async (userId) => {
        )
        SELECT
          d.*,
+         schema_document.state,
+         schema_document.research_ready AS schema_research_ready,
+         schema_document.quality_score,
          (
            CASE WHEN preferences.ministries ? COALESCE(d.ministry, '')
              THEN 4 ELSE 0 END
@@ -644,12 +652,17 @@ const getDashboardIntelligence = async (userId) => {
              THEN 2 ELSE 0 END
          ) AS recommendation_score
        FROM legislative_documents d
+       JOIN documents schema_document ON schema_document.id = d.id
        CROSS JOIN (
          SELECT * FROM preferences
          UNION ALL
          SELECT '[]'::jsonb, '[]'::jsonb, '[]'::jsonb, '[]'::jsonb
          WHERE NOT EXISTS (SELECT 1 FROM preferences)
        ) preferences
+       WHERE schema_document.visibility_status = 'public'
+         AND schema_document.research_ready
+         AND schema_document.quality_score >= 40
+         AND schema_document.canonical_url IS NOT NULL
        ORDER BY
          recommendation_score DESC,
          d.source_priority ASC,
@@ -883,7 +896,22 @@ const getDashboardIntelligence = async (userId) => {
     })),
     recommendedReading: recommendedReadingResult.rows
       .map(mapDocument)
-      .filter((document) => document.recommendationScore >= 3),
+      .filter((document) => document.recommendationScore >= 3)
+      .map((document) => {
+        const score = Math.min(
+          Number((document.recommendationScore / 11).toFixed(4)),
+          1,
+        );
+        return {
+          ...document,
+          type: document.documentType,
+          score,
+          confidence: score >= 0.5 ? "high" : "medium",
+          reason:
+            "Recommended because it matches your saved ministry, jurisdiction, topic, or document-type preferences.",
+          recommendationType: "profile_match",
+        };
+      }),
     demoHighlights: [
       latestBy((document) => document.documentType === "act", 1)[0],
       activeBillsResult.rows.map(mapDocument)[0],

@@ -124,6 +124,14 @@ Single- and multi-document chat accept Auto, English, or Hindi. Auto follows
 the language of the user's question. Quoted citations and source snippets
 remain in the source language.
 
+## Cross-document comparison
+
+Comparison uses the same retrieval families as chat, but retrieves and labels
+passages independently per document. It rejects selections that are not
+strictly research-ready and persists structured similarities, differences,
+clauses, stakeholders, compliance impact, timelines, authority differences,
+citations, and follow-up reading. See `COMPARISON_ENGINE.md`.
+
 ## Testing and roadmap
 
 Tests cover the generic type allowlist, adapter contract, deterministic local

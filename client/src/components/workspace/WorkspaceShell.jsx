@@ -13,6 +13,7 @@ import {
   Scale,
   ScrollText,
   GitCompareArrows,
+  Sparkles,
   X,
 } from "lucide-react";
 import { useEffect, useState } from "react";
@@ -80,6 +81,12 @@ const NAVIGATION = [
     label: "Compare",
     href: "/app/compare",
     icon: GitCompareArrows,
+  },
+  {
+    key: "recommend",
+    label: "Find Relevant Laws",
+    href: "/app/recommend",
+    icon: Sparkles,
   },
 ];
 

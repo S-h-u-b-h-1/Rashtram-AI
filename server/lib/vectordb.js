@@ -465,9 +465,16 @@ const parseJsonResponse = (value) => {
 const generateDocumentComparison = async ({
   mode,
   language,
+  userQuestion,
   documents,
   context,
 }) => {
+  const responseLanguage =
+    language === "hindi"
+      ? "Hindi"
+      : language === "english"
+        ? "English"
+        : "the language used in the focused question, otherwise English";
   const prompt = `
 Compare the supplied Indian legislative and public-policy documents using only
 the labelled source passages. Never use a document title as evidence. Every
@@ -476,7 +483,8 @@ substantive claim must include one or more citation labels exactly as supplied
 retrieved text." Keep the documents distinct and do not merge their provisions.
 
 Comparison mode: ${mode}
-Response language: ${language}
+Response language: ${responseLanguage}
+Focused comparison question: ${userQuestion || "None; provide the requested mode."}
 Documents:
 ${JSON.stringify(documents)}
 
@@ -487,9 +495,11 @@ Return only valid JSON with this shape:
   "differences": [{"topic":"string","analysis":"string","citations":["D1-C1","D2-C1"]}],
   "keyClauses": [{"documentId":"string","clause":"string","analysis":"string","citations":["D1-C1"]}],
   "stakeholders": [{"name":"string","impact":"string","citations":["D1-C1"]}],
+  "complianceImpact": [{"point":"string","citations":["D1-C1"]}],
   "timeline": [{"date":"string","event":"string","documentId":"string","citations":["D1-C1"]}],
   "authorityDifferences": [{"point":"string","citations":["D1-C1"]}],
   "impactAssessment": [{"point":"string","citations":["D1-C1"]}],
+  "keyFindings": [{"point":"string","citations":["D1-C1"]}],
   "suggestedQuestions": ["string"]
 }
 

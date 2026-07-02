@@ -9,6 +9,7 @@ import { ProfileSupportForms } from "./ProfileSupportForms";
 import { ResearchActivity } from "./ResearchActivity";
 import { DataPersonalization } from "./DataPersonalization";
 import { ComparisonHistory } from "./ComparisonHistory";
+import { RecommendationHistory } from "./RecommendationHistory";
 
 export function ProfileView() {
   const [profile, setProfile] = useState(null);
@@ -75,6 +76,7 @@ export function ProfileView() {
       />
       <ContinueResearch chats={profile.recentChats} />
       <ComparisonHistory />
+      <RecommendationHistory />
       <AccountSettings
         account={profile.account}
         onUpdate={(updates) =>

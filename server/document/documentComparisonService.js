@@ -1,19 +1,28 @@
 const { query } = require("../db");
 const DocumentRepository = require("./DocumentRepository");
 const {
-  processDocument,
   retrievePassages,
 } = require("./documentResearchService");
+const {
+  getDocumentRecommendations,
+} = require("./recommendationService");
 const { generateDocumentComparison } = require("../lib/vectordb");
 
 const MODES = new Set([
-  "comprehensive",
-  "legal",
-  "policy",
+  "summary",
+  "clause",
+  "impact",
   "timeline",
-  "stakeholder",
+  "compliance",
+  "full",
 ]);
-const LANGUAGES = new Set(["English", "Hindi"]);
+const MODE_ALIASES = {
+  comprehensive: "full",
+  legal: "clause",
+  policy: "impact",
+  stakeholder: "impact",
+};
+const LANGUAGES = new Set(["auto", "english", "hindi"]);
 
 const validationError = (message, status = 400) => {
   const error = new Error(message);
@@ -32,66 +41,82 @@ const normalizeRequest = (payload = {}) => {
   if (documentIds.length < 2 || documentIds.length > 5) {
     throw validationError("Select between two and five documents.");
   }
-  const mode = String(payload.mode || "comprehensive").toLowerCase();
+  const suppliedMode = String(
+    payload.comparisonMode || payload.mode || "full",
+  ).toLowerCase();
+  const mode = MODE_ALIASES[suppliedMode] || suppliedMode;
   if (!MODES.has(mode)) {
     throw validationError("Unsupported comparison mode.");
   }
-  const language = String(payload.language || "English");
+  const language = String(payload.language || "auto").toLowerCase();
   if (!LANGUAGES.has(language)) {
     throw validationError("Unsupported comparison language.");
   }
-  return { documentIds, mode, language };
+  const userQuestion = String(payload.userQuestion || "")
+    .normalize("NFKC")
+    .trim();
+  if (userQuestion.length > 1_500) {
+    throw validationError("The focused comparison question is too long.");
+  }
+  return { documentIds, mode, language, userQuestion };
 };
 
 const readinessReason = (document) => {
   if (!document) return "Document not found";
-  if (document.processingStatus === "failed") return "Processing failed";
-  if (!document.pdfUrl) return "PDF unavailable";
+  if (
+    document.processingStatus === "failed" ||
+    document.extractionStatus === "failed" ||
+    document.embeddingStatus === "failed"
+  ) {
+    return "Processing failed";
+  }
+  if (!document.hasAccessibleResource && !document.pdfUrl) {
+    return "PDF unavailable";
+  }
   if (!document.title || !document.id) return "Research workspace unavailable";
-  if (!document.researchReady) return "Document not indexed yet";
+  if (document.extractionStatus && document.extractionStatus !== "ready") {
+    return "Text extraction pending";
+  }
+  if (
+    document.extractionStatus === "ready" &&
+    Number(document.chunksCount || 0) <= 0
+  ) {
+    return "No extractable text found";
+  }
+  if (
+    document.embeddingStatus &&
+    document.embeddingStatus !== "ready"
+  ) {
+    return "Research workspace unavailable";
+  }
+  if (!document.researchReady) return "Research workspace unavailable";
   return null;
 };
 
 const ensureResearchReady = async (document) => {
-  let reason = readinessReason(document);
-  if (reason !== "Document not indexed yet") {
-    if (reason) throw validationError(`${document?.title || "Document"}: ${reason}.`, 422);
-    return document;
-  }
-
-  await DocumentRepository.updateProcessingStatus(document.id, "processing");
-  try {
-    await processDocument(document.type, document.id);
-    await DocumentRepository.updateProcessingStatus(document.id, "ready");
-  } catch (error) {
-    await DocumentRepository.updateProcessingStatus(
-      document.id,
-      "failed",
-      error.message,
+  const reason = readinessReason(document);
+  if (reason) {
+    throw validationError(
+      `${document?.title || "Document"}: ${reason}.`,
+      422,
     );
-    const message = /extract|text|scan|ocr/i.test(error.message)
-      ? "No extractable text"
-      : "Research workspace unavailable";
-    throw validationError(`${document.title}: ${message}.`, 422);
   }
-
-  const refreshed = await DocumentRepository.getById(document.id);
-  reason = readinessReason(refreshed);
-  if (reason) throw validationError(`${document.title}: ${reason}.`, 422);
-  return refreshed;
+  return document;
 };
 
 const comparisonQuery = (mode) =>
   ({
-    legal:
+    clause:
       "operative provisions, legal duties, powers, definitions, penalties, exceptions, jurisdiction and authority",
-    policy:
+    impact:
       "policy objectives, implementation, beneficiaries, institutions, funding, outcomes and trade-offs",
     timeline:
       "dates, commencement, deadlines, stages, transitions and implementation sequence",
-    stakeholder:
-      "affected people, institutions, regulators, duties, rights, benefits and compliance impact",
-    comprehensive:
+    compliance:
+      "regulated entities, duties, approvals, reporting, penalties, exceptions, deadlines and compliance impact",
+    summary:
+      "purpose, scope, principal provisions, authorities, affected groups and key dates",
+    full:
       "purpose, provisions, similarities, differences, authorities, stakeholders, dates and practical impact",
   })[mode];
 
@@ -99,15 +124,22 @@ const mapComparison = (row) => row && ({
   id: String(row.id),
   title: row.title,
   documentIds: row.document_ids_json || [],
-  mode: row.mode,
-  language: row.language,
+  mode: MODE_ALIASES[row.mode] || row.mode,
+  comparisonMode: MODE_ALIASES[row.mode] || row.mode,
+  language: String(row.language || "auto").toLowerCase(),
+  userQuestion: row.user_question || "",
   result: row.result_json || {},
+  recommendedDocuments:
+    row.recommended_documents_json ||
+    row.result_json?.recommendedDocuments ||
+    [],
   createdAt: row.created_at,
   updatedAt: row.updated_at,
 });
 
 const createComparison = async (userId, payload) => {
-  const { documentIds, mode, language } = normalizeRequest(payload);
+  const { documentIds, mode, language, userQuestion } =
+    normalizeRequest(payload);
   const loaded = await Promise.all(
     documentIds.map((id) => DocumentRepository.getById(id)),
   );
@@ -121,7 +153,7 @@ const createComparison = async (userId, payload) => {
       const passages = await retrievePassages(
         document.type,
         document.id,
-        comparisonQuery(mode),
+        userQuestion || comparisonQuery(mode),
         topK,
       );
       if (!passages.some((passage) => passage.content.trim())) {
@@ -165,29 +197,87 @@ const createComparison = async (userId, payload) => {
   const generated = await generateDocumentComparison({
     mode,
     language,
-    documents: documents.map(({ id, type, title, authority, status }) => ({
+    userQuestion,
+    documents: documents.map(({
       id,
       type,
       title,
       authority,
       status,
+      ministry,
+      state,
+      jurisdiction,
+      year,
+      publicationDate,
+    }) => ({
+      id,
+      type,
+      title,
+      authority,
+      status,
+      ministry,
+      state,
+      jurisdiction,
+      year,
+      publicationDate,
     })),
     context,
   });
+  const recommendedDocuments = [
+    ...new Map(
+      (
+        await Promise.all(
+          documents.map((document) =>
+            getDocumentRecommendations(document.id, userId, {
+              limit: 6,
+              includeNonReady: false,
+              useUserProfile: true,
+            }),
+          ),
+        )
+      )
+        .flat()
+        .filter(
+          (recommendation) =>
+            !documentIds.includes(String(recommendation.id)),
+        )
+        .sort((left, right) => right.score - left.score)
+        .map((recommendation) => [String(recommendation.id), recommendation]),
+    ).values(),
+  ].slice(0, 8);
   const result = {
     ...generated,
     documents: documents.map(
-      ({ id, type, title, authority, status, sourceUrl, pdfUrl }) => ({
+      ({
         id,
         type,
         title,
         authority,
         status,
+        ministry,
+        state,
+        jurisdiction,
+        year,
+        publicationDate,
+        sourceUrl,
+        pdfUrl,
+      }) => ({
+        id,
+        type,
+        title,
+        authority,
+        status,
+        ministry,
+        state,
+        jurisdiction,
+        year,
+        publicationDate,
         sourceUrl,
         pdfUrl,
       }),
     ),
     citations,
+    recommendedDocuments,
   };
   const title = `Comparison: ${documents
     .map((document) => document.title)
@@ -195,9 +285,10 @@ const createComparison = async (userId, payload) => {
     .slice(0, 450)}`;
   const inserted = await query(
     `INSERT INTO document_comparisons (
-       user_id, title, document_ids_json, mode, language, result_json
+       user_id, title, document_ids_json, mode, language, user_question,
+       result_json, recommended_documents_json
      )
-     VALUES ($1, $2, $3::jsonb, $4, $5, $6::jsonb)
+     VALUES ($1, $2, $3::jsonb, $4, $5, $6, $7::jsonb, $8::jsonb)
      RETURNING *`,
     [
       userId,
@@ -205,7 +296,9 @@ const createComparison = async (userId, payload) => {
       JSON.stringify(documentIds),
       mode,
       language,
+      userQuestion || null,
       JSON.stringify(result),
+      JSON.stringify(recommendedDocuments),
     ],
   );
   return mapComparison(inserted.rows[0]);
@@ -233,10 +326,21 @@ const getComparisons = async (userId, limit = 30) => {
   return result.rows.map(mapComparison);
 };
 
+const deleteComparison = async (userId, comparisonId) => {
+  const result = await query(
+    `DELETE FROM document_comparisons
+     WHERE id::TEXT = $1 AND user_id = $2
+     RETURNING id`,
+    [String(comparisonId), userId],
+  );
+  return Boolean(result.rows[0]);
+};
+
 module.exports = {
   LANGUAGES,
   MODES,
   createComparison,
+  deleteComparison,
   ensureResearchReady,
   getComparison,
   getComparisons,

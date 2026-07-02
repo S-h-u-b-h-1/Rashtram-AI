@@ -25,12 +25,19 @@ const mapDocument = (row) => {
     ...(row.source_metadata || {}),
     ...(row.metadata_json || {}),
   };
-  const processingStatus = row.processing_status || null;
-  const readiness = !row.pdf_url
+  const processingStatus =
+    row.schema_processing_status || row.processing_status || null;
+  const hasAccessibleResource =
+    row.has_accessible_resource == null
+      ? Boolean(row.pdf_url)
+      : Boolean(row.has_accessible_resource);
+  const readiness = !hasAccessibleResource
     ? (sourceUrl ? "source_only" : "missing_pdf")
-    : processingStatus === "failed"
+    : processingStatus === "failed" ||
+        row.extraction_status === "failed" ||
+        row.embedding_status === "failed"
       ? "processing_failed"
-      : processingStatus === "ready" || row.research_ready
+      : row.research_ready
         ? "research_ready"
         : "pdf_available";
   return {
@@ -61,6 +68,11 @@ const mapDocument = (row) => {
     pdfUrl: row.pdf_url,
     processingStatus,
     processingError: row.processing_error || null,
+    extractionStatus: row.extraction_status || null,
+    embeddingStatus: row.embedding_status || null,
+    summaryStatus: row.summary_status || null,
+    chunksCount: Number(row.chunks_count || 0),
+    hasAccessibleResource,
     processedAt: toIso(row.processed_at),
     readiness,
     researchReady: readiness === "research_ready",
@@ -374,7 +386,38 @@ const getById = async (id) => {
          SELECT schema_document.visibility_status
          FROM documents schema_document
          WHERE schema_document.id = legislative_documents.id
-       ) AS visibility_status
+       ) AS visibility_status,
+       EXISTS (
+         SELECT 1 FROM document_resources resource
+         WHERE resource.document_id = legislative_documents.id
+           AND resource.resource_type IN ('pdf', 'text', 'html')
+           AND resource.is_accessible
+       ) AS has_accessible_resource,
+       (
+         SELECT state.processing_status
+         FROM document_processing_state state
+         WHERE state.document_id = legislative_documents.id
+       ) AS schema_processing_status,
+       (
+         SELECT state.extraction_status
+         FROM document_processing_state state
+         WHERE state.document_id = legislative_documents.id
+       ) AS extraction_status,
+       (
+         SELECT state.embedding_status
+         FROM document_processing_state state
+         WHERE state.document_id = legislative_documents.id
+       ) AS embedding_status,
+       (
+         SELECT state.summary_status
+         FROM document_processing_state state
+         WHERE state.document_id = legislative_documents.id
+       ) AS summary_status,
+       (
+         SELECT state.chunks_count
+         FROM document_processing_state state
+         WHERE state.document_id = legislative_documents.id
+       ) AS chunks_count
      FROM legislative_documents
      WHERE id::TEXT = $1 OR canonical_id = $1
      LIMIT 1`,
@@ -592,70 +635,10 @@ const getChatHistory = (userId, documentType, id) =>
   DocumentChat.findOne(userId, documentType, id);
 
 const getRecommendations = async (id, userId = null, limit = 8) => {
-  const document = await getById(id);
-  if (!document) return [];
-  const safeLimit = clampInteger(limit, 8, 1, 30);
-  const preferences = userId
-    ? await query(
-        `SELECT
-           preferred_ministries,
-           preferred_policy_areas,
-           preferred_jurisdictions,
-           preferred_document_types
-         FROM user_profiles
-         WHERE user_id = $1`,
-        [userId],
-      )
-    : { rows: [] };
-  const profile = preferences.rows[0] || {};
-  const result = await query(
-    `SELECT d.*,
-       (
-         CASE WHEN d.document_type = $2 THEN 3 ELSE 0 END
-         + CASE WHEN $3::TEXT IS NOT NULL AND d.ministry = $3 THEN 4 ELSE 0 END
-         + CASE WHEN $4::TEXT IS NOT NULL AND d.authority = $4 THEN 3 ELSE 0 END
-         + CASE WHEN $5::TEXT IS NOT NULL AND d.category = $5 THEN 2 ELSE 0 END
-         + CASE WHEN $6::TEXT IS NOT NULL AND d.jurisdiction = $6 THEN 1 ELSE 0 END
-         + CASE WHEN EXISTS (
-             SELECT 1 FROM document_relationships r
-             WHERE (r.from_document_id = $1 AND r.to_document_id = d.id)
-                OR (r.to_document_id = $1 AND r.from_document_id = d.id)
-           ) THEN 8 ELSE 0 END
-         + CASE WHEN $7::BIGINT IS NOT NULL AND EXISTS (
-             SELECT 1 FROM user_activity_events a
-             WHERE a.user_id = $7 AND a.document_id = d.id
-           ) THEN 1 ELSE 0 END
-         + CASE WHEN d.ministry = ANY($8::TEXT[]) THEN 3 ELSE 0 END
-         + CASE WHEN d.category = ANY($9::TEXT[]) THEN 2 ELSE 0 END
-         + CASE WHEN d.jurisdiction = ANY($10::TEXT[]) THEN 2 ELSE 0 END
-         + CASE WHEN d.document_type = ANY($11::TEXT[]) THEN 2 ELSE 0 END
-         + CASE WHEN EXISTS (
-             SELECT 1 FROM intelligence_events event
-             WHERE event.document_id = d.id
-               AND event.event_date >= CURRENT_DATE - INTERVAL '30 days'
-           ) THEN 2 ELSE 0 END
-       ) AS recommendation_score
-     FROM legislative_documents d
-     WHERE d.id <> $1
-     ORDER BY recommendation_score DESC,
-       d.publication_date DESC NULLS LAST, d.updated_at DESC
-     LIMIT $12`,
-    [
-      id,
-      document.type,
-      document.ministry,
-      document.authority,
-      document.category,
-      document.jurisdiction,
-      userId || null,
-      profile.preferred_ministries || [],
-      profile.preferred_policy_areas || [],
-      profile.preferred_jurisdictions || [],
-      profile.preferred_document_types || [],
-      safeLimit,
-    ],
-  );
-  return result.rows.map(mapDocument);
+  const {
+    getDocumentRecommendations,
+  } = require("./recommendationService");
+  return getDocumentRecommendations(id, userId, { limit });
 };
 
 const getRelatedChats = async (id, userId = null, limit = 6) => {
