@@ -1,6 +1,6 @@
 # Database Audit Report
 
-Generated from the configured PostgreSQL database at 2026-07-02T14:00:07.235Z.
+Generated from the configured PostgreSQL database at 2026-07-02T18:32:38.879Z.
 
 No tables were deleted during this audit. Legacy tables remain available while schema-v2 mirrors preserve backward compatibility.
 
@@ -9,11 +9,11 @@ No tables were deleted during this audit. Legacy tables remain available while s
 - Tables: 56
 - Empty tables: 13
 - Legacy compatibility tables: 9
-- Universal documents: 17742
+- Universal documents: 17744
 - Strictly research-ready documents: 6
 - Low-quality records (score below 40): 38
 - Missing canonical source URL: 0
-- Missing primary PDF resource: 408
+- Missing primary PDF resource: 410
 - Broken resource rows: 0
 - Orphan sources/resources/messages: 0/0/0
 - Duplicate canonical IDs: 0
@@ -36,24 +36,24 @@ No tables were deleted during this audit. Legacy tables remain available while s
 | `dedupe_candidates` | 0 | 2 | keep | n/a |
 | `document_chat_feedback` | 0 | 2 | keep | n/a |
 | `document_chats` | 32 | 6 | legacy_archive | 2026-07-02T09:40:29.188Z |
-| `document_comparisons` | 5 | 4 | keep | 2026-07-02T05:46:49.438Z |
+| `document_comparisons` | 6 | 4 | keep | 2026-07-02T14:53:33.377Z |
 | `document_metadata` | 17741 | 1 | keep | 2026-07-02T09:40:26.800Z |
 | `document_processing_state` | 17741 | 4 | keep | 2026-07-02T13:49:50.451Z |
 | `document_relationships` | 6 | 5 | keep | 2026-06-27T16:09:09.525Z |
 | `document_resources` | 18680 | 4 | keep | 2026-07-02T13:58:54.454Z |
-| `document_sources` | 17751 | 5 | keep | 2026-07-02T13:58:57.048Z |
+| `document_sources` | 17753 | 5 | keep | 2026-07-02T14:41:13.473Z |
 | `document_text_artifacts` | 10 | 3 | keep | 2026-07-02T09:40:25.307Z |
 | `document_text_chunks` | 0 | 1 | keep | n/a |
 | `document_topics` | 0 | 1 | keep | n/a |
-| `documents` | 17742 | 26 | keep | 2026-07-02T13:59:15.575Z |
+| `documents` | 17744 | 26 | keep | 2026-07-02T18:31:38.620Z |
 | `egazette_chats` | 1 | 4 | legacy_archive | 2026-06-29T12:43:38.960Z |
 | `feedback_submissions` | 0 | 1 | keep | n/a |
-| `ingestion_run_items` | 2 | 2 | keep | 2026-07-02T13:58:58.672Z |
-| `ingestion_runs` | 60 | 6 | keep | 2026-07-02T13:58:59.199Z |
-| `intelligence_events` | 289 | 5 | keep | 2026-07-02T13:58:57.048Z |
+| `ingestion_run_items` | 12 | 2 | keep | 2026-07-02T14:41:13.485Z |
+| `ingestion_runs` | 61 | 6 | keep | 2026-07-02T14:41:13.536Z |
+| `intelligence_events` | 293 | 5 | keep | 2026-07-02T14:41:13.473Z |
 | `legislative_document_resources` | 18680 | 6 | legacy_archive | 2026-07-02T13:58:54.454Z |
-| `legislative_documents` | 17742 | 10 | legacy_archive | 2026-07-02T13:58:57.048Z |
-| `multi_document_chats` | 1 | 3 | legacy_archive | 2026-07-02T03:37:43.884Z |
+| `legislative_documents` | 17744 | 10 | legacy_archive | 2026-07-02T14:41:13.473Z |
+| `multi_document_chats` | 2 | 3 | legacy_archive | 2026-07-02T14:53:53.058Z |
 | `recommendations` | 0 | 9 | keep | n/a |
 | `related_bills` | 3 | 3 | legacy_archive | 2026-06-27T14:11:37.515Z |
 | `research_chats` | 32 | 2 | keep | 2026-07-02T09:40:29.188Z |
@@ -64,12 +64,12 @@ No tables were deleted during this audit. Legacy tables remain available while s
 | `saved_content` | 1 | 2 | keep | 2026-07-01T09:29:10.470Z |
 | `saved_searches` | 0 | 3 | keep | n/a |
 | `schema_migrations` | 3 | 2 | keep | 2026-07-02T13:58:18.762Z |
-| `source_collection_snapshots` | 413 | 4 | keep | 2026-07-02T13:58:53.992Z |
+| `source_collection_snapshots` | 414 | 4 | keep | 2026-07-02T14:41:12.177Z |
 | `source_connectors` | 28 | 1 | keep | 2026-07-02T13:30:59.203Z |
 | `source_directory_entries` | 147 | 3 | keep | 2026-07-02T08:41:47.816Z |
-| `source_health` | 1 | 3 | keep | 2026-07-02T13:58:59.734Z |
-| `source_registry` | 28 | 5 | keep | 2026-07-02T13:58:59.455Z |
-| `source_snapshots` | 413 | 0 | keep | 2026-07-02T13:58:53.992Z |
+| `source_health` | 1 | 3 | keep | 2026-07-02T14:41:13.546Z |
+| `source_registry` | 28 | 5 | keep | 2026-07-02T14:41:13.539Z |
+| `source_snapshots` | 414 | 0 | keep | 2026-07-02T14:41:12.177Z |
 | `system_events` | 0 | 1 | keep | n/a |
 | `topic_taxonomy` | 0 | 1 | keep | n/a |
 | `user_activity_events` | 103 | 5 | keep | 2026-07-01T06:35:18.920Z |
@@ -77,7 +77,7 @@ No tables were deleted during this audit. Legacy tables remain available while s
 | `user_preferences` | 1 | 1 | keep | 2026-07-01T04:50:54.068Z |
 | `user_profiles` | 1 | 5 | keep | 2026-07-01T04:50:54.068Z |
 | `user_research_preferences` | 7 | 2 | keep | 2026-07-02T05:37:46.919Z |
-| `user_sessions` | 22 | 4 | keep | 2026-07-02T13:20:54.743Z |
+| `user_sessions` | 24 | 4 | keep | 2026-07-02T15:41:32.645Z |
 | `users` | 8 | 8 | keep | 2026-07-02T05:37:41.283Z |
 
 ## Detailed table findings
@@ -371,11 +371,11 @@ No tables were deleted during this audit. Legacy tables remain available while s
 
 ### document_comparisons
 
-- Rows: 5
+- Rows: 6
 - Decision: **keep** — Active application or infrastructure table.
 - Active code references: `server/db.js`, `server/document/documentComparisonService.js`, `server/document/documentsRoute.js`, `server/lib/database/audit.js`
 - Nullable fields: none
-- Last-update signal: updated_at = 2026-07-02T05:46:49.438Z
+- Last-update signal: updated_at = 2026-07-02T14:53:33.377Z
 - Indexes: `document_comparisons_pkey`, `document_comparisons_user_recent_idx`
 - Foreign keys: `document_comparisons_user_id_fkey`: FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 
@@ -490,11 +490,11 @@ No tables were deleted during this audit. Legacy tables remain available while s
 
 ### document_sources
 
-- Rows: 17751
+- Rows: 17753
 - Decision: **keep** — Active application or infrastructure table.
 - Active code references: `server/dashboard/intelligenceService.js`, `server/db.js`, `server/lib/database/audit.js`, `server/lib/ingestion/core/catalogRepository.js`, `server/lib/ingestion/core/healthCheck.js`
 - Nullable fields: detail_url, pdf_url, legal_identifier, content_hash, text_fingerprint, pdf_hash, html_hash, source_title, source_status, file_hash, mime_type, file_size_bytes, source_type, normalized_source_name, canonical_url, raw_title, raw_status, collected_at
-- Last-update signal: updated_at = 2026-07-02T13:58:57.048Z
+- Last-update signal: updated_at = 2026-07-02T14:41:13.473Z
 - Indexes: `document_sources_content_hash_idx`, `document_sources_document_idx`, `document_sources_normalized_source_idx`, `document_sources_pdf_hash_idx`, `document_sources_pkey`, `document_sources_source_name_idx`, `document_sources_source_name_source_record_id_key`, `document_sources_source_record_idx`, `document_sources_source_url_idx`
 - Foreign keys: `document_sources_document_id_fkey`: FOREIGN KEY (document_id) REFERENCES legislative_documents(id) ON DELETE CASCADE; `document_sources_documents_v2_fk`: FOREIGN KEY (document_id) REFERENCES documents(id) ON DELETE CASCADE DEFERRABLE INITIALLY DEFERRED
 
@@ -601,11 +601,11 @@ No tables were deleted during this audit. Legacy tables remain available while s
 
 ### documents
 
-- Rows: 17742
+- Rows: 17744
 - Decision: **keep** — Active application or infrastructure table.
 - Active code references: `server/act/actsRoute.js`, `server/bill/billsRoute.js`, `server/cli/dbVerify.js`, `server/cli/verifyRelease.js`, `server/dashboard/intelligenceService.js`, `server/document/DocumentRepository.js`, `server/document/documentComparisonService.js`, `server/document/documentsRoute.js`, `server/egazette/egazetteService.js`, `server/lib/catalogRepository.js`, `server/lib/catalogService.js`, `server/lib/database/audit.js`, `server/lib/database/quality.js`, `server/lib/ingestion/connectors/governanceSourceConnectors.js`, `server/lib/ingestion/connectors/prsConnector.js`, `server/lib/ingestion/core/catalogRepository.js`, `server/lib/prsCatalog.js`, `server/lib/vectordb.js`, `server/scripts/ingest-prs-catalog.js`, `server/server.js`, `server/test/dashboardIntelligence.test.js`, `server/test/documentComparison.test.js`, `server/test/ingestionCore.test.js`, `server/test/ingestionHealth.test.js`, `server/test/prsCatalog.test.js`, `server/test/sourceConnectors.test.js`
 - Nullable fields: document_subtype, jurisdiction_level, jurisdiction, state, authority, ministry, department, category, status, year, publication_date, introduced_date, passed_date, assent_date, commencement_date, effective_date, legal_identifier, bill_number, act_number, gazette_identifier, canonical_source_id, canonical_url, primary_pdf_resource_id, search_vector
-- Last-update signal: updated_at = 2026-07-02T13:59:15.575Z
+- Last-update signal: updated_at = 2026-07-02T18:31:38.620Z
 - Indexes: `documents_canonical_id_key`, `documents_first_seen_idx`, `documents_jurisdiction_idx`, `documents_metadata_idx`, `documents_ministry_idx`, `documents_normalized_title_idx`, `documents_pkey`, `documents_publication_idx`, `documents_quality_idx`, `documents_research_ready_idx`, `documents_search_idx`, `documents_source_priority_idx`, `documents_state_idx`, `documents_type_idx`, `documents_updated_idx`, `documents_year_idx`
 - Foreign keys: `documents_canonical_source_id_fkey`: FOREIGN KEY (canonical_source_id) REFERENCES source_registry(id) ON DELETE SET NULL; `documents_primary_pdf_resource_fk`: FOREIGN KEY (primary_pdf_resource_id) REFERENCES document_resources(id) ON DELETE SET NULL DEFERRABLE INITIALLY DEFERRED
 
@@ -705,11 +705,11 @@ No tables were deleted during this audit. Legacy tables remain available while s
 
 ### ingestion_run_items
 
-- Rows: 2
+- Rows: 12
 - Decision: **keep** — Active application or infrastructure table.
 - Active code references: `server/lib/database/audit.js`, `server/lib/ingestion/core/catalogRepository.js`
 - Nullable fields: source_record_id, document_id, action, error_message
-- Last-update signal: created_at = 2026-07-02T13:58:58.672Z
+- Last-update signal: created_at = 2026-07-02T14:41:13.485Z
 - Indexes: `ingestion_run_items_document_idx`, `ingestion_run_items_pkey`, `ingestion_run_items_run_idx`
 - Foreign keys: `ingestion_run_items_document_id_fkey`: FOREIGN KEY (document_id) REFERENCES documents(id) ON DELETE SET NULL; `ingestion_run_items_run_id_fkey`: FOREIGN KEY (run_id) REFERENCES ingestion_runs(id) ON DELETE CASCADE
 
@@ -727,11 +727,11 @@ No tables were deleted during this audit. Legacy tables remain available while s
 
 ### ingestion_runs
 
-- Rows: 60
+- Rows: 61
 - Decision: **keep** — Active application or infrastructure table.
 - Active code references: `server/dashboard/intelligenceService.js`, `server/db.js`, `server/lib/catalogRepository.js`, `server/lib/database/audit.js`, `server/lib/ingestion/core/catalogRepository.js`, `server/lib/ingestion/core/healthCheck.js`
 - Nullable fields: completed_at, collection_name
-- Last-update signal: completed_at = 2026-07-02T13:58:59.199Z
+- Last-update signal: completed_at = 2026-07-02T14:41:13.536Z
 - Indexes: `ingestion_runs_pkey`, `ingestion_runs_source_recent_idx`
 - Foreign keys: none
 
@@ -753,11 +753,11 @@ No tables were deleted during this audit. Legacy tables remain available while s
 
 ### intelligence_events
 
-- Rows: 289
+- Rows: 293
 - Decision: **keep** — Active application or infrastructure table.
 - Active code references: `server/dashboard/intelligenceService.js`, `server/db.js`, `server/document/DocumentRepository.js`, `server/lib/database/audit.js`, `server/lib/ingestion/core/catalogRepository.js`
 - Nullable fields: event_key, summary, document_id, source_url, document_type, jurisdiction, authority, ministry, category, status, event_date
-- Last-update signal: updated_at = 2026-07-02T13:58:57.048Z
+- Last-update signal: updated_at = 2026-07-02T14:41:13.473Z
 - Indexes: `intelligence_events_document_idx`, `intelligence_events_event_key_key`, `intelligence_events_feed_idx`, `intelligence_events_pkey`
 - Foreign keys: `intelligence_events_document_id_fkey`: FOREIGN KEY (document_id) REFERENCES legislative_documents(id) ON DELETE SET NULL
 
@@ -811,11 +811,11 @@ No tables were deleted during this audit. Legacy tables remain available while s
 
 ### legislative_documents
 
-- Rows: 17742
+- Rows: 17744
 - Decision: **legacy_archive** — Preserved for backward compatibility while additive triggers mirror data into schema v2.
 - Active code references: `server/activity/activityService.js`, `server/cli/dbVerify.js`, `server/dashboard/intelligenceService.js`, `server/db.js`, `server/document/DocumentRepository.js`, `server/egazette/egazetteService.js`, `server/lib/catalogRepository.js`, `server/lib/database/audit.js`, `server/lib/ingestion/core/catalogRepository.js`, `server/profile/profileService.js`
 - Nullable fields: year, status, ministry, category, detail_url, pdf_url, source_page_url, content_fetched_at, normalized_title, authority, department, legal_identifier, bill_number, act_number, gazette_identifier, introduced_date, passed_date, enacted_date, publication_date, effective_date, canonical_source, canonical_url, content_hash, text_fingerprint, gazette_id, assent_date, commencement_date, search_vector, file_hash, mime_type, file_size_bytes, processing_status, processing_error, processed_at
-- Last-update signal: updated_at = 2026-07-02T13:58:57.048Z
+- Last-update signal: updated_at = 2026-07-02T14:41:13.473Z
 - Indexes: `legislative_documents_authority_idx`, `legislative_documents_canonical_id_idx`, `legislative_documents_content_hash_idx`, `legislative_documents_gazette_identifier_idx`, `legislative_documents_legal_identifier_idx`, `legislative_documents_metadata_idx`, `legislative_documents_ministry_idx`, `legislative_documents_normalized_title_idx`, `legislative_documents_pkey`, `legislative_documents_publication_idx`, `legislative_documents_scope_idx`, `legislative_documents_search_idx`, `legislative_documents_source_idx`, `legislative_documents_source_name_source_document_id_key`, `legislative_documents_status_idx`, `legislative_documents_text_fingerprint_idx`, `legislative_documents_title_idx`, `legislative_documents_type_date_idx`
 - Foreign keys: none
 
@@ -874,11 +874,11 @@ No tables were deleted during this audit. Legacy tables remain available while s
 
 ### multi_document_chats
 
-- Rows: 1
+- Rows: 2
 - Decision: **legacy_archive** — Preserved for backward compatibility while additive triggers mirror data into schema v2.
 - Active code references: `server/db.js`, `server/document/documentsRoute.js`, `server/lib/database/audit.js`
 - Nullable fields: comparison_id
-- Last-update signal: updated_at = 2026-07-02T03:37:43.884Z
+- Last-update signal: updated_at = 2026-07-02T14:53:53.058Z
 - Indexes: `multi_document_chats_pkey`, `multi_document_chats_user_id_selection_key_key`, `multi_document_chats_user_recent_idx`
 - Foreign keys: `multi_document_chats_comparison_id_fkey`: FOREIGN KEY (comparison_id) REFERENCES document_comparisons(id) ON DELETE SET NULL; `multi_document_chats_user_id_fkey`: FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 
@@ -1099,11 +1099,11 @@ No tables were deleted during this audit. Legacy tables remain available while s
 
 ### source_collection_snapshots
 
-- Rows: 413
+- Rows: 414
 - Decision: **keep** — Active application or infrastructure table.
 - Active code references: `server/dashboard/intelligenceService.js`, `server/db.js`, `server/lib/catalogRepository.js`, `server/lib/ingestion/core/catalogRepository.js`
 - Nullable fields: html_hash, response_status, collected_at
-- Last-update signal: fetched_at = 2026-07-02T13:58:53.992Z
+- Last-update signal: fetched_at = 2026-07-02T14:41:12.177Z
 - Indexes: `source_collection_snapshots_pkey`, `source_snapshots_recent_idx`
 - Foreign keys: none
 
@@ -1175,7 +1175,7 @@ No tables were deleted during this audit. Legacy tables remain available while s
 - Decision: **keep** — Active application or infrastructure table.
 - Active code references: `server/lib/database/audit.js`, `server/lib/database/quality.js`, `server/lib/ingestion/core/catalogRepository.js`
 - Nullable fields: reachable, parser_status, last_checked_at, last_successful_run_at, last_failed_run_at, last_error
-- Last-update signal: updated_at = 2026-07-02T13:58:59.734Z
+- Last-update signal: updated_at = 2026-07-02T14:41:13.546Z
 - Indexes: `source_health_pkey`
 - Foreign keys: `source_health_source_name_fkey`: FOREIGN KEY (source_name) REFERENCES source_registry(source_name) ON DELETE CASCADE
 
@@ -1202,7 +1202,7 @@ No tables were deleted during this audit. Legacy tables remain available while s
 - Decision: **keep** — Active application or infrastructure table.
 - Active code references: `server/cli/dbVerify.js`, `server/dashboard/intelligenceService.js`, `server/lib/database/audit.js`, `server/lib/ingestion/core/catalogRepository.js`, `server/test/dashboardIntelligence.test.js`
 - Nullable fields: base_url, jurisdiction, authority, public_label, internal_label, connector_name, ingestion_frequency, last_successful_run_at, last_failed_run_at, notes
-- Last-update signal: updated_at = 2026-07-02T13:58:59.455Z
+- Last-update signal: updated_at = 2026-07-02T14:41:13.539Z
 - Indexes: `source_registry_normalized_source_name_key`, `source_registry_pkey`, `source_registry_source_name_key`
 - Foreign keys: none
 
@@ -1233,11 +1233,11 @@ No tables were deleted during this audit. Legacy tables remain available while s
 
 ### source_snapshots
 
-- Rows: 413
+- Rows: 414
 - Decision: **keep** — Active application or infrastructure table.
 - Active code references: none outside schema/migrations
 - Nullable fields: html_hash, response_status
-- Last-update signal: created_at = 2026-07-02T13:58:53.992Z
+- Last-update signal: created_at = 2026-07-02T14:41:12.177Z
 - Indexes: `source_snapshots_hash_idx`, `source_snapshots_pkey`, `source_snapshots_source_idx`
 - Foreign keys: none
 
@@ -1417,11 +1417,11 @@ No tables were deleted during this audit. Legacy tables remain available while s
 
 ### user_sessions
 
-- Rows: 22
+- Rows: 24
 - Decision: **keep** — Active application or infrastructure table.
 - Active code references: `server/auth/sessionService.js`, `server/db.js`, `server/lib/database/audit.js`, `server/profile/profileService.js`
 - Nullable fields: user_agent, ip_address, revoked_at
-- Last-update signal: last_seen_at = 2026-07-02T13:20:54.743Z
+- Last-update signal: last_seen_at = 2026-07-02T15:41:32.645Z
 - Indexes: `user_sessions_pkey`, `user_sessions_user_active_idx`
 - Foreign keys: `user_sessions_user_id_fkey`: FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 

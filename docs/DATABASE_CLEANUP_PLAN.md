@@ -1,6 +1,6 @@
 # Database Cleanup Plan
 
-Generated from the configured PostgreSQL database at 2026-07-02T14:00:52.533Z.
+Generated from the configured PostgreSQL database at 2026-07-02T18:38:49.294Z.
 
 ## Safety policy
 
@@ -16,8 +16,8 @@ Generated from the configured PostgreSQL database at 2026-07-02T14:00:52.533Z.
 - `document_chats` (32 rows): retain as legacy archive; current compatibility code references: 6.
 - `egazette_chats` (1 rows): retain as legacy archive; current compatibility code references: 4.
 - `legislative_document_resources` (18680 rows): retain as legacy archive; current compatibility code references: 6.
-- `legislative_documents` (17742 rows): retain as legacy archive; current compatibility code references: 10.
-- `multi_document_chats` (1 rows): retain as legacy archive; current compatibility code references: 3.
+- `legislative_documents` (17744 rows): retain as legacy archive; current compatibility code references: 10.
+- `multi_document_chats` (2 rows): retain as legacy archive; current compatibility code references: 3.
 - `related_bills` (3 rows): retain as legacy archive; current compatibility code references: 3.
 
 ## Empty tables
