@@ -23,6 +23,7 @@ const profileRouter = require("./profile/route");
 const catalogIngestionRouter = require("./catalog/ingestionRoute");
 const activityRouter = require("./activity/route");
 const contactRouter = require("./contact/route");
+const internalCronRouter = require("./internal/cronRoute");
 const { connectDB } = require("./db");
 const cors = require("cors");
 const {
@@ -63,6 +64,7 @@ app.use(generalLimiter);
 
 app.use("/api/auth", authLimiter, authRouter);
 app.use("/api/contact", contactRouter);
+app.use("/api/internal/cron", internalCronRouter);
 app.use("/api/chat", fetchUser, chatRouter);
 app.use("/api/bill-summary", fetchUser, billSummaryRouter);
 app.use("/api/bills", fetchUser, billsRouter);

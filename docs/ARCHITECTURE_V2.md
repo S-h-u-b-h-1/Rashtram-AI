@@ -22,8 +22,11 @@ database table.
 
 ## Universal document model
 
-`legislative_documents` is the canonical table. `DocumentRepository.mapDocument`
-exposes this stable public contract:
+`documents` is the normalized canonical table. Existing
+`legislative_documents` IDs and writes are retained through an additive
+compatibility layer while backend reads use schema-v2 quality, readiness, and
+resources. `DocumentRepository.mapDocument` exposes this stable public
+contract:
 
 ```text
 id
@@ -62,13 +65,20 @@ they become authorities and discovery targets for later document collection.
 India.gov document categories are stored here because its current result list
 is client-rendered and exposes no stable document rows in public HTML.
 
+`document_sources`, `document_resources`, `document_metadata`, and
+`document_processing_state` separate provenance, assets, flexible metadata,
+and research readiness. `research_chats` and `research_messages` normalize the
+legacy message arrays without breaking existing APIs. Migration checksums and
+advisory locks make this safe under concurrent serverless startup.
+
 ## Backend layers
 
 ```text
 connector
   -> universal normalizer
   -> ingestion dedupe/canonical merge
-  -> legislative_documents
+  -> compatibility write + documents mirror
+  -> document_sources / document_resources / processing state
   -> DocumentRepository
   -> DocumentService
   -> /api/documents
@@ -97,6 +107,19 @@ legal and publication numbers, ministry, department, authority, category,
 metadata, and source metadata. A stored PostgreSQL `TSVECTOR` and GIN index
 provide full-text search. Optional semantic results from processed PDF chunks
 are merged with lexical matches.
+
+Readiness comes from the normalized processing state and requires a valid
+source, accessible resource, extraction, chunks, embeddings, and no processing
+failure. Quality scores are exposed on the document contract and refreshed
+after scheduled ingestion.
+
+## Scheduled ingestion
+
+GitHub Actions owns long-running daily and weekly metadata collection. A
+bounded, secret-protected Vercel Cron route refreshes recent high-priority
+sources without PDF downloads or AI work. Every real run records source health,
+per-record outcomes, counters, snapshots, and errors. See
+`SCHEDULED_INGESTION.md`.
 
 ### DocumentService
 

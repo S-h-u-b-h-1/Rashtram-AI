@@ -64,6 +64,9 @@ const mapDocument = (row) => {
     processedAt: toIso(row.processed_at),
     readiness,
     researchReady: readiness === "research_ready",
+    qualityScore:
+      row.quality_score == null ? null : Number(row.quality_score),
+    visibilityStatus: row.visibility_status || "public",
     fileHash: row.file_hash || null,
     mimeType: row.mime_type || null,
     fileSizeBytes:
@@ -104,6 +107,13 @@ const addParameter = (parameters, value) => {
 const buildFilters = (options = {}) => {
   const parameters = [];
   const conditions = [];
+  if (!options.includeInternal) {
+    conditions.push(`COALESCE((
+      SELECT schema_document.visibility_status
+      FROM documents schema_document
+      WHERE schema_document.id = legislative_documents.id
+    ), 'public') NOT IN ('hidden_invalid', 'internal_only')`);
+  }
   const rawType = String(options.type || "").trim().toLowerCase();
   const stateScopedType = [
     "state-bill",
@@ -252,16 +262,19 @@ const buildFilters = (options = {}) => {
 };
 
 const DOCUMENT_DATE_EXPRESSION = `COALESCE(
-  publication_date,
-  introduced_date,
-  passed_date,
-  enacted_date,
-  effective_date,
-  commencement_date,
-  CASE WHEN year BETWEEN 1800 AND 2200 THEN MAKE_DATE(year, 1, 1) END,
-  first_seen_at::DATE,
-  updated_at::DATE,
-  created_at::DATE
+  publication_date::TIMESTAMPTZ,
+  introduced_date::TIMESTAMPTZ,
+  passed_date::TIMESTAMPTZ,
+  enacted_date::TIMESTAMPTZ,
+  effective_date::TIMESTAMPTZ,
+  commencement_date::TIMESTAMPTZ,
+  CASE
+    WHEN year BETWEEN 1800 AND 2200
+      THEN MAKE_DATE(year, 1, 1)::TIMESTAMPTZ
+  END,
+  first_seen_at,
+  updated_at,
+  created_at
 )`;
 
 const SORT_COLUMNS = {
@@ -298,11 +311,21 @@ const find = async (options = {}) => {
   const [documents, count] = await Promise.all([
     query(
       `SELECT *,
-         EXISTS (
-           SELECT 1
-           FROM document_text_artifacts artifact
-           WHERE artifact.document_id = legislative_documents.id
-         ) AS research_ready,
+         COALESCE((
+           SELECT schema_document.research_ready
+           FROM documents schema_document
+           WHERE schema_document.id = legislative_documents.id
+         ), FALSE) AS research_ready,
+         (
+           SELECT schema_document.quality_score
+           FROM documents schema_document
+           WHERE schema_document.id = legislative_documents.id
+         ) AS quality_score,
+         (
+           SELECT schema_document.visibility_status
+           FROM documents schema_document
+           WHERE schema_document.id = legislative_documents.id
+         ) AS visibility_status,
          ${rankExpression} AS search_rank
        FROM legislative_documents
        WHERE ${filters.where}
@@ -337,11 +360,21 @@ const search = (options = {}) => find(options);
 const getById = async (id) => {
   const result = await query(
     `SELECT *,
-       EXISTS (
-         SELECT 1
-         FROM document_text_artifacts artifact
-         WHERE artifact.document_id = legislative_documents.id
-       ) AS research_ready
+       COALESCE((
+         SELECT schema_document.research_ready
+         FROM documents schema_document
+         WHERE schema_document.id = legislative_documents.id
+       ), FALSE) AS research_ready,
+       (
+         SELECT schema_document.quality_score
+         FROM documents schema_document
+         WHERE schema_document.id = legislative_documents.id
+       ) AS quality_score,
+       (
+         SELECT schema_document.visibility_status
+         FROM documents schema_document
+         WHERE schema_document.id = legislative_documents.id
+       ) AS visibility_status
      FROM legislative_documents
      WHERE id::TEXT = $1 OR canonical_id = $1
      LIMIT 1`,
@@ -376,7 +409,14 @@ const updatePDF = async (id, pdfUrl) => {
   );
 };
 
-const updateProcessingStatus = async (id, status, error = null) => {
+const updateProcessingStatus = async (
+  id,
+  status,
+  error = null,
+  details = {},
+) => {
+  const errorMessage = error ? String(error).slice(0, 1_000) : null;
+  const chunksCount = Math.max(0, Number(details.chunksCount || 0));
   await query(
     `UPDATE legislative_documents
      SET processing_status = $2,
@@ -384,16 +424,108 @@ const updateProcessingStatus = async (id, status, error = null) => {
          processed_at = CASE WHEN $2 = 'ready' THEN NOW() ELSE processed_at END,
          updated_at = NOW()
      WHERE id = $1`,
-    [id, status, error ? String(error).slice(0, 1_000) : null],
+    [id, status, errorMessage],
+  );
+  await query(
+    `INSERT INTO document_processing_state (
+       document_id, processing_status, extraction_status, embedding_status,
+       summary_status, ocr_status, error_message, chunks_count,
+       embedding_provider, ai_provider, last_processed_at, updated_at
+     )
+     SELECT
+       d.id,
+       $2,
+       CASE
+         WHEN $2 = 'ready' THEN 'ready'
+         WHEN $2 = 'failed' THEN 'failed'
+         ELSE COALESCE(ps.extraction_status, 'not_started')
+       END,
+       CASE
+         WHEN $2 = 'ready' THEN 'ready'
+         WHEN $2 = 'failed' THEN 'failed'
+         ELSE COALESCE(ps.embedding_status, 'not_started')
+       END,
+       CASE
+         WHEN $2 = 'ready' THEN 'ready'
+         WHEN $2 = 'failed' THEN 'failed'
+         ELSE COALESCE(ps.summary_status, 'not_started')
+       END,
+       COALESCE(ps.ocr_status, 'not_required'),
+       $3,
+       GREATEST(COALESCE(ps.chunks_count, 0), $4),
+       CASE WHEN $2 = 'ready' THEN $5 ELSE ps.embedding_provider END,
+       CASE WHEN $2 = 'ready' THEN $6 ELSE ps.ai_provider END,
+       CASE WHEN $2 = 'ready' THEN NOW() ELSE ps.last_processed_at END,
+       NOW()
+     FROM documents d
+     LEFT JOIN document_processing_state ps ON ps.document_id = d.id
+     WHERE d.id = $1
+     ON CONFLICT (document_id) DO UPDATE SET
+       processing_status = EXCLUDED.processing_status,
+       extraction_status = EXCLUDED.extraction_status,
+       embedding_status = EXCLUDED.embedding_status,
+       summary_status = EXCLUDED.summary_status,
+       ocr_status = EXCLUDED.ocr_status,
+       error_message = EXCLUDED.error_message,
+       chunks_count = GREATEST(
+         document_processing_state.chunks_count,
+         EXCLUDED.chunks_count
+       ),
+       embedding_provider = COALESCE(
+         EXCLUDED.embedding_provider,
+         document_processing_state.embedding_provider
+       ),
+       ai_provider = COALESCE(
+         EXCLUDED.ai_provider,
+         document_processing_state.ai_provider
+       ),
+       last_processed_at = COALESCE(
+         EXCLUDED.last_processed_at,
+         document_processing_state.last_processed_at
+       ),
+       updated_at = NOW()`,
+    [
+      id,
+      status,
+      errorMessage,
+      chunksCount,
+      details.embeddingProvider || process.env.OPENAI_EMBEDDING_MODEL || "openai",
+      details.aiProvider || "openai",
+    ],
+  );
+  await query(
+    `UPDATE documents d
+     SET research_ready = (
+       d.canonical_url IS NOT NULL
+       AND EXISTS (
+         SELECT 1 FROM document_resources r
+         WHERE r.document_id = d.id
+           AND r.resource_type IN ('pdf', 'text', 'html')
+           AND r.is_accessible
+       )
+       AND EXISTS (
+         SELECT 1 FROM document_processing_state ps
+         WHERE ps.document_id = d.id
+           AND ps.processing_status = 'ready'
+           AND ps.extraction_status = 'ready'
+           AND ps.embedding_status = 'ready'
+           AND ps.chunks_count > 0
+           AND ps.error_message IS NULL
+       )
+     ),
+     updated_at = NOW()
+     WHERE d.id = $1`,
+    [id],
   );
 };
 
 const getResources = async (id) => {
   const result = await query(
-    `SELECT label, resource_type, category, url, metadata
-     FROM legislative_document_resources
+    `SELECT label, resource_type, NULL::TEXT AS category, url,
+       metadata_json AS metadata
+     FROM document_resources
      WHERE document_id = $1
-     ORDER BY resource_type, label, id`,
+     ORDER BY is_primary DESC, resource_type, label, id`,
     [id],
   );
   return result.rows.map((row) => ({

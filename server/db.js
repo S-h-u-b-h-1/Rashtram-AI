@@ -4,6 +4,7 @@ require("dotenv").config();
 const globalForDatabase = globalThis;
 const SCHEMA_VERSION = 2026070201;
 const SCHEMA_LOCK_KEY = 1_847_263_911;
+const { runMigrations } = require("./lib/database/migrator");
 
 const normalizeConnectionString = (connectionString) => {
   const url = new URL(connectionString);
@@ -1086,10 +1087,12 @@ const initializeSchema = async () => {
 
 const connectDB = async () => {
   if (!globalForDatabase.__rashtramSchemaPromise) {
-    globalForDatabase.__rashtramSchemaPromise = initializeSchema().catch((error) => {
-      globalForDatabase.__rashtramSchemaPromise = null;
-      throw error;
-    });
+    globalForDatabase.__rashtramSchemaPromise = initializeSchema()
+      .then(() => runMigrations(getPool()))
+      .catch((error) => {
+        globalForDatabase.__rashtramSchemaPromise = null;
+        throw error;
+      });
   }
 
   return globalForDatabase.__rashtramSchemaPromise;

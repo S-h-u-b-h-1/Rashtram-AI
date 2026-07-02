@@ -3,6 +3,7 @@ const {
   createRun,
   findCandidates,
   persistRecord,
+  recordRunItem,
   storeSnapshots,
   upsertDirectoryEntries,
 } = require("./catalogRepository");
@@ -184,6 +185,18 @@ const runIngestion = async (connector, options = {}) => {
         const candidates = await findCandidates(record);
         const decision = chooseBestCandidate(record, candidates);
         const persisted = await persistRecord(record, decision);
+        await recordRunItem({
+          runId: run.id,
+          sourceRecordId: record.sourceRecordId,
+          documentId: persisted.documentId,
+          status: "stored",
+          action: persisted.action,
+          metadata: {
+            matchReason: persisted.matchReason,
+            sourceAdded: persisted.sourceAdded,
+            resources: persisted.resources,
+          },
+        });
         summary.stored += 1;
         summary.resources += persisted.resources;
         summary.counters.relationships += persisted.relationships;
@@ -201,6 +214,13 @@ const runIngestion = async (connector, options = {}) => {
         }
       } catch (error) {
         summary.counters.skipped += 1;
+        await recordRunItem({
+          runId: run.id,
+          sourceRecordId:
+            rawRecord.sourceRecordId || rawRecord.sourceDocumentId || null,
+          status: "failed",
+          errorMessage: error.message,
+        }).catch(() => undefined);
         summary.errors.push({
           sourceRecordId:
             rawRecord.sourceRecordId || rawRecord.sourceDocumentId || null,

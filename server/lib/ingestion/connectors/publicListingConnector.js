@@ -10,6 +10,20 @@ const normalize = (value) =>
     .replace(/\s+/g, " ")
     .trim();
 
+const BOILERPLATE_TITLE = /^(?:skip to (?:main )?content|print this page|color blindness|text size(?::.*)?|user login|about us|privacy policy|english|हिंदी|हिन्दी|description|other initiatives|telecom|broadcasting|legal|notifications?|master directions?|master circulars?|draft notifications?\/guidelines|draft directions(?: \(re-wise\))?|index to rbi circulars|standalone circulars|circulars withdrawn|guidelines|regulations|policies|bulletins|secretariat|heis|organization(?:al)? chart|rules? & regulations|individual regulation|consolidated regulation|draft regulation \/ discussion paper|principal regulation|\d+\.\s*(?:gazette|notification))$/iu;
+
+const isBoilerplateLink = (title, url, pageUrl) => {
+  if (BOILERPLATE_TITLE.test(normalize(title))) return true;
+  const target = new URL(url);
+  const page = new URL(pageUrl);
+  return (
+    Boolean(target.hash) &&
+    target.origin === page.origin &&
+    target.pathname === page.pathname &&
+    target.search === page.search
+  );
+};
+
 const MIME_TYPES = {
   pdf: "application/pdf",
   doc: "application/msword",
@@ -105,6 +119,7 @@ const parseListing = (html, pageUrl, config) => {
     );
     const testValue = `${title} ${context} ${url}`;
     if (!title || title.length < 4) return;
+    if (isBoilerplateLink(title, url, pageUrl)) return;
     if (config.linkPattern && !config.linkPattern.test(testValue)) return;
     if (config.excludePattern && config.excludePattern.test(testValue)) return;
     if (
@@ -130,7 +145,7 @@ const parseListing = (html, pageUrl, config) => {
         ? config.documentType(testValue)
         : config.documentType ||
           inferDocumentType({ title, category: config.collection });
-    records.push({
+    const record = {
       sourceName: config.name,
       sourceRecordId: sha256(url).slice(0, 40),
       sourceUrl: url,
@@ -166,7 +181,20 @@ const parseListing = (html, pageUrl, config) => {
         ...(config.metadata || {}),
       },
       ...extraFields,
-    });
+    };
+    if (
+      typeof config.recordFilter === "function" &&
+      !config.recordFilter(record, {
+        title,
+        context,
+        pageUrl,
+        url,
+        isFile,
+      })
+    ) {
+      return;
+    }
+    records.push(record);
   });
   return records;
 };
@@ -243,5 +271,6 @@ module.exports = {
   createPublicListingConnector,
   dateFromText,
   fileMetadata,
+  isBoilerplateLink,
   parseListing,
 };

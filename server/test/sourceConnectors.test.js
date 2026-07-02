@@ -255,6 +255,35 @@ test("public listing parser preserves file metadata and policy types", () => {
   assert.equal(record.publicationDate, "2026-06-30");
 });
 
+test("public listing parser rejects navigation and accessibility artifacts", () => {
+  const records = parseListing(
+    `<nav>
+       <a href="#main-content">Skip to main content</a>
+       <a href="#">Color Blindness</a>
+       <a href="/legal.html">Legal</a>
+     </nav>
+     <article>
+       <h3>Master Circular for Investment Advisers</h3>
+       <a href="/legal/master-circulars/jul-2026/investment-advisers.html">
+         Read more
+       </a>
+     </article>`,
+    "https://regulator.gov.in/legal.html",
+    {
+      name: "regulator-test",
+      collection: "legal",
+      itemSelector: "article, nav",
+      linkPattern: /legal|circular|main content|color blindness/i,
+      allowedHosts: ["regulator.gov.in"],
+      authority: "Public Regulator",
+      documentType: () => "circular",
+    },
+  );
+
+  assert.equal(records.length, 1);
+  assert.equal(records[0].title, "Master Circular for Investment Advisers");
+});
+
 test("RSS connector normalizes official public announcements", async () => {
   const connector = createRssConnector({
     name: "official-feed",

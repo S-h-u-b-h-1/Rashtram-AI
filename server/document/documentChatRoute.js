@@ -84,6 +84,12 @@ router.post("/process", async (req, res) => {
     await DocumentRepository.updateProcessingStatus(
       documentId,
       "ready",
+      null,
+      {
+        chunksCount: result.chunksStored || result.totalChunks || 0,
+        embeddingProvider: process.env.OPENAI_EMBEDDING_MODEL || "openai",
+        aiProvider: "openai",
+      },
     );
     console.log("[document-process] completed", {
       documentType,

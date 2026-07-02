@@ -36,6 +36,130 @@ const completeRun = async (runId, summary) => {
       JSON.stringify(errors),
     ],
   );
+  await query(
+    `INSERT INTO source_registry (
+       source_name, normalized_source_name, display_name, source_type,
+       connector_name, ingestion_frequency, status, enabled,
+       last_successful_run_at, last_failed_run_at, notes
+     )
+     VALUES (
+       $1, REPLACE($1, '-', '_'), INITCAP(REPLACE($1, '-', ' ')),
+       CASE
+         WHEN $1 LIKE 'regulator-%' THEN 'Official Regulator Source'
+         WHEN $1 LIKE 'state-%' THEN 'State Government Source'
+         WHEN $1 LIKE 'ministry%' THEN 'Ministry Source'
+         ELSE 'Official Government Source'
+       END,
+       $1, 'manual', $2, TRUE,
+       CASE WHEN $2 IN ('completed', 'completed_with_errors') THEN NOW() END,
+       CASE WHEN $2 = 'failed' THEN NOW() END,
+       'Automatically registered from an ingestion run.'
+     )
+     ON CONFLICT (source_name) DO UPDATE SET
+       status = EXCLUDED.status,
+       last_successful_run_at = COALESCE(
+         EXCLUDED.last_successful_run_at,
+         source_registry.last_successful_run_at
+       ),
+       last_failed_run_at = COALESCE(
+         EXCLUDED.last_failed_run_at,
+         source_registry.last_failed_run_at
+       ),
+       updated_at = NOW()`,
+    [summary.source, summary.status],
+  );
+  await query(
+    `INSERT INTO source_health (
+       source_name, status, reachable, parser_status, records_discovered,
+       records_stored, resources_discovered, last_checked_at,
+       last_successful_run_at, last_failed_run_at, consecutive_failures,
+       last_error, metadata_json, updated_at
+     )
+     VALUES (
+       $1,
+       CASE
+         WHEN $2 = 'completed' THEN 'fresh'
+         WHEN $2 = 'completed_with_errors' THEN 'degraded'
+         ELSE 'failed'
+       END,
+       $2 <> 'failed',
+       CASE WHEN $2 = 'failed' THEN 'failed' ELSE 'valid' END,
+       $3, $4, $5, NOW(),
+       CASE WHEN $2 IN ('completed', 'completed_with_errors') THEN NOW() END,
+       CASE WHEN $2 = 'failed' THEN NOW() END,
+       CASE WHEN $2 = 'failed' THEN 1 ELSE 0 END,
+       $6,
+       $7::jsonb,
+       NOW()
+     )
+     ON CONFLICT (source_name) DO UPDATE SET
+       status = EXCLUDED.status,
+       reachable = EXCLUDED.reachable,
+       parser_status = EXCLUDED.parser_status,
+       records_discovered = EXCLUDED.records_discovered,
+       records_stored = EXCLUDED.records_stored,
+       resources_discovered = EXCLUDED.resources_discovered,
+       last_checked_at = NOW(),
+       last_successful_run_at = COALESCE(
+         EXCLUDED.last_successful_run_at,
+         source_health.last_successful_run_at
+       ),
+       last_failed_run_at = COALESCE(
+         EXCLUDED.last_failed_run_at,
+         source_health.last_failed_run_at
+       ),
+       consecutive_failures = CASE
+         WHEN EXCLUDED.status = 'failed'
+           THEN source_health.consecutive_failures + 1
+         ELSE 0
+       END,
+       last_error = EXCLUDED.last_error,
+       metadata_json = source_health.metadata_json || EXCLUDED.metadata_json,
+       updated_at = NOW()`,
+    [
+      summary.source,
+      summary.status,
+      summary.discovered || 0,
+      summary.stored || 0,
+      summary.resources || 0,
+      errors[0]?.message ? String(errors[0].message).slice(0, 2_000) : null,
+      JSON.stringify({
+        runId,
+        collection: summary.collection || null,
+        counters: summary.counters || {},
+      }),
+    ],
+  );
+};
+
+const recordRunItem = async ({
+  runId,
+  sourceRecordId,
+  documentId = null,
+  status,
+  action = null,
+  errorMessage = null,
+  metadata = {},
+}) => {
+  if (!runId) return null;
+  const result = await query(
+    `INSERT INTO ingestion_run_items (
+       run_id, source_record_id, document_id, status, action,
+       error_message, metadata_json
+     )
+     VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb)
+     RETURNING id`,
+    [
+      runId,
+      sourceRecordId || null,
+      documentId,
+      status,
+      action,
+      errorMessage ? String(errorMessage).slice(0, 2_000) : null,
+      JSON.stringify(metadata || {}),
+    ],
+  );
+  return result.rows[0];
 };
 
 const findCandidates = async (record) => {
@@ -1148,6 +1272,7 @@ module.exports = {
   getUniversalStats,
   hasMeaningfulDocumentUpdate,
   persistRecord,
+  recordRunItem,
   recordIngestionRun,
   eventTypeForRecord,
   updateEventTypeForRecord,

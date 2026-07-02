@@ -4,10 +4,21 @@ Verified: 2 July 2026
 
 ## Outcome
 
-Production PostgreSQL contains 17,741 canonical documents across 18 populated
-source families; 17,334 have PDF URLs. This sprint added real PIB, NITI Aayog,
+Production PostgreSQL contains 17,742 canonical documents across 18 populated
+source families; 17,335 have PDF URLs. This sprint added real PIB, NITI Aayog,
 state-policy, India.gov discovery, and secondary-research coverage without bulk
 downloads, OCR, embeddings, or AI generation.
+
+The catalogue is now mirrored into the normalized database-v2 model with
+17,742 exact document-ID matches, 17,751 provenance rows, and 18,681 resources.
+Twenty-eight sources/connectors are registered for scheduled health and run
+tracking. Daily and weekly jobs collect metadata and links only; research
+processing remains on demand.
+
+A bounded scheduled PIB run on 2 July 2026 inserted one new public release and
+updated one existing record without duplication. Thirty-eight legacy regulator
+navigation/category artifacts were retained for audit but quarantined from
+public catalogue/search results.
 
 | Source | Source records | Canonical documents | PDFs |
 | --- | ---: | ---: | ---: |

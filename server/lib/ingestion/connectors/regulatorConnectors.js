@@ -21,6 +21,22 @@ const regulatorType = (value) => {
   return "other";
 };
 
+const regulatorRecordHasEvidence = (record, context) => {
+  if (context.isFile || record.publicationDate) return true;
+  const url = new URL(record.sourceUrl);
+  const page = new URL(context.pageUrl);
+  if (
+    url.origin === page.origin &&
+    url.pathname === page.pathname &&
+    url.search === page.search
+  ) {
+    return false;
+  }
+  return /(?:[?&](?:id|Id|ID)=\d+|\/(?:master-circulars?|circulars?|notifications?|orders?|consultation-papers?|recommendations?|regulations?|guidelines?)\/[^/?#]{5,})/i.test(
+    `${url.pathname}${url.search}`,
+  );
+};
+
 const configs = [
   {
     name: "regulator-rbi",
@@ -175,6 +191,7 @@ const regulatorConnectors = configs.map((config) =>
     jurisdiction: "India",
     documentType: regulatorType,
     category: "regulatory",
+    recordFilter: regulatorRecordHasEvidence,
     emptyMessage:
       "The regulator portal was reachable but exposed no matching crawlable records in this bounded sample.",
   }),
@@ -239,5 +256,6 @@ module.exports = {
   REGULATOR_SOURCE_CONFIGS: configs,
   ncltConnector,
   regulatorConnectors,
+  regulatorRecordHasEvidence,
   regulatorType,
 };

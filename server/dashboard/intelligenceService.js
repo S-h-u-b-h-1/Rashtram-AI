@@ -452,7 +452,17 @@ const getDashboardIntelligence = async (userId) => {
     query(`
       SELECT *
       FROM legislative_documents
+      WHERE COALESCE((
+        SELECT schema_document.visibility_status
+        FROM documents schema_document
+        WHERE schema_document.id = legislative_documents.id
+      ), 'public') = 'public'
       ORDER BY
+        COALESCE((
+          SELECT schema_document.quality_score
+          FROM documents schema_document
+          WHERE schema_document.id = legislative_documents.id
+        ), 0) DESC,
         first_seen_at DESC NULLS LAST,
         updated_at DESC,
         id DESC
@@ -468,17 +478,30 @@ const getDashboardIntelligence = async (userId) => {
           first_seen_at::DATE
         ) AS intelligence_date
       FROM legislative_documents
-      WHERE document_type IN (
+      WHERE (
+        document_type IN (
         'act', 'policy', 'strategy_paper', 'white_paper',
         'discussion_paper', 'recommendation', 'notification',
         'gazette', 'committee_report', 'consultation_paper',
         'cabinet_decision', 'press_release', 'report', 'rule',
         'regulation', 'circular', 'order', 'office_memorandum',
         'guideline', 'scheme'
-      )
+        )
          OR source_name LIKE 'regulator-%'
          OR canonical_source LIKE 'regulator-%'
-      ORDER BY intelligence_date DESC NULLS LAST, updated_at DESC, id DESC
+      )
+        AND COALESCE((
+          SELECT schema_document.visibility_status
+          FROM documents schema_document
+          WHERE schema_document.id = legislative_documents.id
+        ), 'public') = 'public'
+      ORDER BY
+        COALESCE((
+          SELECT schema_document.quality_score
+          FROM documents schema_document
+          WHERE schema_document.id = legislative_documents.id
+        ), 0) DESC,
+        intelligence_date DESC NULLS LAST, updated_at DESC, id DESC
       LIMIT 100
     `),
     query(`
@@ -568,7 +591,8 @@ const getDashboardIntelligence = async (userId) => {
       SELECT label, COUNT(*)::INTEGER AS documents
       FROM (
         SELECT COALESCE(NULLIF(ministry, ''), NULLIF(category, '')) AS label
-        FROM legislative_documents
+        FROM documents
+        WHERE visibility_status = 'public'
       ) categories
       WHERE label IS NOT NULL
       GROUP BY label
@@ -582,16 +606,18 @@ const getDashboardIntelligence = async (userId) => {
         MAX(
           COALESCE(publication_date::TIMESTAMPTZ, updated_at)
         ) AS latest_activity
-      FROM legislative_documents
+      FROM documents
       WHERE ministry IS NOT NULL AND ministry <> ''
+        AND visibility_status = 'public'
       GROUP BY ministry
       ORDER BY latest_activity DESC, documents DESC, ministry
       LIMIT 10
     `),
     query(`
       SELECT document_type, COUNT(*)::INTEGER AS documents
-      FROM legislative_documents
+      FROM documents
       WHERE first_seen_at >= NOW() - INTERVAL '30 days'
+        AND visibility_status = 'public'
       GROUP BY document_type
       ORDER BY documents DESC, document_type
     `),
@@ -655,19 +681,21 @@ const getDashboardIntelligence = async (userId) => {
         ) AS recent_events,
         (
           SELECT COUNT(*)::INTEGER
-          FROM legislative_documents
+          FROM documents
           WHERE first_seen_at >= NOW() - INTERVAL '24 hours'
+            AND visibility_status = 'public'
         ) AS recent_documents_24h,
         (
           SELECT COUNT(*)::INTEGER
-          FROM legislative_documents
+          FROM documents
           WHERE first_seen_at >= NOW() - INTERVAL '7 days'
+            AND visibility_status = 'public'
         ) AS recent_documents
     `),
     query(`
       SELECT
         COUNT(*)::INTEGER AS total_documents,
-        COUNT(pdf_url)::INTEGER AS documents_with_pdf,
+        COUNT(primary_pdf_resource_id)::INTEGER AS documents_with_pdf,
         COUNT(DISTINCT jurisdiction)::INTEGER AS jurisdictions,
         COUNT(*) FILTER (
           WHERE document_type = 'bill'
@@ -681,9 +709,7 @@ const getDashboardIntelligence = async (userId) => {
           WHERE document_type = 'act'
         )::INTEGER AS acts,
         COUNT(*) FILTER (
-          WHERE canonical_source IN ('egazette', 'state-gazette')
-             OR source_name IN ('egazette', 'state-gazette')
-             OR gazette_identifier IS NOT NULL
+          WHERE gazette_identifier IS NOT NULL
              OR document_type = 'gazette'
         )::INTEGER AS gazette_documents,
         COUNT(*) FILTER (
@@ -694,11 +720,13 @@ const getDashboardIntelligence = async (userId) => {
             'cabinet_decision'
           )
         )::INTEGER AS policy_documents
-      FROM legislative_documents
+      FROM documents
+      WHERE visibility_status = 'public'
     `),
     query(`
       SELECT document_type, COUNT(*)::INTEGER AS documents
-      FROM legislative_documents
+      FROM documents
+      WHERE visibility_status = 'public'
       GROUP BY document_type
       ORDER BY documents DESC, document_type
     `),
