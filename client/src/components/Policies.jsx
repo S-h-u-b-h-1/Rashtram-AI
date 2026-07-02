@@ -115,6 +115,9 @@ export default function Policies() {
           "category",
           "jurisdiction",
           "source",
+          "sourceType",
+          "state",
+          "language",
         ]}
         filterLabels={{ jurisdiction: "State / jurisdiction" }}
         dataNote="Only official public records available through connected sources are shown. Missing coverage is never estimated."

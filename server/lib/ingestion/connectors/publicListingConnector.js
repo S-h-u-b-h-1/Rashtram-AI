@@ -118,6 +118,13 @@ const parseListing = (html, pageUrl, config) => {
     seen.add(url);
     const file = fileMetadata(url, context);
     const isFile = file.mimeType !== "text/html";
+    const extraFields =
+      typeof config.extraFields === "function"
+        ? config.extraFields($, $(element), $(element).closest(
+            config.itemSelector ||
+              "tr, article, li, .views-row, .card, .item, .list-group-item",
+          ), context) || {}
+        : {};
     const documentType =
       typeof config.documentType === "function"
         ? config.documentType(testValue)
@@ -158,6 +165,7 @@ const parseListing = (html, pageUrl, config) => {
         discoveredOn: pageUrl,
         ...(config.metadata || {}),
       },
+      ...extraFields,
     });
   });
   return records;

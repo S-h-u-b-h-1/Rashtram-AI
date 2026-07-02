@@ -57,6 +57,9 @@ const findCandidates = async (record) => {
      FROM legislative_documents d
      LEFT JOIN document_sources s ON s.document_id = d.id
      WHERE (s.source_name = $1 AND s.source_record_id = $2)
+        OR d.canonical_url = $11
+        OR d.source_url = $11
+        OR ($12::TEXT IS NOT NULL AND d.pdf_url = $12)
         OR ($3::TEXT[] <> '{}'::TEXT[] AND (
              d.legal_identifier = ANY($3::TEXT[])
           OR d.gazette_identifier = ANY($3::TEXT[])
@@ -70,6 +73,20 @@ const findCandidates = async (record) => {
           AND ($7::INTEGER IS NULL OR d.year = $7)
           AND d.jurisdiction = $8
           AND d.document_type = $9
+        )
+        OR (
+          d.normalized_title = $6
+          AND d.document_type = $9
+          AND COALESCE(LOWER(d.authority), '') =
+              COALESCE(LOWER($13), '')
+          AND ($7::INTEGER IS NULL OR d.year = $7)
+        )
+        OR (
+          d.normalized_title = $6
+          AND d.document_type = $9
+          AND COALESCE(LOWER(d.ministry), '') =
+              COALESCE(LOWER($14), '')
+          AND ($15::DATE IS NULL OR d.publication_date = $15)
         )
         OR (
           $7::INTEGER IS NOT NULL
@@ -91,6 +108,11 @@ const findCandidates = async (record) => {
       record.jurisdiction,
       record.documentType,
       titleAnchor,
+      record.sourceUrl,
+      record.pdfUrl,
+      record.authority,
+      record.ministry,
+      record.publicationDate,
     ],
   );
   return result.rows;
@@ -129,7 +151,7 @@ const documentInsertValues = (record) => [
   record.sourceUrl,
   JSON.stringify(record.sourceMetadata || {}),
   record.sourceName,
-  record.detailUrl || record.sourceUrl,
+  record.sourceUrl,
   record.sourcePriority,
   record.contentHash,
   record.textFingerprint,
@@ -277,7 +299,7 @@ const updateCanonicalDocument = async (client, documentId, record) => {
       record.contentHash,
       record.textFingerprint,
       record.sourceName,
-      record.detailUrl || record.sourceUrl,
+      record.sourceUrl,
       JSON.stringify(record.metadata || {}),
       record.fileHash,
       record.mimeType,
@@ -591,7 +613,7 @@ const recordIntelligenceEvent = async (
       record.title,
       document.id,
       record.sourceName,
-      record.detailUrl || record.sourceUrl,
+      record.sourceUrl,
       record.documentType,
       record.jurisdiction,
       record.authority,

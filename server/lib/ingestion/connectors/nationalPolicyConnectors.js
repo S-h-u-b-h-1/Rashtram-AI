@@ -1,7 +1,6 @@
 const {
   createPublicListingConnector,
 } = require("./publicListingConnector");
-const { createRssConnector } = require("./rssConnector");
 
 const policyType = (value) => {
   const text = String(value || "").toLowerCase();
@@ -30,14 +29,15 @@ const policyType = (value) => {
 const nitiAayogConnector = createPublicListingConnector({
   name: "niti-aayog",
   collection: "reports-and-publications",
-  url: "https://www.niti.gov.in/publications/division-reports",
+  url: "https://niti.gov.in/publications/division-reports",
   pageUrl: (page) =>
-    `https://www.niti.gov.in/publications/division-reports?page=${page}`,
+    `https://niti.gov.in/publications/division-reports?page=${page}`,
   authority: "NITI Aayog",
   ministry: "Ministry of Planning",
   jurisdictionLevel: "union",
   jurisdiction: "India",
   itemSelector: "tr",
+  linkSelector: "table a[href]",
   linkPattern: /\.(pdf|docx?)(?:$|[?#])/i,
   title: ($, anchor, row) =>
     row.find("td").eq(1).text() ||
@@ -46,20 +46,15 @@ const nitiAayogConnector = createPublicListingConnector({
   documentType: policyType,
   category: "public-policy",
   allowedHosts: ["niti.gov.in"],
-});
-
-const pibConnector = createRssConnector({
-  name: "pib",
-  collection: "press-releases",
-  url: "https://pib.gov.in/RssMain.aspx?ModId=6&Lang=1&Regid=1",
-  authority: "Press Information Bureau",
-  ministry: "Ministry of Information and Broadcasting",
-  jurisdictionLevel: "union",
-  jurisdiction: "India",
-  documentType: (value) =>
-    /\b(cabinet|union cabinet|ccpa|ccs)\b/i.test(value)
-      ? "cabinet_decision"
-      : "press_release",
+  metadata: {
+    sourceClassification: "Official Government Source",
+    country: "India",
+  },
+  extraFields: ($, anchor, row) => ({
+    department: row.find("td").eq(3).text().trim() || null,
+    language: /[\u0900-\u097f]/u.test(row.text()) ? "Hindi" : "English",
+    sourceClassification: "Official Government Source",
+  }),
 });
 
 const myGovConnector = createPublicListingConnector({
@@ -138,6 +133,5 @@ module.exports = {
   ndapConnector,
   nitiAayogConnector,
   ogdConnector,
-  pibConnector,
   policyType,
 };

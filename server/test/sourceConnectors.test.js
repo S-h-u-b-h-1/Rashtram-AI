@@ -40,6 +40,10 @@ const {
   parseStateDirectory,
   STATE_AND_UTS,
 } = require("../lib/ingestion/connectors/stateDirectoryConnector");
+const {
+  parsePibListing,
+  pibType,
+} = require("../lib/ingestion/connectors/governanceSourceConnectors");
 
 test("IndiaCode parser discovers year buckets and canonical act rows", () => {
   const years = parseYearLinks(
@@ -381,6 +385,28 @@ test("every registered connector exposes the operational lifecycle contract", ()
     "state-legislature",
   );
   assert.equal(connectorByName("indiacode").name, "india-code");
+});
+
+test("PIB listing preserves release identity, ministry, date, and type", () => {
+  const records = parsePibListing(
+    `<ul class="num">
+      <h3>Cabinet Committee on Economic Affairs (CCEA)</h3>
+      <li>
+        <a href="/PressReleseDetail.aspx?PRID=123"
+           title="Cabinet approves a national logistics policy">
+          Cabinet approves a national logistics policy
+        </a>
+        <span>Posted on: 02 Jul 2026</span>
+      </li>
+    </ul>`,
+    "https://pib.gov.in/AllRelease.aspx",
+  );
+  assert.equal(records.length, 1);
+  assert.equal(records[0].sourceRecordId, "123");
+  assert.equal(records[0].ministry, "Cabinet Committee on Economic Affairs (CCEA)");
+  assert.equal(records[0].publicationDate, "2026-07-02");
+  assert.equal(records[0].documentType, "cabinet_decision");
+  assert.equal(pibType("New public advisory"), "guideline");
 });
 
 test("IndiaCode detail work respects the requested concurrency bound", async () => {

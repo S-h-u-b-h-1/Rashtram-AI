@@ -1,6 +1,6 @@
 # Data Trust and Privacy
 
-Last reviewed: 28 June 2026
+Last reviewed: 2 July 2026
 
 ## v1.0 account and chat additions
 
@@ -54,15 +54,21 @@ Public simplification does not remove evidence. PostgreSQL retains:
 Source priority affects canonical presentation but never deletes the attached
 source record.
 
+Secondary research remains classified and attributed and is never presented as
+an official government record. The Policy Edge connector reads only public
+paths explicitly allowed by its robots policy.
+
 ## Deduplication
 
 Matching remains layered:
 
 1. exact source identity;
-2. scoped legal identifiers;
-3. PDF/content SHA-256;
-4. normalized text fingerprint;
-5. same-year, same-type, same-jurisdiction title similarity.
+2. canonical source URL and PDF URL;
+3. scoped legal identifiers;
+4. PDF/content SHA-256;
+5. normalized text fingerprint;
+6. normalized title plus authority/ministry, year/date, and document type;
+7. same-year, same-type, same-jurisdiction title similarity.
 
 Scores at or above `0.92` can merge, `0.80–0.92` are queued for review, and
 lower scores create a separate canonical document. Bills and enacted Acts stay

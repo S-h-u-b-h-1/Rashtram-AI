@@ -38,7 +38,7 @@ class PoliteFetcher {
     this.respectRobots = options.respectRobots !== false;
     this.userAgent =
       options.userAgent ||
-      "RashtramAI-Catalog/1.0 (+https://rashtram-ai.vercel.app)";
+      "RashtramAI-Catalog/1.0";
     this.client =
       options.client ||
       axios.create({

@@ -1,7 +1,6 @@
 # Source Connector Status
 
-Status reviewed: 30 June 2026 after health probes and bounded production runs
-35–47.
+Status reviewed: 2 July 2026 after bounded production runs 49–58.
 
 This is an operational snapshot. `Connected` means a live, read-only sample
 returned valid normalized records or directory entities. `Populated` means
@@ -29,8 +28,12 @@ instead of bypassing source controls or inventing coverage.
 | `state-directory` | Connected | All 28 states and 8 Union Territories stored as directory entities |
 | `mygov` | Connected | 2 public consultation records stored |
 | `ndap` | Reachable / no server-rendered records | 0 records; no private hydration endpoint used |
-| `niti-aayog` | Blocked by HTTP 403 | 0 records |
-| `pib` | Blocked by HTTP 403 | 0 records |
+| `niti-aayog` | Populated | 20 current official reports/PDFs stored |
+| `pib` | Populated | 15 current releases stored; release-specific PDF discovery enabled |
+| `india-gov` | Connected directory | 10 stable document categories stored; result rows are client-rendered |
+| `state-policy` | Populated | 15 official Haryana policy/regulatory PDFs stored |
+| `ministry-environment` | Populated | 36 official ministry PDF records stored |
+| `policy-edge` | Populated secondary source | 12 attributed open-access articles stored from robots-allowed paths |
 | `ogd-india` | Blocked by HTTP 403 | 0 records |
 
 ## Regulators and tribunals
@@ -60,15 +63,17 @@ CAPTCHA, and 403 responses are not worked around.
 
 ## Verified production coverage
 
-After runs 35–47:
+After runs 49–58:
 
-- 17,643 canonical documents;
-- 17,262 canonical documents with PDF URLs;
-- 13 canonical source families;
+- 17,741 canonical documents;
+- 17,334 canonical documents with PDF URLs;
+- 18 populated canonical source families;
 - 53 ministries, 48 departments, and 36 state/UT directory entries;
-- 82 new MyGov/regulator source records;
-- 16 consultation papers and 2 guidelines in the policy catalogue;
+- 20 NITI records, 15 PIB releases, 15 Haryana policy PDFs, 36 ministry
+  documents, and 12 secondary research records;
+- 10 India.gov document-category directory entries;
 - zero exact content-hash duplicate groups;
+- zero duplicate source identities or repeated URLs in the expanded sample;
 - zero bulk PDF downloads, OCR jobs, vector writes, or AI calls during
   collection.
 

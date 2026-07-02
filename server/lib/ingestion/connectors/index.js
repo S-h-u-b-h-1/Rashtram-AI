@@ -9,8 +9,13 @@ const {
   ndapConnector,
   nitiAayogConnector,
   ogdConnector,
-  pibConnector,
 } = require("./nationalPolicyConnectors");
+const {
+  indiaGovConnector,
+  pibConnector,
+  policyEdgeConnector,
+  statePolicyConnector,
+} = require("./governanceSourceConnectors");
 const { prsConnector } = require("./prsConnector");
 const { rajyaSabhaConnector } = require("./rajyaSabhaConnector");
 const { stateGazetteConnector } = require("./stateGazetteConnector");
@@ -33,8 +38,11 @@ const CONNECTORS = [
   rajyaSabhaConnector,
   stateLegislatureConnector,
   stateGazetteConnector,
+  statePolicyConnector,
   ministryConnector,
   ministryEnvironmentConnector,
+  indiaGovConnector,
+  policyEdgeConnector,
   stateDirectoryConnector,
   nitiAayogConnector,
   pibConnector,
@@ -51,6 +59,7 @@ const CONNECTOR_ALIASES = {
   "state-gazettes": "state-gazette",
   indiacode: "india-code",
   prs: "prs-india",
+  "india.gov": "india-gov",
 };
 
 const SOURCE_GROUPS = {
@@ -62,7 +71,12 @@ const SOURCE_GROUPS = {
     "ndap",
     "ogd-india",
     "ministry-environment",
+    "india-gov",
+    "state-policy",
   ],
+  ministries: ["ministry", "ministry-environment"],
+  "state-policies": ["state-policy"],
+  "think-tanks": ["policy-edge"],
   regulators: regulatorConnectors.map((connector) => connector.name),
   national: [
     "prs-india",
@@ -77,6 +91,9 @@ const SOURCE_GROUPS = {
     "ndap",
     "ogd-india",
     "ministry-environment",
+    "india-gov",
+    "state-policy",
+    "policy-edge",
   ],
 };
 

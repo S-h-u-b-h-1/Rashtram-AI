@@ -79,6 +79,10 @@ const mapDocument = (row) => {
     gazetteNumber: row.gazette_identifier || row.gazette_id,
     category: row.category,
     metadata,
+    sourceType: metadata.sourceClassification || null,
+    language: metadata.language || null,
+    state: metadata.state || null,
+    country: metadata.country || "India",
     summary: row.summary || null,
     recommendationScore:
       row.recommendation_score == null
@@ -159,6 +163,21 @@ const buildFilters = (options = {}) => {
         options.source,
       )}`,
     );
+  }
+  const metadataFilters = [
+    ["sourceType", "sourceClassification"],
+    ["language", "language"],
+    ["state", "state"],
+  ];
+  for (const [option, key] of metadataFilters) {
+    if (options[option] && options[option] !== "All") {
+      conditions.push(
+        `metadata_json ->> '${key}' = ${addParameter(
+          parameters,
+          options[option],
+        )}`,
+      );
+    }
   }
   if (options.year && options.year !== "All") {
     conditions.push(
@@ -732,7 +751,28 @@ const getFilterOptions = async (options = {}) => {
            ORDER BY COALESCE(canonical_source, source_name)
          ),
          NULL
-       ) AS sources
+       ) AS sources,
+       ARRAY_REMOVE(
+         ARRAY_AGG(
+           DISTINCT metadata_json ->> 'sourceClassification'
+           ORDER BY metadata_json ->> 'sourceClassification'
+         ),
+         NULL
+       ) AS source_types,
+       ARRAY_REMOVE(
+         ARRAY_AGG(
+           DISTINCT metadata_json ->> 'language'
+           ORDER BY metadata_json ->> 'language'
+         ),
+         NULL
+       ) AS languages,
+       ARRAY_REMOVE(
+         ARRAY_AGG(
+           DISTINCT metadata_json ->> 'state'
+           ORDER BY metadata_json ->> 'state'
+         ),
+         NULL
+       ) AS states
      FROM legislative_documents
      WHERE ${filters.where}`,
     filters.parameters,

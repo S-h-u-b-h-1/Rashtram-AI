@@ -80,6 +80,21 @@ const SOURCE_REGISTRY = [
     purpose: "Public consultations, draft policies and citizen discussions",
   },
   {
+    key: "india-gov",
+    label: "National Portal of India",
+    purpose: "Official government document and scheme directory discovery",
+  },
+  {
+    key: "state-policy",
+    label: "State Policy Portals",
+    purpose: "Official state policies, guidelines, orders and schemes",
+  },
+  {
+    key: "policy-edge",
+    label: "The Policy Edge",
+    purpose: "Attributed secondary policy research and public explainers",
+  },
+  {
     key: "ndap",
     label: "NDAP",
     purpose: "Official public-data catalogue discovery",
@@ -796,7 +811,12 @@ const getDashboardIntelligence = async (userId) => {
     latestMinistryUpdates: latestBy(
       (document) =>
         Boolean(document.ministry) &&
-        ["pib", "niti-aayog", "ministry"].includes(document.sourceName),
+        [
+          "pib",
+          "niti-aayog",
+          "ministry",
+          "ministry-environment",
+        ].includes(document.sourceName),
     ),
     latestStateUpdates: latestBy(
       (document) => document.jurisdictionLevel === "state",

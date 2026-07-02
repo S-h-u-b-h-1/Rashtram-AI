@@ -1,6 +1,6 @@
 # Rashtram AI Architecture v2
 
-Last reviewed: 30 June 2026
+Last reviewed: 2 July 2026
 
 ## Architectural objective
 
@@ -52,9 +52,15 @@ specialized fields. Type-specific source metadata stays inside `metadata`.
 `file_hash`, `mime_type`, and `file_size_bytes` retain discovered asset
 identity without requiring a bulk file download.
 
+Every newly normalized record also carries `sourceClassification`, `language`,
+`country`, and, for state records, `state` inside `metadata_json`. These are
+returned by the universal API as parameterized filter dimensions.
+
 `source_directory_entries` separately stores ministries, departments, states,
 and Union Territories. Directory entities are not fabricated as documents;
 they become authorities and discovery targets for later document collection.
+India.gov document categories are stored here because its current result list
+is client-rendered and exposes no stable document rows in public HTML.
 
 ## Backend layers
 
@@ -135,6 +141,9 @@ Current views:
 - Policies: policy, scheme, guideline, consultation, strategy, report,
   recommendation, resolution, and Cabinet-decision scope
 - All documents: no type restriction
+
+The policy view additionally exposes source type, ministry, state, year,
+document type, language, category, source, and PDF availability filters.
 
 Every result opens `/app/document/:id`. `UniversalDocumentRoute` resolves the
 document type from the API and renders the existing shared

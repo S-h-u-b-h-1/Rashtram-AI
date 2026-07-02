@@ -11,6 +11,9 @@ const OPTIONS = [
   ["category", "Category", "categories"],
   ["jurisdiction", "Jurisdiction", "jurisdictions"],
   ["source", "Source", "sources"],
+  ["sourceType", "Source type", "source_types"],
+  ["language", "Language", "languages"],
+  ["state", "State", "states"],
 ];
 
 const label = (value) =>

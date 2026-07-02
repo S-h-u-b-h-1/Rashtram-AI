@@ -29,6 +29,40 @@ const countPdfUrls = (record) =>
     ].filter(Boolean),
   ).size;
 
+const dateInRange = (record, options) => {
+  const value =
+    record.publicationDate ||
+    record.enactedDate ||
+    record.introducedDate ||
+    record.effectiveDate;
+  if (!value) return !options.from && !options.to;
+  const date = String(value).slice(0, 10);
+  return (!options.from || date >= options.from) &&
+    (!options.to || date <= options.to);
+};
+
+const matchesRequestedScope = (record, options) => {
+  const equals = (left, right) =>
+    String(left || "").toLowerCase() === String(right || "").toLowerCase();
+  if (!dateInRange(record, options)) return false;
+  if (
+    options.state &&
+    !equals(record.state || record.jurisdiction, options.state)
+  ) return false;
+  if (options.ministry && !equals(record.ministry, options.ministry)) return false;
+  if (
+    options.regulator &&
+    ![
+      record.sourceName,
+      record.authority,
+    ].some((value) => String(value || "").toLowerCase().includes(
+      String(options.regulator).toLowerCase(),
+    ))
+  ) return false;
+  if (options.category && !equals(record.category, options.category)) return false;
+  return true;
+};
+
 const runIngestion = async (connector, options = {}) => {
   if (!connector?.name || typeof connector.collect !== "function") {
     throw new Error("A connector with name and collect() is required");
@@ -82,7 +116,9 @@ const runIngestion = async (connector, options = {}) => {
         retries: options.retries,
       });
     const collection = await connector.collect(options, { fetcher });
-    const records = collection.records || [];
+    const records = (collection.records || []).filter((record) =>
+      matchesRequestedScope(record, options),
+    );
     const directoryEntries = collection.directoryEntries || [];
     summary.discovered = records.length;
     summary.counters.discovered = records.length;
@@ -190,5 +226,7 @@ const runIngestion = async (connector, options = {}) => {
 
 module.exports = {
   countPdfUrls,
+  dateInRange,
+  matchesRequestedScope,
   runIngestion,
 };
