@@ -24,6 +24,8 @@ import { ChatHistory } from "./ChatHistory";
 import { ChatInput } from "./ChatInput";
 import { ChatSidebar } from "./ChatSidebar";
 import { SuggestedQuestions } from "./SuggestedQuestions";
+import { useSmoothMessageStream } from "@/hooks/useSmoothMessageStream";
+import { usePinnedChatScroll } from "@/hooks/usePinnedChatScroll";
 
 const QUESTIONS = {
   bill: [
@@ -74,7 +76,14 @@ export function DocumentChatLayout({
   const [isPinned, setIsPinned] = useState(false);
   const [error, setError] = useState("");
   const [responseLanguage, setResponseLanguage] = useState("Auto");
-  const messagesEndRef = useRef(null);
+  const abortControllerRef = useRef(null);
+  const smoothStream = useSmoothMessageStream(setMessages);
+  const {
+    handleScroll,
+    messagesEndRef,
+    pinToLatest,
+    scrollContainerRef,
+  } = usePinnedChatScroll(messages);
 
   const prepareDocument = useCallback(async (canonicalDocument) => {
     if (!canonicalDocument?.pdfUrl) return "";
@@ -193,9 +202,12 @@ export function DocumentChatLayout({
     };
   }, [documentId, documentType, initialDocument, prepareDocument]);
 
-  useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages]);
+  useEffect(
+    () => () => {
+      abortControllerRef.current?.abort();
+    },
+    [],
+  );
 
   const submitQuestion = async (question) => {
     const text = String(question || input).trim();
@@ -206,8 +218,13 @@ export function DocumentChatLayout({
       timestamp: timeLabel(),
     };
     const streamId = `stream-${Date.now()}`;
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
+    smoothStream.start(streamId);
+    pinToLatest();
     setInput("");
     setSending(true);
+    setError("");
     setMessages((current) => [
       ...current,
       userMessage,
@@ -227,64 +244,59 @@ export function DocumentChatLayout({
       page_path: `/app/document/${documentId}`,
       metadata_json: { documentType },
     });
+    const userSavePromise = addDocumentChatMessage(
+      documentType,
+      documentId,
+      userMessage,
+    ).then(
+      () => null,
+      (saveError) => saveError,
+    );
     try {
-      await addDocumentChatMessage(
+      const result = await sendDocumentChatMessage({
+        message: text,
         documentType,
         documentId,
-        userMessage,
-      );
-      await sendDocumentChatMessage(
-        text,
-        documentType,
-        documentId,
-        (chunk) =>
-          setMessages((current) =>
-            current.map((message) =>
-              message.id === streamId
-                ? { ...message, text: message.text + chunk }
-                : message,
-            ),
-          ),
-        async (result) => {
-          const assistantMessage = {
-            id: streamId,
-            text: result.response,
-            sender: "assistant",
-            timestamp: timeLabel(),
-            sources: result.sources,
-            isStreaming: false,
-          };
-          setMessages((current) =>
-            current.map((message) =>
-              message.id === streamId ? assistantMessage : message,
-            ),
-          );
-          await addDocumentChatMessage(
-            documentType,
-            documentId,
-            assistantMessage,
-          );
-          setSending(false);
-        },
-        (chatError) => {
-          setMessages((current) =>
-            current.map((message) =>
-              message.id === streamId
-                ? {
-                    ...message,
-                    text: `I couldn't complete that answer: ${chatError.message}`,
-                    isStreaming: false,
-                    isError: true,
-                  }
-                : message,
-            ),
-          );
-          setSending(false);
-        },
         responseLanguage,
-      );
+        signal: controller.signal,
+        onChunk: (chunk) => smoothStream.append(streamId, chunk),
+      });
+      smoothStream.complete(streamId, result);
+      const assistantMessage = {
+        id: streamId,
+        text: result.response,
+        sender: "assistant",
+        timestamp: timeLabel(),
+        sources: result.sources,
+        metadata: result.metadata,
+        isStreaming: false,
+      };
+      const userSaveError = await userSavePromise;
+      const assistantSaveError = await addDocumentChatMessage(
+          documentType,
+          documentId,
+          assistantMessage,
+        ).then(
+          () => null,
+          (saveError) => saveError,
+        );
+      if (userSaveError || assistantSaveError) {
+        setError(
+          "The response completed, but chat history could not be saved. Please retry before leaving this page.",
+        );
+      }
     } catch (requestError) {
-      setError(requestError.message);
+      const stopped =
+        controller.signal.aborted || requestError.name === "AbortError";
+      smoothStream.fail(streamId, { stopped });
+      if (!stopped) {
+        setError("Response generation was interrupted. Please try again.");
+      }
+      await userSavePromise;
+    } finally {
+      if (abortControllerRef.current === controller) {
+        abortControllerRef.current = null;
+      }
       setSending(false);
     }
   };
@@ -297,8 +309,13 @@ export function DocumentChatLayout({
   };
 
   const clear = async () => {
+    abortControllerRef.current?.abort();
     await clearDocumentChat(documentType, documentId);
     setMessages([]);
+  };
+
+  const stopGeneration = () => {
+    abortControllerRef.current?.abort();
   };
 
   const addNote = async (body) => {
@@ -433,7 +450,11 @@ export function DocumentChatLayout({
       </details>
       <div className="grid min-h-0 flex-1 xl:grid-cols-[minmax(0,1fr)_380px]">
         <main id="research-chat" className="flex min-h-0 flex-col">
-          <div className="paper-grid app-scrollbar flex-1 overflow-y-auto p-4 sm:p-6">
+          <div
+            ref={scrollContainerRef}
+            onScroll={handleScroll}
+            className="paper-grid app-scrollbar flex-1 overflow-y-auto p-4 sm:p-6"
+          >
             <ChatHistory
               messages={messages}
               messagesEndRef={messagesEndRef}
@@ -451,6 +472,7 @@ export function DocumentChatLayout({
             sending={sending}
             disabled={!researchReady}
             onSend={submitQuestion}
+            onStop={stopGeneration}
             onRegenerate={regenerate}
             onClear={clear}
             responseLanguage={responseLanguage}

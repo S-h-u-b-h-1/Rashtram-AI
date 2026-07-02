@@ -1,4 +1,6 @@
 const express = require("express");
+const crypto = require("node:crypto");
+const { query } = require("../db");
 const DocumentService = require("./DocumentService");
 const DocumentRepository = require("./DocumentRepository");
 const {
@@ -6,11 +8,30 @@ const {
 } = require("./documentResearchService");
 const { generateResponse } = require("../lib/vectordb");
 const {
+  completeSSE,
+  errorSSE,
+  sendSSE,
+  startSSE,
+} = require("../lib/sse");
+const {
   createComparison,
   getComparison,
 } = require("./documentComparisonService");
 
 const router = express.Router();
+
+const normalizeChatIds = (value) => [
+  ...new Set(
+    (Array.isArray(value) ? value : String(value || "").split(","))
+      .map((id) => String(id || "").trim())
+      .filter(Boolean),
+  ),
+].slice(0, 5);
+
+const selectionKey = (ids) =>
+  [...ids].sort((left, right) =>
+    left.localeCompare(right, undefined, { numeric: true }),
+  ).join(":");
 
 const sendError = (res, error, context) => {
   const status = error.status || 500;
@@ -48,6 +69,45 @@ router.get("/filters", async (req, res) => {
   }
 });
 
+router.get("/chat/history", async (req, res) => {
+  try {
+    const ids = normalizeChatIds(req.query.ids);
+    if (ids.length < 2) return res.json({ messages: [] });
+    const result = await query(
+      `SELECT messages, comparison_id, updated_at
+       FROM multi_document_chats
+       WHERE user_id = $1 AND selection_key = $2
+       LIMIT 1`,
+      [req.user.id, selectionKey(ids)],
+    );
+    const row = result.rows[0];
+    return res.json({
+      messages: row?.messages || [],
+      comparisonId: row?.comparison_id ? String(row.comparison_id) : null,
+      updatedAt: row?.updated_at || null,
+    });
+  } catch (error) {
+    return sendError(res, error, "Cross-document history lookup failed");
+  }
+});
+
+router.delete("/chat/history", async (req, res) => {
+  try {
+    const ids = normalizeChatIds(req.query.ids);
+    if (ids.length < 2) {
+      return res.status(400).json({ error: "At least two IDs are required." });
+    }
+    await query(
+      `DELETE FROM multi_document_chats
+       WHERE user_id = $1 AND selection_key = $2`,
+      [req.user.id, selectionKey(ids)],
+    );
+    return res.json({ success: true });
+  } catch (error) {
+    return sendError(res, error, "Cross-document history clear failed");
+  }
+});
+
 router.post("/compare", async (req, res) => {
   try {
     const comparison = await createComparison(req.user.id, req.body);
@@ -74,13 +134,7 @@ router.get("/compare/:comparisonId", async (req, res) => {
 
 router.post("/chat", async (req, res) => {
   try {
-    const ids = [
-      ...new Set(
-        (Array.isArray(req.body.documentIds) ? req.body.documentIds : [])
-          .map(String)
-          .filter(Boolean),
-      ),
-    ].slice(0, 5);
+    const ids = normalizeChatIds(req.body.documentIds);
     const message = String(req.body.message || "").trim();
     if (!ids.length || !message) {
       return res.status(400).json({
@@ -134,43 +188,95 @@ router.post("/chat", async (req, res) => {
       throw error;
     }
 
-    res.setHeader("Content-Type", "text/event-stream");
-    res.setHeader("Cache-Control", "no-cache, no-transform");
-    res.setHeader("Connection", "keep-alive");
-    res.write(
-      `data: ${JSON.stringify({
-        type: "meta",
-        documents: documents.map(({ id, type, title }) => ({
-          id,
-          type,
-          title,
-        })),
-        sources: sources.map((source) => ({
-          ...source,
-          content: source.content.slice(0, 360),
-        })),
-      })}\n\n`,
-    );
+    startSSE(res);
+    sendSSE(res, {
+      type: "meta",
+      documents: documents.map(({ id, type, title }) => ({
+        id,
+        type,
+        title,
+      })),
+      sources: sources.map((source) => ({
+        ...source,
+        content: source.content.slice(0, 360),
+      })),
+      metadata: {
+        grounded: true,
+        documentCount: documents.length,
+      },
+    });
     const responseLanguage = req.body.responseLanguage || "Auto";
     const stream = await generateResponse(message, context, {
       responseLanguage,
     });
+    let fullResponse = "";
     for await (const chunk of stream) {
+      if (res.destroyed || res.writableEnded) break;
       const content =
         typeof chunk.text === "function" ? chunk.text() : chunk.text || "";
       if (content) {
-        res.write(`data: ${JSON.stringify({ type: "content", content })}\n\n`);
+        fullResponse += content;
+        sendSSE(res, { type: "content", content });
       }
     }
-    res.write("data: [DONE]\n\n");
-    return res.end();
+    if (res.destroyed || res.writableEnded) return undefined;
+    const now = new Date().toISOString();
+    const persistedMessages = [
+      {
+        _id: crypto.randomUUID(),
+        sender: "user",
+        text: message,
+        timestamp: now,
+        sources: [],
+      },
+      {
+        _id: crypto.randomUUID(),
+        sender: "assistant",
+        text: fullResponse,
+        timestamp: now,
+        sources,
+        metadata: {
+          grounded: true,
+          documentIds: ids,
+          responseLanguage,
+        },
+      },
+    ];
+    await query(
+      `INSERT INTO multi_document_chats (
+         user_id, selection_key, document_ids_json, comparison_id, messages
+       )
+       VALUES (
+         $1, $2, $3::jsonb,
+         (
+           SELECT id FROM document_comparisons
+           WHERE id::TEXT = $4 AND user_id = $1
+         ),
+         $5::jsonb
+       )
+       ON CONFLICT (user_id, selection_key)
+       DO UPDATE SET
+         messages = multi_document_chats.messages || EXCLUDED.messages,
+         comparison_id = COALESCE(
+           EXCLUDED.comparison_id,
+           multi_document_chats.comparison_id
+         ),
+         updated_at = NOW()`,
+      [
+        req.user.id,
+        selectionKey(ids),
+        JSON.stringify(ids),
+        String(req.body.comparisonId || ""),
+        JSON.stringify(persistedMessages),
+      ],
+    );
+    completeSSE(res, { persisted: true });
+    return undefined;
   } catch (error) {
     console.error("Cross-document chat failed:", error);
     if (!res.headersSent) return sendError(res, error, "Cross-document chat failed");
-    res.write(
-      `data: ${JSON.stringify({ type: "error", error: error.message })}\n\n`,
-    );
-    return res.end();
+    errorSSE(res, error);
+    return undefined;
   }
 });
 

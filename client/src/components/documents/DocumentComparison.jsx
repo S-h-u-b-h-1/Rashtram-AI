@@ -150,6 +150,9 @@ export function DocumentComparison() {
   const chatIds = (result?.documents || selectedDocuments)
     .map((document) => document.id)
     .join(",");
+  const chatHref = `/app/multi-document-chat?ids=${chatIds}${
+    comparison?.id ? `&comparison=${comparison.id}` : ""
+  }`;
 
   if (!comparison && ids.length < 2 && !comparisonId) {
     return (
@@ -225,7 +228,7 @@ export function DocumentComparison() {
             )}
             {chatIds && (
               <Link
-                href={`/app/multi-document-chat?ids=${chatIds}`}
+                href={chatHref}
                 className="inline-flex items-center gap-2 rounded-xl bg-white/10 px-4 py-2 text-xs font-semibold"
               >
                 <MessageSquareText className="h-4 w-4" />
@@ -336,7 +339,7 @@ export function DocumentComparison() {
                 {result.suggestedQuestions.map((question) => (
                   <Link
                     key={question}
-                    href={`/app/multi-document-chat?ids=${chatIds}`}
+                    href={chatHref}
                     className="inline-flex items-center gap-2 rounded-xl bg-[#eee0dc] px-3 py-2 text-xs text-[#514d46]"
                   >
                     <FileText className="h-3.5 w-3.5 text-[#8f1d2c]" />

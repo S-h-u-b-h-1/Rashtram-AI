@@ -1,6 +1,6 @@
 "use client";
 
-import { Loader2, RotateCcw, Send, Trash2 } from "lucide-react";
+import { Loader2, RotateCcw, Send, Square, Trash2 } from "lucide-react";
 
 export function ChatInput({
   input,
@@ -8,6 +8,7 @@ export function ChatInput({
   sending,
   disabled,
   onSend,
+  onStop,
   onRegenerate,
   onClear,
   responseLanguage,
@@ -26,7 +27,7 @@ export function ChatInput({
                 onSend();
               }
             }}
-            disabled={disabled || sending}
+            disabled={disabled}
             placeholder={
               disabled
                 ? "Grounded chat becomes available after the PDF is indexed"
@@ -37,13 +38,16 @@ export function ChatInput({
           />
           <button
             type="button"
-            disabled={!input.trim() || disabled || sending}
-            onClick={() => onSend()}
+            disabled={disabled || (!sending && !input.trim())}
+            onClick={() => (sending ? onStop?.() : onSend())}
             className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-[#8f1d2c] text-white disabled:opacity-35"
-            aria-label="Send research question"
+            aria-label={sending ? "Stop generating" : "Send research question"}
           >
             {sending ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
+              <span className="relative grid place-items-center">
+                <Loader2 className="h-5 w-5 animate-spin opacity-55" />
+                <Square className="absolute h-2.5 w-2.5 fill-current" />
+              </span>
             ) : (
               <Send className="h-4 w-4" />
             )}

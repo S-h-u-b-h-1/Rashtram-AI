@@ -1,12 +1,12 @@
 "use client";
 
 import { Check, Copy, Loader2, ThumbsDown, ThumbsUp } from "lucide-react";
-import { useState } from "react";
+import { memo, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { CitationCard } from "./CitationCard";
 
-export function ChatMessage({ message, onFeedback }) {
+function ChatMessageComponent({ message, onFeedback }) {
   const [copied, setCopied] = useState(false);
   const isUser = message.sender === "user";
 
@@ -24,14 +24,32 @@ export function ChatMessage({ message, onFeedback }) {
           : "max-w-[94%] rounded-2xl rounded-bl-md border border-[#8f1d2c]/8 bg-[#f6f2eb] px-5 py-4 text-[#29312d] shadow-sm sm:max-w-[86%]"
       }
     >
-      <div className={`chat-markdown ${isUser ? "user-message" : ""}`}>
-        <ReactMarkdown remarkPlugins={[remarkGfm]}>
-          {message.text ||
-            (message.isStreaming ? "Preparing grounded response…" : "")}
-        </ReactMarkdown>
+      <div
+        className={`chat-markdown min-h-6 ${isUser ? "user-message" : ""}`}
+        aria-live={message.isStreaming ? "polite" : undefined}
+        aria-busy={message.isStreaming || undefined}
+      >
+        {message.isStreaming && !message.text ? (
+          <div className="flex items-center gap-2 text-sm text-[#706a61]">
+            <Loader2 className="h-4 w-4 animate-spin text-[#a85a52]" />
+            <span>Preparing grounded response…</span>
+            <span className="inline-flex gap-1" aria-hidden="true">
+              <span className="h-1 w-1 animate-pulse rounded-full bg-[#a85a52]" />
+              <span className="h-1 w-1 animate-pulse rounded-full bg-[#a85a52] [animation-delay:120ms]" />
+              <span className="h-1 w-1 animate-pulse rounded-full bg-[#a85a52] [animation-delay:240ms]" />
+            </span>
+          </div>
+        ) : (
+          <ReactMarkdown remarkPlugins={[remarkGfm]}>
+            {message.text || ""}
+          </ReactMarkdown>
+        )}
       </div>
-      {message.isStreaming && (
-        <Loader2 className="mt-3 h-4 w-4 animate-spin text-[#a85a52]" />
+      {message.isStreaming && message.text && (
+        <span
+          className="mt-2 inline-block h-4 w-1.5 animate-pulse rounded-sm bg-[#a85a52]"
+          aria-hidden="true"
+        />
       )}
       {!isUser && message.sources?.length > 0 && (
         <details className="mt-4 border-t border-[#8f1d2c]/8 pt-3">
@@ -95,3 +113,8 @@ export function ChatMessage({ message, onFeedback }) {
     </article>
   );
 }
+
+export const ChatMessage = memo(
+  ChatMessageComponent,
+  (previous, next) => previous.message === next.message,
+);

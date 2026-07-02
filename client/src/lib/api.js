@@ -1,5 +1,7 @@
 
 
+import { consumeSSEStream } from "@/lib/chat-stream";
+
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5001/api';
 
 
@@ -147,60 +149,72 @@ export const fetchDocumentGraph = async (documentId) => {
 };
 
 export const sendCrossDocumentChat = async (
-  message,
-  documentIds,
-  onChunk,
-  onComplete,
-  onError,
-  responseLanguage = "English",
+  {
+    message,
+    documentIds,
+    onChunk,
+    responseLanguage = "English",
+    comparisonId = null,
+    signal,
+  },
 ) => {
   const token = getAuthToken();
   if (!token) {
-    onError(new Error("No authentication token found. Please login."));
-    return;
+    throw new Error("No authentication token found. Please login.");
   }
-  try {
-    const response = await fetch(`${API_BASE_URL}/documents/chat`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "auth-token": token,
-      },
-      body: JSON.stringify({ message, documentIds, responseLanguage }),
-    });
-    if (!response.ok) {
-      const payload = await response.json().catch(() => ({}));
-      throw new Error(payload.error || `Request failed with ${response.status}`);
-    }
-    const reader = response.body.getReader();
-    const decoder = new TextDecoder();
-    let buffer = "";
-    let fullResponse = "";
-    let sources = [];
-    while (true) {
-      const { value, done } = await reader.read();
-      if (done) break;
-      buffer += decoder.decode(value, { stream: true });
-      const events = buffer.split("\n\n");
-      buffer = events.pop() || "";
-      for (const event of events) {
-        if (!event.startsWith("data: ")) continue;
-        const raw = event.slice(6);
-        if (raw === "[DONE]") continue;
-        const parsed = JSON.parse(raw);
-        if (parsed.type === "meta") sources = parsed.sources || [];
-        if (parsed.type === "content") {
-          fullResponse += parsed.content;
-          onChunk(parsed.content);
-        }
-        if (parsed.type === "error") throw new Error(parsed.error);
+  const response = await fetch(`${API_BASE_URL}/documents/chat`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Accept: "text/event-stream",
+      "auth-token": token,
+    },
+    body: JSON.stringify({
+      message,
+      documentIds,
+      responseLanguage,
+      comparisonId,
+    }),
+    signal,
+  });
+  if (!response.ok) {
+    const payload = await response.json().catch(() => ({}));
+    throw new Error(payload.error || `Request failed with ${response.status}`);
+  }
+  let fullResponse = "";
+  let sources = [];
+  let metadata = {};
+  await consumeSSEStream(response, {
+    signal,
+    onEvent: (event) => {
+      if (event.type === "meta") {
+        sources = event.sources || [];
+        metadata = event.metadata || {};
+      } else if (event.type === "content") {
+        fullResponse += event.content || "";
+        onChunk?.(event.content || "");
+      } else if (event.type === "error") {
+        throw new Error(event.error || "Response generation failed.");
       }
-    }
-    onComplete({ response: fullResponse, sources });
-  } catch (error) {
-    onError(error);
-  }
+    },
+  });
+  return { response: fullResponse, sources, metadata };
 };
+
+export const getCrossDocumentChatHistory = async (documentIds) =>
+  apiRequest(
+    `/documents/chat/history?${toQueryString({
+      ids: documentIds.join(","),
+    })}`,
+  );
+
+export const clearCrossDocumentChatHistory = async (documentIds) =>
+  apiRequest(
+    `/documents/chat/history?${toQueryString({
+      ids: documentIds.join(","),
+    })}`,
+    { method: "DELETE" },
+  );
 
 export const processDocumentResearch = async (
   documentType,
@@ -319,69 +333,60 @@ export const sendDocumentChatFeedback = async ({
 };
 
 export const sendDocumentChatMessage = async (
-  message,
-  documentType,
-  documentId,
-  onChunk,
-  onComplete,
-  onError,
-  responseLanguage = "English",
+  {
+    message,
+    documentType,
+    documentId,
+    onChunk,
+    responseLanguage = "English",
+    signal,
+  },
 ) => {
   const token = getAuthToken();
   if (!token) {
-    onError(new Error("No authentication token found. Please login."));
-    return;
+    throw new Error("No authentication token found. Please login.");
   }
-  try {
-    const response = await fetch(`${API_BASE_URL}/document-chat`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "auth-token": token,
-      },
-      body: JSON.stringify({
-        message,
-        documentType,
-        documentId,
-        responseLanguage,
-      }),
-    });
-    if (!response.ok) {
-      const payload = await response.json().catch(() => ({}));
-      throw new Error(
-        payload.error ||
-          payload.message ||
-          `Request failed with status ${response.status}`,
-      );
-    }
-    const reader = response.body.getReader();
-    const decoder = new TextDecoder();
-    let buffer = "";
-    let sources = [];
-    let fullResponse = "";
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      buffer += decoder.decode(value, { stream: true });
-      const events = buffer.split("\n\n");
-      buffer = events.pop() || "";
-      for (const event of events) {
-        if (!event.startsWith("data: ")) continue;
-        const raw = event.slice(6);
-        if (raw === "[DONE]") continue;
-        const parsed = JSON.parse(raw);
-        if (parsed.type === "meta") sources = parsed.sources || [];
-        if (parsed.type === "content") {
-          fullResponse += parsed.content;
-          onChunk(parsed.content);
-        }
-        if (parsed.type === "error") throw new Error(parsed.error);
+  const response = await fetch(`${API_BASE_URL}/document-chat`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Accept: "text/event-stream",
+      "auth-token": token,
+    },
+    body: JSON.stringify({
+      message,
+      documentType,
+      documentId,
+      responseLanguage,
+    }),
+    signal,
+  });
+  if (!response.ok) {
+    const payload = await response.json().catch(() => ({}));
+    throw new Error(
+      payload.error ||
+        payload.message ||
+        `Request failed with status ${response.status}`,
+    );
+  }
+  let sources = [];
+  let metadata = {};
+  let fullResponse = "";
+  await consumeSSEStream(response, {
+    signal,
+    onEvent: (event) => {
+      if (event.type === "meta") {
+        sources = event.sources || [];
+        metadata = event.metadata || {};
+      } else if (event.type === "content") {
+        fullResponse += event.content || "";
+        onChunk?.(event.content || "");
+      } else if (event.type === "error") {
+        throw new Error(event.error || "Response generation failed.");
       }
-    }
-    onComplete({ response: fullResponse, sources });
-  } catch (error) {
-    onError(error);
-  }
+    },
+  });
+  return { response: fullResponse, sources, metadata };
 };
 
 const downloadAuthenticatedFile = async (endpoint, filename) => {

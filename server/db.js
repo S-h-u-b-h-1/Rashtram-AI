@@ -159,6 +159,23 @@ const initializeSchema = async () => {
     CREATE INDEX IF NOT EXISTS document_comparisons_user_recent_idx
       ON document_comparisons (user_id, updated_at DESC);
 
+    CREATE TABLE IF NOT EXISTS multi_document_chats (
+      id BIGSERIAL PRIMARY KEY,
+      user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      selection_key TEXT NOT NULL,
+      document_ids_json JSONB NOT NULL,
+      comparison_id BIGINT
+        REFERENCES document_comparisons(id) ON DELETE SET NULL,
+      messages JSONB NOT NULL DEFAULT '[]'::jsonb,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      UNIQUE (user_id, selection_key),
+      CHECK (JSONB_TYPEOF(document_ids_json) = 'array')
+    );
+
+    CREATE INDEX IF NOT EXISTS multi_document_chats_user_recent_idx
+      ON multi_document_chats (user_id, updated_at DESC);
+
     CREATE TABLE IF NOT EXISTS research_notes (
       id BIGSERIAL PRIMARY KEY,
       user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,

@@ -4,11 +4,15 @@ import { FileText, Loader2 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import {
   fetchDocument,
+  clearCrossDocumentChatHistory,
+  getCrossDocumentChatHistory,
   processDocumentResearch,
   sendCrossDocumentChat,
 } from "@/lib/api";
 import { ChatHistory } from "@/components/document-chat/ChatHistory";
 import { ChatInput } from "@/components/document-chat/ChatInput";
+import { useSmoothMessageStream } from "@/hooks/useSmoothMessageStream";
+import { usePinnedChatScroll } from "@/hooks/usePinnedChatScroll";
 
 const timeLabel = () =>
   new Date().toLocaleTimeString([], {
@@ -16,7 +20,7 @@ const timeLabel = () =>
     minute: "2-digit",
   });
 
-export function MultiDocumentChat({ documentIds }) {
+export function MultiDocumentChat({ documentIds, comparisonId = null }) {
   const [documents, setDocuments] = useState([]);
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState("");
@@ -24,21 +28,32 @@ export function MultiDocumentChat({ documentIds }) {
   const [sending, setSending] = useState(false);
   const [error, setError] = useState("");
   const [responseLanguage, setResponseLanguage] = useState("Auto");
-  const messagesEndRef = useRef(null);
+  const abortControllerRef = useRef(null);
+  const smoothStream = useSmoothMessageStream(setMessages);
+  const {
+    handleScroll,
+    messagesEndRef,
+    pinToLatest,
+    scrollContainerRef,
+  } = usePinnedChatScroll(messages);
 
   useEffect(() => {
     let active = true;
-    Promise.all(documentIds.map((id) => fetchDocument(id)))
-      .then(async (responses) => {
+    Promise.all([
+      Promise.all(documentIds.map((id) => fetchDocument(id))),
+      getCrossDocumentChatHistory(documentIds).catch(() => ({ messages: [] })),
+    ])
+      .then(async ([responses, history]) => {
         const loadedDocuments = responses.map(
           (response) => response.document,
         );
         if (active) {
           setDocuments(loadedDocuments);
+          setMessages(history.messages || []);
         }
         const preparation = await Promise.allSettled(
           loadedDocuments
-            .filter((document) => document.pdfUrl)
+            .filter((document) => document.pdfUrl && !document.researchReady)
             .map((document) =>
               processDocumentResearch(document.type, document.id),
             ),
@@ -63,17 +78,18 @@ export function MultiDocumentChat({ documentIds }) {
       });
     return () => {
       active = false;
+      abortControllerRef.current?.abort();
     };
   }, [documentIds]);
 
-  useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages]);
-
-  const submit = (question = input) => {
+  const submit = async (question = input) => {
     const text = String(question || "").trim();
     if (!text || sending || !documents.length) return;
     const streamId = `cross-${Date.now()}`;
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
+    smoothStream.start(streamId);
+    pinToLatest();
     const userMessage = {
       id: `user-${Date.now()}`,
       sender: "user",
@@ -82,6 +98,7 @@ export function MultiDocumentChat({ documentIds }) {
     };
     setInput("");
     setSending(true);
+    setError("");
     setMessages((current) => [
       ...current,
       userMessage,
@@ -93,49 +110,43 @@ export function MultiDocumentChat({ documentIds }) {
         isStreaming: true,
       },
     ]);
-    sendCrossDocumentChat(
-      text,
-      documents.map((document) => document.id),
-      (chunk) =>
-        setMessages((current) =>
-          current.map((message) =>
-            message.id === streamId
-              ? { ...message, text: message.text + chunk }
-              : message,
-          ),
-        ),
-      ({ response, sources }) => {
-        setMessages((current) =>
-          current.map((message) =>
-            message.id === streamId
-              ? {
-                  ...message,
-                  text: response,
-                  sources,
-                  isStreaming: false,
-                }
-              : message,
-          ),
-        );
-        setSending(false);
-      },
-      (requestError) => {
-        setMessages((current) =>
-          current.map((message) =>
-            message.id === streamId
-              ? {
-                  ...message,
-                  text: `Cross-document analysis failed: ${requestError.message}`,
-                  isStreaming: false,
-                  isError: true,
-                }
-              : message,
-          ),
-        );
-        setSending(false);
-      },
-      responseLanguage,
-    );
+    try {
+      const result = await sendCrossDocumentChat({
+        message: text,
+        documentIds: documents.map((document) => document.id),
+        comparisonId,
+        responseLanguage,
+        signal: controller.signal,
+        onChunk: (chunk) => smoothStream.append(streamId, chunk),
+      });
+      smoothStream.complete(streamId, result);
+    } catch (requestError) {
+      const stopped =
+        controller.signal.aborted || requestError.name === "AbortError";
+      smoothStream.fail(streamId, { stopped });
+      if (!stopped) {
+        setError("Response generation was interrupted. Please try again.");
+      }
+    } finally {
+      if (abortControllerRef.current === controller) {
+        abortControllerRef.current = null;
+      }
+      setSending(false);
+    }
+  };
+
+  const clear = async () => {
+    abortControllerRef.current?.abort();
+    try {
+      await clearCrossDocumentChatHistory(documentIds);
+      setMessages([]);
+    } catch (requestError) {
+      setError(requestError.message);
+    }
+  };
+
+  const stopGeneration = () => {
+    abortControllerRef.current?.abort();
   };
 
   const regenerate = () => {
@@ -175,7 +186,11 @@ export function MultiDocumentChat({ documentIds }) {
         </div>
         {error && <p className="mt-3 text-xs text-[#85434a]">{error}</p>}
       </header>
-      <div className="paper-grid app-scrollbar min-h-0 flex-1 overflow-y-auto p-5">
+      <div
+        ref={scrollContainerRef}
+        onScroll={handleScroll}
+        className="paper-grid app-scrollbar min-h-0 flex-1 overflow-y-auto p-5"
+      >
         <ChatHistory
           messages={messages}
           messagesEndRef={messagesEndRef}
@@ -188,8 +203,9 @@ export function MultiDocumentChat({ documentIds }) {
         sending={sending}
         disabled={!documents.length}
         onSend={() => submit()}
+        onStop={stopGeneration}
         onRegenerate={regenerate}
-        onClear={() => setMessages([])}
+        onClear={clear}
         responseLanguage={responseLanguage}
         onResponseLanguageChange={setResponseLanguage}
       />

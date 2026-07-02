@@ -4,6 +4,12 @@ const {
   generateResponse,
   searchSimilarContentForEGazette,
 } = require("../lib/vectordb");
+const {
+  completeSSE,
+  errorSSE,
+  sendSSE,
+  startSSE,
+} = require("../lib/sse");
 const { getGazetteById } = require("./egazetteService");
 
 const router = express.Router();
@@ -153,28 +159,23 @@ router.post("/", async (req, res) => {
       content: String(match.metadata?.content || "").slice(0, 260),
     }));
 
-    res.setHeader("Content-Type", "text/event-stream");
-    res.setHeader("Cache-Control", "no-cache, no-transform");
-    res.setHeader("Connection", "keep-alive");
-    res.write(
-      `data: ${JSON.stringify({
-        type: "meta",
-        sources,
-        gazetteId: String(gazetteId),
-      })}\n\n`,
-    );
+    startSSE(res);
+    sendSSE(res, {
+      type: "meta",
+      sources,
+      gazetteId: String(gazetteId),
+    });
     const stream = await generateResponse(message, context);
     for await (const chunk of stream) {
+      if (res.destroyed || res.writableEnded) break;
       const content =
         typeof chunk.text === "function" ? chunk.text() : chunk.text || "";
       if (content) {
-        res.write(
-          `data: ${JSON.stringify({ type: "content", content })}\n\n`,
-        );
+        sendSSE(res, { type: "content", content });
       }
     }
-    res.write("data: [DONE]\n\n");
-    return res.end();
+    if (!res.destroyed && !res.writableEnded) completeSSE(res);
+    return undefined;
   } catch (error) {
     console.error("eGazette chat failed:", error);
     if (!res.headersSent) {
@@ -182,10 +183,8 @@ router.post("/", async (req, res) => {
         error: `Failed to answer Gazette question: ${error.message}`,
       });
     }
-    res.write(
-      `data: ${JSON.stringify({ type: "error", error: error.message })}\n\n`,
-    );
-    return res.end();
+    errorSSE(res, error);
+    return undefined;
   }
 });
 

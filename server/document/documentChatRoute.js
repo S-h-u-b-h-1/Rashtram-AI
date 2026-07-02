@@ -7,6 +7,12 @@ const {
 } = require("./documentResearchService");
 const DocumentRepository = require("./DocumentRepository");
 const { generateResponse } = require("../lib/vectordb");
+const {
+  completeSSE,
+  errorSSE,
+  sendSSE,
+  startSSE,
+} = require("../lib/sse");
 
 const router = express.Router();
 
@@ -323,52 +329,47 @@ router.post("/", async (req, res) => {
       content: item.content.slice(0, 360),
     }));
 
-    res.setHeader("Content-Type", "text/event-stream");
-    res.setHeader("Cache-Control", "no-cache, no-transform");
-    res.setHeader("Connection", "keep-alive");
-    res.write(
-      `data: ${JSON.stringify({
-        type: "meta",
-        documentType,
-        documentId,
-        sources,
-      })}\n\n`,
-    );
+    startSSE(res);
+    sendSSE(res, {
+      type: "meta",
+      documentType,
+      documentId,
+      sources,
+      metadata: {
+        grounded: true,
+        passageCount: sources.length,
+      },
+    });
     if (!context.trim()) {
-      res.write(
-        `data: ${JSON.stringify({
-          type: "content",
-          content:
-            "I could not find enough grounded context in this document to answer reliably.",
-        })}\n\n`,
-      );
-      res.write("data: [DONE]\n\n");
-      return res.end();
+      sendSSE(res, {
+        type: "content",
+        content:
+          "I could not find enough grounded context in this document to answer reliably.",
+      });
+      completeSSE(res);
+      return undefined;
     }
     const responseLanguage = req.body.responseLanguage || "Auto";
     const stream = await generateResponse(message, context, {
       responseLanguage,
     });
     for await (const chunk of stream) {
+      if (res.destroyed || res.writableEnded) break;
       const content =
         typeof chunk.text === "function" ? chunk.text() : chunk.text || "";
       if (content) {
-        res.write(
-          `data: ${JSON.stringify({ type: "content", content })}\n\n`,
-        );
+        sendSSE(res, { type: "content", content });
       }
     }
-    res.write("data: [DONE]\n\n");
-    return res.end();
+    if (!res.destroyed && !res.writableEnded) completeSSE(res);
+    return undefined;
   } catch (error) {
     console.error("Unified document chat failed:", error);
     if (!res.headersSent) {
       return res.status(error.status || 500).json({ error: error.message });
     }
-    res.write(
-      `data: ${JSON.stringify({ type: "error", error: error.message })}\n\n`,
-    );
-    return res.end();
+    errorSSE(res, error);
+    return undefined;
   }
 });
 

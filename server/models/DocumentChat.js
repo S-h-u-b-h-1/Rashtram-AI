@@ -103,6 +103,12 @@ const addMessage = async (
     sender: messageData.sender,
     timestamp: messageData.timestamp || new Date().toISOString(),
     sources: Array.isArray(messageData.sources) ? messageData.sources : [],
+    metadata:
+      messageData.metadata &&
+      typeof messageData.metadata === "object" &&
+      !Array.isArray(messageData.metadata)
+        ? messageData.metadata
+        : {},
     isError: Boolean(messageData.isError),
   };
   const result = await query(
