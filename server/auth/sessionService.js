@@ -39,26 +39,34 @@ const createSessionToken = async (userId, req) => {
 const isSessionActive = async (sessionId, userId) => {
   if (!sessionId) return true;
   const result = await query(
-    `WITH active AS MATERIALIZED (
-       SELECT id
-       FROM user_sessions
-       WHERE id = $1
-         AND user_id = $2
-         AND revoked_at IS NULL
-         AND expires_at > NOW()
-     ),
-     touched AS (
-       UPDATE user_sessions session
-       SET last_seen_at = NOW()
-       FROM active
-       WHERE session.id = active.id
-         AND session.last_seen_at < NOW() - INTERVAL '5 minutes'
-       RETURNING session.id
-     )
-     SELECT id FROM active`,
+    `SELECT id, last_seen_at
+     FROM user_sessions
+     WHERE id = $1
+       AND user_id = $2
+       AND revoked_at IS NULL
+       AND expires_at > NOW()
+     LIMIT 1`,
     [sessionId, userId],
   );
-  return Boolean(result.rows[0]);
+  const session = result.rows[0];
+  if (!session) return false;
+
+  if (
+    Date.now() - new Date(session.last_seen_at).getTime() >
+    5 * 60 * 1_000
+  ) {
+    await query(
+      `UPDATE user_sessions
+       SET last_seen_at = NOW()
+       WHERE id = $1
+         AND user_id = $2
+         AND last_seen_at < NOW() - INTERVAL '5 minutes'`,
+      [sessionId, userId],
+    ).catch((error) => {
+      console.warn("Session activity timestamp update skipped:", error.message);
+    });
+  }
+  return true;
 };
 
 module.exports = {
