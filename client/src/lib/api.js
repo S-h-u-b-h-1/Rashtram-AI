@@ -119,6 +119,23 @@ export const fetchDocument = async (documentId) => {
   return apiRequest(`/documents/${encodeURIComponent(documentId)}`);
 };
 
+export const createDocumentComparison = async (payload) => {
+  return apiRequest("/documents/compare", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+};
+
+export const getDocumentComparison = async (comparisonId) => {
+  return apiRequest(
+    `/documents/compare/${encodeURIComponent(comparisonId)}`,
+  );
+};
+
+export const getDocumentComparisons = async (limit = 30) => {
+  return apiRequest(`/profile/comparisons?limit=${encodeURIComponent(limit)}`);
+};
+
 export const fetchDocumentTimeline = async (documentId) => {
   return apiRequest(
     `/documents/${encodeURIComponent(documentId)}/timeline`,

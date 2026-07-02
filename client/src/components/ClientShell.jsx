@@ -4,6 +4,7 @@ import { usePathname } from "next/navigation";
 import { AuthProvider } from "@/context/AuthContext";
 import Navbar from "@/components/Navbar";
 import FooterDemo from "@/components/Footer";
+import { ComparisonProvider } from "@/context/ComparisonContext";
 
 export function ClientShell({ children }) {
   const pathname = usePathname();
@@ -14,9 +15,11 @@ export function ClientShell({ children }) {
 
   return (
     <AuthProvider>
-      {!isApplicationRoute && <Navbar />}
-      {children}
-      {!isApplicationRoute && <FooterDemo />}
+      <ComparisonProvider>
+        {!isApplicationRoute && <Navbar />}
+        {children}
+        {!isApplicationRoute && <FooterDemo />}
+      </ComparisonProvider>
     </AuthProvider>
   );
 }

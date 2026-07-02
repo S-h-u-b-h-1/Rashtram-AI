@@ -58,11 +58,18 @@ const getAccountData = async (userId) => {
       [userId],
     ),
     query(
-      `SELECT id, item_type, document_type, document_id, chat_id, title,
-         metadata_json, created_at
-       FROM saved_content
-       WHERE user_id = $1
-       ORDER BY created_at DESC
+      `SELECT s.id, s.item_type, s.document_type, s.document_id, s.chat_id,
+         s.title, s.metadata_json, s.created_at,
+         d.pdf_url, d.processing_status,
+         EXISTS (
+           SELECT 1 FROM document_text_artifacts a
+           WHERE a.document_id = d.id
+         ) AS research_ready
+       FROM saved_content s
+       LEFT JOIN legislative_documents d
+         ON d.id::TEXT = s.document_id
+       WHERE s.user_id = $1
+       ORDER BY s.created_at DESC
        LIMIT 100`,
       [userId],
     ),
@@ -248,6 +255,9 @@ const getAccountData = async (userId) => {
       chatId: row.chat_id ? String(row.chat_id) : null,
       title: row.title,
       metadata: row.metadata_json || {},
+      pdfUrl: row.pdf_url,
+      processingStatus: row.processing_status,
+      researchReady: Boolean(row.research_ready),
       createdAt: row.created_at,
     })),
     savedSearches: searches.rows.map((row) => ({

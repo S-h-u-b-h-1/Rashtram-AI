@@ -18,6 +18,10 @@ import {
 } from "@/lib/api";
 import { formatDate, humanize } from "@/lib/document-links";
 import { DocumentFilters } from "./DocumentFilters";
+import {
+  comparisonDisabledReason,
+  useComparison,
+} from "@/context/ComparisonContext";
 
 const EMPTY_FILTERS = {
   type: "",
@@ -85,9 +89,13 @@ export function DocumentExplorer({
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [selectedIds, setSelectedIds] = useState([]);
   const [sortBy, setSortBy] = useState("publicationDate");
   const [sortDirection, setSortDirection] = useState("desc");
+  const {
+    addDocument,
+    removeDocument,
+    isSelected,
+  } = useComparison();
 
   const requestFilters = useMemo(
     () => ({
@@ -144,16 +152,6 @@ export function DocumentExplorer({
 
   const updateFilter = (key, value) => {
     setFilters((current) => ({ ...current, [key]: value }));
-  };
-
-  const toggleSelected = (id) => {
-    setSelectedIds((current) => {
-      if (current.includes(id)) {
-        return current.filter((item) => item !== id);
-      }
-      if (current.length >= 5) return current;
-      return [...current, id];
-    });
   };
 
   return (
@@ -218,21 +216,6 @@ export function DocumentExplorer({
         </button>
       </div>
 
-      {selectedIds.length > 0 && (
-        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#8f1d2c]/8 bg-[#eee0dc] px-5 py-3">
-          <p className="text-xs font-semibold text-[#514d46]">
-            {selectedIds.length} of 5 documents selected
-          </p>
-          <Link
-            href={`/app/multi-document-chat?ids=${selectedIds.join(",")}`}
-            className="inline-flex items-center gap-2 rounded-xl bg-[#8f1d2c] px-4 py-2 text-xs font-semibold text-white"
-          >
-            <GitCompareArrows className="h-4 w-4" />
-            Compare in one chat
-          </Link>
-        </div>
-      )}
-
       <div className="min-h-[460px]">
         {loading ? (
           <div className="grid min-h-[460px] place-items-center">
@@ -251,13 +234,14 @@ export function DocumentExplorer({
         ) : (
           <div className="divide-y divide-[#8f1d2c]/7">
             {documents.map((document) => {
-              const selected = selectedIds.includes(document.id);
+              const selected = isSelected(document.id);
               const readiness =
                 document.readiness ||
                 (document.pdfUrl ? "pdf_available" : "source_only");
               const canPrepare =
                 readiness === "research_ready" ||
                 readiness === "pdf_available";
+              const compareDisabled = comparisonDisabledReason(document);
               return (
                 <article
                   key={document.id}
@@ -270,8 +254,12 @@ export function DocumentExplorer({
                     <input
                       type="checkbox"
                       checked={selected}
-                      disabled={!document.researchReady}
-                      onChange={() => toggleSelected(document.id)}
+                      disabled={Boolean(compareDisabled)}
+                      onChange={() =>
+                        selected
+                          ? removeDocument(document.id)
+                          : addDocument(document)
+                      }
                       className="accent-[#8f1d2c]"
                     />
                   </label>
@@ -313,6 +301,20 @@ export function DocumentExplorer({
                     </p>
                   </div>
                   <div className="flex flex-wrap items-start gap-2 md:justify-end">
+                    <button
+                      type="button"
+                      disabled={Boolean(compareDisabled)}
+                      title={compareDisabled || undefined}
+                      onClick={() =>
+                        selected
+                          ? removeDocument(document.id)
+                          : addDocument(document)
+                      }
+                      className="inline-flex items-center gap-1.5 rounded-xl border border-[#8f1d2c]/10 bg-white px-3 py-2 text-[10px] font-semibold text-[#8f1d2c] disabled:cursor-not-allowed disabled:bg-[#ddd5ca] disabled:text-[#81796e]"
+                    >
+                      <GitCompareArrows className="h-3.5 w-3.5" />
+                      {selected ? "Remove compare" : "Add to compare"}
+                    </button>
                     {canPrepare ? (
                       <Link
                         href={`/app/document/${document.id}#research-chat`}

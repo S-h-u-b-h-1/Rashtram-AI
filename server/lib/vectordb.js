@@ -449,6 +449,57 @@ const generateSuggestedQuestions = async (documentType, summary) => {
   return parseSuggestedQuestions(responseText(response));
 };
 
+const parseJsonResponse = (value) => {
+  const normalized = String(value || "")
+    .replace(/^```(?:json)?\s*/i, "")
+    .replace(/\s*```$/i, "")
+    .trim();
+  const start = normalized.indexOf("{");
+  const end = normalized.lastIndexOf("}");
+  if (start < 0 || end <= start) {
+    throw new Error("The comparison model returned an invalid response.");
+  }
+  return JSON.parse(normalized.slice(start, end + 1));
+};
+
+const generateDocumentComparison = async ({
+  mode,
+  language,
+  documents,
+  context,
+}) => {
+  const prompt = `
+Compare the supplied Indian legislative and public-policy documents using only
+the labelled source passages. Never use a document title as evidence. Every
+substantive claim must include one or more citation labels exactly as supplied
+(for example "[D1-C2]"). If evidence is absent, say "Not identified in the
+retrieved text." Keep the documents distinct and do not merge their provisions.
+
+Comparison mode: ${mode}
+Response language: ${language}
+Documents:
+${JSON.stringify(documents)}
+
+Return only valid JSON with this shape:
+{
+  "executiveSummary": "string",
+  "similarities": [{"point":"string","citations":["D1-C1"]}],
+  "differences": [{"topic":"string","analysis":"string","citations":["D1-C1","D2-C1"]}],
+  "keyClauses": [{"documentId":"string","clause":"string","analysis":"string","citations":["D1-C1"]}],
+  "stakeholders": [{"name":"string","impact":"string","citations":["D1-C1"]}],
+  "timeline": [{"date":"string","event":"string","documentId":"string","citations":["D1-C1"]}],
+  "authorityDifferences": [{"point":"string","citations":["D1-C1"]}],
+  "impactAssessment": [{"point":"string","citations":["D1-C1"]}],
+  "suggestedQuestions": ["string"]
+}
+
+Source passages:
+${context}
+`;
+  const response = await runGeneration("generateContent", prompt);
+  return parseJsonResponse(responseText(response));
+};
+
 const generateDashboardOverview = async (evidence) => {
   const prompt = `
 Write a concise two-sentence legislative intelligence overview of no more than
@@ -686,6 +737,7 @@ module.exports = {
   generateActSummary,
   generateBillSummary,
   generateDocumentSummary,
+  generateDocumentComparison,
   generateDashboardOverview,
   generateEGazetteSummary,
   generateEmbedding,

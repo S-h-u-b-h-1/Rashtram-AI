@@ -5,6 +5,10 @@ const {
   retrievePassages,
 } = require("./documentResearchService");
 const { generateResponse } = require("../lib/vectordb");
+const {
+  createComparison,
+  getComparison,
+} = require("./documentComparisonService");
 
 const router = express.Router();
 
@@ -41,6 +45,30 @@ router.get("/filters", async (req, res) => {
     return res.json(await DocumentService.getFilterOptions(req.query));
   } catch (error) {
     return sendError(res, error, "Universal document filters failed");
+  }
+});
+
+router.post("/compare", async (req, res) => {
+  try {
+    const comparison = await createComparison(req.user.id, req.body);
+    return res.status(201).json({ comparison });
+  } catch (error) {
+    return sendError(res, error, "Document comparison failed");
+  }
+});
+
+router.get("/compare/:comparisonId", async (req, res) => {
+  try {
+    const comparison = await getComparison(
+      req.user.id,
+      req.params.comparisonId,
+    );
+    if (!comparison) {
+      return res.status(404).json({ error: "Comparison not found." });
+    }
+    return res.json({ comparison });
+  } catch (error) {
+    return sendError(res, error, "Document comparison lookup failed");
   }
 });
 

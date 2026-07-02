@@ -12,6 +12,7 @@ import {
   Search,
   Scale,
   ScrollText,
+  GitCompareArrows,
   X,
 } from "lucide-react";
 import { useEffect, useState } from "react";
@@ -19,6 +20,7 @@ import { BrandMark } from "@/components/BrandMark";
 import { useAuth } from "@/context/AuthContext";
 import { cn } from "@/lib/utils";
 import { GlobalCommandPalette } from "@/components/documents/GlobalCommandPalette";
+import { ComparisonTray } from "@/components/documents/ComparisonTray";
 
 const NAVIGATION = [
   {
@@ -72,6 +74,12 @@ const NAVIGATION = [
     label: "Policies",
     href: "/app?view=policies",
     icon: BookOpenText,
+  },
+  {
+    key: "compare",
+    label: "Compare",
+    href: "/app/compare",
+    icon: GitCompareArrows,
   },
 ];
 
@@ -302,6 +310,7 @@ export function WorkspaceShell({ activeKey, title, children }) {
         open={isCommandPaletteOpen}
         onClose={() => setIsCommandPaletteOpen(false)}
       />
+      <ComparisonTray />
     </div>
   );
 }

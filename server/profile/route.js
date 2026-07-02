@@ -14,6 +14,9 @@ const {
   revokeSession,
   updateProfile,
 } = require("./profileService");
+const {
+  getComparisons,
+} = require("../document/documentComparisonService");
 
 const router = express.Router();
 
@@ -30,6 +33,17 @@ router.get("/", fetchuser, async (req, res) => {
   } catch (error) {
     console.error("Profile fetch error:", error);
     return res.status(500).json({ error: "Unable to load profile right now." });
+  }
+});
+
+router.get("/comparisons", fetchuser, async (req, res) => {
+  try {
+    return res.json({
+      comparisons: await getComparisons(req.user.id, req.query.limit),
+    });
+  } catch (error) {
+    console.error("Comparison history fetch error:", error);
+    return res.status(500).json({ error: "Unable to load comparison history." });
   }
 });
 

@@ -9,10 +9,12 @@ import {
   Save,
   Trash2,
   UserRound,
+  GitCompareArrows,
 } from "lucide-react";
 import { useMemo, useState } from "react";
 import * as api from "@/lib/api";
 import { formatDate, humanize } from "@/lib/document-links";
+import { useComparison } from "@/context/ComparisonContext";
 
 const join = (items) => (Array.isArray(items) ? items.join(", ") : "");
 const split = (value) =>
@@ -22,6 +24,7 @@ const split = (value) =>
     .filter(Boolean);
 
 export function AccountSettings({ account, onUpdate }) {
+  const { addDocument, removeDocument, isSelected } = useComparison();
   const initial = account?.profile || {};
   const [form, setForm] = useState({
     ...initial,
@@ -349,6 +352,31 @@ export function AccountSettings({ account, onUpdate }) {
                   >
                     <Trash2 className="h-3.5 w-3.5" />
                   </button>
+                  {item.documentId && item.researchReady && (
+                    <button
+                      type="button"
+                      onClick={() =>
+                        isSelected(item.documentId)
+                          ? removeDocument(item.documentId)
+                          : addDocument({
+                              id: item.documentId,
+                              title: item.title,
+                              type: item.documentType,
+                              pdfUrl: item.pdfUrl,
+                              processingStatus: item.processingStatus,
+                              researchReady: item.researchReady,
+                            })
+                      }
+                      aria-label={`${
+                        isSelected(item.documentId) ? "Remove" : "Add"
+                      } ${item.title} ${
+                        isSelected(item.documentId) ? "from" : "to"
+                      } comparison`}
+                      className="text-[#8f1d2c]"
+                    >
+                      <GitCompareArrows className="h-3.5 w-3.5" />
+                    </button>
+                  )}
                 </div>
               ))}
             {!account?.savedContent?.length && (
