@@ -2,6 +2,8 @@ const { Pool } = require("pg");
 require("dotenv").config();
 
 const globalForDatabase = globalThis;
+const SCHEMA_VERSION = 2026070201;
+const SCHEMA_LOCK_KEY = 1_847_263_911;
 
 const normalizeConnectionString = (connectionString) => {
   const url = new URL(connectionString);
@@ -34,8 +36,25 @@ const getPool = () => {
 
 const initializeSchema = async () => {
   const pool = getPool();
+  const client = await pool.connect();
 
-  await pool.query(`
+  try {
+    await client.query("SELECT pg_advisory_lock($1)", [SCHEMA_LOCK_KEY]);
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS application_schema_versions (
+        id SMALLINT PRIMARY KEY DEFAULT 1 CHECK (id = 1),
+        version BIGINT NOT NULL,
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )
+    `);
+    const versionResult = await client.query(
+      "SELECT version FROM application_schema_versions WHERE id = 1",
+    );
+    if (Number(versionResult.rows[0]?.version || 0) >= SCHEMA_VERSION) {
+      return;
+    }
+
+    await client.query(`
     CREATE TABLE IF NOT EXISTS users (
       id BIGSERIAL PRIMARY KEY,
       name TEXT NOT NULL,
@@ -1048,7 +1067,21 @@ const initializeSchema = async () => {
      WHERE html_hash IS NULL
         OR collected_at IS NULL
         OR metadata_json = '{}'::jsonb;
-  `);
+    `);
+    await client.query(
+      `INSERT INTO application_schema_versions (id, version)
+       VALUES (1, $1)
+       ON CONFLICT (id) DO UPDATE SET
+         version = EXCLUDED.version,
+         updated_at = NOW()`,
+      [SCHEMA_VERSION],
+    );
+  } finally {
+    await client
+      .query("SELECT pg_advisory_unlock($1)", [SCHEMA_LOCK_KEY])
+      .catch(() => undefined);
+    client.release();
+  }
 };
 
 const connectDB = async () => {

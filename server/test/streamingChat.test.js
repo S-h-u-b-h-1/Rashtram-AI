@@ -1,5 +1,7 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
+const fs = require("node:fs");
+const path = require("node:path");
 const {
   completeSSE,
   errorSSE,
@@ -63,4 +65,14 @@ test("SSE failures terminate with a structured error event", () => {
   assert.match(response.writes[0], /"type":"error"/);
   assert.match(response.writes[0], /stream interrupted/);
   assert.equal(response.writableEnded, true);
+});
+
+test("serverless schema initialization is serialized and versioned", () => {
+  const databaseSource = fs.readFileSync(
+    path.join(__dirname, "..", "db.js"),
+    "utf8",
+  );
+  assert.match(databaseSource, /pg_advisory_lock/);
+  assert.match(databaseSource, /application_schema_versions/);
+  assert.match(databaseSource, /SCHEMA_VERSION/);
 });
