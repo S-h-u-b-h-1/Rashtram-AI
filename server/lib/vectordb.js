@@ -524,6 +524,50 @@ ${JSON.stringify(evidence)}
   return responseText(response).trim().slice(0, 600);
 };
 
+const verifyDocumentRelationship = async ({
+  sourceDocument,
+  targetDocument,
+  proposedRelationship,
+  evidence,
+}) => {
+  const prompt = `
+You verify proposed relationships between Indian government documents. Use only
+the supplied document metadata and evidence. Reject the relationship unless the
+evidence explicitly supports it. Do not infer legal effect from similar titles
+alone.
+
+Return only valid JSON:
+{
+  "supported": true,
+  "relationshipType": "UPPER_SNAKE_CASE",
+  "confidence": 0.0,
+  "explanation": "one concise evidence-based sentence",
+  "evidenceQuote": "short supplied excerpt or empty string"
+}
+
+Source document:
+${JSON.stringify(sourceDocument)}
+
+Target document:
+${JSON.stringify(targetDocument)}
+
+Proposed relationship: ${proposedRelationship}
+Evidence:
+${JSON.stringify(evidence)}
+`;
+  const response = await runGeneration("generateContent", prompt);
+  const parsed = parseJsonResponse(responseText(response));
+  return {
+    supported: parsed.supported === true,
+    relationshipType: String(parsed.relationshipType || "")
+      .trim()
+      .toUpperCase(),
+    confidence: Math.min(Math.max(Number(parsed.confidence || 0), 0), 1),
+    explanation: String(parsed.explanation || "").trim().slice(0, 1_000),
+    evidenceQuote: String(parsed.evidenceQuote || "").trim().slice(0, 1_000),
+  };
+};
+
 const generateBillSummary = (billContent) =>
   generateDocumentSummary("bill", billContent);
 
@@ -755,6 +799,7 @@ module.exports = {
   generateLocalEmbedding,
   generateResponse,
   generateSuggestedQuestions,
+  verifyDocumentRelationship,
   getActIndex,
   getEGazetteIndex,
   getIndex,

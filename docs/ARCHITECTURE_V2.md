@@ -147,6 +147,10 @@ All routes require authenticated access.
 | `GET` | `/api/documents/compare/:id` | Saved comparison lookup |
 | `DELETE` | `/api/documents/compare/:id` | Delete an owned comparison |
 | `GET` | `/api/documents/:id/timeline` | Lifecycle and relationship events |
+| `GET` | `/api/graph/search` | Search connected document nodes |
+| `GET` | `/api/graph/path` | Find a bounded shortest relationship path |
+| `POST` | `/api/graph/paths` | Save a supported research path |
+| `GET` | `/api/graph/metrics` | Government knowledge-network metrics |
 | `GET` | `/api/documents/:id/graph` | Document/entity nodes and edges |
 | `POST` | `/api/documents/chat` | Streamed one-to-five-document RAG chat |
 
@@ -245,6 +249,11 @@ evidence is absent.
 - refers to
 - supersedes
 - related
+
+Each edge now includes strength, confidence, source, explanation, and
+structured evidence. Directed inverse edges support questions such as “what
+amended this Act?” without losing the original relationship direction. See
+`KNOWLEDGE_GRAPH_ARCHITECTURE.md`.
 
 The API also derives document-to-authority, document-to-ministry, and
 document-to-jurisdiction edges. State jurisdictions and committee metadata are

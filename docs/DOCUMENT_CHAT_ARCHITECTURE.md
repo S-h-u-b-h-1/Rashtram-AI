@@ -33,6 +33,11 @@ passage citations, follow-ups, regeneration, copy, feedback, notes, pinning,
 bookmarks, exports, metadata, summaries, official PDF/source links, verified
 relationships, and suggested related reading.
 
+Relationship questions are detected before generation. Chat loads verified
+graph edges alongside vector passages and labels graph sources separately, so
+questions about amendments, enabling Acts, notifications, replacements, and
+related instruments do not rely on vector similarity alone.
+
 Raw HTML is not enabled in chat Markdown. Headings, lists, tables, links, and
 code blocks remain supported without model-generated browser markup.
 

@@ -1,6 +1,10 @@
 const { query } = require("../db");
 const { getActivityInsights } = require("../activity/activityService");
 const { generateDashboardOverview } = require("../lib/vectordb");
+const {
+  getGraphProfileInsights,
+  getKnowledgeGraphMetrics,
+} = require("../graph/knowledgeGraphService");
 
 let overviewCache = {
   key: null,
@@ -805,6 +809,7 @@ const getDashboardIntelligence = async (userId) => {
     },
     fallbackBrief,
   );
+  const knowledgeGraph = await getKnowledgeGraphMetrics();
 
   return {
     userGreeting: getGreeting(userRow?.name),
@@ -820,6 +825,7 @@ const getDashboardIntelligence = async (userId) => {
           : "Awaiting source refresh",
     },
     briefSummary,
+    knowledgeGraph,
     recentActivity: buildRecentActivity({
       recentEventCount24h,
       recentEventCount,
@@ -1138,6 +1144,7 @@ const getProfileData = async (userId) => {
     activityRow.act_chats +
     activityRow.policy_chats +
     activityRow.gazette_chats;
+  const graphInsights = await getGraphProfileInsights(userId);
 
   return {
     user: {
@@ -1166,6 +1173,7 @@ const getProfileData = async (userId) => {
       savedSummaries: activityRow.saved_summaries,
       totalMessages: activityRow.total_messages,
     },
+    graphInsights,
     platformCoverageStats: {
       totalDocuments: coverageRow.total_documents,
       documentsWithPdf: coverageRow.documents_with_pdf,

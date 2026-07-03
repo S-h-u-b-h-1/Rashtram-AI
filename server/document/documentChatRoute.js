@@ -8,6 +8,9 @@ const {
 const DocumentRepository = require("./DocumentRepository");
 const { generateResponse } = require("../lib/vectordb");
 const {
+  getRelationshipContext,
+} = require("../graph/knowledgeGraphService");
+const {
   completeSSE,
   errorSSE,
   sendSSE,
@@ -321,19 +324,31 @@ router.post("/", async (req, res) => {
     if (!message) {
       return res.status(400).json({ error: "Message is required." });
     }
-    const passages = await retrievePassages(
-      documentType,
-      documentId,
-      message,
-      6,
-    );
-    const context = passages
+    const [passages, relationshipContext] = await Promise.all([
+      retrievePassages(
+        documentType,
+        documentId,
+        message,
+        6,
+      ),
+      getRelationshipContext(documentId, message),
+    ]);
+    const passageContext = passages
       .map((item) => `[Passage ${item.passage}]\n${item.content}`)
       .join("\n\n");
-    const sources = passages.map((item) => ({
-      ...item,
-      content: item.content.slice(0, 360),
-    }));
+    const context = [
+      passageContext,
+      relationshipContext.context
+        ? `Government knowledge graph:\n${relationshipContext.context}`
+        : "",
+    ].filter(Boolean).join("\n\n");
+    const sources = [
+      ...passages.map((item) => ({
+        ...item,
+        content: item.content.slice(0, 360),
+      })),
+      ...relationshipContext.sources,
+    ];
 
     startSSE(res);
     sendSSE(res, {
@@ -343,7 +358,9 @@ router.post("/", async (req, res) => {
       sources,
       metadata: {
         grounded: true,
-        passageCount: sources.length,
+        passageCount: passages.length,
+        graphSourceCount: relationshipContext.sources.length,
+        graphGrounded: relationshipContext.graphGrounded,
       },
     });
     if (!context.trim()) {

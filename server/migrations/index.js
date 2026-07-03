@@ -15,4 +15,8 @@ module.exports = [
     name: "004_comparison_recommendation_intelligence.js",
     migration: require("./004_comparison_recommendation_intelligence"),
   },
+  {
+    name: "005_government_knowledge_graph.js",
+    migration: require("./005_government_knowledge_graph"),
+  },
 ];

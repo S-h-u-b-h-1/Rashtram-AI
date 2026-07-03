@@ -581,35 +581,9 @@ const getResources = async (id) => {
 };
 
 const getRelated = async (id) => {
-  const result = await query(
-    `SELECT
-       r.from_document_id, r.to_document_id,
-       r.relationship_type, r.confidence,
-       r.source_name AS relationship_source_name,
-       r.source_url AS relationship_source_url,
-       r.metadata_json AS relationship_metadata,
-       related.*
-     FROM document_relationships r
-     JOIN legislative_documents related
-       ON related.id = CASE
-         WHEN r.from_document_id = $1 THEN r.to_document_id
-         ELSE r.from_document_id
-       END
-     WHERE r.from_document_id = $1 OR r.to_document_id = $1
-     ORDER BY r.confidence DESC NULLS LAST, related.updated_at DESC
-     LIMIT 50`,
-    [id],
-  );
-  return result.rows.map((row) => ({
-    direction:
-      String(row.from_document_id) === String(id) ? "outgoing" : "incoming",
-    relationshipType: row.relationship_type,
-    confidence: row.confidence == null ? null : Number(row.confidence),
-    sourceName: row.relationship_source_name,
-    sourceUrl: row.relationship_source_url,
-    metadata: row.relationship_metadata || {},
-    document: mapDocument(row),
-  }));
+  const { getRelationships } = require("../graph/knowledgeGraphService");
+  const result = await getRelationships(id, { limit: 50 });
+  return result.relationships;
 };
 
 const getSummary = async (id, userId = null) => {
@@ -786,62 +760,8 @@ const getGraph = async (
   documentValue = null,
   relationshipValues = null,
 ) => {
-  const document = documentValue || await getById(id);
-  if (!document) return { nodes: [], edges: [] };
-  const relationships = relationshipValues || await getRelated(id);
-  const nodes = [
-    {
-      id: `document:${document.id}`,
-      kind: document.type,
-      label: document.title,
-      document,
-    },
-  ];
-  const edges = [];
-  for (const relationship of relationships) {
-    const related = relationship.document;
-    nodes.push({
-      id: `document:${related.id}`,
-      kind: related.type,
-      label: related.title,
-      document: related,
-    });
-    const outgoing = relationship.direction !== "incoming";
-    edges.push({
-      from: outgoing
-        ? `document:${document.id}`
-        : `document:${related.id}`,
-      to: outgoing
-        ? `document:${related.id}`
-        : `document:${document.id}`,
-      type: relationship.relationshipType,
-      confidence: relationship.confidence,
-    });
-  }
-  const committee =
-    document.metadata?.committee ||
-    document.metadata?.committeeName ||
-    document.metadata?.committee_name ||
-    (document.type === "committee_report" ? document.authority : null);
-  for (const [kind, label] of [
-    ["authority", document.authority],
-    ["ministry", document.ministry],
-    [
-      document.jurisdictionLevel === "state" ? "state" : "jurisdiction",
-      document.jurisdiction,
-    ],
-    ["committee", committee],
-  ]) {
-    if (!label) continue;
-    const nodeId = `${kind}:${label}`;
-    nodes.push({ id: nodeId, kind, label });
-    edges.push({
-      from: `document:${document.id}`,
-      to: nodeId,
-      type: kind === "authority" ? "issued_by" : "belongs_to",
-    });
-  }
-  return { rootId: `document:${document.id}`, nodes, edges };
+  const { getGraph: loadGraph } = require("../graph/knowledgeGraphService");
+  return loadGraph(id, { depth: 1, limit: 80 });
 };
 
 const getFilterOptions = async (options = {}) => {

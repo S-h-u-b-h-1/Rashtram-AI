@@ -25,6 +25,7 @@ const activityRouter = require("./activity/route");
 const contactRouter = require("./contact/route");
 const internalCronRouter = require("./internal/cronRoute");
 const recommendationsRouter = require("./recommendation/recommendationsRoute");
+const graphRouter = require("./graph/route");
 const { connectDB } = require("./db");
 const cors = require("cors");
 const {
@@ -84,6 +85,7 @@ app.use("/api/process-egazette", fetchUser, processEGazetteRouter);
 app.use("/api/document-chat", fetchUser, documentChatRouter);
 app.use("/api/documents", fetchUser, documentsRouter);
 app.use("/api/recommendations", fetchUser, recommendationsRouter);
+app.use("/api/graph", graphRouter);
 app.use("/api/dashboard", dashboardRouter);
 app.use("/api/profile", profileRouter);
 app.use("/api/catalog-operations", catalogIngestionRouter);

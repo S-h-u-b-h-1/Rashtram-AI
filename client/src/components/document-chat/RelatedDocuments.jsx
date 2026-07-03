@@ -1,18 +1,26 @@
 "use client";
 
-import { ExternalLink, MessageSquareText } from "lucide-react";
+import {
+  ExternalLink,
+  GitCompareArrows,
+  MessageSquareText,
+} from "lucide-react";
 import Link from "next/link";
 import { humanize } from "@/lib/document-links";
 import { RecommendationCard } from "@/components/recommendations/RecommendationCard";
+import { useComparison } from "@/context/ComparisonContext";
 
 export function RelatedDocuments({
   relationships = [],
   recommendations = [],
   relatedChats = [],
 }) {
+  const { addDocument, isSelected, removeDocument } = useComparison();
   const items = relationships.slice(0, 6).map((item) => ({
     ...item.document,
     relation: item.relationshipType,
+    explanation: item.explanation,
+    confidence: item.confidence,
     verified: true,
   }));
   return (
@@ -45,38 +53,64 @@ export function RelatedDocuments({
           >
             <p className="text-[9px] font-semibold uppercase tracking-[0.1em] text-[#874047]">
               Verified · {humanize(item.relation)}
+              {item.confidence != null
+                ? ` · ${Math.round(item.confidence * 100)}%`
+                : ""}
             </p>
             <p className="mt-2 text-xs font-semibold leading-5 text-[#29312d]">
               {item.title}
             </p>
+            {item.explanation && (
+              <p className="mt-2 text-[10px] leading-5 text-[#706a61]">
+                {item.explanation}
+              </p>
+            )}
             {(item.id || item.pdfUrl || item.sourceUrl) && (
-              <Link
-                href={
-                  item.id && item.readiness !== "processing_failed"
-                    ? `/app/document/${item.id}`
-                    : item.pdfUrl || item.sourceUrl
-                }
-                target={
-                  item.id && item.readiness !== "processing_failed"
-                    ? undefined
-                    : "_blank"
-                }
-                rel={
-                  item.id && item.readiness !== "processing_failed"
-                    ? undefined
-                    : "noreferrer"
-                }
-                className="mt-2 inline-flex items-center gap-1 text-[10px] font-semibold text-[#874047]"
-              >
-                {item.researchReady
-                  ? "Research"
-                  : item.id && item.pdfUrl
-                    ? "Prepare research"
-                  : item.pdfUrl
-                    ? "View PDF"
-                    : "View source"}
-                <ExternalLink className="h-3 w-3" />
-              </Link>
+              <div className="mt-2 flex flex-wrap gap-2">
+                <Link
+                  href={
+                    item.id && item.readiness !== "processing_failed"
+                      ? `/app/document/${item.id}`
+                      : item.pdfUrl || item.sourceUrl
+                  }
+                  target={
+                    item.id && item.readiness !== "processing_failed"
+                      ? undefined
+                      : "_blank"
+                  }
+                  rel={
+                    item.id && item.readiness !== "processing_failed"
+                      ? undefined
+                      : "noreferrer"
+                  }
+                  className="inline-flex items-center gap-1 text-[10px] font-semibold text-[#874047]"
+                >
+                  {item.researchReady
+                    ? "Research"
+                    : item.id && item.pdfUrl
+                      ? "Prepare research"
+                      : item.pdfUrl
+                        ? "View PDF"
+                        : "View source"}
+                  <ExternalLink className="h-3 w-3" />
+                </Link>
+                {item.researchReady && (
+                  <button
+                    type="button"
+                    onClick={() =>
+                      isSelected(item.id)
+                        ? removeDocument(item.id)
+                        : addDocument(item)
+                    }
+                    className="inline-flex items-center gap-1 text-[10px] font-semibold text-[#874047]"
+                  >
+                    <GitCompareArrows className="h-3 w-3" />
+                    {isSelected(item.id)
+                      ? "Remove compare"
+                      : "Add to compare"}
+                  </button>
+                )}
+              </div>
             )}
           </article>
         ))}

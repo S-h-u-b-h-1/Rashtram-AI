@@ -335,6 +335,61 @@ export function DocumentComparison() {
             </p>
           </section>
 
+          <section className="surface-card p-5 sm:p-6">
+            <h3 className="font-serif text-2xl text-[#8f1d2c]">
+              Relationship overlap
+            </h3>
+            <div className="mt-4 grid gap-3 lg:grid-cols-2">
+              {(result.relationshipIntelligence?.relationships || []).map(
+                (relationship) => (
+                  <article
+                    key={relationship.id}
+                    className="rounded-xl border border-[#8f1d2c]/8 bg-[#f7f2eb] p-4"
+                  >
+                    <p className="text-xs font-semibold text-[#29312d]">
+                      {relationship.sourceTitle} → {relationship.targetTitle}
+                    </p>
+                    <p className="mt-2 text-[10px] font-bold uppercase tracking-[0.1em] text-[#8f1d2c]">
+                      {relationship.label}
+                      {relationship.confidence != null
+                        ? ` · ${Math.round(relationship.confidence * 100)}% confidence`
+                        : ""}
+                    </p>
+                    {relationship.explanation && (
+                      <p className="mt-2 text-xs leading-5 text-[#706a61]">
+                        {relationship.explanation}
+                      </p>
+                    )}
+                  </article>
+                ),
+              )}
+            </div>
+            {!(result.relationshipIntelligence?.relationships || []).length && (
+              <p className="mt-3 text-sm text-[#81796e]">
+                No direct verified relationship is stored between these
+                documents.
+              </p>
+            )}
+            <dl className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+              {[
+                ["Shared ministries", "sharedMinistries"],
+                ["Shared authorities", "sharedAuthorities"],
+                ["Shared jurisdictions", "sharedJurisdictions"],
+                ["Shared topics", "sharedTopics"],
+              ].map(([label, key]) => (
+                <div key={key} className="rounded-xl bg-[#fffaf0] p-3">
+                  <dt className="text-[9px] uppercase tracking-[0.1em] text-[#81796e]">
+                    {label}
+                  </dt>
+                  <dd className="mt-1 text-xs text-[#514d46]">
+                    {result.relationshipIntelligence?.[key]?.join(", ") ||
+                      "None identified"}
+                  </dd>
+                </div>
+              ))}
+            </dl>
+          </section>
+
           <div className="grid gap-5 xl:grid-cols-2">
             {SECTION_CONFIG.map(([key, title]) => (
               <section key={key} className="surface-card p-5 sm:p-6">

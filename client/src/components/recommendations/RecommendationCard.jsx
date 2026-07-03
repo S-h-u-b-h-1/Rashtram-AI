@@ -68,7 +68,7 @@ export function RecommendationCard({
           .filter(Boolean)
           .join(" · ")}
       </p>
-      {!compact && (
+      {(!compact || recommendation.graphRelationship) && (
         <p className="mt-3 text-xs leading-5 text-[#625d55]">
           {recommendation.reason}
         </p>

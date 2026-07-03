@@ -23,6 +23,7 @@ documents ─ document_sources
     ├─ document_processing_state
     ├─ document_text_chunks
     ├─ document_relationships
+    ├─ saved_graph_paths
     └─ document_topics ─ topic_taxonomy
 
 ingestion_runs ─ ingestion_run_items
@@ -77,6 +78,14 @@ follow-up recommendation snapshot, and timestamps.
 candidate document, type, normalized score, reason, confidence, and
 source/problem context in `reason_json`. Catalogue documents remain the
 authoritative record.
+
+## Knowledge graph intelligence
+
+`document_relationships` stores directed document edges with generated
+source/target aliases, relationship strength, confidence, provenance,
+explanation, and JSON evidence. `saved_graph_paths` stores user-owned,
+reproducible relationship journeys. Graph traversal remains bounded and
+cycle-safe.
 
 ## Search and performance
 

@@ -88,7 +88,13 @@ const scoreRecommendation = (signals = {}) => {
 
 const reasonFromSignals = (signals, candidate) => {
   const reasons = [];
-  if (signals.relationship) reasons.push("a verified catalogue relationship");
+  if (signals.relationshipType) {
+    reasons.push(
+      `the verified ${signals.relationshipType.replaceAll("_", " ")} relationship`,
+    );
+  } else if (signals.relationship) {
+    reasons.push("a verified catalogue relationship");
+  }
   if (signals.sameMinistry) reasons.push("the same ministry");
   else if (signals.sameAuthority) reasons.push("the same issuing authority");
   if (signals.sameState) reasons.push(`the same state (${candidate.state})`);
@@ -136,6 +142,8 @@ const mapCandidateSignals = (row, semanticIds, profile) => {
     publicationTime >= Date.now() - 366 * 24 * 60 * 60 * 1_000;
   return {
     relationship: Boolean(row.relationship_match),
+    relationshipType: row.relationship_type || null,
+    relationshipExplanation: row.relationship_explanation || null,
     sameMinistry: Boolean(row.same_ministry),
     sameAuthority: Boolean(row.same_authority),
     sameJurisdiction: Boolean(row.same_jurisdiction),
@@ -183,6 +191,12 @@ const shapeRecommendation = (row, signals) => {
     signals: Object.entries(signals)
       .filter(([, enabled]) => enabled === true)
       .map(([name]) => name),
+    graphRelationship: signals.relationshipType
+      ? {
+          type: signals.relationshipType,
+          explanation: signals.relationshipExplanation,
+        }
+      : null,
   };
   return {
     ...candidate,
@@ -300,7 +314,41 @@ const getDocumentRecommendations = async (
            relationship.to_document_id = current.id
            AND relationship.from_document_id = candidate.id
          )
-       ) AS relationship_match
+       ) AS relationship_match,
+       (
+         SELECT relationship.relationship_type
+         FROM document_relationships relationship
+         WHERE (
+           relationship.from_document_id = current.id
+           AND relationship.to_document_id = candidate.id
+         ) OR (
+           relationship.to_document_id = current.id
+           AND relationship.from_document_id = candidate.id
+         )
+         ORDER BY COALESCE(
+           relationship.relationship_strength,
+           relationship.confidence,
+           0
+         ) DESC
+         LIMIT 1
+       ) AS relationship_type,
+       (
+         SELECT relationship.explanation
+         FROM document_relationships relationship
+         WHERE (
+           relationship.from_document_id = current.id
+           AND relationship.to_document_id = candidate.id
+         ) OR (
+           relationship.to_document_id = current.id
+           AND relationship.from_document_id = candidate.id
+         )
+         ORDER BY COALESCE(
+           relationship.relationship_strength,
+           relationship.confidence,
+           0
+         ) DESC
+         LIMIT 1
+       ) AS relationship_explanation
      FROM documents candidate
      JOIN legislative_documents legacy ON legacy.id = candidate.id
      CROSS JOIN current_document current
@@ -319,7 +367,8 @@ const getDocumentRecommendations = async (
          AND COALESCE(candidate.jurisdiction, '') =
            COALESCE(current.jurisdiction, '')
        )
-     ORDER BY candidate.quality_score DESC,
+     ORDER BY relationship_match DESC,
+       candidate.quality_score DESC,
        candidate.research_ready DESC,
        candidate.publication_date DESC NULLS LAST
      LIMIT $4`,

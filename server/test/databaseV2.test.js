@@ -20,6 +20,8 @@ test("database migrations are versioned and ordered", () => {
   assert.ok(files.includes("001_database_v2.js"));
   assert.ok(files.includes("002_normalized_support_tables.js"));
   assert.ok(files.includes("003_quarantine_navigation_artifacts.js"));
+  assert.ok(files.includes("004_comparison_recommendation_intelligence.js"));
+  assert.ok(files.includes("005_government_knowledge_graph.js"));
 });
 
 test("quality score rewards provenance and processing evidence", () => {

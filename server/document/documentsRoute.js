@@ -323,8 +323,15 @@ router.get("/:id/summary", async (req, res) => {
 
 router.get("/:id/relationships", async (req, res) => {
   try {
-    const relationships = await DocumentService.getRelated(req.params.id);
-    return res.json({ relationships });
+    const { getRelationships } = require("../graph/knowledgeGraphService");
+    return res.json(
+      await getRelationships(req.params.id, {
+        type: req.query.type,
+        minimumConfidence: req.query.minimumConfidence,
+        limit: req.query.limit,
+        offset: req.query.offset,
+      }),
+    );
   } catch (error) {
     return sendError(res, error, "Universal document relationships failed");
   }
@@ -366,7 +373,11 @@ router.get("/:id/timeline", async (req, res) => {
 
 router.get("/:id/graph", async (req, res) => {
   try {
-    const graph = await DocumentService.getGraph(req.params.id);
+    const { getGraph } = require("../graph/knowledgeGraphService");
+    const graph = await getGraph(req.params.id, {
+      depth: req.query.depth,
+      limit: req.query.limit,
+    });
     return res.json({ graph });
   } catch (error) {
     return sendError(res, error, "Universal graph failed");

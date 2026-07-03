@@ -6,6 +6,9 @@ const {
 const {
   getDocumentRecommendations,
 } = require("./recommendationService");
+const {
+  getComparisonGraphOverlap,
+} = require("../graph/knowledgeGraphService");
 const { generateDocumentComparison } = require("../lib/vectordb");
 
 const MODES = new Set([
@@ -194,6 +197,19 @@ const createComparison = async (userId, payload) => {
     })
     .join("\n\n");
 
+  const graphIntelligence = await getComparisonGraphOverlap(documentIds);
+  const graphContext = graphIntelligence.relationships.length
+    ? [
+        "=== VERIFIED KNOWLEDGE GRAPH RELATIONSHIPS ===",
+        ...graphIntelligence.relationships.map((relationship) =>
+          [
+            `${relationship.sourceTitle} --${relationship.type}--> ${relationship.targetTitle}`,
+            `Confidence: ${relationship.confidence ?? "not scored"}`,
+            relationship.explanation || "",
+          ].filter(Boolean).join("\n"),
+        ),
+      ].join("\n\n")
+    : "";
   const generated = await generateDocumentComparison({
     mode,
     language,
@@ -221,7 +237,7 @@ const createComparison = async (userId, payload) => {
       year,
       publicationDate,
     })),
-    context,
+    context: [context, graphContext].filter(Boolean).join("\n\n"),
   });
   const recommendedDocuments = [
     ...new Map(
@@ -277,6 +293,7 @@ const createComparison = async (userId, payload) => {
       }),
     ),
     citations,
+    relationshipIntelligence: graphIntelligence,
     recommendedDocuments,
   };
   const title = `Comparison: ${documents

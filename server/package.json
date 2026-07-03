@@ -14,6 +14,8 @@
     "db:cleanup-report": "node cli/dbCleanupReport.js",
     "db:migrate": "node cli/dbMigrate.js",
     "db:verify": "node cli/dbVerify.js",
+    "graph:discover": "node cli/discoverRelationships.js",
+    "graph:verify": "node cli/verifyGraph.js",
     "ingest:catalog": "node scripts/ingest-prs-catalog.js",
     "ingest:catalog-only": "node scripts/ingest-prs-catalog.js --catalog-only",
     "ingest:sources": "node cli/ingestSources.js",

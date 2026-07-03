@@ -175,9 +175,47 @@ export const fetchDocumentTimeline = async (documentId) => {
   );
 };
 
-export const fetchDocumentGraph = async (documentId) => {
-  return apiRequest(`/documents/${encodeURIComponent(documentId)}/graph`);
+export const fetchDocumentGraph = async (documentId, options = {}) => {
+  return apiRequest(
+    `/documents/${encodeURIComponent(documentId)}/graph?${toQueryString(
+      options,
+    )}`,
+  );
 };
+
+export const fetchDocumentRelationships = async (
+  documentId,
+  options = {},
+) =>
+  apiRequest(
+    `/documents/${encodeURIComponent(documentId)}/relationships?${toQueryString(
+      options,
+    )}`,
+  );
+
+export const searchKnowledgeGraph = async (query, options = {}) =>
+  apiRequest(
+    `/graph/search?${toQueryString({ ...options, q: query })}`,
+  );
+
+export const findKnowledgeGraphPath = async (
+  sourceDocumentId,
+  targetDocumentId,
+  maxDepth = 6,
+) =>
+  apiRequest(
+    `/graph/path?${toQueryString({
+      from: sourceDocumentId,
+      to: targetDocumentId,
+      maxDepth,
+    })}`,
+  );
+
+export const saveKnowledgeGraphPath = async (payload) =>
+  apiRequest("/graph/paths", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
 
 export const sendCrossDocumentChat = async (
   {
