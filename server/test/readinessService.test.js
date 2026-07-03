@@ -9,6 +9,9 @@ const {
   mapDocument,
 } = require("../document/DocumentRepository");
 const { PDFProcessor } = require("../lib/pdfProcessor");
+const {
+  parseSummarySections,
+} = require("../document/documentResearchService");
 
 test("PDF failures are classified by permanent and retriable cause", () => {
   const missing = classifyProcessingFailure({
@@ -74,5 +77,46 @@ test("PDF processing rejects unsupported and private URLs before download", asyn
   await assert.rejects(
     processor.downloadPDF("http://127.0.0.1/document.pdf"),
     /Private network/,
+  );
+});
+
+test("PDF quality and legal chunk metadata remain explicit", () => {
+  const processor = new PDFProcessor();
+  const quality = processor.classifyPdfQuality({
+    buffer: Buffer.alloc(50_000),
+    nativeText: "A".repeat(2_000),
+    numPages: 2,
+    ocrUsed: false,
+    language: { isBilingual: false },
+  });
+  assert.equal(quality.qualityClass, "native_text");
+  assert.equal(quality.charactersPerPage, 1_000);
+
+  const text = [
+    "Section 4. Definitions",
+    "In this Act, authority means the competent authority.",
+    "4.1 The authority shall publish the prescribed form.",
+  ].join("\n");
+  const metadata = processor.structuralChunkMetadata(
+    text,
+    text,
+    0,
+    3,
+  );
+  assert.equal(metadata.structuralType, "section");
+  assert.equal(metadata.sectionId, "4.");
+  assert.equal(metadata.pageStart, 1);
+  assert.ok(metadata.pageEnd >= metadata.pageStart);
+});
+
+test("cached research summaries preserve structured sections", () => {
+  assert.deepEqual(
+    parseSummarySections(
+      "## Executive Summary\nGrounded overview.\n## Key Provisions\n- Duty",
+    ),
+    {
+      executive_summary: "Grounded overview.",
+      key_provisions: "- Duty",
+    },
   );
 });

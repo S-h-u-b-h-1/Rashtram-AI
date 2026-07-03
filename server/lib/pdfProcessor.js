@@ -128,6 +128,37 @@ class PDFProcessor {
     return letters >= requiredLetters;
   }
 
+  classifyPdfQuality({
+    buffer,
+    nativeText,
+    numPages,
+    ocrUsed,
+    language,
+  }) {
+    const fileSizeBytes = Number(buffer?.length || 0);
+    const pages = Math.max(Number(numPages || 0), 1);
+    const textLength = String(nativeText || "").length;
+    const charactersPerPage = Math.round(textLength / pages);
+    let qualityClass = "native_text";
+    if (ocrUsed) {
+      qualityClass = "scanned";
+    } else if (charactersPerPage < 180) {
+      qualityClass = "mixed";
+    }
+    if (language?.isBilingual) qualityClass = "multi_language";
+    if (fileSizeBytes > MAX_INLINE_OCR_BYTES) qualityClass = "very_large";
+    if (fileSizeBytes > 0 && fileSizeBytes < 8_000) qualityClass = "very_small";
+    return {
+      qualityClass,
+      fileSizeBytes,
+      numPages: Number(numPages || 0),
+      nativeTextLength: textLength,
+      charactersPerPage,
+      ocrUsed: Boolean(ocrUsed),
+      isBilingual: Boolean(language?.isBilingual),
+    };
+  }
+
   sentenceUnits(text, languageCode = "und") {
     const boundary = languageCode.startsWith("hi")
       ? /(?<=[.!?।॥])\s+|\n{2,}|(?=\n(?:धारा|अध्याय|भाग|अनुसूची|\d+[.)]))/u
@@ -179,6 +210,56 @@ class PDFProcessor {
     }
     pushChunk(current);
     return chunks;
+  }
+
+  structuralChunkMetadata(
+    content,
+    fullText,
+    cursor,
+    numPages,
+  ) {
+    const value = String(content || "");
+    const heading = value.match(
+      /(?:^|\n)\s*(section|article|rule|regulation|chapter|part|schedule|appendix|annexure|धारा|अनुच्छेद|नियम|अध्याय|भाग|अनुसूची)\s+([A-Z0-9IVXLC().-]+)([^\n]{0,180})/iu,
+    );
+    const clause = value.match(
+      /(?:^|\n)\s*(\d+(?:\.\d+)*|\([a-z0-9ivx]+\))[\s.)-]+/iu,
+    );
+    const normalizedType = heading?.[1]?.toLowerCase() || (
+      /\bdefinitions?\b|\bपरिभाषा\b/iu.test(value.slice(0, 500))
+        ? "definitions"
+        : clause
+          ? "clause"
+          : "passage"
+    );
+    const needle = value.slice(0, 120).trim();
+    let start = needle ? fullText.indexOf(needle, Math.max(0, cursor - 500)) : -1;
+    if (start < 0 && needle) start = fullText.indexOf(needle);
+    if (start < 0) start = Math.max(0, cursor);
+    const end = Math.min(fullText.length, start + value.length);
+    const pages = Math.max(Number(numPages || 0), 1);
+    const denominator = Math.max(fullText.length, 1);
+    const pageStart = Math.min(
+      pages,
+      Math.max(1, Math.floor((start / denominator) * pages) + 1),
+    );
+    const pageEnd = Math.min(
+      pages,
+      Math.max(pageStart, Math.floor((end / denominator) * pages) + 1),
+    );
+    return {
+      start,
+      end,
+      pageStart,
+      pageEnd,
+      pageEstimate: true,
+      structuralType: normalizedType,
+      sectionId: heading?.[2] || null,
+      sectionTitle: heading
+        ? `${heading[1]} ${heading[2]}${heading[3] || ""}`.trim()
+        : null,
+      clauseId: clause?.[1] || null,
+    };
   }
 
   async downloadPDF(pdfUrl) {
@@ -294,16 +375,40 @@ class PDFProcessor {
   }
 
   async processPDFByPages(pdfUrl) {
+    const totalStartedAt = Date.now();
+    const downloadStartedAt = Date.now();
     const buffer = await this.downloadPDF(pdfUrl);
-    const native = await this.parsePDFBuffer(buffer);
+    const downloadMs = Date.now() - downloadStartedAt;
+    const parseStartedAt = Date.now();
+    let native;
+    try {
+      native = await this.parsePDFBuffer(buffer);
+    } catch (error) {
+      const encrypted = /\/Encrypt\b/.test(
+        buffer.subarray(0, Math.min(buffer.length, 1_000_000)).toString("latin1"),
+      );
+      const wrapped = new Error(
+        encrypted
+          ? "Encrypted PDF cannot be processed."
+          : `Corrupted PDF could not be parsed: ${error.message}`,
+      );
+      wrapped.status = 422;
+      wrapped.code = encrypted ? "PDF_ENCRYPTED" : "PDF_CORRUPTED";
+      wrapped.pdfQualityClass = encrypted ? "encrypted" : "corrupted";
+      throw wrapped;
+    }
+    const parseMs = Date.now() - parseStartedAt;
     let fullText = native.fullText;
     let extractionMethod = "pdf_text";
     let ocrUsed = false;
     let ocrRequired = false;
+    let ocrMs = 0;
 
     if (!this.hasUsableText(fullText, native.numPages)) {
       ocrRequired = true;
+      const ocrStartedAt = Date.now();
       fullText = await this.extractTextWithOcr(buffer);
+      ocrMs = Date.now() - ocrStartedAt;
       extractionMethod = "openai_ocr";
       ocrUsed = true;
     }
@@ -316,7 +421,16 @@ class PDFProcessor {
     }
 
     const language = this.detectLanguage(fullText);
+    const cleanupStartedAt = Date.now();
     const cleanedText = this.cleanText(fullText, language.languageCode);
+    const cleanupMs = Date.now() - cleanupStartedAt;
+    const pdfQuality = this.classifyPdfQuality({
+      buffer,
+      nativeText: native.fullText,
+      numPages: native.numPages,
+      ocrUsed,
+      language,
+    });
     return {
       ...native,
       fullText: cleanedText,
@@ -328,6 +442,14 @@ class PDFProcessor {
       ocrRequired,
       language,
       fileSizeBytes: buffer.length,
+      pdfQuality,
+      stageMetrics: {
+        downloadMs,
+        parseMs,
+        ocrMs,
+        cleanupMs,
+        pdfTotalMs: Date.now() - totalStartedAt,
+      },
     };
   }
 
@@ -363,6 +485,14 @@ class PDFProcessor {
     }
 
     const structuredChunks = chunks.map((content, index) => ({
+      ...this.structuralChunkMetadata(
+        content,
+        pdfData.fullText,
+        index === 0 ? 0 : chunks
+          .slice(0, index)
+          .reduce((sum, chunk) => sum + chunk.length - this.overlap, 0),
+        pdfData.numPages,
+      ),
       id: `${documentId}-chunk-${index}`,
       billId: String(documentId),
       title,
@@ -384,8 +514,19 @@ class PDFProcessor {
         ocrUsed: pdfData.ocrUsed,
         ocrRequired: pdfData.ocrRequired,
         isBilingual: pdfData.language.isBilingual,
+        pdfQualityClass: pdfData.pdfQuality.qualityClass,
       },
     }));
+
+    for (const chunk of structuredChunks) {
+      chunk.metadata.pageStart = chunk.pageStart;
+      chunk.metadata.pageEnd = chunk.pageEnd;
+      chunk.metadata.pageEstimate = chunk.pageEstimate;
+      chunk.metadata.structuralType = chunk.structuralType;
+      chunk.metadata.sectionId = chunk.sectionId;
+      chunk.metadata.sectionTitle = chunk.sectionTitle;
+      chunk.metadata.clauseId = chunk.clauseId;
+    }
 
     return {
       chunks: structuredChunks,
@@ -402,7 +543,10 @@ class PDFProcessor {
         info: pdfData.info,
         metadata: pdfData.metadata,
         fileSizeBytes: pdfData.fileSizeBytes,
+        quality: pdfData.pdfQuality,
       },
+      pdfQuality: pdfData.pdfQuality,
+      stageMetrics: pdfData.stageMetrics,
     };
   }
 

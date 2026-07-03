@@ -23,4 +23,8 @@ module.exports = [
     name: "006_full_research_readiness.js",
     migration: require("./006_full_research_readiness"),
   },
+  {
+    name: "007_mass_processing_infrastructure.js",
+    migration: require("./007_mass_processing_infrastructure"),
+  },
 ];

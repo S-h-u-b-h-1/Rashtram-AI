@@ -23,9 +23,16 @@ const argumentFlag = (name) => {
 
 processDocumentBatch({
   limit: argumentValue("limit", 25),
+  concurrency: argumentValue("concurrency", 3),
+  maxAttempts: argumentValue("max-attempts", 3),
+  staleMinutes: argumentValue("stale-minutes", 15),
+  sourceConcurrency: argumentValue("source-concurrency", 2),
   type: argumentValue("type"),
   onlyUnprocessed: argumentFlag("only-unprocessed"),
   retryFailed: argumentFlag("retry-failed"),
+  resume: argumentFlag("resume"),
+  enqueueOnly: argumentFlag("enqueue-only"),
+  discoverGraph: !argumentFlag("skip-graph"),
 })
   .then((result) => console.log(JSON.stringify(result, null, 2)))
   .catch((error) => {

@@ -59,9 +59,10 @@ product gates are mirrored to `documents.research_ready` and
 ## Queue and operational commands
 
 Processing requests are recorded in `document_processing_jobs`. Active jobs
-are unique per document, priorities are bounded, attempts are recorded, and
-the CLI processes documents sequentially to avoid overloading official
-sources or model/vector providers.
+are unique per document, priorities are bounded, and concurrent workers use
+atomic `SKIP LOCKED` claims. PostgreSQL stores checkpoints, worker heartbeats,
+attempt metrics, delayed retries, and dead-letter outcomes. Per-source
+concurrency prevents the worker pool from overloading official hosts.
 
 ```bash
 npm run process:audit --prefix server
@@ -71,11 +72,17 @@ npm run process:documents --prefix server -- --type=bill --limit=100
 npm run process:documents --prefix server -- --type=state_bill --limit=100
 npm run process:documents --prefix server -- --type=act --limit=100
 npm run process:documents --prefix server -- --retry-failed
+npm run process:documents --prefix server -- --limit=500 --resume --concurrency=3
 ```
 
 The batch order prioritizes interacted-with documents, comparison selections,
-Bills, Acts, policies, Gazette records, graph-connected records, quality, and
-recency. Use small batches first after any provider or pipeline change.
+recommendations, graph degree, policies, Bills, Acts, Gazette records, recency,
+quality, and PDF-size cost efficiency. Use small batches first after any
+provider or pipeline change.
+
+Chunks retain estimated page range, structural type, section/article/rule ID,
+section title, clause ID, source URL, original language, extraction method, and
+PDF quality class. Citations expose those fields in chat and comparison.
 
 ## Required server configuration
 

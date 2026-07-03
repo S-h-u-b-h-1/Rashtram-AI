@@ -83,6 +83,9 @@ const getTextArtifact = async (documentId) => {
        ocr_used,
        ocr_required,
        metadata_json,
+       summary_json,
+       pdf_quality_class,
+       pdf_quality_json,
        updated_at
      FROM document_text_artifacts
      WHERE document_id = $1
@@ -104,6 +107,9 @@ const getTextArtifact = async (documentId) => {
     ocrUsed: row.ocr_used,
     ocrRequired: row.ocr_required,
     metadata: row.metadata_json || {},
+    summarySections: row.summary_json || {},
+    pdfQualityClass: row.pdf_quality_class || null,
+    pdfQuality: row.pdf_quality_json || {},
     updatedAt: row.updated_at,
   };
 };
@@ -117,6 +123,8 @@ const saveTextArtifact = async (
     extractionMethod,
     ocrUsed,
     ocrRequired,
+    summaryJson = {},
+    pdfQuality = null,
     metadata = {},
   },
 ) => {
@@ -132,9 +140,15 @@ const saveTextArtifact = async (
        extraction_method,
        ocr_used,
        ocr_required,
-       metadata_json
+       metadata_json,
+       summary_json,
+       pdf_quality_class,
+       pdf_quality_json
      )
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11::jsonb)
+     VALUES (
+       $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11::jsonb,
+       $12::jsonb, $13, $14::jsonb
+     )
      ON CONFLICT (document_id)
      DO UPDATE SET
        language_code = EXCLUDED.language_code,
@@ -147,6 +161,9 @@ const saveTextArtifact = async (
        ocr_used = EXCLUDED.ocr_used,
        ocr_required = EXCLUDED.ocr_required,
        metadata_json = EXCLUDED.metadata_json,
+       summary_json = EXCLUDED.summary_json,
+       pdf_quality_class = EXCLUDED.pdf_quality_class,
+       pdf_quality_json = EXCLUDED.pdf_quality_json,
        updated_at = NOW()`,
     [
       documentId,
@@ -160,12 +177,41 @@ const saveTextArtifact = async (
       Boolean(ocrUsed),
       Boolean(ocrRequired),
       JSON.stringify(metadata),
+      JSON.stringify(summaryJson || {}),
+      pdfQuality?.qualityClass || null,
+      JSON.stringify(pdfQuality || {}),
     ],
   );
   for (const key of contextCache.keys()) {
     if (key.endsWith(`:${documentId}`)) contextCache.delete(key);
   }
 };
+
+const parseSummarySections = (summary) => {
+  const sections = {};
+  const parts = String(summary || "").split(/^##\s+/m).slice(1);
+  for (const part of parts) {
+    const [heading, ...body] = part.split("\n");
+    const key = String(heading || "")
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "_")
+      .replace(/^_|_$/g, "");
+    if (key) sections[key] = body.join("\n").trim();
+  }
+  return sections;
+};
+
+const questionsFromSummary = (summarySections) =>
+  String(summarySections?.suggested_questions || "")
+    .split("\n")
+    .map((line) =>
+      line
+        .replace(/^\s*(?:[-*]|\d+[.)])\s*/, "")
+        .trim(),
+    )
+    .filter(Boolean)
+    .slice(0, 4);
 
 const getDocument = async (documentType, documentId) => {
   const requestedType = normalizeDocumentType(documentType);
@@ -282,6 +328,7 @@ const saveNormalizedChunks = async (documentId, chunks, languageCode) => {
 };
 
 const processDocument = async (documentType, documentId) => {
+  const totalStartedAt = Date.now();
   const document = await getDocument(documentType, documentId);
   if (!document) {
     const error = new Error("Document not found.");
@@ -289,9 +336,14 @@ const processDocument = async (documentType, documentId) => {
     throw error;
   }
   const config = typeConfig(documentType);
+  const indexCheckStartedAt = Date.now();
   const existence = await config.check(documentId);
+  const indexCheckMs = Date.now() - indexCheckStartedAt;
   if (existence.exists) {
+    const storedArtifact = await getTextArtifact(documentId);
+    const indexedLoadStartedAt = Date.now();
     const matches = await loadIndexedChunks(config, documentId);
+    const pineconeReadMs = Date.now() - indexedLoadStartedAt;
     const context = matches
       .map((match) => match.metadata?.content || "")
       .filter(Boolean)
@@ -299,14 +351,16 @@ const processDocument = async (documentType, documentId) => {
     if (context) {
       const language = pdfProcessor.detectLanguage(context);
       const summary =
+        storedArtifact?.englishSummary ||
         existence.summary ||
         await generateDocumentSummary(documentType, context, {
           sourceLanguage: language.languageCode,
         });
-      const suggestedQuestions = await generateSuggestedQuestions(
-        documentType,
-        summary,
-      );
+      const summarySections = parseSummarySections(summary);
+      const suggestedQuestions =
+        questionsFromSummary(summarySections).length > 0
+          ? questionsFromSummary(summarySections)
+          : await generateSuggestedQuestions(documentType, summary);
       await saveTextArtifact(documentId, {
         language,
         originalText: context,
@@ -315,6 +369,13 @@ const processDocument = async (documentType, documentId) => {
           matches[0]?.metadata?.extractionMethod || "pdf_text",
         ocrUsed: Boolean(matches[0]?.metadata?.ocrUsed),
         ocrRequired: Boolean(matches[0]?.metadata?.ocrRequired),
+        summaryJson: {
+          ...summarySections,
+          suggestedQuestions,
+        },
+        pdfQuality: matches[0]?.metadata?.pdfQualityClass
+          ? { qualityClass: matches[0].metadata.pdfQualityClass }
+          : null,
         metadata: {
           reconstructedFromIndexedChunks: true,
           chunks: matches.length,
@@ -346,6 +407,18 @@ const processDocument = async (documentType, documentId) => {
         textArtifact: await getTextArtifact(documentId),
         textLength: context.length,
         language,
+        stageMetrics: {
+          indexCheckMs,
+          pineconeReadMs,
+          totalMs: Date.now() - totalStartedAt,
+        },
+        usage: {
+          estimated: true,
+          generationInputTokens: Math.ceil(context.length / 4),
+          generationOutputTokens: Math.ceil(summary.length / 4),
+          embeddingInputTokens: 0,
+          ocrUsed: Boolean(matches[0]?.metadata?.ocrUsed),
+        },
       };
     }
   }
@@ -367,15 +440,18 @@ const processDocument = async (documentType, documentId) => {
     .slice(0, 6)
     .map((chunk) => chunk.content)
     .join("\n\n");
+  const summaryStartedAt = Date.now();
   const summary = await generateDocumentSummary(
     documentType,
     summaryContext,
     { sourceLanguage: processed.language.languageCode },
   );
-  const suggestedQuestions = await generateSuggestedQuestions(
-    documentType,
-    summary,
-  );
+  const summarySections = parseSummarySections(summary);
+  const suggestedQuestions =
+    questionsFromSummary(summarySections).length > 0
+      ? questionsFromSummary(summarySections)
+      : await generateSuggestedQuestions(documentType, summary);
+  const summaryMs = Date.now() - summaryStartedAt;
   await saveTextArtifact(documentId, {
     language: processed.language,
     originalText: processed.originalText,
@@ -383,6 +459,11 @@ const processDocument = async (documentType, documentId) => {
     extractionMethod: processed.extractionMethod,
     ocrUsed: processed.ocrUsed,
     ocrRequired: processed.ocrRequired,
+    summaryJson: {
+      ...summarySections,
+      suggestedQuestions,
+    },
+    pdfQuality: processed.pdfQuality,
     metadata: {
       ...processed.pdfMetadata,
       suggestedQuestions,
@@ -399,17 +480,23 @@ const processDocument = async (documentType, documentId) => {
       ...chunk.metadata,
       documentType,
       sourceUrl: document.sourceUrl,
-      summary,
       languageCode: processed.language.languageCode,
       script: processed.language.script,
       originalLanguage: processed.language.languageCode,
     },
   }));
   const stored = await config.store(chunks);
+  const chunkPersistenceStartedAt = Date.now();
   await saveNormalizedChunks(
     documentId,
     chunks,
     processed.language.languageCode,
+  );
+  const chunkPersistenceMs = Date.now() - chunkPersistenceStartedAt;
+  const embeddingInputTokens = chunks.reduce(
+    (sum, chunk) =>
+      sum + Math.ceil(String(chunk.embeddingText || chunk.content).length / 4),
+    0,
   );
   return {
     alreadyProcessed: false,
@@ -422,6 +509,23 @@ const processDocument = async (documentType, documentId) => {
     language: processed.language,
     ocrUsed: processed.ocrUsed,
     ocrRequired: processed.ocrRequired,
+    pdfQuality: processed.pdfQuality,
+    stageMetrics: {
+      indexCheckMs,
+      ...(processed.stageMetrics || {}),
+      summaryMs,
+      embeddingsMs: Number(stored.metrics?.embeddingsMs || 0),
+      pineconeMs: Number(stored.metrics?.pineconeMs || 0),
+      chunkPersistenceMs,
+      totalMs: Date.now() - totalStartedAt,
+    },
+    usage: {
+      estimated: true,
+      generationInputTokens: Math.ceil(summaryContext.length / 4),
+      generationOutputTokens: Math.ceil(summary.length / 4),
+      embeddingInputTokens,
+      ocrUsed: processed.ocrUsed,
+    },
   };
 };
 
@@ -446,6 +550,14 @@ const retrievePassages = async (
       match.metadata?.languageCode ||
       match.metadata?.originalLanguage ||
       "und",
+    pageStart: match.metadata?.pageStart || null,
+    pageEnd: match.metadata?.pageEnd || null,
+    pageEstimate: Boolean(match.metadata?.pageEstimate),
+    sectionId: match.metadata?.sectionId || null,
+    sectionTitle: match.metadata?.sectionTitle || null,
+    clauseId: match.metadata?.clauseId || null,
+    structuralType: match.metadata?.structuralType || "passage",
+    sourceUrl: match.metadata?.sourceUrl || null,
   }));
 };
 
@@ -489,5 +601,6 @@ module.exports = {
   retrievePassages,
   saveTextArtifact,
   saveNormalizedChunks,
+  parseSummarySections,
   searchAcrossIndexedDocuments,
 };

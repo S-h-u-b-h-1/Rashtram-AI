@@ -2,11 +2,20 @@ import { DatabaseZap } from "lucide-react";
 
 export function ResearchReadinessMetrics({ metrics }) {
   if (!metrics) return null;
+  const duration = (milliseconds) => {
+    const seconds = Math.round(Number(milliseconds || 0) / 1_000);
+    if (seconds < 60) return `${seconds}s`;
+    return `${Math.floor(seconds / 60)}m ${seconds % 60}s`;
+  };
   const values = [
     ["Research ready", metrics.researchReady],
     ["Comparison ready", metrics.comparisonReady],
     ["Processing backlog", metrics.processableBacklog],
     ["Stored passages", metrics.chunks],
+    ["Queued", metrics.queue?.queued],
+    ["Processing", metrics.queue?.running],
+    ["Failed / DLQ", (metrics.queue?.failed || 0) + (metrics.queue?.deadLetter || 0)],
+    ["Throughput / hour", metrics.performance?.throughputPerHour],
   ];
   return (
     <section className="surface-card p-5 sm:p-6">
@@ -33,6 +42,40 @@ export function ResearchReadinessMetrics({ metrics }) {
           </div>
         ))}
       </dl>
+      {metrics.performance && (
+        <div className="mt-4 grid gap-3 rounded-xl border border-[#8f1d2c]/8 bg-[#fffaf0] p-4 text-xs text-[#706a61] sm:grid-cols-2 xl:grid-cols-4">
+          <p>
+            Average processing{" "}
+            <strong className="text-[#29312d]">
+              {duration(metrics.performance.averageDurationMs)}
+            </strong>
+          </p>
+          <p>
+            Failure rate{" "}
+            <strong className="text-[#29312d]">
+              {(Number(metrics.performance.failureRate || 0) * 100).toFixed(1)}%
+            </strong>
+          </p>
+          <p>
+            Active workers{" "}
+            <strong className="text-[#29312d]">
+              {(metrics.workers || []).filter(
+                (worker) => worker.status === "running",
+              ).length}
+            </strong>
+          </p>
+          <p>
+            Estimated completion{" "}
+            <strong className="text-[#29312d]">
+              {metrics.performance.estimatedCompletionHours == null
+                ? "Awaiting throughput"
+                : `${metrics.performance.estimatedCompletionHours.toLocaleString(
+                  "en-IN",
+                )}h`}
+            </strong>
+          </p>
+        </div>
+      )}
       {(metrics.latestProcessed || []).length > 0 && (
         <div className="mt-5">
           <h3 className="text-xs font-semibold text-[#514d46]">

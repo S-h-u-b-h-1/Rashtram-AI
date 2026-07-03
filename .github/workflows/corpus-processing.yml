@@ -1,0 +1,83 @@
+name: Research corpus processing
+
+on:
+  workflow_dispatch:
+    inputs:
+      batch_size:
+        description: Maximum documents to process
+        required: true
+        default: "75"
+        type: string
+      concurrency:
+        description: Worker concurrency (1-4 recommended)
+        required: true
+        default: "3"
+        type: string
+      resume_only:
+        description: Consume queued work without adding documents
+        required: true
+        default: false
+        type: boolean
+  schedule:
+    - cron: "15 */6 * * *"
+
+concurrency:
+  group: rashtram-research-corpus
+  cancel-in-progress: false
+
+jobs:
+  process:
+    runs-on: ubuntu-latest
+    timeout-minutes: 330
+    permissions:
+      contents: read
+    defaults:
+      run:
+        working-directory: server
+    env:
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      PINECONE_API_KEY: ${{ secrets.PINECONE_API_KEY }}
+      OPENAI_MODEL: gpt-5.4-mini
+      OPENAI_FALLBACK_MODEL: gpt-4.1-mini
+      OPENAI_OCR_MODEL: gpt-5.4-mini
+      OPENAI_EMBEDDING_MODEL: text-embedding-3-large
+      EMBEDDING_PROVIDER: openai
+      PINECONE_INDEX_NAME: rashtram-bills
+      PINECONE_ACT_INDEX_NAME: rashtram-acts
+      PROCESSING_CONCURRENCY: "3"
+      PROCESSING_SOURCE_CONCURRENCY: "2"
+      NODE_ENV: production
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: server/package-lock.json
+
+      - name: Install backend dependencies
+        run: npm ci
+
+      - name: Apply additive database migrations
+        run: npm run db:migrate
+
+      - name: Process prioritized corpus batch
+        shell: bash
+        run: |
+          BATCH_SIZE="${{ github.event_name == 'workflow_dispatch' && inputs.batch_size || '75' }}"
+          WORKERS="${{ github.event_name == 'workflow_dispatch' && inputs.concurrency || '3' }}"
+          EXTRA_ARGS="--only-unprocessed"
+          if [[ "${{ github.event_name == 'workflow_dispatch' && inputs.resume_only || 'false' }}" == "true" ]]; then
+            EXTRA_ARGS="--resume"
+          fi
+          npm run process:documents -- \
+            --limit="$BATCH_SIZE" \
+            --concurrency="$WORKERS" \
+            --source-concurrency=2 \
+            $EXTRA_ARGS
+
+      - name: Report corpus status
+        if: always()
+        run: npm run process:status

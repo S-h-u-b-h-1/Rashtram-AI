@@ -11,6 +11,7 @@ const {
 const {
   prepareDocument,
 } = require("./readinessService");
+const DocumentRepository = require("./DocumentRepository");
 const {
   completeSSE,
   errorSSE,
@@ -306,7 +307,7 @@ router.post("/", async (req, res) => {
     if (!message) {
       return res.status(400).json({ error: "Message is required." });
     }
-    const [passages, relationshipContext] = await Promise.all([
+    const [passages, relationshipContext, document] = await Promise.all([
       retrievePassages(
         documentType,
         documentId,
@@ -314,9 +315,27 @@ router.post("/", async (req, res) => {
         6,
       ),
       getRelationshipContext(documentId, message),
+      DocumentRepository.getById(documentId),
     ]);
     const passageContext = passages
-      .map((item) => `[Passage ${item.passage}]\n${item.content}`)
+      .map((item) => {
+        const location = [
+          document?.title || `Document ${documentId}`,
+          item.pageStart
+            ? `Page ${item.pageStart}${
+              item.pageEnd && item.pageEnd !== item.pageStart
+                ? `–${item.pageEnd}`
+                : ""
+            }${item.pageEstimate ? " (estimated)" : ""}`
+            : null,
+          item.sectionTitle || (
+            item.sectionId ? `Section ${item.sectionId}` : null
+          ),
+          item.clauseId ? `Clause ${item.clauseId}` : null,
+          `Chunk ${item.chunkIndex + 1}`,
+        ].filter(Boolean).join(" | ");
+        return `[Source ${item.passage}: ${location}]\n${item.content}`;
+      })
       .join("\n\n");
     const context = [
       passageContext,
@@ -327,6 +346,14 @@ router.post("/", async (req, res) => {
     const sources = [
       ...passages.map((item) => ({
         ...item,
+        documentTitle: document?.title || null,
+        documentType: document?.type || documentType,
+        page: item.pageStart,
+        section: item.sectionTitle || item.sectionId,
+        clause: item.clauseId,
+        chunk: item.chunkIndex + 1,
+        sourceUrl: item.sourceUrl || document?.sourceUrl || null,
+        pdfUrl: item.pdfUrl || document?.pdfUrl || null,
         content: item.content.slice(0, 360),
       })),
       ...relationshipContext.sources,

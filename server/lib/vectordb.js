@@ -337,8 +337,9 @@ ${prompt}
 
 Give a comprehensive, accessible answer. Clearly state when the context does
 not contain enough information. Do not invent provisions, dates, or citations.
-When the context contains labels such as [Passage 1], cite the relevant labels
-inline. Respond in ${language}. Preserve quoted source text in its original
+When the context contains labels such as [Source 1: Document | Page | Section |
+Chunk], cite those exact labels inline for every substantive claim. Respond in
+${language}. Preserve quoted source text in its original
 language and explain it in ${language} when needed.
 `;
 
@@ -411,6 +412,7 @@ Use exactly these Markdown sections:
 ## Legal Impact
 ## Compliance Notes
 ## Related Documents
+## Suggested Questions
 
 Document content:
 ${content}
@@ -658,6 +660,8 @@ const storeContentInChunks = async ({
   chunkIdField = "billId",
 }) => {
   let totalStored = 0;
+  let embeddingsMs = 0;
+  let pineconeMs = 0;
 
   for (
     let start = 0;
@@ -665,14 +669,14 @@ const storeContentInChunks = async ({
     start += EMBEDDING_BATCH_SIZE
   ) {
     const batch = chunks.slice(start, start + EMBEDDING_BATCH_SIZE);
+    const embeddingStartedAt = Date.now();
     const embeddings = await generateEmbeddings(
       batch.map((chunk) => chunk.embeddingText || chunk.content),
       "RETRIEVAL_DOCUMENT",
     );
-    const vectors = batch.map((chunk, index) => ({
-      id: chunk.id,
-      values: embeddings[index],
-      metadata: {
+    embeddingsMs += Date.now() - embeddingStartedAt;
+    const vectors = batch.map((chunk, index) => {
+      const metadata = {
         [idField]: String(
           chunk[chunkIdField] ?? chunk.billId ?? chunk.documentId,
         ),
@@ -683,14 +687,29 @@ const storeContentInChunks = async ({
         timestamp: new Date().toISOString(),
         embeddingProvider: EMBEDDING_PROVIDER,
         ...chunk.metadata,
-      },
-    }));
+      };
+      return {
+        id: chunk.id,
+        values: embeddings[index],
+        metadata: Object.fromEntries(
+          Object.entries(metadata).filter(
+            ([, value]) => value !== null && value !== undefined,
+          ),
+        ),
+      };
+    });
 
+    const pineconeStartedAt = Date.now();
     await upsertWithRetry(index, vectors);
+    pineconeMs += Date.now() - pineconeStartedAt;
     totalStored += vectors.length;
   }
 
-  return { chunksStored: totalStored, success: true };
+  return {
+    chunksStored: totalStored,
+    success: true,
+    metrics: { embeddingsMs, pineconeMs },
+  };
 };
 
 const storeBillContentInChunks = (chunks) =>
