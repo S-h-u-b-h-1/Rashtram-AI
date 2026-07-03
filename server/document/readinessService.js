@@ -572,9 +572,20 @@ const runReadinessAudit = async () => {
       (summary[row.readiness_class] || 0) + 1;
     return summary;
   }, {});
+  const reconciled = await query(`
+    UPDATE document_processing_jobs job
+    SET status = 'dead_letter', completed_at = COALESCE(completed_at, NOW()),
+        updated_at = NOW()
+    FROM document_processing_state state
+    WHERE state.document_id = job.document_id
+      AND state.readiness_class = 'processing_failed_permanent'
+      AND job.status = 'failed'
+    RETURNING job.id
+  `);
   return {
     audited: result.rows.length,
     createdStates: inserted.rows.length,
+    reconciledDeadLetters: reconciled.rows.length,
     counts,
   };
 };

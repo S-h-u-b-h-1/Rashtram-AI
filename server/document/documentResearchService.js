@@ -493,9 +493,10 @@ const processDocument = async (documentType, documentId) => {
     ...chunk,
     id: `${documentType}-${documentId}-chunk-${index}`,
     [config.idField]: String(documentId),
-    embeddingText: processed.language.languageCode.startsWith("hi")
-      ? `${chunk.content}\n\nEnglish document summary: ${summary}`
-      : chunk.content,
+    // text-embedding-3-large is multilingual. Preserve and embed each source
+    // chunk directly instead of duplicating a generated English summary into
+    // every Hindi vector request.
+    embeddingText: chunk.content,
     metadata: {
       ...chunk.metadata,
       documentType,
