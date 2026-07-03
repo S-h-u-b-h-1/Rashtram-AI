@@ -62,15 +62,29 @@ scheduled ingestion, source health, and Vercel configuration.
 - Initial backfill failed closed on an empty Pinecone secret and recorded the
   failures without false readiness promotion.
 
-## Production verification pending
+## Production verification
 
-The following must be updated after the final deployment:
+- Backend deployment `dpl_A8Qsq6iTZ4MQPJFjwmFCc2gTaZkW` is READY and aliased
+  to `https://rashtram-ai-backend.vercel.app`.
+- Frontend deployment `dpl_DhR1oGHCinaAkX7wcLb67HSZfmGF` is READY and aliased
+  to `https://rashtram-ai.vercel.app`.
+- Backend `/health` returned `status=OK`, `database=connected`, and
+  `aiProvider=openai`.
+- The landing page returned HTTP 200, title `Rashtram AI`, the official
+  favicon returned HTTP 200, and no console warnings/errors were observed.
+- Unauthenticated `/app` access redirected truthfully to the production login
+  page.
+- A 390px production viewport had no horizontal overflow.
+- Frontend and backend Vercel error-log scans found no errors in the first
+  30 minutes after deployment.
+- Live recommendation validation returned a relevant GST amendment Bill for a
+  selected GST Bill and returned an honest empty result for a weak broadcasting
+  comparison match.
 
-- deployment URLs and READY state;
-- browser checks for catalogue, document research, comparison, dashboard, and
-  profile;
-- backend health/log check;
-- confirmation that a newly processed document works in chat and comparison.
+An authenticated end-to-end chat/comparison browser session was not performed
+because the verification browser had no test account session. The same newly
+processed documents passed the server-side retrieval probe that gates both
+features; authenticated manual smoke testing remains recommended.
 
 ## Remaining limitations
 
