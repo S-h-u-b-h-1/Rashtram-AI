@@ -72,7 +72,9 @@ test("serverless schema initialization is serialized and versioned", () => {
     path.join(__dirname, "..", "db.js"),
     "utf8",
   );
-  assert.match(databaseSource, /pg_advisory_lock/);
+  assert.match(databaseSource, /pg_advisory_xact_lock/);
+  assert.match(databaseSource, /BEGIN/);
+  assert.match(databaseSource, /COMMIT/);
   assert.match(databaseSource, /application_schema_versions/);
   assert.match(databaseSource, /SCHEMA_VERSION/);
 });

@@ -38,9 +38,12 @@ const getPool = () => {
 const initializeSchema = async () => {
   const pool = getPool();
   const client = await pool.connect();
+  let transactionOpen = false;
 
   try {
-    await client.query("SELECT pg_advisory_lock($1)", [SCHEMA_LOCK_KEY]);
+    await client.query("BEGIN");
+    transactionOpen = true;
+    await client.query("SELECT pg_advisory_xact_lock($1)", [SCHEMA_LOCK_KEY]);
     await client.query(`
       CREATE TABLE IF NOT EXISTS application_schema_versions (
         id SMALLINT PRIMARY KEY DEFAULT 1 CHECK (id = 1),
@@ -52,6 +55,8 @@ const initializeSchema = async () => {
       "SELECT version FROM application_schema_versions WHERE id = 1",
     );
     if (Number(versionResult.rows[0]?.version || 0) >= SCHEMA_VERSION) {
+      await client.query("COMMIT");
+      transactionOpen = false;
       return;
     }
 
@@ -1160,10 +1165,14 @@ const initializeSchema = async () => {
          updated_at = NOW()`,
       [SCHEMA_VERSION],
     );
+    await client.query("COMMIT");
+    transactionOpen = false;
+  } catch (error) {
+    if (transactionOpen) {
+      await client.query("ROLLBACK").catch(() => undefined);
+    }
+    throw error;
   } finally {
-    await client
-      .query("SELECT pg_advisory_unlock($1)", [SCHEMA_LOCK_KEY])
-      .catch(() => undefined);
     client.release();
   }
 };

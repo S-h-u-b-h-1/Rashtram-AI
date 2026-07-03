@@ -156,6 +156,15 @@ export const getDocumentRecommendations = async (
   );
 };
 
+export const recommendDocumentsForComparison = async (payload) =>
+  apiRequest("/documents/recommend-for-comparison", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+
+export const getDocumentReadiness = async (documentId) =>
+  apiRequest(`/documents/${encodeURIComponent(documentId)}/readiness`);
+
 export const getRecentRecommendations = async (limit = 12) => {
   return apiRequest(
     `/profile/recommendations?limit=${encodeURIComponent(limit)}`,

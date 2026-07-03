@@ -86,6 +86,20 @@ test("comparison readiness exposes specific disabled reasons", () => {
     }),
     null,
   );
+  assert.equal(
+    readinessReason({
+      id: "1",
+      title: "Bill",
+      pdfUrl: "https://example.test/a.pdf",
+      researchReady: true,
+      comparisonReady: false,
+      readinessReason: "Retrieval verification is pending.",
+      extractionStatus: "ready",
+      embeddingStatus: "ready",
+      chunksCount: 3,
+    }),
+    "Retrieval verification is pending.",
+  );
 });
 
 test("comparison accepts the public API contract and legacy aliases", () => {

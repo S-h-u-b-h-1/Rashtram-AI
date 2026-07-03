@@ -53,6 +53,7 @@ const documentNode = (row, prefix = "") => ({
       row[`${prefix}pdf_url`] || row[`${prefix}canonical_url`],
     ),
     researchReady: Boolean(row[`${prefix}research_ready`]),
+    comparisonReady: Boolean(row[`${prefix}comparison_ready`]),
   },
 });
 
@@ -125,6 +126,7 @@ const getRelationships = async (documentId, options = {}) => {
          related.source_url
        ) AS related_canonical_url,
        schema_document.research_ready AS related_research_ready,
+       schema_document.comparison_ready AS related_comparison_ready,
        COUNT(*) OVER()::INTEGER AS total_count
      FROM document_relationships relationship
      JOIN legislative_documents related
@@ -237,6 +239,7 @@ const getGraph = async (documentId, options = {}) => {
          source.source_url
        ) AS source_canonical_url,
        source_schema.research_ready AS source_research_ready,
+       source_schema.comparison_ready AS source_comparison_ready,
        target.id AS target_id,
        target.title AS target_title,
        target.document_type AS target_document_type,
@@ -255,7 +258,8 @@ const getGraph = async (documentId, options = {}) => {
          target.detail_url,
          target.source_url
        ) AS target_canonical_url,
-       target_schema.research_ready AS target_research_ready
+       target_schema.research_ready AS target_research_ready,
+       target_schema.comparison_ready AS target_comparison_ready
      FROM document_relationships relationship
      JOIN node_ids source_node
        ON source_node.document_id = relationship.from_document_id
@@ -298,7 +302,8 @@ const getGraph = async (documentId, options = {}) => {
            legacy.detail_url,
            legacy.source_url
          ) AS canonical_url,
-         schema_document.research_ready
+         schema_document.research_ready,
+         schema_document.comparison_ready
        FROM legislative_documents legacy
        LEFT JOIN documents schema_document ON schema_document.id = legacy.id
        WHERE legacy.id = $1`,
@@ -364,6 +369,7 @@ const searchGraph = async (search, options = {}) => {
        legacy.pdf_url,
        schema_document.canonical_url,
        schema_document.research_ready,
+       schema_document.comparison_ready,
        COUNT(relationship.id)::INTEGER AS relationship_count
      FROM legislative_documents legacy
      JOIN documents schema_document ON schema_document.id = legacy.id
@@ -482,7 +488,8 @@ const findPath = async (sourceValue, targetValue, options = {}) => {
          legacy.introduced_date, legacy.enacted_date, legacy.effective_date,
          legacy.pdf_url,
          schema_document.canonical_url,
-         schema_document.research_ready
+         schema_document.research_ready,
+         schema_document.comparison_ready
        FROM UNNEST($1::BIGINT[]) WITH ORDINALITY requested(id, position)
        JOIN legislative_documents legacy ON legacy.id = requested.id
        LEFT JOIN documents schema_document ON schema_document.id = legacy.id

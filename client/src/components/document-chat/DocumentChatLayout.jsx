@@ -86,7 +86,7 @@ export function DocumentChatLayout({
   } = usePinnedChatScroll(messages);
 
   const prepareDocument = useCallback(async (canonicalDocument) => {
-    if (!canonicalDocument?.pdfUrl) return "";
+    if (!canonicalDocument?.pdfUrl) return null;
     setProcessing(true);
     setProcessingError("");
     try {
@@ -102,15 +102,27 @@ export function DocumentChatLayout({
         }));
       }
       setSummary(generatedSummary);
-      setResearchReady(true);
-      return generatedSummary;
+      setResearchReady(Boolean(result.researchReady));
+      setDocument((current) => ({
+        ...current,
+        researchReady: Boolean(result.researchReady),
+        comparisonReady: Boolean(result.comparisonReady),
+        readiness: result.researchReady ? "research_ready" : current.readiness,
+        readinessClass: result.comparisonReady
+          ? "comparison_ready"
+          : result.researchReady
+            ? "research_ready"
+            : current.readinessClass,
+        processingStatus: result.researchReady ? "ready" : current.processingStatus,
+      }));
+      return result;
     } catch (processingFailure) {
       const message =
         processingFailure.message ||
         "The document could not be prepared for AI research.";
       setProcessingError(message);
       setResearchReady(false);
-      return "";
+      return null;
     } finally {
       setProcessing(false);
     }
@@ -129,9 +141,7 @@ export function DocumentChatLayout({
           ...(detail.document || {}),
         };
         setDocument(canonical);
-        setResearchReady(
-          Boolean(canonical.researchReady || canonical.textArtifact),
-        );
+        setResearchReady(Boolean(canonical.researchReady));
         trackActivity({
           event_type: "chat_started",
           entity_type: documentType,
@@ -140,6 +150,10 @@ export function DocumentChatLayout({
           page_path: `/app/document/${documentId}`,
           metadata_json: { documentType },
         });
+        if (!canonical.researchReady) {
+          setMessages([]);
+          return;
+        }
         const history = await getDocumentChatHistory(
           documentType,
           documentId,
@@ -153,10 +167,10 @@ export function DocumentChatLayout({
           return;
         }
 
-        let generatedSummary = "";
-        if (canonical.pdfUrl) {
-          generatedSummary = await prepareDocument(canonical);
-        }
+        const generatedSummary =
+          history.chat?.summary ||
+          canonical.summary ||
+          "";
         if (cancelled) return;
         setSummary(generatedSummary);
         const session = await createDocumentChatSession(
@@ -166,9 +180,7 @@ export function DocumentChatLayout({
         );
         setIsPinned(Boolean(session.chat?.isPinned));
         const welcome = {
-          text: canonical.pdfUrl
-            ? `I've prepared **${canonical.title}** for evidence-grounded research. Ask about provisions, implementation, affected institutions, or related records.`
-            : `I can show verified metadata for **${canonical.title}**, but grounded chat requires an official PDF.`,
+          text: `I've prepared **${canonical.title}** for evidence-grounded research. Ask about provisions, implementation, affected institutions, or related records.`,
           sender: "assistant",
           timestamp: timeLabel(),
         };
@@ -200,7 +212,7 @@ export function DocumentChatLayout({
     return () => {
       cancelled = true;
     };
-  }, [documentId, documentType, initialDocument, prepareDocument]);
+  }, [documentId, documentType, initialDocument]);
 
   useEffect(
     () => () => {
@@ -363,12 +375,12 @@ export function DocumentChatLayout({
   };
 
   const retryProcessing = async () => {
-    const generatedSummary = await prepareDocument(document);
-    if (!generatedSummary) return;
+    const result = await prepareDocument(document);
+    if (!result?.researchReady) return;
     await updateDocumentChatSummary(
       documentType,
       documentId,
-      generatedSummary,
+      result.summary || "",
     ).catch(() => undefined);
   };
 
@@ -420,7 +432,7 @@ export function DocumentChatLayout({
         </p>
       )}
       {processingError && (
-        <div className="flex shrink-0 items-center justify-between gap-3 bg-[#f4dfdc] px-4 py-2 text-xs text-[#85434a] xl:hidden">
+        <div className="flex shrink-0 items-center justify-between gap-3 bg-[#f4dfdc] px-4 py-2 text-xs text-[#85434a]">
           <span className="line-clamp-2">
             Processing failed. {processingError}
           </span>
@@ -450,6 +462,30 @@ export function DocumentChatLayout({
       </details>
       <div className="grid min-h-0 flex-1 xl:grid-cols-[minmax(0,1fr)_380px]">
         <main id="research-chat" className="flex min-h-0 flex-col">
+          {!researchReady && !processing && (
+            <div className="border-b border-[#8f1d2c]/8 bg-[#fffaf0] px-4 py-3 text-xs text-[#706a61]">
+              <p className="font-semibold text-[#8f1d2c]">
+                Research is not ready for this document.
+              </p>
+              <p className="mt-1">
+                {processingError ||
+                  document.readinessReason ||
+                  (document.pdfUrl
+                    ? "Choose Retry to prepare searchable passages."
+                    : "View the source or PDF when available; grounded chat remains disabled.")}
+              </p>
+              {document.pdfUrl && !processingError && (
+                <button
+                  type="button"
+                  onClick={retryProcessing}
+                  className="mt-2 inline-flex items-center gap-1 rounded-lg bg-[#8f1d2c] px-2.5 py-1.5 text-[10px] font-semibold text-white"
+                >
+                  <RefreshCw className="h-3 w-3" />
+                  Prepare for Research
+                </button>
+              )}
+            </div>
+          )}
           <div
             ref={scrollContainerRef}
             onScroll={handleScroll}

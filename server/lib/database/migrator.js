@@ -8,9 +8,14 @@ const migrationFiles = () =>
 const runMigrations = async (pool) => {
   const client = await pool.connect();
   const applied = [];
+  let transactionOpen = false;
 
   try {
-    await client.query("SELECT pg_advisory_lock($1)", [MIGRATION_LOCK_KEY]);
+    await client.query("BEGIN");
+    transactionOpen = true;
+    await client.query("SELECT pg_advisory_xact_lock($1)", [
+      MIGRATION_LOCK_KEY,
+    ]);
     await client.query(`
       CREATE TABLE IF NOT EXISTS schema_migrations (
         migration_name TEXT PRIMARY KEY,
@@ -37,27 +42,24 @@ const runMigrations = async (pool) => {
         continue;
       }
 
-      await client.query("BEGIN");
-      try {
-        await migration.up(client);
-        await client.query(
-          `INSERT INTO schema_migrations (migration_name, checksum)
-           VALUES ($1, $2)`,
-          [file, migration.checksum],
-        );
-        await client.query("COMMIT");
-        applied.push(file);
-      } catch (error) {
-        await client.query("ROLLBACK");
-        throw error;
-      }
+      await migration.up(client);
+      await client.query(
+        `INSERT INTO schema_migrations (migration_name, checksum)
+         VALUES ($1, $2)`,
+        [file, migration.checksum],
+      );
+      applied.push(file);
     }
 
+    await client.query("COMMIT");
+    transactionOpen = false;
     return { applied, available: migrationFiles() };
+  } catch (error) {
+    if (transactionOpen) {
+      await client.query("ROLLBACK").catch(() => undefined);
+    }
+    throw error;
   } finally {
-    await client
-      .query("SELECT pg_advisory_unlock($1)", [MIGRATION_LOCK_KEY])
-      .catch(() => undefined);
     client.release();
   }
 };

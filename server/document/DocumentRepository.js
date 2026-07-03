@@ -71,11 +71,28 @@ const mapDocument = (row) => {
     extractionStatus: row.extraction_status || null,
     embeddingStatus: row.embedding_status || null,
     summaryStatus: row.summary_status || null,
+    pdfStatus: row.pdf_status || null,
+    ocrStatus: row.ocr_status || null,
+    chunkingStatus: row.chunking_status || null,
     chunksCount: Number(row.chunks_count || 0),
+    embeddingsCount: Number(row.embeddings_count || 0),
+    textLength: Number(row.text_length || 0),
+    retryCount: Number(row.retry_count || 0),
+    failureStage: row.failure_stage || null,
+    failureReason:
+      row.failure_reason || row.processing_error || null,
+    failureDetails: row.failure_details_json || {},
+    readinessClass: row.readiness_class || readiness,
+    readinessReason: row.readiness_reason || null,
+    lastAttemptedAt: toIso(row.last_attempted_at),
     hasAccessibleResource,
     processedAt: toIso(row.processed_at),
     readiness,
     researchReady: readiness === "research_ready",
+    comparisonReady: Boolean(
+      row.comparison_ready &&
+      readiness === "research_ready",
+    ),
     qualityScore:
       row.quality_score == null ? null : Number(row.quality_score),
     visibilityStatus: row.visibility_status || "public",
@@ -231,6 +248,40 @@ const buildFilters = (options = {}) => {
   if (options.hasPdf === false || options.hasPdf === "false") {
     conditions.push("pdf_url IS NULL");
   }
+  if (options.researchReady === true || options.researchReady === "true") {
+    conditions.push(`EXISTS (
+      SELECT 1 FROM documents readiness_document
+      WHERE readiness_document.id = legislative_documents.id
+        AND readiness_document.research_ready
+    )`);
+  }
+  if (options.researchReady === false || options.researchReady === "false") {
+    conditions.push(`NOT EXISTS (
+      SELECT 1 FROM documents readiness_document
+      WHERE readiness_document.id = legislative_documents.id
+        AND readiness_document.research_ready
+    )`);
+  }
+  if (
+    options.comparisonReady === true ||
+    options.comparisonReady === "true"
+  ) {
+    conditions.push(`EXISTS (
+      SELECT 1 FROM documents readiness_document
+      WHERE readiness_document.id = legislative_documents.id
+        AND readiness_document.comparison_ready
+    )`);
+  }
+  if (
+    options.comparisonReady === false ||
+    options.comparisonReady === "false"
+  ) {
+    conditions.push(`NOT EXISTS (
+      SELECT 1 FROM documents readiness_document
+      WHERE readiness_document.id = legislative_documents.id
+        AND readiness_document.comparison_ready
+    )`);
+  }
 
   const search = String(options.search || options.q || "").trim();
   let searchCondition = null;
@@ -328,6 +379,11 @@ const find = async (options = {}) => {
            FROM documents schema_document
            WHERE schema_document.id = legislative_documents.id
          ), FALSE) AS research_ready,
+         COALESCE((
+           SELECT schema_document.comparison_ready
+           FROM documents schema_document
+           WHERE schema_document.id = legislative_documents.id
+         ), FALSE) AS comparison_ready,
          (
            SELECT schema_document.quality_score
            FROM documents schema_document
@@ -338,6 +394,21 @@ const find = async (options = {}) => {
            FROM documents schema_document
            WHERE schema_document.id = legislative_documents.id
          ) AS visibility_status,
+         (
+           SELECT state.readiness_class
+           FROM document_processing_state state
+           WHERE state.document_id = legislative_documents.id
+         ) AS readiness_class,
+         (
+           SELECT state.readiness_reason
+           FROM document_processing_state state
+           WHERE state.document_id = legislative_documents.id
+         ) AS readiness_reason,
+         (
+           SELECT state.failure_reason
+           FROM document_processing_state state
+           WHERE state.document_id = legislative_documents.id
+         ) AS failure_reason,
          ${rankExpression} AS search_rank
        FROM legislative_documents
        WHERE ${filters.where}
@@ -377,6 +448,11 @@ const getById = async (id) => {
          FROM documents schema_document
          WHERE schema_document.id = legislative_documents.id
        ), FALSE) AS research_ready,
+       COALESCE((
+         SELECT schema_document.comparison_ready
+         FROM documents schema_document
+         WHERE schema_document.id = legislative_documents.id
+       ), FALSE) AS comparison_ready,
        (
          SELECT schema_document.quality_score
          FROM documents schema_document
@@ -414,10 +490,70 @@ const getById = async (id) => {
          WHERE state.document_id = legislative_documents.id
        ) AS summary_status,
        (
+         SELECT state.pdf_status
+         FROM document_processing_state state
+         WHERE state.document_id = legislative_documents.id
+       ) AS pdf_status,
+       (
+         SELECT state.ocr_status
+         FROM document_processing_state state
+         WHERE state.document_id = legislative_documents.id
+       ) AS ocr_status,
+       (
+         SELECT state.chunking_status
+         FROM document_processing_state state
+         WHERE state.document_id = legislative_documents.id
+       ) AS chunking_status,
+       (
          SELECT state.chunks_count
          FROM document_processing_state state
          WHERE state.document_id = legislative_documents.id
-       ) AS chunks_count
+       ) AS chunks_count,
+       (
+         SELECT state.embeddings_count
+         FROM document_processing_state state
+         WHERE state.document_id = legislative_documents.id
+       ) AS embeddings_count,
+       (
+         SELECT state.text_length
+         FROM document_processing_state state
+         WHERE state.document_id = legislative_documents.id
+       ) AS text_length,
+       (
+         SELECT state.retry_count
+         FROM document_processing_state state
+         WHERE state.document_id = legislative_documents.id
+       ) AS retry_count,
+       (
+         SELECT state.failure_stage
+         FROM document_processing_state state
+         WHERE state.document_id = legislative_documents.id
+       ) AS failure_stage,
+       (
+         SELECT state.failure_reason
+         FROM document_processing_state state
+         WHERE state.document_id = legislative_documents.id
+       ) AS failure_reason,
+       (
+         SELECT state.failure_details_json
+         FROM document_processing_state state
+         WHERE state.document_id = legislative_documents.id
+       ) AS failure_details_json,
+       (
+         SELECT state.readiness_class
+         FROM document_processing_state state
+         WHERE state.document_id = legislative_documents.id
+       ) AS readiness_class,
+       (
+         SELECT state.readiness_reason
+         FROM document_processing_state state
+         WHERE state.document_id = legislative_documents.id
+       ) AS readiness_reason,
+       (
+         SELECT state.last_attempted_at
+         FROM document_processing_state state
+         WHERE state.document_id = legislative_documents.id
+       ) AS last_attempted_at
      FROM legislative_documents
      WHERE id::TEXT = $1 OR canonical_id = $1
      LIMIT 1`,
@@ -459,7 +595,55 @@ const updateProcessingStatus = async (
   details = {},
 ) => {
   const errorMessage = error ? String(error).slice(0, 1_000) : null;
-  const chunksCount = Math.max(0, Number(details.chunksCount || 0));
+  const existingResult = await query(
+    `SELECT * FROM document_processing_state WHERE document_id = $1`,
+    [id],
+  );
+  const existing = existingResult.rows[0] || {};
+  const chunksCount = Math.max(
+    0,
+    Number(details.chunksCount ?? existing.chunks_count ?? 0),
+  );
+  const embeddingsCount = Math.max(
+    0,
+    Number(details.embeddingsCount ?? existing.embeddings_count ?? 0),
+  );
+  const failureStage =
+    details.failureStage || (status === "failed" ? "processing" : null);
+  const stageStatus = (name, readyValue = "ready") =>
+    details[name] ||
+    (status === "ready"
+      ? readyValue
+      : status === "failed" &&
+          failureStage === name.replace("Status", "").toLowerCase()
+        ? "failed"
+        : existing[
+          name.replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`)
+        ] || "not_started");
+  const extractionStatus = stageStatus("extractionStatus");
+  const embeddingStatus = stageStatus("embeddingStatus");
+  const summaryStatus = stageStatus("summaryStatus");
+  const chunkingStatus = stageStatus("chunkingStatus");
+  const ocrStatus =
+    details.ocrStatus ||
+    existing.ocr_status ||
+    (details.ocrRequired ? "pending" : "not_required");
+  const pdfStatus =
+    details.pdfStatus ||
+    existing.pdf_status ||
+    (status === "ready" ? "available" : "unknown");
+  const failureReason =
+    details.failureReason || errorMessage || null;
+  const readinessClass =
+    details.readinessClass ||
+    (status === "ready"
+      ? "comparison_ready"
+      : status === "failed"
+        ? "processing_failed_retriable"
+        : "processing_pending");
+  const readinessReason =
+    details.readinessReason ||
+    (status === "ready" ? null : failureReason || "Document processing is pending.");
   await query(
     `UPDATE legislative_documents
      SET processing_status = $2,
@@ -473,36 +657,18 @@ const updateProcessingStatus = async (
     `INSERT INTO document_processing_state (
        document_id, processing_status, extraction_status, embedding_status,
        summary_status, ocr_status, error_message, chunks_count,
-       embedding_provider, ai_provider, last_processed_at, updated_at
+       embedding_provider, ai_provider, last_processed_at, updated_at,
+       pdf_status, chunking_status, research_ready, comparison_ready,
+       embeddings_count, text_length, language, script, is_bilingual,
+       retry_count, failure_stage, failure_reason, failure_details_json,
+       readiness_class, readiness_reason, last_attempted_at
      )
-     SELECT
-       d.id,
-       $2,
-       CASE
-         WHEN $2 = 'ready' THEN 'ready'
-         WHEN $2 = 'failed' THEN 'failed'
-         ELSE COALESCE(ps.extraction_status, 'not_started')
-       END,
-       CASE
-         WHEN $2 = 'ready' THEN 'ready'
-         WHEN $2 = 'failed' THEN 'failed'
-         ELSE COALESCE(ps.embedding_status, 'not_started')
-       END,
-       CASE
-         WHEN $2 = 'ready' THEN 'ready'
-         WHEN $2 = 'failed' THEN 'failed'
-         ELSE COALESCE(ps.summary_status, 'not_started')
-       END,
-       COALESCE(ps.ocr_status, 'not_required'),
-       $3,
-       GREATEST(COALESCE(ps.chunks_count, 0), $4),
-       CASE WHEN $2 = 'ready' THEN $5 ELSE ps.embedding_provider END,
-       CASE WHEN $2 = 'ready' THEN $6 ELSE ps.ai_provider END,
-       CASE WHEN $2 = 'ready' THEN NOW() ELSE ps.last_processed_at END,
-       NOW()
-     FROM documents d
-     LEFT JOIN document_processing_state ps ON ps.document_id = d.id
-     WHERE d.id = $1
+     VALUES (
+       $1, $2, $3, $4, $5, $6, $7, $8, $9, $10,
+       CASE WHEN $2 = 'ready' THEN NOW() ELSE $11 END,
+       NOW(), $12, $13, FALSE, FALSE, $14, $15, $16, $17, $18,
+       $19, $20, $21, $22::jsonb, $23, $24, NOW()
+     )
      ON CONFLICT (document_id) DO UPDATE SET
        processing_status = EXCLUDED.processing_status,
        extraction_status = EXCLUDED.extraction_status,
@@ -510,37 +676,60 @@ const updateProcessingStatus = async (
        summary_status = EXCLUDED.summary_status,
        ocr_status = EXCLUDED.ocr_status,
        error_message = EXCLUDED.error_message,
-       chunks_count = GREATEST(
-         document_processing_state.chunks_count,
-         EXCLUDED.chunks_count
-       ),
-       embedding_provider = COALESCE(
-         EXCLUDED.embedding_provider,
-         document_processing_state.embedding_provider
-       ),
-       ai_provider = COALESCE(
-         EXCLUDED.ai_provider,
-         document_processing_state.ai_provider
-       ),
+       chunks_count = EXCLUDED.chunks_count,
+       embedding_provider = EXCLUDED.embedding_provider,
+       ai_provider = EXCLUDED.ai_provider,
        last_processed_at = COALESCE(
          EXCLUDED.last_processed_at,
          document_processing_state.last_processed_at
        ),
+       pdf_status = EXCLUDED.pdf_status,
+       chunking_status = EXCLUDED.chunking_status,
+       embeddings_count = EXCLUDED.embeddings_count,
+       text_length = EXCLUDED.text_length,
+       language = EXCLUDED.language,
+       script = EXCLUDED.script,
+       is_bilingual = EXCLUDED.is_bilingual,
+       retry_count = EXCLUDED.retry_count,
+       failure_stage = EXCLUDED.failure_stage,
+       failure_reason = EXCLUDED.failure_reason,
+       failure_details_json = EXCLUDED.failure_details_json,
+       readiness_class = EXCLUDED.readiness_class,
+       readiness_reason = EXCLUDED.readiness_reason,
+       last_attempted_at = EXCLUDED.last_attempted_at,
        updated_at = NOW()`,
     [
       id,
       status,
+      extractionStatus,
+      embeddingStatus,
+      summaryStatus,
+      ocrStatus,
       errorMessage,
       chunksCount,
       details.embeddingProvider || process.env.OPENAI_EMBEDDING_MODEL || "openai",
       details.aiProvider || "openai",
+      existing.last_processed_at || null,
+      pdfStatus,
+      chunkingStatus,
+      embeddingsCount,
+      Math.max(0, Number(details.textLength ?? existing.text_length ?? 0)),
+      details.language || existing.language || null,
+      details.script || existing.script || null,
+      Boolean(details.isBilingual ?? existing.is_bilingual),
+      Number(existing.retry_count || 0) +
+        (status === "failed" ? 1 : 0),
+      failureStage,
+      failureReason,
+      JSON.stringify(details.failureDetails || {}),
+      readinessClass,
+      readinessReason,
     ],
   );
   await query(
     `UPDATE documents d
      SET research_ready = (
-       d.canonical_url IS NOT NULL
-       AND EXISTS (
+       EXISTS (
          SELECT 1 FROM document_resources r
          WHERE r.document_id = d.id
            AND r.resource_type IN ('pdf', 'text', 'html')
@@ -551,13 +740,57 @@ const updateProcessingStatus = async (
          WHERE ps.document_id = d.id
            AND ps.processing_status = 'ready'
            AND ps.extraction_status = 'ready'
+           AND ps.chunking_status = 'ready'
            AND ps.embedding_status = 'ready'
            AND ps.chunks_count > 0
+           AND ps.embeddings_count >= ps.chunks_count
            AND ps.error_message IS NULL
+           AND $2 = 'ready'
+           AND $3
+       )
+     ),
+     comparison_ready = (
+       EXISTS (
+         SELECT 1 FROM document_resources r
+         WHERE r.document_id = d.id
+           AND r.resource_type IN ('pdf', 'text', 'html')
+           AND r.is_accessible
+       )
+       AND EXISTS (
+         SELECT 1 FROM document_processing_state ps
+         WHERE ps.document_id = d.id
+           AND ps.processing_status = 'ready'
+           AND ps.extraction_status = 'ready'
+           AND ps.chunking_status = 'ready'
+           AND ps.embedding_status = 'ready'
+           AND ps.chunks_count > 0
+           AND ps.embeddings_count >= ps.chunks_count
+           AND ps.error_message IS NULL
+           AND $2 = 'ready'
+           AND $3
        )
      ),
      updated_at = NOW()
      WHERE d.id = $1`,
+    [id, status, details.retrievalVerified === true],
+  );
+  await query(
+    `UPDATE document_processing_state state
+     SET research_ready = document.research_ready,
+         comparison_ready = document.comparison_ready,
+         readiness_class = CASE
+           WHEN document.comparison_ready THEN 'comparison_ready'
+           WHEN document.research_ready THEN 'research_ready'
+           ELSE state.readiness_class
+         END,
+         readiness_reason = CASE
+           WHEN document.research_ready THEN NULL
+           ELSE state.readiness_reason
+         END,
+         updated_at = NOW()
+     FROM documents document
+     WHERE document.id = state.document_id
+       AND state.document_id = $1`,
     [id],
   );
 };
@@ -608,11 +841,16 @@ const getPDF = async (id) => {
 const getChatHistory = (userId, documentType, id) =>
   DocumentChat.findOne(userId, documentType, id);
 
-const getRecommendations = async (id, userId = null, limit = 8) => {
+const getRecommendations = async (
+  id,
+  userId = null,
+  limit = 8,
+  options = {},
+) => {
   const {
     getDocumentRecommendations,
   } = require("./recommendationService");
-  return getDocumentRecommendations(id, userId, { limit });
+  return getDocumentRecommendations(id, userId, { limit, ...options });
 };
 
 const getRelatedChats = async (id, userId = null, limit = 6) => {

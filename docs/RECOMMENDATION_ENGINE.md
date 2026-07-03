@@ -12,14 +12,17 @@ Primary recommendations require `visibility_status = public`,
 duplicate-title records, and low-quality records are excluded.
 
 Signals include verified relationships, ministry/authority, state and
-jurisdiction, category and type, full-text similarity, legal identifiers,
-semantic similarity, opted-in user preferences, recency, quality, and research
-readiness. Results contain a normalized score, confidence, reason, and signal
-names. Low-confidence results stay behind a “More” action.
+jurisdiction, department, category and type, year/session, title similarity,
+legal identifiers, semantic similarity, opted-in user preferences, recent
+usage/popularity, recency, quality, research readiness, and comparison
+readiness. Graph relationship type and explanation are retained when present.
+Results contain a normalized score, confidence, reason, and signal names.
+Low-confidence results stay behind a “More” action.
 
 ## APIs and product integration
 
 - `GET /api/documents/:id/recommendations`
+- `POST /api/documents/recommend-for-comparison`
 - `POST /api/recommendations/problem`
 - `GET /api/recommendations/recent`
 - `GET /api/profile/recommendations`
@@ -35,3 +38,13 @@ consent-aware activity system. Recommendation snapshots expire after 30 days.
 Sparse research-ready coverage can correctly return no result. Semantic
 scoring degrades to catalogue signals if vector retrieval is unavailable.
 Rashtram AI provides research assistance, not legal advice.
+
+For a Bill, the related-document request is type-scoped to Bills. The selected
+Bill, duplicates, invalid/quarantined records, and non-ready records are
+excluded. If no candidate clears the confidence threshold, the product shows:
+“No closely related Bills are available yet.”
+
+Comparison recommendations accept one to five selected IDs. Candidates that
+match more than one selected document receive a bounded bridge boost; verified
+graph links receive a separate bounded boost. Only `comparison_ready`
+candidates can be added.

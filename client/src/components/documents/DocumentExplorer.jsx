@@ -36,16 +36,25 @@ const EMPTY_FILTERS = {
   language: "",
   state: "",
   hasPdf: "",
+  researchReady: "",
+  comparisonReady: "",
   publicationFrom: "",
   publicationTo: "",
 };
 
 const READINESS_LABELS = {
   research_ready: "Research Ready",
+  comparison_ready: "Research Ready",
   pdf_available: "PDF Available",
   processing_failed: "Processing Failed",
   source_only: "Source Only",
   missing_pdf: "Missing PDF",
+  processing_pending: "Processing Pending",
+  processing_failed_retriable: "Retry Available",
+  processing_failed_permanent: "Processing Unavailable",
+  ocr_required: "OCR Required",
+  unsupported_file_type: "Unsupported File",
+  invalid_or_quarantined: "Quarantined",
 };
 
 const documentDateLabel = (document) => {
@@ -239,11 +248,14 @@ export function DocumentExplorer({
             {documents.map((document) => {
               const selected = isSelected(document.id);
               const readiness =
+                document.readinessClass ||
                 document.readiness ||
                 (document.pdfUrl ? "pdf_available" : "source_only");
               const canPrepare =
-                readiness === "research_ready" ||
-                readiness === "pdf_available";
+                ["comparison_ready", "research_ready", "pdf_available",
+                  "pdf_available_not_processed",
+                  "processing_failed_retriable",
+                  "ocr_required"].includes(readiness);
               const compareDisabled = comparisonDisabledReason(document);
               return (
                 <article
@@ -277,6 +289,7 @@ export function DocumentExplorer({
                         </span>
                       )}
                       <span
+                        title={document.readinessReason || undefined}
                         className={
                           readiness === "research_ready"
                             ? "rounded-full bg-[#e2ece6] px-2 py-1 text-[9px] font-semibold text-[#315a49]"
@@ -287,6 +300,11 @@ export function DocumentExplorer({
                       >
                         {READINESS_LABELS[readiness] || "Available"}
                       </span>
+                      {document.comparisonReady && (
+                        <span className="rounded-full bg-[#e6e1f1] px-2 py-1 text-[9px] font-semibold text-[#554477]">
+                          Comparison Ready
+                        </span>
+                      )}
                     </div>
                     <h3 className="mt-2 font-serif text-lg leading-6 text-[#29312d]">
                       {document.title}
@@ -341,6 +359,8 @@ export function DocumentExplorer({
                     ) : (
                       <span
                         title={
+                          document.readinessReason ||
+                          document.failureReason ||
                           document.processingError ||
                           "A readable, indexed PDF is required for research."
                         }

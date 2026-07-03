@@ -19,6 +19,7 @@ const {
   getComparison,
 } = require("./documentComparisonService");
 const {
+  getComparisonRecommendations,
   getDocumentRecommendations,
 } = require("./recommendationService");
 
@@ -70,6 +71,16 @@ router.get("/filters", async (req, res) => {
     return res.json(await DocumentService.getFilterOptions(req.query));
   } catch (error) {
     return sendError(res, error, "Universal document filters failed");
+  }
+});
+
+router.post("/recommend-for-comparison", async (req, res) => {
+  try {
+    return res.json(
+      await getComparisonRecommendations(req.user.id, req.body),
+    );
+  } catch (error) {
+    return sendError(res, error, "Comparison recommendations failed");
   }
 });
 
@@ -321,6 +332,38 @@ router.get("/:id/summary", async (req, res) => {
   }
 });
 
+router.get("/:id/readiness", async (req, res) => {
+  try {
+    const document = await DocumentRepository.getById(req.params.id);
+    if (!document) {
+      return res.status(404).json({ error: "Document not found." });
+    }
+    return res.json({
+      documentId: document.id,
+      researchReady: document.researchReady,
+      comparisonReady: document.comparisonReady,
+      readinessClass: document.readinessClass,
+      readinessReason: document.readinessReason,
+      processingStatus: document.processingStatus,
+      pdfStatus: document.pdfStatus,
+      extractionStatus: document.extractionStatus,
+      ocrStatus: document.ocrStatus,
+      chunkingStatus: document.chunkingStatus,
+      embeddingStatus: document.embeddingStatus,
+      summaryStatus: document.summaryStatus,
+      chunksCount: document.chunksCount,
+      embeddingsCount: document.embeddingsCount,
+      failureStage: document.failureStage,
+      failureReason: document.failureReason,
+      retryCount: document.retryCount,
+      lastAttemptedAt: document.lastAttemptedAt,
+      processedAt: document.processedAt,
+    });
+  } catch (error) {
+    return sendError(res, error, "Document readiness lookup failed");
+  }
+});
+
 router.get("/:id/relationships", async (req, res) => {
   try {
     const { getRelationships } = require("../graph/knowledgeGraphService");
@@ -345,6 +388,7 @@ router.get("/:id/recommendations", async (req, res) => {
         limit: req.query.limit,
         includeNonReady: req.query.includeNonReady,
         useUserProfile: req.query.useUserProfile,
+        query: req.query.q || req.query.query,
       }),
       DocumentService.getRelatedChats(
         req.params.id,

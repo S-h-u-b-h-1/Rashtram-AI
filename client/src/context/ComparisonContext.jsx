@@ -12,7 +12,7 @@ export const comparisonDisabledReason = (document) => {
     document.extractionStatus === "failed" ||
     document.embeddingStatus === "failed"
   ) {
-    return "Processing failed";
+    return document.readinessReason || document.failureReason || "Processing failed";
   }
   if (!document.hasAccessibleResource && !document?.pdfUrl) {
     return "PDF unavailable";
@@ -27,6 +27,9 @@ export const comparisonDisabledReason = (document) => {
     return "No extractable text found";
   }
   if (!document.researchReady) return "Research workspace unavailable";
+  if (document.comparisonReady === false) {
+    return document.readinessReason || "Comparison retrieval is unavailable";
+  }
   return "";
 };
 
@@ -84,6 +87,7 @@ export function ComparisonProvider({ children }) {
             chunksCount: document.chunksCount,
             hasAccessibleResource: document.hasAccessibleResource,
             researchReady: true,
+            comparisonReady: true,
           },
         ]);
         return { ok: true };

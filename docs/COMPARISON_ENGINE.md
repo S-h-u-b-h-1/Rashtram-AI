@@ -9,7 +9,8 @@ orders, notifications, and schemes.
 A document can be compared only when it has a valid title and public source,
 an accessible PDF/text resource, successful extraction, stored chunks,
 successful embeddings, no processing error, and
-`documents.research_ready = true`.
+successful retrieval verification. Both `documents.research_ready` and
+`documents.comparison_ready` must be true.
 
 The API returns specific `422` errors for unavailable PDFs, pending extraction,
 failed processing, missing extractable text, or an unavailable research
@@ -38,9 +39,16 @@ accepted.
 
 Additional endpoints:
 
+- `POST /api/documents/recommend-for-comparison`
 - `GET /api/documents/compare/:comparisonId`
 - `DELETE /api/documents/compare/:comparisonId`
 - `GET /api/profile/comparisons`
 
 Comparisons are scoped to the authenticated user. Rashtram AI is a research
 assistant, not a legal authority.
+
+The recommendation endpoint accepts one to five selected document IDs. With
+one selection it finds similar, same-ministry/state, graph-connected, and
+semantically related documents. With multiple selections it also ranks
+documents that bridge the selection. Recommendation cards expose confidence,
+reason, readiness, and Add to Compare only for comparison-ready records.

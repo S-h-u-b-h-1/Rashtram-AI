@@ -19,4 +19,8 @@ module.exports = [
     name: "005_government_knowledge_graph.js",
     migration: require("./005_government_knowledge_graph"),
   },
+  {
+    name: "006_full_research_readiness.js",
+    migration: require("./006_full_research_readiness"),
+  },
 ];

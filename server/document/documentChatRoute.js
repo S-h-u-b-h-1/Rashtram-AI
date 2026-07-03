@@ -2,14 +2,15 @@ const express = require("express");
 const DocumentChat = require("../models/DocumentChat");
 const {
   getDocumentContext,
-  processDocument,
   retrievePassages,
 } = require("./documentResearchService");
-const DocumentRepository = require("./DocumentRepository");
 const { generateResponse } = require("../lib/vectordb");
 const {
   getRelationshipContext,
 } = require("../graph/knowledgeGraphService");
+const {
+  prepareDocument,
+} = require("./readinessService");
 const {
   completeSSE,
   errorSSE,
@@ -75,25 +76,15 @@ router.post("/process", async (req, res) => {
     const identityValue = identity(req);
     const { documentType } = identityValue;
     documentId = identityValue.documentId;
-    await DocumentRepository.updateProcessingStatus(
-      documentId,
-      "processing",
-    );
     console.log("[document-process] started", {
       documentType,
       documentId,
     });
-    const result = await processDocument(documentType, documentId);
-    await DocumentRepository.updateProcessingStatus(
-      documentId,
-      "ready",
-      null,
-      {
-        chunksCount: result.chunksStored || result.totalChunks || 0,
-        embeddingProvider: process.env.OPENAI_EMBEDDING_MODEL || "openai",
-        aiProvider: "openai",
-      },
-    );
+    const result = await prepareDocument(documentId, {
+      userId: req.user.id,
+      priority: 100,
+      reason: "user_prepare",
+    });
     console.log("[document-process] completed", {
       documentType,
       documentId,
@@ -105,15 +96,6 @@ router.post("/process", async (req, res) => {
     });
     return res.json({ success: true, ...result });
   } catch (error) {
-    if (documentId) {
-      await DocumentRepository.updateProcessingStatus(
-        documentId,
-        "failed",
-        error.message,
-      ).catch((statusError) => {
-        console.error("[document-process] status update failed", statusError);
-      });
-    }
     console.error("[document-process] failed", {
       message: error.message,
       status: error.status || 500,

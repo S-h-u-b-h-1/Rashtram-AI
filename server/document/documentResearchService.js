@@ -201,7 +201,12 @@ const getDocumentContext = async (documentType, documentId) => {
     await Promise.all([
       DocumentRepository.getResources(documentId),
       DocumentRepository.getRelated(documentId),
-      DocumentRepository.getRecommendations(documentId),
+      DocumentRepository.getRecommendations(
+        documentId,
+        null,
+        8,
+        document.type === "bill" ? { type: "bill" } : {},
+      ),
       getTextArtifact(documentId),
     ]);
   const [timeline, graph] = await Promise.all([
@@ -237,6 +242,45 @@ const loadIndexedChunks = async (config, documentId, topK = 100) => {
   return result.matches || [];
 };
 
+const saveNormalizedChunks = async (documentId, chunks, languageCode) => {
+  await query(`DELETE FROM document_text_chunks WHERE document_id = $1`, [
+    documentId,
+  ]);
+  for (let index = 0; index < chunks.length; index += 1) {
+    const chunk = chunks[index];
+    const content = String(
+      chunk.content || chunk.metadata?.content || "",
+    ).trim();
+    if (!content) continue;
+    await query(
+      `INSERT INTO document_text_chunks (
+         document_id, chunk_index, original_text, translated_text,
+         language, token_count, vector_reference, metadata_json
+       )
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb)
+       ON CONFLICT (document_id, chunk_index)
+       DO UPDATE SET
+         original_text = EXCLUDED.original_text,
+         translated_text = EXCLUDED.translated_text,
+         language = EXCLUDED.language,
+         token_count = EXCLUDED.token_count,
+         vector_reference = EXCLUDED.vector_reference,
+         metadata_json = EXCLUDED.metadata_json,
+         updated_at = NOW()`,
+      [
+        documentId,
+        chunk.metadata?.chunkIndex ?? chunk.chunkIndex ?? index,
+        content,
+        chunk.translatedText || null,
+        chunk.metadata?.languageCode || languageCode || "und",
+        Math.ceil(content.length / 4),
+        chunk.id || `${documentId}-chunk-${index}`,
+        JSON.stringify(chunk.metadata || {}),
+      ],
+    );
+  }
+};
+
 const processDocument = async (documentType, documentId) => {
   const document = await getDocument(documentType, documentId);
   if (!document) {
@@ -245,18 +289,7 @@ const processDocument = async (documentType, documentId) => {
     throw error;
   }
   const config = typeConfig(documentType);
-  const storedArtifact = await getTextArtifact(documentId);
   const existence = await config.check(documentId);
-  if (existence.exists && existence.summary) {
-    return {
-      alreadyProcessed: true,
-      summary: existence.summary,
-      chunksStored: existence.chunksCount || 0,
-      document,
-      textArtifact: storedArtifact,
-    };
-  }
-
   if (existence.exists) {
     const matches = await loadIndexedChunks(config, documentId);
     const context = matches
@@ -265,9 +298,11 @@ const processDocument = async (documentType, documentId) => {
       .join("\n\n");
     if (context) {
       const language = pdfProcessor.detectLanguage(context);
-      const summary = await generateDocumentSummary(documentType, context, {
-        sourceLanguage: language.languageCode,
-      });
+      const summary =
+        existence.summary ||
+        await generateDocumentSummary(documentType, context, {
+          sourceLanguage: language.languageCode,
+        });
       const suggestedQuestions = await generateSuggestedQuestions(
         documentType,
         summary,
@@ -294,12 +329,23 @@ const processDocument = async (documentType, documentId) => {
           }),
         ),
       );
+      await saveNormalizedChunks(
+        documentId,
+        matches.map((match) => ({
+          id: match.id,
+          content: match.metadata?.content || "",
+          metadata: match.metadata || {},
+        })),
+        language.languageCode,
+      );
       return {
         alreadyProcessed: true,
         summary,
         chunksStored: matches.length,
         document,
         textArtifact: await getTextArtifact(documentId),
+        textLength: context.length,
+        language,
       };
     }
   }
@@ -360,6 +406,11 @@ const processDocument = async (documentType, documentId) => {
     },
   }));
   const stored = await config.store(chunks);
+  await saveNormalizedChunks(
+    documentId,
+    chunks,
+    processed.language.languageCode,
+  );
   return {
     alreadyProcessed: false,
     summary,
@@ -367,6 +418,10 @@ const processDocument = async (documentType, documentId) => {
     totalChunks: processed.totalChunks,
     document,
     textArtifact: await getTextArtifact(documentId),
+    textLength: processed.originalText.length,
+    language: processed.language,
+    ocrUsed: processed.ocrUsed,
+    ocrRequired: processed.ocrRequired,
   };
 };
 
@@ -416,6 +471,7 @@ const searchAcrossIndexedDocuments = async (searchQuery, topK = 40) => {
     ...new Set(
       matches
         .flat()
+        .filter((match) => match.score >= 0.55)
         .sort((left, right) => right.score - left.score)
         .map((match) => match.id)
         .filter(Boolean)
@@ -432,5 +488,6 @@ module.exports = {
   getTextArtifact,
   retrievePassages,
   saveTextArtifact,
+  saveNormalizedChunks,
   searchAcrossIndexedDocuments,
 };

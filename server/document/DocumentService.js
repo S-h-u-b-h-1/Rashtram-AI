@@ -61,7 +61,12 @@ const getById = async (id, userId = null) => {
     await Promise.all([
       DocumentRepository.getResources(document.id),
       DocumentRepository.getRelated(document.id),
-      DocumentRepository.getRecommendations(document.id, userId),
+      DocumentRepository.getRecommendations(
+        document.id,
+        userId,
+        8,
+        document.type === "bill" ? { type: "bill" } : {},
+      ),
       DocumentRepository.getRelatedChats(document.id, userId),
       DocumentRepository.getSummary(document.id, userId),
     ]);

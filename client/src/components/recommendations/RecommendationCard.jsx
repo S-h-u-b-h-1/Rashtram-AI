@@ -51,6 +51,12 @@ export function RecommendationCard({
               recommendation.documentType || recommendation.type,
             )}{" "}
             · {confidence} confidence
+            {" · "}
+            {recommendation.comparisonReady
+              ? "comparison ready"
+              : recommendation.researchReady
+                ? "research ready"
+                : "preparation required"}
           </p>
           <h3 className="mt-2 line-clamp-2 text-sm font-semibold leading-5 text-[#29312d]">
             {recommendation.title}
@@ -64,7 +70,8 @@ export function RecommendationCard({
       <p className="mt-2 text-[10px] text-[#81796e]">
         {[recommendation.ministry || recommendation.authority,
           recommendation.state || recommendation.jurisdiction,
-          recommendation.year || formatDate(recommendation.publicationDate)]
+          recommendation.year || formatDate(recommendation.publicationDate),
+          recommendation.status]
           .filter(Boolean)
           .join(" · ")}
       </p>
@@ -73,13 +80,25 @@ export function RecommendationCard({
           {recommendation.reason}
         </p>
       )}
+      {recommendation.signals?.length > 0 && (
+        <div className="mt-3 flex flex-wrap gap-1.5">
+          {recommendation.signals.slice(0, 4).map((signal) => (
+            <span
+              key={signal}
+              className="rounded-full bg-[#f5eee7] px-2 py-1 text-[9px] font-medium text-[#706a61]"
+            >
+              {humanize(signal)}
+            </span>
+          ))}
+        </div>
+      )}
       <div className="mt-4 flex flex-wrap gap-2">
         <Link
           href={`/app/document/${recommendation.id}`}
           onClick={() => track("recommendation_opened")}
           className="inline-flex items-center gap-1.5 rounded-xl bg-[#8f1d2c] px-3 py-2 text-[10px] font-semibold text-white"
         >
-          Research
+          {recommendation.researchReady ? "Research" : "Prepare for Research"}
           <ArrowRight className="h-3 w-3" />
         </Link>
         <button

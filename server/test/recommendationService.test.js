@@ -5,7 +5,9 @@ const {
   confidenceForScore,
   isRecommendationEligible,
   normalizeTypes,
+  stateOnlyRequested,
   scoreRecommendation,
+  validateComparisonRecommendationRequest,
   validateProblemRequest,
 } = require("../document/recommendationService");
 
@@ -25,6 +27,48 @@ test("recommendation scoring rewards grounded catalogue signals", () => {
   assert.ok(strong > weak);
   assert.equal(confidenceForScore(strong), "high");
   assert.equal(confidenceForScore(0.2), "low");
+  assert.ok(
+    scoreRecommendation({
+      relationship: true,
+      researchReady: true,
+      comparisonReady: true,
+      qualityScore: 80,
+    }) >
+      scoreRecommendation({
+        semanticMatch: true,
+        researchReady: true,
+        comparisonReady: true,
+        qualityScore: 80,
+      }),
+  );
+});
+
+test("comparison recommendation input prevents duplicate selections", () => {
+  assert.deepEqual(
+    validateComparisonRecommendationRequest({
+      selectedDocumentIds: [1, "2"],
+      preferredTypes: ["bill", "act"],
+      limit: 99,
+      query: "  labour reform  ",
+    }),
+    {
+      selectedDocumentIds: ["1", "2"],
+      preferredTypes: ["bill", "act"],
+      limit: 20,
+      query: "labour reform",
+    },
+  );
+  assert.throws(
+    () =>
+      validateComparisonRecommendationRequest({
+        selectedDocumentIds: ["1", "1"],
+      }),
+    /duplicate/i,
+  );
+  assert.throws(
+    () => validateComparisonRecommendationRequest({ selectedDocumentIds: [] }),
+    /one and five/i,
+  );
 });
 
 test("recommendations exclude low-quality, hidden and non-ready records", () => {
@@ -56,6 +100,8 @@ test("recommendation type filters expand policy and gazette families", () => {
   assert.equal(types.includes("notification"), true);
   assert.equal(types.includes("circular"), true);
   assert.deepEqual(normalizeTypes("all"), []);
+  assert.deepEqual(normalizeTypes("state_bill"), ["bill"]);
+  assert.equal(stateOnlyRequested("state_bill"), true);
 });
 
 test("problem recommender validates and normalizes bounded input", () => {

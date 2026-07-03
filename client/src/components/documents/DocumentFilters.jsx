@@ -92,6 +92,25 @@ export function DocumentFilters({
             <option value="false">Unavailable</option>
           </select>
         </label>
+        {[
+          ["researchReady", "Research"],
+          ["comparisonReady", "Comparison"],
+        ].map(([key, text]) => (
+          <label key={key} className="space-y-1">
+            <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[#777066]">
+              {text}
+            </span>
+            <select
+              value={filters[key] || ""}
+              onChange={(event) => onFilterChange(key, event.target.value)}
+              className="h-10 rounded-xl border border-[#8f1d2c]/10 bg-white px-3 text-xs text-[#29312d]"
+            >
+              <option value="">All</option>
+              <option value="true">Ready only</option>
+              <option value="false">Not ready</option>
+            </select>
+          </label>
+        ))}
         {["publicationFrom", "publicationTo"].map((key) => (
           <label key={key} className="space-y-1">
             <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[#777066]">

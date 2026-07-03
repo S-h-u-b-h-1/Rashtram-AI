@@ -64,15 +64,10 @@ export function ComparisonTray() {
             href={`/app/compare?ids=${documents
               .map((document) => document.id)
               .join(",")}`}
-            aria-disabled={documents.length < 2}
-            className={`inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-xs font-semibold ${
-              documents.length >= 2
-                ? "bg-[#fffaf0] text-[#8f1d2c]"
-                : "pointer-events-none bg-white/10 text-white/35"
-            }`}
+            className="inline-flex items-center gap-2 rounded-xl bg-[#fffaf0] px-4 py-2.5 text-xs font-semibold text-[#8f1d2c]"
           >
             <GitCompareArrows className="h-4 w-4" />
-            Compare selected
+            {documents.length >= 2 ? "Compare selected" : "Find matches"}
           </Link>
         </div>
       </div>

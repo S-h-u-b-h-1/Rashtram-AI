@@ -43,10 +43,21 @@ const normalizeTypes = (value) => {
   if (requested.includes("all")) return [];
   return [
     ...new Set(
-      requested.flatMap((type) => TYPE_GROUPS[type] || [type]),
+      requested.flatMap((type) => {
+        if (["state_bill", "state_bills"].includes(type)) return ["bill"];
+        if (["state_act", "state_acts"].includes(type)) return ["act"];
+        return TYPE_GROUPS[type] || [type];
+      }),
     ),
   ].filter((type) => /^[a-z_]{2,40}$/.test(type));
 };
+
+const stateOnlyRequested = (value) =>
+  normalizeList(value || "all", 12)
+    .map((type) => type.toLowerCase().replace(/-/g, "_"))
+    .some((type) =>
+      ["state_bill", "state_bills", "state_act", "state_acts"].includes(type),
+    );
 
 const confidenceForScore = (score) => {
   if (score >= 0.5) return "high";
@@ -72,18 +83,22 @@ const scoreRecommendation = (signals = {}) => {
     (signals.relationship ? 22 : 0) +
     (signals.sameMinistry ? 14 : 0) +
     (signals.sameAuthority ? 10 : 0) +
+    (signals.sameDepartment ? 8 : 0) +
     (signals.sameJurisdiction ? 8 : 0) +
     (signals.sameState ? 10 : 0) +
     (signals.sameCategory ? 8 : 0) +
     (signals.sameType ? 4 : 0) +
+    (signals.sameYear ? 5 : 0) +
     (signals.titleMatch ? 8 : 0) +
     (signals.sharedLegalIdentifier ? 12 : 0) +
     (signals.semanticMatch ? 12 : 0) +
     (signals.profileMatch ? 5 : 0) +
     (signals.recent ? 4 : 0) +
     (signals.researchReady ? 8 : 0) +
+    (signals.comparisonReady ? 4 : 0) +
+    Math.min(Math.max(Number(signals.popularity || 0), 0), 20) / 4 +
     Math.min(Math.max(Number(signals.qualityScore || 0), 0), 100) / 10;
-  return Math.min(Number((points / 135).toFixed(4)), 1);
+  return Math.min(Number((points / 145).toFixed(4)), 1);
 };
 
 const reasonFromSignals = (signals, candidate) => {
@@ -96,6 +111,7 @@ const reasonFromSignals = (signals, candidate) => {
     reasons.push("a verified catalogue relationship");
   }
   if (signals.sameMinistry) reasons.push("the same ministry");
+  if (signals.sameDepartment) reasons.push("the same department");
   else if (signals.sameAuthority) reasons.push("the same issuing authority");
   if (signals.sameState) reasons.push(`the same state (${candidate.state})`);
   else if (signals.sameJurisdiction) reasons.push("the same jurisdiction");
@@ -104,6 +120,7 @@ const reasonFromSignals = (signals, candidate) => {
     reasons.push("closely matching subject matter");
   }
   if (signals.sharedLegalIdentifier) reasons.push("a shared legal identifier");
+  if (signals.sameYear) reasons.push("the same legislative year");
   if (signals.profileMatch) reasons.push("your research preferences");
   if (signals.recent) reasons.push("recent publication");
   if (!reasons.length) reasons.push("strong catalogue quality and provenance");
@@ -146,16 +163,20 @@ const mapCandidateSignals = (row, semanticIds, profile) => {
     relationshipExplanation: row.relationship_explanation || null,
     sameMinistry: Boolean(row.same_ministry),
     sameAuthority: Boolean(row.same_authority),
+    sameDepartment: Boolean(row.same_department),
     sameJurisdiction: Boolean(row.same_jurisdiction),
     sameState: Boolean(row.same_state),
     sameCategory: Boolean(row.same_category),
     sameType: Boolean(row.same_type),
+    sameYear: Boolean(row.same_year),
     titleMatch: Boolean(row.title_match),
     sharedLegalIdentifier: Boolean(row.shared_legal_identifier),
     semanticMatch: semanticIds.has(String(row.id)),
     profileMatch: Boolean(profileMatch),
     recent,
     researchReady: Boolean(row.research_ready),
+    comparisonReady: Boolean(row.comparison_ready),
+    popularity: Number(row.popularity || 0),
     qualityScore: Number(row.quality_score || 0),
   };
 };
@@ -180,10 +201,12 @@ const shapeRecommendation = (row, signals) => {
     jurisdiction: row.jurisdiction,
     category: row.category,
     year: row.year,
+    status: row.status || null,
     publicationDate: row.publication_date,
     sourceUrl: row.canonical_url || row.detail_url || row.source_url,
     pdfUrl: row.pdf_url,
     researchReady: Boolean(row.research_ready),
+    comparisonReady: Boolean(row.comparison_ready),
     readiness: row.research_ready ? "research_ready" : "pdf_available",
     qualityScore: Number(row.quality_score || 0),
     score,
@@ -213,7 +236,9 @@ const persistRecommendations = async (
   if (!userId || !recommendations.length) return;
   const contextKey = context.sourceDocumentId
     ? `document:${context.sourceDocumentId}`
-    : `problem:${context.problemHash}`;
+    : context.comparisonSelection
+      ? `comparison:${context.comparisonSelection.join(":")}`
+      : `problem:${context.problemHash}`;
   await query(
     `DELETE FROM recommendations
      WHERE user_id = $1
@@ -263,12 +288,13 @@ const getDocumentRecommendations = async (
   const useUserProfile =
     String(options.useUserProfile ?? "true").toLowerCase() !== "false";
   const types = normalizeTypes(options.type);
+  const stateOnly = stateOnlyRequested(options.type);
   const profile = await getProfileSignals(userId, useUserProfile);
   let semanticIds = [];
   if (current.researchReady) {
     try {
       semanticIds = await searchAcrossIndexedDocuments(
-        [current.title, current.category, current.ministry]
+        [options.query, current.title, current.category, current.ministry]
           .filter(Boolean)
           .join(" "),
         40,
@@ -286,11 +312,14 @@ const getDocumentRecommendations = async (
      )
      SELECT legacy.*, candidate.state AS schema_state,
        candidate.research_ready, candidate.quality_score,
+       candidate.comparison_ready,
        candidate.visibility_status, candidate.metadata_json,
        (candidate.ministry IS NOT NULL
          AND candidate.ministry = current.ministry) AS same_ministry,
        (candidate.authority IS NOT NULL
          AND candidate.authority = current.authority) AS same_authority,
+       (candidate.department IS NOT NULL
+         AND candidate.department = current.department) AS same_department,
        (candidate.jurisdiction IS NOT NULL
          AND candidate.jurisdiction = current.jurisdiction) AS same_jurisdiction,
        (candidate.state IS NOT NULL
@@ -298,6 +327,13 @@ const getDocumentRecommendations = async (
        (candidate.category IS NOT NULL
          AND candidate.category = current.category) AS same_category,
        (candidate.document_type = current.document_type) AS same_type,
+       (candidate.year IS NOT NULL
+         AND candidate.year = current.year) AS same_year,
+       (
+         SELECT COALESCE(SUM(interaction.count), 0)::INTEGER
+         FROM user_document_interactions interaction
+         WHERE interaction.document_id = candidate.id
+       ) AS popularity,
        (
          TO_TSVECTOR('simple', COALESCE(candidate.title, '')) @@
          PLAINTO_TSQUERY('simple', current.title)
@@ -360,6 +396,7 @@ const getDocumentRecommendations = async (
        AND ($2::BOOLEAN OR candidate.research_ready)
        AND (CARDINALITY($3::TEXT[]) = 0
          OR candidate.document_type = ANY($3::TEXT[]))
+       AND (NOT $4::BOOLEAN OR candidate.jurisdiction_level = 'state')
        AND NOT (
          candidate.normalized_title = current.normalized_title
          AND candidate.document_type = current.document_type
@@ -371,8 +408,14 @@ const getDocumentRecommendations = async (
        candidate.quality_score DESC,
        candidate.research_ready DESC,
        candidate.publication_date DESC NULLS LAST
-     LIMIT $4`,
-    [current.id, includeNonReady, types, Math.max(limit * 5, 30)],
+     LIMIT $5`,
+    [
+      current.id,
+      includeNonReady,
+      types,
+      stateOnly,
+      Math.max(limit * 5, 30),
+    ],
   );
   const semanticSet = new Set(semanticIds);
   const recommendations = result.rows
@@ -382,7 +425,7 @@ const getDocumentRecommendations = async (
     })
     .filter(
       (item) =>
-        item.score >= 0.18 &&
+        item.score >= 0.24 &&
         isRecommendationEligible(item, { includeNonReady }),
     )
     .sort((left, right) => right.score - left.score)
@@ -526,6 +569,141 @@ const getProblemRecommendations = async (userId, payload) => {
   };
 };
 
+const validateComparisonRecommendationRequest = (payload = {}) => {
+  const supplied = Array.isArray(payload.selectedDocumentIds)
+    ? payload.selectedDocumentIds.map((id) => String(id || "").trim())
+    : [];
+  const selectedDocumentIds = [...new Set(supplied.filter(Boolean))];
+  if (selectedDocumentIds.length < 1 || selectedDocumentIds.length > 5) {
+    const error = new Error("Select between one and five documents.");
+    error.status = 400;
+    throw error;
+  }
+  if (selectedDocumentIds.length !== supplied.length) {
+    const error = new Error("Duplicate selected documents are not allowed.");
+    error.status = 400;
+    throw error;
+  }
+  return {
+    selectedDocumentIds,
+    limit: clampInteger(payload.limit, 10, 1, 20),
+    preferredTypes: payload.preferredTypes || "all",
+    query: String(payload.query || "").normalize("NFKC").trim().slice(0, 500),
+  };
+};
+
+const getComparisonRecommendations = async (userId, payload = {}) => {
+  const {
+    selectedDocumentIds,
+    limit,
+    preferredTypes,
+    query,
+  } = validateComparisonRecommendationRequest(payload);
+  const selected = await Promise.all(
+    selectedDocumentIds.map((id) => DocumentRepository.getById(id)),
+  );
+  if (selected.some((document) => !document)) {
+    const error = new Error("One or more selected documents were not found.");
+    error.status = 404;
+    throw error;
+  }
+  const groups = await Promise.all(
+    selected.map((document) =>
+      getDocumentRecommendations(document.id, userId, {
+        type: preferredTypes,
+        limit: 20,
+        includeNonReady: false,
+        useUserProfile: true,
+        query,
+      }),
+    ),
+  );
+  const candidates = new Map();
+  groups.forEach((recommendations, selectedIndex) => {
+    for (const recommendation of recommendations) {
+      if (selectedDocumentIds.includes(String(recommendation.id))) continue;
+      const current = candidates.get(String(recommendation.id)) || {
+        recommendation,
+        selectedMatches: new Set(),
+        graphMatches: 0,
+        scoreTotal: 0,
+      };
+      current.selectedMatches.add(String(selected[selectedIndex].id));
+      current.scoreTotal += Number(recommendation.score || 0);
+      if (recommendation.graphRelationship) current.graphMatches += 1;
+      if (
+        Number(recommendation.score || 0) >
+        Number(current.recommendation.score || 0)
+      ) {
+        current.recommendation = recommendation;
+      }
+      candidates.set(String(recommendation.id), current);
+    }
+  });
+  const recommendations = [...candidates.values()]
+    .map((candidate) => {
+      const bridgeCount = candidate.selectedMatches.size;
+      const baseScore = candidate.scoreTotal / bridgeCount;
+      const bridgeBoost =
+        selected.length > 1 ? Math.min(0.2, (bridgeCount - 1) * 0.1) : 0;
+      const graphBoost = Math.min(0.1, candidate.graphMatches * 0.05);
+      const score = Math.min(
+        1,
+        Number((baseScore + bridgeBoost + graphBoost).toFixed(4)),
+      );
+      const reasonParts = [];
+      if (bridgeCount > 1) {
+        reasonParts.push(
+          `it is relevant to ${bridgeCount} selected documents`,
+        );
+      }
+      if (candidate.graphMatches) {
+        reasonParts.push("verified knowledge-graph connections");
+      }
+      if (!reasonParts.length) {
+        reasonParts.push(
+          candidate.recommendation.reason
+            .replace(/^Recommended because it has /, "")
+            .replace(/\.$/, ""),
+        );
+      }
+      return {
+        ...candidate.recommendation,
+        score,
+        confidence: confidenceForScore(score),
+        comparisonReady: Boolean(
+          candidate.recommendation.comparisonReady &&
+          candidate.recommendation.researchReady,
+        ),
+        reason: `Recommended for comparison because ${reasonParts.join(
+          " and ",
+        )}.`,
+        signals: [
+          ...new Set([
+            ...(candidate.recommendation.signals || []),
+            ...(bridgeCount > 1 ? ["bridgesSelectedDocuments"] : []),
+            ...(candidate.graphMatches ? ["graphBridge"] : []),
+          ]),
+        ],
+        matchedSelectedDocumentIds: [...candidate.selectedMatches],
+      };
+    })
+    .filter((recommendation) => recommendation.comparisonReady)
+    .sort((left, right) => right.score - left.score)
+    .slice(0, limit);
+  await persistRecommendations(userId, recommendations, {
+    comparisonSelection: selectedDocumentIds,
+  });
+  return {
+    selectedDocuments: selected.map((document) => ({
+      id: document.id,
+      title: document.title,
+      documentType: document.type,
+    })),
+    recommendations,
+  };
+};
+
 const getRecentRecommendations = async (userId, limit = 12) => {
   const safeLimit = clampInteger(limit, 12, 1, 30);
   const result = await query(
@@ -550,6 +728,7 @@ const getRecentRecommendations = async (userId, limit = 12) => {
        ranked.recommendation_type, ranked.reason_json,
        ranked.recommended_at, legacy.*, document.state AS schema_state,
        document.research_ready, document.quality_score,
+       document.comparison_ready,
        document.visibility_status, document.metadata_json
      FROM ranked
      JOIN documents document ON document.id = ranked.document_id
@@ -574,10 +753,12 @@ const getRecentRecommendations = async (userId, limit = 12) => {
       state: row.schema_state || row.metadata_json?.state || null,
       jurisdiction: row.jurisdiction,
       year: row.year,
+      status: row.status || null,
       publicationDate: row.publication_date,
       sourceUrl: row.canonical_url || row.detail_url || row.source_url,
       pdfUrl: row.pdf_url,
       researchReady: true,
+      comparisonReady: Boolean(row.comparison_ready),
       readiness: "research_ready",
       qualityScore: Number(row.quality_score || 0),
       score: Number(row.score || 0),
@@ -602,10 +783,13 @@ const getRecentRecommendations = async (userId, limit = 12) => {
 module.exports = {
   confidenceForScore,
   getDocumentRecommendations,
+  getComparisonRecommendations,
   getProblemRecommendations,
   getRecentRecommendations,
   isRecommendationEligible,
   normalizeTypes,
+  stateOnlyRequested,
   scoreRecommendation,
+  validateComparisonRecommendationRequest,
   validateProblemRequest,
 };

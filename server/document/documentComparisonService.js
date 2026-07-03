@@ -93,6 +93,9 @@ const readinessReason = (document) => {
     return "Research workspace unavailable";
   }
   if (!document.researchReady) return "Research workspace unavailable";
+  if (document.comparisonReady === false) {
+    return document.readinessReason || "Comparison retrieval is unavailable";
+  }
   return null;
 };
 

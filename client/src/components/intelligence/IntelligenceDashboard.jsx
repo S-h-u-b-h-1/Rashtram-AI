@@ -11,6 +11,7 @@ import { SourceHealthPanel } from "./SourceHealthPanel";
 import { TrendingMinistries } from "./TrendingMinistries";
 import { RecommendationSection } from "@/components/recommendations/RecommendationSection";
 import { KnowledgeNetworkMetrics } from "./KnowledgeNetworkMetrics";
+import { ResearchReadinessMetrics } from "./ResearchReadinessMetrics";
 
 export function IntelligenceDashboard({ onNavigate }) {
   const [data, setData] = useState(null);
@@ -141,6 +142,8 @@ export function IntelligenceDashboard({ onNavigate }) {
       <PlatformCoverageOverview coverage={data.platformCoverage || {}} />
 
       <KnowledgeNetworkMetrics metrics={data.knowledgeGraph} />
+
+      <ResearchReadinessMetrics metrics={data.processingReadiness} />
 
       <ContinueResearch chats={data.recentUserChats || []} />
 

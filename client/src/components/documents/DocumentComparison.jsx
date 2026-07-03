@@ -13,6 +13,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import {
   createDocumentComparison,
   getDocumentComparison,
+  recommendDocumentsForComparison,
   trackActivity,
 } from "@/lib/api";
 import { useComparison } from "@/context/ComparisonContext";
@@ -90,6 +91,8 @@ export function DocumentComparison() {
   const [language, setLanguage] = useState("auto");
   const [userQuestion, setUserQuestion] = useState("");
   const [comparison, setComparison] = useState(null);
+  const [selectionRecommendations, setSelectionRecommendations] = useState([]);
+  const [recommendationsLoading, setRecommendationsLoading] = useState(false);
   const [loading, setLoading] = useState(Boolean(comparisonId));
   const [error, setError] = useState("");
   const initialRequest = useRef("");
@@ -162,6 +165,32 @@ export function DocumentComparison() {
   }, [comparisonId]);
 
   useEffect(() => {
+    if (!ids.length) {
+      setSelectionRecommendations([]);
+      return;
+    }
+    let active = true;
+    setRecommendationsLoading(true);
+    recommendDocumentsForComparison({
+      selectedDocumentIds: ids,
+      preferredTypes: ["bill", "state_bill", "act", "policy", "gazette"],
+      limit: 10,
+    })
+      .then((response) => {
+        if (active) setSelectionRecommendations(response.recommendations || []);
+      })
+      .catch(() => {
+        if (active) setSelectionRecommendations([]);
+      })
+      .finally(() => {
+        if (active) setRecommendationsLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [ids]);
+
+  useEffect(() => {
     const key = ids.join(",");
     if (comparisonId || ids.length < 2 || initialRequest.current === key) return;
     initialRequest.current = key;
@@ -185,7 +214,7 @@ export function DocumentComparison() {
     comparison?.id ? `&comparison=${comparison.id}` : ""
   }`;
 
-  if (!comparison && ids.length < 2 && !comparisonId) {
+  if (!comparison && ids.length === 0 && !comparisonId) {
     return (
       <section className="surface-card grid min-h-[500px] place-items-center p-8 text-center">
         <div>
@@ -289,6 +318,36 @@ export function DocumentComparison() {
           </p>
         )}
       </section>
+
+      {!comparison && ids.length === 1 && (
+        <section className="surface-card p-5 sm:p-6">
+          <h3 className="font-serif text-2xl text-[#8f1d2c]">
+            Select one more document to compare
+          </h3>
+          <p className="mt-2 text-sm text-[#706a61]">
+            Recommendations below use the selected document’s ministry,
+            jurisdiction, subject, graph relationships, and indexed text.
+          </p>
+        </section>
+      )}
+
+      {ids.length > 0 && (
+        <RecommendationSection
+          title="Recommended documents to compare"
+          eyebrow={
+            recommendationsLoading
+              ? "Finding comparison matches…"
+              : "Selection-aware recommendations"
+          }
+          recommendations={selectionRecommendations}
+          emptyMessage={
+            recommendationsLoading
+              ? "Analysing the selected documents…"
+              : "No closely related comparison-ready documents are available yet."
+          }
+          pagePath="/app/compare"
+        />
+      )}
 
       {loading && !result ? (
         <div className="surface-card grid min-h-[420px] place-items-center">

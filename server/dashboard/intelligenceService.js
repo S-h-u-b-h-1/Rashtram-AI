@@ -5,6 +5,9 @@ const {
   getGraphProfileInsights,
   getKnowledgeGraphMetrics,
 } = require("../graph/knowledgeGraphService");
+const {
+  getProcessingStatus,
+} = require("../document/readinessService");
 
 let overviewCache = {
   key: null,
@@ -810,6 +813,7 @@ const getDashboardIntelligence = async (userId) => {
     fallbackBrief,
   );
   const knowledgeGraph = await getKnowledgeGraphMetrics();
+  const processingReadiness = await getProcessingStatus();
 
   return {
     userGreeting: getGreeting(userRow?.name),
@@ -826,6 +830,7 @@ const getDashboardIntelligence = async (userId) => {
     },
     briefSummary,
     knowledgeGraph,
+    processingReadiness,
     recentActivity: buildRecentActivity({
       recentEventCount24h,
       recentEventCount,

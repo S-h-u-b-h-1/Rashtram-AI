@@ -11,6 +11,7 @@ import { RecommendationCard } from "@/components/recommendations/RecommendationC
 import { useComparison } from "@/context/ComparisonContext";
 
 export function RelatedDocuments({
+  sourceDocumentType,
   relationships = [],
   recommendations = [],
   relatedChats = [],
@@ -26,7 +27,9 @@ export function RelatedDocuments({
   return (
     <section>
       <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-[#874047]">
-        Related documents to refer
+        {sourceDocumentType === "bill"
+          ? "Related Bills"
+          : "Related documents to refer"}
       </p>
       {recommendations.length > 0 && (
         <div className="mt-3 space-y-3">
@@ -116,8 +119,9 @@ export function RelatedDocuments({
         ))}
         {!items.length && !recommendations.length && (
           <p className="rounded-xl border border-dashed border-[#8f1d2c]/10 p-4 text-[11px] leading-5 text-[#81796e]">
-            Related records will appear when catalogue relationships are
-            verified.
+            {sourceDocumentType === "bill"
+              ? "No closely related Bills are available yet."
+              : "Related records will appear when catalogue relationships are verified."}
           </p>
         )}
       </div>
