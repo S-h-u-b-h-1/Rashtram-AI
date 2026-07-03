@@ -12,7 +12,10 @@ const classifyProcessingFailure = (error, fallbackStage = "processing") => {
     .slice(0, 2_000);
   const status = Number(error?.response?.status || error?.status || 0);
   let failureStage = fallbackStage;
-  if (/pdf|download|404|410|content[- ]type/i.test(message)) {
+  if (
+    [401, 403, 404, 410, 415].includes(status) ||
+    /pdf|download|401|403|404|410|forbidden|content[- ]type/i.test(message)
+  ) {
     failureStage = "pdf";
   } else if (/ocr|scanned/i.test(message)) {
     failureStage = "ocr";
@@ -26,7 +29,7 @@ const classifyProcessingFailure = (error, fallbackStage = "processing") => {
     failureStage = "summary";
   }
   const permanent =
-    [404, 410, 415].includes(status) ||
+    [401, 403, 404, 410, 415].includes(status) ||
     PERMANENT_FAILURE_PATTERN.test(message);
   const retriable = !permanent && (
     !status ||
@@ -525,7 +528,7 @@ const runReadinessAudit = async () => {
             THEN 'processing_pending'
           WHEN state.processing_status = 'failed'
             AND COALESCE(state.failure_reason, state.error_message, '') ~*
-              '(404|410|not found|invalid pdf|unsupported|no usable text|too large)'
+              '(401|403|404|410|forbidden|not found|invalid pdf|unsupported|no usable text|too large)'
             THEN 'processing_failed_permanent'
           WHEN state.processing_status = 'failed'
             THEN 'processing_failed_retriable'

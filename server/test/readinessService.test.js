@@ -22,6 +22,14 @@ test("PDF failures are classified by permanent and retriable cause", () => {
   assert.equal(missing.permanent, true);
   assert.equal(missing.readinessClass, "processing_failed_permanent");
 
+  const forbidden = classifyProcessingFailure({
+    message: "Request failed with status code 403",
+    response: { status: 403 },
+  });
+  assert.equal(forbidden.failureStage, "pdf");
+  assert.equal(forbidden.permanent, true);
+  assert.equal(forbidden.readinessClass, "processing_failed_permanent");
+
   const timeout = classifyProcessingFailure({
     message: "Pinecone embedding request timed out",
     code: "ETIMEDOUT",

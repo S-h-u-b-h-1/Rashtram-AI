@@ -431,11 +431,31 @@ const processDocument = async (documentType, documentId) => {
     throw error;
   }
 
-  const processed = await pdfProcessor.processPDFAndCreateChunks(
+  const resources = await DocumentRepository.getResources(documentId);
+  const pdfCandidates = [
     document.pdfUrl,
-    documentId,
-    document.title,
-  );
+    ...resources
+      .filter((resource) => resource.resourceType === "pdf")
+      .map((resource) => resource.url),
+  ].filter((value, index, values) => value && values.indexOf(value) === index);
+  let processed;
+  let processingError;
+  for (const pdfUrl of pdfCandidates) {
+    try {
+      processed = await pdfProcessor.processPDFAndCreateChunks(
+        pdfUrl,
+        documentId,
+        document.title,
+      );
+      processed.processedPdfUrl = pdfUrl;
+      break;
+    } catch (error) {
+      processingError = error;
+      const status = Number(error?.response?.status || error?.status || 0);
+      if (![401, 403, 404, 410].includes(status)) throw error;
+    }
+  }
+  if (!processed) throw processingError;
   const summaryContext = processed.chunks
     .slice(0, 6)
     .map((chunk) => chunk.content)
@@ -480,6 +500,7 @@ const processDocument = async (documentType, documentId) => {
       ...chunk.metadata,
       documentType,
       sourceUrl: document.sourceUrl,
+      pdfUrl: processed.processedPdfUrl,
       languageCode: processed.language.languageCode,
       script: processed.language.script,
       originalLanguage: processed.language.languageCode,
