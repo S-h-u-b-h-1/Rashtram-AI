@@ -27,6 +27,7 @@ const {
 } = require("../lib/ingestion/core/fetcher");
 const {
   countPdfUrls,
+  matchesRequestedScope,
 } = require("../lib/ingestion/core/ingestionRunner");
 const { parseArguments } = require("../cli/ingestSources");
 const {
@@ -73,7 +74,12 @@ test("normalization creates a universal record without losing source metadata", 
   assert.equal(record.year, 2025);
   assert.equal(record.legalIdentifier, null);
   assert.equal(record.sourcePriority, 20);
-  assert.deepEqual(record.metadata, { official: true });
+  assert.deepEqual(record.metadata, {
+    official: true,
+    sourceClassification: "Official Government Source",
+    language: "English",
+    country: "India",
+  });
 });
 
 test("normalization accepts universal schema aliases", () => {
@@ -89,12 +95,17 @@ test("normalization accepts universal schema aliases", () => {
     commencementDate: "2025-09-01",
     pdfHash: "abc123",
     htmlHash: "def456",
+    mimeType: "application/pdf",
+    fileSizeBytes: 4096,
   });
   assert.equal(record.gazetteIdentifier, "CG-DL-E-1");
   assert.equal(record.enactedDate, "2025-08-22");
   assert.equal(record.effectiveDate, "2025-09-01");
   assert.equal(record.pdfHash, "abc123");
   assert.equal(record.htmlHash, "def456");
+  assert.equal(record.fileHash, "abc123");
+  assert.equal(record.mimeType, "application/pdf");
+  assert.equal(record.fileSizeBytes, 4096);
   assert.equal(record.status, "Published");
 });
 
@@ -121,6 +132,9 @@ test("normalization handles Indian numeric dates and source priority", () => {
   assert.equal(sourcePriorityFor("egazette"), 10);
   assert.equal(sourcePriorityFor("prs-india"), 50);
   assert.equal(normalizeDocumentType("Office Memorandum"), "office_memorandum");
+  assert.equal(normalizeDocumentType("strategy-paper"), "strategy_paper");
+  assert.equal(normalizeDocumentType("cabinet-decisions"), "cabinet_decision");
+  assert.equal(normalizeDocumentType("press-release"), "press_release");
   assert.equal(normalizeJurisdiction(null, "union"), "India");
   assert.equal(normalizeJurisdiction(null, "state"), "Unknown");
 });
@@ -166,6 +180,24 @@ test("ingestion counters count distinct PDF URLs and parse operational flags", (
   );
   assert.equal(parseArguments(["--dry-run"]).dryRun, true);
   assert.equal(parseArguments(["--from=2025-01-01"]).from, "2025-01-01");
+  assert.equal(
+    matchesRequestedScope(
+      {
+        publicationDate: "2026-07-02",
+        jurisdiction: "Haryana",
+        ministry: "Energy",
+        category: "state-policy",
+      },
+      {
+        from: "2026-01-01",
+        to: "2026-12-31",
+        state: "Haryana",
+        ministry: "Energy",
+        category: "state-policy",
+      },
+    ),
+    true,
+  );
 });
 
 test("intelligence updates are emitted only for meaningful field changes", () => {
@@ -246,6 +278,34 @@ test("dedupe applies exact layers before fuzzy matching", () => {
     }).reason,
     "legal-identifier",
   );
+});
+
+test("dedupe treats each file URL as canonical even on a shared listing page", () => {
+  const decision = evaluateCandidate(
+    {
+      sourceName: "niti-aayog",
+      sourceRecordId: "report-b",
+      sourceUrl: "https://niti.gov.in/files/report-b.pdf",
+      detailUrl: "https://niti.gov.in/publications",
+      pdfUrl: "https://niti.gov.in/files/report-b.pdf",
+      title: "Semiconductor Manufacturing Roadmap",
+      normalizedTitle: "semiconductor manufacturing roadmap",
+      documentType: "report",
+      jurisdiction: "India",
+      year: 2026,
+    },
+    {
+      source_name: "niti-aayog",
+      source_record_id: "report-a",
+      canonical_url: "https://niti.gov.in/files/report-a.pdf",
+      pdf_url: "https://niti.gov.in/files/report-a.pdf",
+      normalized_title: "tourism hospitality growth",
+      document_type: "report",
+      jurisdiction: "India",
+      year: 2026,
+    },
+  );
+  assert.equal(decision.action, "create");
 });
 
 test("dedupe never merges repeated act numbers across years", () => {

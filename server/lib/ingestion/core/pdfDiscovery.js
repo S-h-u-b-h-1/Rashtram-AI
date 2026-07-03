@@ -5,7 +5,7 @@ const parseHtml = (html) => cheerio.load(html || "");
 const absoluteUrl = (url, baseUrl) => {
   if (!url) return null;
   try {
-    return new URL(url, baseUrl).toString();
+    return new URL(String(url).trim(), baseUrl).toString();
   } catch {
     return null;
   }

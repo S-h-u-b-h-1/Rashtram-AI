@@ -1,7 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { ArrowRight, ExternalLink, FileText } from "lucide-react";
+import {
+  ArrowRight,
+  ExternalLink,
+  FileText,
+  GitCompareArrows,
+} from "lucide-react";
 import {
   buildResearchHref,
   formatDate,
@@ -9,14 +14,19 @@ import {
 } from "@/lib/document-links";
 import { getPublicSourceLabel } from "@/lib/source-branding";
 import { trackActivity } from "@/lib/api";
+import {
+  comparisonDisabledReason,
+  useComparison,
+} from "@/context/ComparisonContext";
 
 export function DocumentListSection({
   eyebrow,
   title,
-  documents,
+  documents = [],
   emptyMessage,
   onViewAll,
 }) {
+  const { addDocument, removeDocument, isSelected } = useComparison();
   return (
     <section className="surface-card p-5 sm:p-6">
       <div className="flex items-start justify-between gap-4">
@@ -47,8 +57,15 @@ export function DocumentListSection({
         ) : (
           documents.slice(0, 6).map((document) => {
             const researchHref = buildResearchHref(document);
+            const selected = isSelected(document.id);
+            const normalizedDocument = {
+              ...document,
+              type: document.type || document.documentType,
+              pdfUrl: document.pdfUrl || document.pdf,
+            };
+            const disabledReason = comparisonDisabledReason(normalizedDocument);
             const row = (
-              <div className="group flex items-start gap-3 rounded-xl border border-transparent p-3 transition hover:border-[#8f1d2c]/8 hover:bg-[#f5efe5]">
+              <div className="group flex min-w-0 flex-1 items-start gap-3 p-3">
                 <div className="mt-0.5 grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-[#ebe3d6] text-[#874047]">
                   <FileText className="h-4 w-4" />
                 </div>
@@ -70,55 +87,56 @@ export function DocumentListSection({
               </div>
             );
 
-            return researchHref ? (
-              <Link
+            return (
+              <div
                 key={document.id}
-                href={researchHref}
-                onClick={() =>
-                  trackActivity({
-                    event_type: "research_continued",
-                    entity_type: document.documentType,
-                    entity_id: document.id,
-                    document_id: document.id,
-                    page_path: "/app",
-                    metadata_json: {
-                      documentType: document.documentType,
-                      jurisdiction: document.jurisdiction,
-                      category: document.category,
-                      ministry: document.ministry,
-                    },
-                  })
-                }
+                className="flex items-center rounded-xl border border-transparent transition hover:border-[#8f1d2c]/8 hover:bg-[#f5efe5]"
               >
-                {row}
-              </Link>
-            ) : document.sourceUrl ? (
-              <a
-                key={document.id}
-                href={document.sourceUrl}
-                target="_blank"
-                rel="noreferrer"
-                onClick={() =>
-                  trackActivity({
-                    event_type: "source_opened",
-                    entity_type: document.documentType,
-                    entity_id: document.id,
-                    document_id: document.id,
-                    page_path: "/app",
-                    metadata_json: {
-                      documentType: document.documentType,
-                      jurisdiction: document.jurisdiction,
-                      publicSourceType: getPublicSourceLabel(
-                        document.sourceName,
-                      ),
-                    },
-                  })
-                }
-              >
-                {row}
-              </a>
-            ) : (
-              <div key={document.id}>{row}</div>
+                {researchHref ? (
+                  <Link
+                    href={researchHref}
+                    className="min-w-0 flex-1"
+                    onClick={() =>
+                      trackActivity({
+                        event_type: "research_continued",
+                        entity_type: document.documentType,
+                        entity_id: document.id,
+                        document_id: document.id,
+                        page_path: "/app",
+                      })
+                    }
+                  >
+                    {row}
+                  </Link>
+                ) : document.sourceUrl ? (
+                  <a
+                    href={document.sourceUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="min-w-0 flex-1"
+                  >
+                    {row}
+                  </a>
+                ) : (
+                  row
+                )}
+                <button
+                  type="button"
+                  disabled={Boolean(disabledReason)}
+                  title={disabledReason || undefined}
+                  onClick={() =>
+                    selected
+                      ? removeDocument(document.id)
+                      : addDocument(normalizedDocument)
+                  }
+                  aria-label={`${selected ? "Remove" : "Add"} ${
+                    document.title
+                  } ${selected ? "from" : "to"} comparison`}
+                  className="mr-3 grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-[#eee0dc] text-[#8f1d2c] disabled:cursor-not-allowed disabled:opacity-35"
+                >
+                  <GitCompareArrows className="h-3.5 w-3.5" />
+                </button>
+              </div>
             );
           })
         )}

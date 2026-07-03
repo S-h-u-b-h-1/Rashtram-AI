@@ -11,21 +11,38 @@ const {
 } = require("../dashboard/intelligenceService");
 
 test("source registry distinguishes all requested official source groups", () => {
-  assert.equal(SOURCE_REGISTRY.length, 9);
-  assert.deepEqual(
-    SOURCE_REGISTRY.map((source) => source.key),
-    [
-      "prs-india",
-      "digital-sansad",
-      "lok-sabha",
-      "rajya-sabha",
-      "egazette",
-      "india-code",
-      "ministry",
-      "state-legislature",
-      "state-gazette",
-    ],
-  );
+  const keys = new Set(SOURCE_REGISTRY.map((source) => source.key));
+  for (const key of [
+    "prs-india",
+    "digital-sansad",
+    "lok-sabha",
+    "rajya-sabha",
+    "egazette",
+    "india-code",
+    "ministry",
+    "state-legislature",
+    "state-gazette",
+    "state-directory",
+    "niti-aayog",
+    "pib",
+    "mygov",
+    "india-gov",
+    "state-policy",
+    "policy-edge",
+    "ndap",
+    "ogd-india",
+    "regulator-rbi",
+    "regulator-sebi",
+    "regulator-trai",
+    "regulator-nclt",
+    "regulator-nclat",
+    "regulator-gst-council",
+    "regulator-cbdt",
+    "regulator-cbic",
+  ]) {
+    assert.equal(keys.has(key), true, `${key} is registered`);
+  }
+  assert.equal(keys.size, SOURCE_REGISTRY.length);
 });
 
 test("source health safely reports not-run, fresh, stale, degraded, and blocked states", () => {
@@ -159,6 +176,8 @@ test("document mapping exposes provenance without leaking source metadata", () =
     source_name: "prs-india",
     source_url: "https://prsindia.org/42",
     pdf_url: "https://www.indiacode.nic.in/42.pdf",
+    department: "Department of Legal Affairs",
+    gazette_identifier: "CG-DL-E-42",
     publication_date: "2025-08-22",
     first_seen_at: "2026-06-27T00:00:00.000Z",
     updated_at: "2026-06-27T00:00:00.000Z",
@@ -169,5 +188,7 @@ test("document mapping exposes provenance without leaking source metadata", () =
     document.sourceUrl,
     "https://www.indiacode.nic.in/handle/42",
   );
+  assert.equal(document.department, "Department of Legal Affairs");
+  assert.equal(document.gazetteNumber, "CG-DL-E-42");
   assert.equal("metadataJson" in document, false);
 });

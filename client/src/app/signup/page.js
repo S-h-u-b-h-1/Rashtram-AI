@@ -53,7 +53,7 @@ export default function Signup() {
       <AuthShell
         eyebrow="Create your workspace"
         title="Begin with a question."
-        description="Create an account to research bills, acts, and their policy implications."
+        description="Create an account to research legislation, Gazette notifications, policies, and public programmes."
       >
         <button
           type="button"

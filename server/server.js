@@ -12,10 +12,20 @@ const actSummaryRouter = require("./act/actSummaryRoute");
 const actsRouter = require("./act/actsRoute");
 const processActRouter = require("./act/processActRoute");
 const actChatManagementRouter = require("./act/actChatRoute");
+const egazettesRouter = require("./egazette/egazettesRoute");
+const egazetteChatRouter = require("./egazette/egazetteChatRoute");
+const egazetteSummaryRouter = require("./egazette/egazetteSummaryRoute");
+const processEGazetteRouter = require("./egazette/processEGazetteRoute");
+const documentChatRouter = require("./document/documentChatRoute");
+const documentsRouter = require("./document/documentsRoute");
 const dashboardRouter = require("./dashboard/route");
 const profileRouter = require("./profile/route");
 const catalogIngestionRouter = require("./catalog/ingestionRoute");
 const activityRouter = require("./activity/route");
+const contactRouter = require("./contact/route");
+const internalCronRouter = require("./internal/cronRoute");
+const recommendationsRouter = require("./recommendation/recommendationsRoute");
+const graphRouter = require("./graph/route");
 const { connectDB } = require("./db");
 const cors = require("cors");
 const {
@@ -55,6 +65,8 @@ app.use(express.urlencoded({ extended: true }));
 app.use(generalLimiter);
 
 app.use("/api/auth", authLimiter, authRouter);
+app.use("/api/contact", contactRouter);
+app.use("/api/internal/cron", internalCronRouter);
 app.use("/api/chat", fetchUser, chatRouter);
 app.use("/api/bill-summary", fetchUser, billSummaryRouter);
 app.use("/api/bills", fetchUser, billsRouter);
@@ -66,6 +78,14 @@ app.use("/api/act-summary", fetchUser, actSummaryRouter);
 app.use("/api/acts", fetchUser, actsRouter);
 app.use("/api/process-act", fetchUser, processActRouter);
 app.use("/api/act-chats", actChatManagementRouter);
+app.use("/api/egazettes", fetchUser, egazettesRouter);
+app.use("/api/egazette-chat", fetchUser, egazetteChatRouter);
+app.use("/api/egazette-summary", fetchUser, egazetteSummaryRouter);
+app.use("/api/process-egazette", fetchUser, processEGazetteRouter);
+app.use("/api/document-chat", fetchUser, documentChatRouter);
+app.use("/api/documents", fetchUser, documentsRouter);
+app.use("/api/recommendations", fetchUser, recommendationsRouter);
+app.use("/api/graph", graphRouter);
 app.use("/api/dashboard", dashboardRouter);
 app.use("/api/profile", profileRouter);
 app.use("/api/catalog-operations", catalogIngestionRouter);
@@ -85,7 +105,7 @@ app.get("/health", async (req, res) => {
     res.status(200).json({
       status: "OK",
       database: "connected",
-      aiProvider: "gemini",
+      aiProvider: "openai",
       timestamp: new Date().toISOString(),
     });
   } catch (error) {

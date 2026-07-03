@@ -1,6 +1,7 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const path = require("node:path");
+const jwt = require("jsonwebtoken");
 const fetchuser = require("../middleware/fetchuser");
 
 const {
@@ -111,6 +112,42 @@ test("activity and product routes reject unauthenticated requests", () => {
   assert.equal(response.statusCode, 401);
   assert.equal(nextCalled, false);
   assert.match(response.body.error, /No token provided/);
+});
+
+test("legacy JWTs remain valid while new session-aware tokens roll out", async () => {
+  const previousSecret = process.env.JWT_SECRET;
+  process.env.JWT_SECRET = "test-session-compatibility-secret";
+  const token = jwt.sign(
+    { user: { id: "7" } },
+    process.env.JWT_SECRET,
+    {
+      issuer: "rashtram-ai",
+      audience: "rashtram-ai-client",
+      expiresIn: "5m",
+    },
+  );
+  let nextCalled = false;
+  const request = {
+    user: null,
+    header(name) {
+      return name === "auth-token" ? token : null;
+    },
+  };
+  const response = {
+    status() {
+      return this;
+    },
+    json() {
+      return this;
+    },
+  };
+  await fetchuser(request, response, () => {
+    nextCalled = true;
+  });
+  assert.equal(nextCalled, true);
+  assert.equal(request.user.id, "7");
+  if (previousSecret === undefined) delete process.env.JWT_SECRET;
+  else process.env.JWT_SECRET = previousSecret;
 });
 
 test(

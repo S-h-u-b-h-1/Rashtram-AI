@@ -99,14 +99,14 @@ function ProductPage() {
       icon: Layers,
       title: "Advanced Analytics",
       description:
-        "Deep analysis capabilities that identify patterns, trends, and correlations across multiple policy domains instantly.",
+        "Catalogue trends appear only when enough source-backed records support the comparison.",
       delay: "100ms",
     },
     {
       icon: Clock,
-      title: "Real-time Updates",
+      title: "Source-aware Updates",
       description:
-        "Source-aware refresh status distinguishes current, stale, planned, and unavailable public record feeds.",
+        "Refresh status distinguishes fresh, stale, blocked, and not-yet-run public record feeds.",
       delay: "200ms",
     },
   ];
@@ -144,7 +144,8 @@ function ProductPage() {
 
             <p className="text-xl md:text-2xl text-gray-600 mb-12 max-w-3xl mx-auto leading-relaxed animate-fade-in-up delay-200">
               Rashtram AI transforms policy research with complete transparency.
-              Real sourcing, real-time data, real impact.
+              Source-backed records, transparent availability, and grounded
+              document research.
             </p>
 
             <div className="flex flex-col sm:flex-row gap-5 justify-center animate-fade-in-up delay-300">
@@ -152,7 +153,7 @@ function ProductPage() {
                 href="/signup"
                 className="bg-[#9b2638] px-10 py-4 text-lg font-bold text-white shadow-lg shadow-[#8f1d2c]/15 transition-all hover:-translate-y-1 hover:shadow-[#8f1d2c]/25"
               >
-                Start Free Trial
+                Create an account
               </Link>
               <Link
                 href="#features"
@@ -204,8 +205,8 @@ function ProductPage() {
                   Transparency First
                 </span>
                 <h2 className="text-4xl font-black text-gray-900 leading-tight">
-                  Trusted by <br />
-                  <span className="text-gray-400">the Best</span>
+                  Built for <br />
+                  <span className="text-gray-400">verification</span>
                 </h2>
                 <p className="text-lg text-gray-600 leading-relaxed">
                   We preserve the public record context behind legislative
@@ -215,7 +216,7 @@ function ProductPage() {
                   href="/signup"
                   className="inline-flex items-center text-[#9b2638] font-bold text-lg hover:underline decoration-2 underline-offset-4 cursor-pointer group"
                 >
-                  Verify our sources{" "}
+                  Explore the workspace{" "}
                   <ArrowRight className="w-5 h-5 ml-2 group-hover:translate-x-1 transition-transform" />
                 </Link>
               </div>

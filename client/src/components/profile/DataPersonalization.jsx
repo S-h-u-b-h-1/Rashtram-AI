@@ -2,10 +2,8 @@
 
 import {
   DatabaseZap,
-  Download,
   Eye,
   ShieldCheck,
-  Trash2,
 } from "lucide-react";
 import { useState } from "react";
 import * as api from "@/lib/api";
@@ -196,29 +194,6 @@ export function DataPersonalization({ insights, onUpdate }) {
           research workspaces.
         </div>
       )}
-
-      <div className="mt-5 grid gap-3 sm:grid-cols-2">
-        <button
-          type="button"
-          disabled
-          className="flex cursor-not-allowed items-center gap-3 rounded-2xl border border-[#8f1d2c]/9 bg-[#f6f2eb] p-4 text-left opacity-70"
-        >
-          <Download className="h-4 w-4 text-[#874047]" />
-          <span className="text-sm font-semibold text-[#29312d]">
-            Export activity data — coming soon
-          </span>
-        </button>
-        <button
-          type="button"
-          disabled
-          className="flex cursor-not-allowed items-center gap-3 rounded-2xl border border-[#a33d31]/12 bg-[#f6f2eb] p-4 text-left opacity-70"
-        >
-          <Trash2 className="h-4 w-4 text-[#a33d31]" />
-          <span className="text-sm font-semibold text-[#29312d]">
-            Delete activity data — coming soon
-          </span>
-        </button>
-      </div>
 
       <div className="mt-4 flex items-start gap-2 text-[11px] leading-5 text-[#81796e]">
         <DatabaseZap className="mt-0.5 h-3.5 w-3.5 shrink-0" />

@@ -3,12 +3,19 @@ import {
   FileCheck2,
   FolderOpen,
   History,
-  MessageSquareText,
   ScrollText,
+  Newspaper,
+  Bookmark,
+  MapPinned,
 } from "lucide-react";
 
 export function ResearchActivity({ stats }) {
   const items = [
+    {
+      label: "State Bill conversations",
+      value: stats.stateBillChats,
+      icon: MapPinned,
+    },
     {
       label: "Bill conversations",
       value: stats.billChats,
@@ -20,24 +27,29 @@ export function ResearchActivity({ stats }) {
       icon: BookOpenText,
     },
     {
-      label: "Research history",
-      value: stats.researchHistoryCount,
-      icon: History,
-    },
-    {
-      label: "Documents opened",
-      value: stats.documentsOpened,
-      icon: FolderOpen,
-    },
-    {
-      label: "Saved summaries",
-      value: stats.savedSummaries,
+      label: "Policy conversations",
+      value: stats.policyChats,
       icon: FileCheck2,
     },
     {
-      label: "Research messages",
-      value: stats.totalMessages,
-      icon: MessageSquareText,
+      label: "Gazette conversations",
+      value: stats.gazetteChats,
+      icon: Newspaper,
+    },
+    {
+      label: "Saved documents",
+      value: stats.savedDocuments,
+      icon: History,
+    },
+    {
+      label: "Bookmarks",
+      value: stats.bookmarks,
+      icon: Bookmark,
+    },
+    {
+      label: "Reading history",
+      value: stats.readingHistory,
+      icon: FolderOpen,
     },
   ];
 
@@ -55,7 +67,7 @@ export function ResearchActivity({ stats }) {
         </p>
       </div>
 
-      <div className="mt-5 grid grid-cols-2 gap-3 lg:grid-cols-3 xl:grid-cols-6">
+      <div className="mt-5 grid grid-cols-2 gap-3 lg:grid-cols-4">
         {items.map((item) => {
           const ActivityIcon = item.icon;
           return (
@@ -65,7 +77,8 @@ export function ResearchActivity({ stats }) {
             >
               <ActivityIcon className="h-4 w-4 text-[#874047]" />
               <p className="mt-4 font-serif text-3xl text-[#8f1d2c]">
-                {item.value.toLocaleString()}
+                {Number(item.value || 0).toLocaleString()}
+                {item.suffix || ""}
               </p>
               <p className="mt-1 text-[11px] text-[#81796e]">
                 {item.label}

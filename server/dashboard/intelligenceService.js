@@ -1,5 +1,19 @@
 const { query } = require("../db");
 const { getActivityInsights } = require("../activity/activityService");
+const { generateDashboardOverview } = require("../lib/vectordb");
+const {
+  getGraphProfileInsights,
+  getKnowledgeGraphMetrics,
+} = require("../graph/knowledgeGraphService");
+const {
+  getProcessingStatus,
+} = require("../document/readinessService");
+
+let overviewCache = {
+  key: null,
+  value: null,
+  expiresAt: 0,
+};
 
 const SOURCE_REGISTRY = [
   {
@@ -38,6 +52,11 @@ const SOURCE_REGISTRY = [
     purpose: "Policies, schemes, guidelines and consultations",
   },
   {
+    key: "ministry-environment",
+    label: "Ministry of Environment, Forest and Climate Change",
+    purpose: "Official environmental guidelines, schemes and reports",
+  },
+  {
     key: "state-legislature",
     label: "State Legislatures",
     purpose: "State Bills, Acts and Assembly proceedings",
@@ -47,6 +66,74 @@ const SOURCE_REGISTRY = [
     label: "State Gazettes",
     purpose: "State notifications, rules, orders and ordinances",
   },
+  {
+    key: "state-directory",
+    label: "All States & Union Territories",
+    purpose: "Official IGOD discovery for all 36 state and UT jurisdictions",
+  },
+  {
+    key: "niti-aayog",
+    label: "NITI Aayog",
+    purpose: "Policy reports, strategy papers, white papers and recommendations",
+  },
+  {
+    key: "pib",
+    label: "Press Information Bureau",
+    purpose: "Cabinet decisions, policy announcements and ministry releases",
+  },
+  {
+    key: "mygov",
+    label: "MyGov",
+    purpose: "Public consultations, draft policies and citizen discussions",
+  },
+  {
+    key: "india-gov",
+    label: "National Portal of India",
+    purpose: "Official government document and scheme directory discovery",
+  },
+  {
+    key: "state-policy",
+    label: "State Policy Portals",
+    purpose: "Official state policies, guidelines, orders and schemes",
+  },
+  {
+    key: "policy-edge",
+    label: "The Policy Edge",
+    purpose: "Attributed secondary policy research and public explainers",
+  },
+  {
+    key: "ndap",
+    label: "NDAP",
+    purpose: "Official public-data catalogue discovery",
+  },
+  {
+    key: "ogd-india",
+    label: "Open Government Data Platform India",
+    purpose: "Official public datasets and catalogue metadata",
+  },
+  ...[
+    ["rbi", "Reserve Bank of India"],
+    ["sebi", "Securities and Exchange Board of India"],
+    ["trai", "Telecom Regulatory Authority of India"],
+    ["uidai", "Unique Identification Authority of India"],
+    ["cci", "Competition Commission of India"],
+    ["cerc", "Central Electricity Regulatory Commission"],
+    ["irdai", "Insurance Regulatory and Development Authority"],
+    ["pfrda", "Pension Fund Regulatory and Development Authority"],
+    ["nmc", "National Medical Commission"],
+    ["aicte", "All India Council for Technical Education"],
+    ["ugc", "University Grants Commission"],
+    ["ec", "Election Commission of India"],
+    ["nclt", "National Company Law Tribunal"],
+    ["nclat", "National Company Law Appellate Tribunal"],
+    ["gst-council", "Goods and Services Tax Council"],
+    ["cbdt", "Central Board of Direct Taxes"],
+    ["cbic", "Central Board of Indirect Taxes and Customs"],
+  ].map(([key, label]) => ({
+    key: `regulator-${key}`,
+    label,
+    purpose: "Official regulations, circulars, orders and consultations",
+  })),
 ];
 
 const toIso = (value) => {
@@ -91,12 +178,27 @@ const mapDocument = (row) => ({
   jurisdiction: row.jurisdiction,
   authority: row.authority,
   ministry: row.ministry,
+  department: row.department,
   category: row.category,
+  gazetteNumber: row.gazette_identifier || row.gazette_id || null,
   status: row.status,
   year: row.year,
   sourceName: row.canonical_source || row.source_name,
   sourceUrl: row.canonical_url || row.detail_url || row.source_url,
   pdfUrl: row.pdf_url,
+  state: row.state || row.metadata_json?.state || null,
+  qualityScore:
+    row.quality_score == null ? null : Number(row.quality_score),
+  readiness: !row.pdf_url
+    ? "source_only"
+    : row.schema_research_ready || row.processing_status === "ready"
+      ? "research_ready"
+      : row.processing_status === "failed"
+        ? "processing_failed"
+        : "pdf_available",
+  researchReady: Boolean(
+    row.schema_research_ready || row.processing_status === "ready",
+  ),
   eventDate: toIso(
     row.intelligence_date ||
       row.publication_date ||
@@ -106,6 +208,10 @@ const mapDocument = (row) => ({
   ),
   firstSeenAt: toIso(row.first_seen_at),
   updatedAt: toIso(row.updated_at),
+  recommendationScore:
+    row.recommendation_score == null
+      ? null
+      : Number(row.recommendation_score),
 });
 
 const mapEvent = (row) => ({
@@ -118,6 +224,14 @@ const mapEvent = (row) => ({
   sourceName: row.source_name,
   sourceUrl: row.source_url,
   pdfUrl: row.pdf_url,
+  readiness: !row.pdf_url
+    ? "source_only"
+    : row.processing_status === "ready"
+      ? "research_ready"
+      : row.processing_status === "failed"
+        ? "processing_failed"
+        : "pdf_available",
+  researchReady: row.processing_status === "ready",
   jurisdiction: row.jurisdiction,
   authority: row.authority,
   ministry: row.ministry,
@@ -143,37 +257,19 @@ const mapChat = (row) => ({
 
 const getRecentUserChats = async (userId, limit = 8) => {
   const result = await query(
-    `SELECT *
-     FROM (
-       SELECT
-         id,
-         bill_id AS document_id,
-         'bill'::TEXT AS document_type,
-         bill_title AS title,
-         bill_status AS status,
-         pdf_url,
-         LEFT(summary, 280) AS summary,
-         JSONB_ARRAY_LENGTH(messages) AS message_count,
-         GREATEST(last_message_at, updated_at) AS updated_at
-       FROM bill_chats
-       WHERE user_id = $1 AND is_active = TRUE
-
-       UNION ALL
-
-       SELECT
-         id,
-         act_id AS document_id,
-         'act'::TEXT AS document_type,
-         act_title AS title,
-         act_status AS status,
-         pdf_url,
-         LEFT(summary, 280) AS summary,
-         JSONB_ARRAY_LENGTH(messages) AS message_count,
-         updated_at
-       FROM act_chats
-       WHERE user_id = $1 AND is_active = TRUE
-     ) research
-     ORDER BY updated_at DESC
+    `SELECT
+       id,
+       document_id,
+       document_type,
+       document_title AS title,
+       status,
+       pdf_url,
+       LEFT(summary, 280) AS summary,
+       JSONB_ARRAY_LENGTH(messages) AS message_count,
+       GREATEST(last_accessed_at, last_message_at, updated_at) AS updated_at
+     FROM document_chats
+     WHERE user_id = $1 AND is_active = TRUE
+     ORDER BY is_pinned DESC, updated_at DESC
      LIMIT $2`,
     [userId, limit],
   );
@@ -289,16 +385,62 @@ const findLatestDatedEvent = (events) =>
       : latest;
   }, null);
 
+const getGreeting = (name) => {
+  const hour = Number(
+    new Intl.DateTimeFormat("en-IN", {
+      timeZone: "Asia/Kolkata",
+      hour: "2-digit",
+      hour12: false,
+    }).format(new Date()),
+  );
+  const greeting =
+    hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening";
+  return name ? `${greeting}, ${name.split(" ")[0]}` : greeting;
+};
+
+const getGroundedOverview = async (evidence, fallback) => {
+  if (!process.env.OPENAI_API_KEY) return fallback;
+  const key = JSON.stringify(evidence);
+  if (
+    overviewCache.key === key &&
+    overviewCache.value &&
+    overviewCache.expiresAt > Date.now()
+  ) {
+    return overviewCache.value;
+  }
+  try {
+    const value = await generateDashboardOverview(evidence);
+    if (!value) return fallback;
+    overviewCache = {
+      key,
+      value,
+      expiresAt: Date.now() + 15 * 60 * 1_000,
+    };
+    return value;
+  } catch (error) {
+    console.warn("Dashboard overview generation unavailable:", error.message);
+    return fallback;
+  }
+};
+
 const getDashboardIntelligence = async (userId) => {
   const [
     user,
     eventsResult,
     recentDocumentsResult,
+    nationalUpdatesResult,
+    latestStateBillsResult,
     activeBillsResult,
+    gazetteNotificationsResult,
     legalUpdatesResult,
     trendingResult,
+    ministryActivityResult,
+    developmentCountsResult,
+    recommendedReadingResult,
     refreshResult,
     recentCountsResult,
+    coverageResult,
+    coverageTypesResult,
     sourceHealth,
     recentUserChats,
   ] = await Promise.all([
@@ -310,7 +452,7 @@ const getDashboardIntelligence = async (userId) => {
       [userId],
     ),
     query(`
-      SELECT e.*, d.pdf_url
+      SELECT e.*, d.pdf_url, d.processing_status
       FROM intelligence_events e
       LEFT JOIN legislative_documents d ON d.id = e.document_id
       ORDER BY
@@ -322,11 +464,77 @@ const getDashboardIntelligence = async (userId) => {
     query(`
       SELECT *
       FROM legislative_documents
+      WHERE COALESCE((
+        SELECT schema_document.visibility_status
+        FROM documents schema_document
+        WHERE schema_document.id = legislative_documents.id
+      ), 'public') = 'public'
       ORDER BY
+        COALESCE((
+          SELECT schema_document.quality_score
+          FROM documents schema_document
+          WHERE schema_document.id = legislative_documents.id
+        ), 0) DESC,
         first_seen_at DESC NULLS LAST,
         updated_at DESC,
         id DESC
       LIMIT 12
+    `),
+    query(`
+      SELECT
+        legislative_documents.*,
+        COALESCE(
+          publication_date,
+          enacted_date,
+          effective_date,
+          first_seen_at::DATE
+        ) AS intelligence_date
+      FROM legislative_documents
+      WHERE (
+        document_type IN (
+        'act', 'policy', 'strategy_paper', 'white_paper',
+        'discussion_paper', 'recommendation', 'notification',
+        'gazette', 'committee_report', 'consultation_paper',
+        'cabinet_decision', 'press_release', 'report', 'rule',
+        'regulation', 'circular', 'order', 'office_memorandum',
+        'guideline', 'scheme'
+        )
+         OR source_name LIKE 'regulator-%'
+         OR canonical_source LIKE 'regulator-%'
+      )
+        AND COALESCE((
+          SELECT schema_document.visibility_status
+          FROM documents schema_document
+          WHERE schema_document.id = legislative_documents.id
+        ), 'public') = 'public'
+      ORDER BY
+        COALESCE((
+          SELECT schema_document.quality_score
+          FROM documents schema_document
+          WHERE schema_document.id = legislative_documents.id
+        ), 0) DESC,
+        intelligence_date DESC NULLS LAST, updated_at DESC, id DESC
+      LIMIT 100
+    `),
+    query(`
+      SELECT
+        legislative_documents.*,
+        COALESCE(
+          introduced_date,
+          publication_date,
+          CASE
+            WHEN year BETWEEN 1800 AND 2200 THEN MAKE_DATE(year, 1, 1)
+          END,
+          first_seen_at::DATE
+        ) AS intelligence_date
+      FROM legislative_documents
+      WHERE document_type = 'bill'
+        AND jurisdiction_level = 'state'
+      ORDER BY
+        intelligence_date DESC NULLS LAST,
+        updated_at DESC,
+        id DESC
+      LIMIT 8
     `),
     query(`
       SELECT
@@ -342,6 +550,27 @@ const getDashboardIntelligence = async (userId) => {
         AND jurisdiction_level IN ('parliament', 'union')
         AND LOWER(COALESCE(status, '')) ~
           '(introduced|pending|consideration|passed|referred|committee)'
+      ORDER BY
+        intelligence_date DESC NULLS LAST,
+        updated_at DESC,
+        id DESC
+      LIMIT 8
+    `),
+    query(`
+      SELECT
+        legislative_documents.*,
+        COALESCE(
+          publication_date,
+          effective_date,
+          first_seen_at::DATE
+        ) AS intelligence_date
+      FROM legislative_documents
+      WHERE (
+        canonical_source IN ('egazette', 'state-gazette')
+        OR source_name IN ('egazette', 'state-gazette')
+        OR gazette_identifier IS NOT NULL
+        OR document_type = 'gazette'
+      )
       ORDER BY
         intelligence_date DESC NULLS LAST,
         updated_at DESC,
@@ -374,13 +603,82 @@ const getDashboardIntelligence = async (userId) => {
       SELECT label, COUNT(*)::INTEGER AS documents
       FROM (
         SELECT COALESCE(NULLIF(ministry, ''), NULLIF(category, '')) AS label
-        FROM legislative_documents
+        FROM documents
+        WHERE visibility_status = 'public'
       ) categories
       WHERE label IS NOT NULL
       GROUP BY label
       ORDER BY documents DESC, label
       LIMIT 12
     `),
+    query(`
+      SELECT
+        ministry,
+        COUNT(*)::INTEGER AS documents,
+        MAX(
+          COALESCE(publication_date::TIMESTAMPTZ, updated_at)
+        ) AS latest_activity
+      FROM documents
+      WHERE ministry IS NOT NULL AND ministry <> ''
+        AND visibility_status = 'public'
+      GROUP BY ministry
+      ORDER BY latest_activity DESC, documents DESC, ministry
+      LIMIT 10
+    `),
+    query(`
+      SELECT document_type, COUNT(*)::INTEGER AS documents
+      FROM documents
+      WHERE first_seen_at >= NOW() - INTERVAL '30 days'
+        AND visibility_status = 'public'
+      GROUP BY document_type
+      ORDER BY documents DESC, document_type
+    `),
+    query(
+      `WITH preferences AS (
+         SELECT
+           COALESCE(preferred_ministries, '[]'::jsonb) AS ministries,
+           COALESCE(preferred_policy_areas, '[]'::jsonb) AS policy_areas,
+           COALESCE(preferred_jurisdictions, '[]'::jsonb) AS jurisdictions,
+           COALESCE(preferred_document_types, '[]'::jsonb) AS document_types
+         FROM user_profiles
+         WHERE user_id = $1
+       )
+       SELECT
+         d.*,
+         schema_document.state,
+         schema_document.research_ready AS schema_research_ready,
+         schema_document.quality_score,
+         (
+           CASE WHEN preferences.ministries ? COALESCE(d.ministry, '')
+             THEN 4 ELSE 0 END
+           + CASE WHEN preferences.policy_areas ? COALESCE(d.category, '')
+             THEN 3 ELSE 0 END
+           + CASE WHEN preferences.jurisdictions ? COALESCE(d.jurisdiction, '')
+             THEN 2 ELSE 0 END
+           + CASE WHEN preferences.document_types ? d.document_type
+             THEN 2 ELSE 0 END
+         ) AS recommendation_score
+       FROM legislative_documents d
+       JOIN documents schema_document ON schema_document.id = d.id
+       CROSS JOIN (
+         SELECT * FROM preferences
+         UNION ALL
+         SELECT '[]'::jsonb, '[]'::jsonb, '[]'::jsonb, '[]'::jsonb
+         WHERE NOT EXISTS (SELECT 1 FROM preferences)
+       ) preferences
+       WHERE schema_document.visibility_status = 'public'
+         AND schema_document.research_ready
+         AND schema_document.quality_score >= 40
+         AND schema_document.canonical_url IS NOT NULL
+       ORDER BY
+         recommendation_score DESC,
+         d.source_priority ASC,
+         COALESCE(d.publication_date, d.enacted_date, d.introduced_date)
+           DESC NULLS LAST,
+         d.updated_at DESC
+       LIMIT 8`,
+      [userId],
+    ),
     query(`
       SELECT completed_at, status, source_name
       FROM ingestion_runs
@@ -403,20 +701,63 @@ const getDashboardIntelligence = async (userId) => {
         ) AS recent_events,
         (
           SELECT COUNT(*)::INTEGER
-          FROM legislative_documents
+          FROM documents
           WHERE first_seen_at >= NOW() - INTERVAL '24 hours'
+            AND visibility_status = 'public'
         ) AS recent_documents_24h,
         (
           SELECT COUNT(*)::INTEGER
-          FROM legislative_documents
+          FROM documents
           WHERE first_seen_at >= NOW() - INTERVAL '7 days'
+            AND visibility_status = 'public'
         ) AS recent_documents
+    `),
+    query(`
+      SELECT
+        COUNT(*)::INTEGER AS total_documents,
+        COUNT(primary_pdf_resource_id)::INTEGER AS documents_with_pdf,
+        COUNT(DISTINCT jurisdiction)::INTEGER AS jurisdictions,
+        COUNT(*) FILTER (
+          WHERE document_type = 'bill'
+            AND jurisdiction_level IN ('parliament', 'union')
+        )::INTEGER AS parliament_bills,
+        COUNT(*) FILTER (
+          WHERE document_type = 'bill'
+            AND jurisdiction_level = 'state'
+        )::INTEGER AS state_bills,
+        COUNT(*) FILTER (
+          WHERE document_type = 'act'
+        )::INTEGER AS acts,
+        COUNT(*) FILTER (
+          WHERE gazette_identifier IS NOT NULL
+             OR document_type = 'gazette'
+        )::INTEGER AS gazette_documents,
+        COUNT(*) FILTER (
+          WHERE document_type IN (
+            'policy', 'scheme', 'guideline', 'consultation_paper',
+            'strategy_paper', 'white_paper', 'discussion_paper',
+            'recommendation', 'report', 'government_resolution',
+            'cabinet_decision'
+          )
+        )::INTEGER AS policy_documents
+      FROM documents
+      WHERE visibility_status = 'public'
+    `),
+    query(`
+      SELECT document_type, COUNT(*)::INTEGER AS documents
+      FROM documents
+      WHERE visibility_status = 'public'
+      GROUP BY document_type
+      ORDER BY documents DESC, document_type
     `),
     getSourceHealth(),
     getRecentUserChats(userId, 8),
   ]);
 
   const recentDocuments = recentDocumentsResult.rows.map(mapDocument);
+  const nationalUpdates = nationalUpdatesResult.rows.map(mapDocument);
+  const latestBy = (predicate, limit = 8) =>
+    nationalUpdates.filter(predicate).slice(0, limit);
   const storedEvents = eventsResult.rows.map(mapEvent);
   const intelligenceEvents = storedEvents.length
     ? storedEvents
@@ -445,11 +786,37 @@ const getDashboardIntelligence = async (userId) => {
     recentCountsResult.rows[0]?.recent_documents || 0;
   const latestEvent = findLatestDatedEvent(storedEvents);
   const userRow = user.rows[0];
+  const coverage = coverageResult.rows[0] || {};
+  const fallbackBrief = buildBriefSummary({
+    recentEventCount,
+    freshSourceCount,
+    recentDocumentCount,
+  });
+  const briefSummary = await getGroundedOverview(
+    {
+      verifiedEventsLast7Days: Number(recentEventCount),
+      cataloguedDocumentsLast7Days: Number(recentDocumentCount),
+      freshSourceCount,
+      latestVerifiedEvent: latestEvent
+        ? {
+            title: latestEvent.title,
+            date: latestEvent.eventDate,
+            type: latestEvent.documentType,
+          }
+        : null,
+      recentCatalogueTitles: recentDocuments.slice(0, 3).map((document) => ({
+        title: document.title,
+        type: document.documentType,
+        date: document.eventDate,
+      })),
+    },
+    fallbackBrief,
+  );
+  const knowledgeGraph = await getKnowledgeGraphMetrics();
+  const processingReadiness = await getProcessingStatus();
 
   return {
-    userGreeting: userRow?.name
-      ? `Good to see you, ${userRow.name.split(" ")[0]}`
-      : "Welcome to your intelligence desk",
+    userGreeting: getGreeting(userRow?.name),
     currentDate: new Date().toISOString(),
     lastRefresh: toIso(refreshResult.rows[0]?.completed_at),
     freshnessStatus: {
@@ -461,11 +828,9 @@ const getDashboardIntelligence = async (userId) => {
           ? `${freshSourceCount} sources fresh`
           : "Awaiting source refresh",
     },
-    briefSummary: buildBriefSummary({
-      recentEventCount,
-      freshSourceCount,
-      recentDocumentCount,
-    }),
+    briefSummary,
+    knowledgeGraph,
+    processingReadiness,
     recentActivity: buildRecentActivity({
       recentEventCount24h,
       recentEventCount,
@@ -477,19 +842,126 @@ const getDashboardIntelligence = async (userId) => {
       : "No live Parliament events have been ingested yet; showing recent catalogue additions.",
     intelligenceEvents,
     recentDocuments,
+    latestActs: latestBy((document) => document.documentType === "act"),
+    latestPolicies: latestBy((document) =>
+      [
+        "policy",
+        "scheme",
+        "guideline",
+        "office_memorandum",
+        "circular",
+        "consultation_paper",
+        "strategy_paper",
+        "white_paper",
+        "discussion_paper",
+        "recommendation",
+        "report",
+        "government_resolution",
+        "cabinet_decision",
+      ].includes(document.documentType),
+    ),
+    latestMinistryUpdates: latestBy(
+      (document) =>
+        Boolean(document.ministry) &&
+        [
+          "pib",
+          "niti-aayog",
+          "ministry",
+          "ministry-environment",
+        ].includes(document.sourceName),
+    ),
+    latestStateUpdates: latestBy(
+      (document) => document.jurisdictionLevel === "state",
+    ),
+    latestStateBills: latestStateBillsResult.rows.map(mapDocument),
+    latestRegulatorUpdates: latestBy((document) =>
+      String(document.sourceName || "").startsWith("regulator-"),
+    ),
+    committeeActivity: latestBy(
+      (document) => document.documentType === "committee_report",
+    ),
+    publicConsultations: latestBy(
+      (document) => document.documentType === "consultation_paper",
+    ),
+    cabinetDecisions: latestBy(
+      (document) => document.documentType === "cabinet_decision",
+    ),
     activeBills: activeBillsResult.rows.map(mapDocument),
     latestLegalUpdates: legalUpdatesResult.rows.map(mapDocument),
-    trendingCategories: trendingResult.rows.map((row) => ({
-      label: row.label,
+    recentGazetteNotifications:
+      gazetteNotificationsResult.rows.map(mapDocument),
+    trendingCategories: trendingResult.rows
+      .filter((row) => Number(row.documents) >= 2)
+      .map((row) => ({
+        label: row.label,
+        documentCount: row.documents,
+      })),
+    ministryActivity: ministryActivityResult.rows.map((row) => ({
+      ministry: row.ministry,
+      documentCount: row.documents,
+      latestActivity: toIso(row.latest_activity),
+    })),
+    majorDevelopments: developmentCountsResult.rows.map((row) => ({
+      documentType: row.document_type,
       documentCount: row.documents,
     })),
+    recommendedReading: recommendedReadingResult.rows
+      .map(mapDocument)
+      .filter((document) => document.recommendationScore >= 3)
+      .map((document) => {
+        const score = Math.min(
+          Number((document.recommendationScore / 11).toFixed(4)),
+          1,
+        );
+        return {
+          ...document,
+          type: document.documentType,
+          score,
+          confidence: score >= 0.5 ? "high" : "medium",
+          reason:
+            "Recommended because it matches your saved ministry, jurisdiction, topic, or document-type preferences.",
+          recommendationType: "profile_match",
+        };
+      }),
+    demoHighlights: [
+      latestBy((document) => document.documentType === "act", 1)[0],
+      activeBillsResult.rows.map(mapDocument)[0],
+      latestStateBillsResult.rows.map(mapDocument)[0],
+      latestBy((document) =>
+        [
+          "policy",
+          "scheme",
+          "guideline",
+          "consultation_paper",
+        ].includes(document.documentType),
+      1)[0],
+      gazetteNotificationsResult.rows.map(mapDocument)[0],
+    ].filter(
+      (document, index, documents) =>
+        document &&
+        documents.findIndex((candidate) => candidate?.id === document.id) ===
+          index,
+    ),
     sourceHealth,
+    platformCoverage: {
+      totalDocuments: coverage.total_documents || 0,
+      parliamentBills: coverage.parliament_bills || 0,
+      stateBills: coverage.state_bills || 0,
+      acts: coverage.acts || 0,
+      gazetteDocuments: coverage.gazette_documents || 0,
+      policyDocuments: coverage.policy_documents || 0,
+      documentsWithPdf: coverage.documents_with_pdf || 0,
+      jurisdictions: coverage.jurisdictions || 0,
+      lastRefresh: toIso(refreshResult.rows[0]?.completed_at),
+      byDocumentType: coverageTypesResult.rows.map((row) => ({
+        documentType: row.document_type,
+        documents: row.documents,
+      })),
+    },
     recentUserChats,
     emptyStateFlags: {
       noLiveEvents: storedEvents.length === 0,
       noActiveBills: activeBillsResult.rows.length === 0,
-      parliamentCalendarNotConnected: true,
-      watchlistNotAvailable: true,
     },
   };
 };
@@ -504,6 +976,7 @@ const getProfileData = async (userId) => {
     recentChats,
     sources,
     activityInsights,
+    favoriteGazetteCategories,
   ] = await Promise.all([
       query(
         `SELECT
@@ -515,40 +988,57 @@ const getProfileData = async (userId) => {
       ),
       query(
         `SELECT
+           COUNT(*) FILTER (
+             WHERE document_type = 'bill'
+               AND NOT EXISTS (
+                 SELECT 1
+                 FROM legislative_documents d
+                 WHERE d.id::TEXT = document_chats.document_id::TEXT
+                   AND d.jurisdiction_level = 'state'
+               )
+           )::INTEGER AS bill_chats,
+           COUNT(*) FILTER (
+             WHERE document_type = 'bill'
+               AND EXISTS (
+                 SELECT 1
+                 FROM legislative_documents d
+                 WHERE d.id::TEXT = document_chats.document_id::TEXT
+                   AND d.jurisdiction_level = 'state'
+               )
+           )::INTEGER AS state_bill_chats,
+           COUNT(*) FILTER (
+             WHERE document_type = 'act'
+           )::INTEGER AS act_chats,
+           COUNT(*) FILTER (
+             WHERE document_type = 'gazette'
+           )::INTEGER AS gazette_chats,
+           COUNT(*) FILTER (
+             WHERE document_type IN (
+               'policy', 'scheme', 'guideline', 'consultation_paper',
+               'strategy_paper', 'white_paper', 'discussion_paper',
+               'recommendation', 'report', 'government_resolution',
+               'cabinet_decision'
+             )
+           )::INTEGER AS policy_chats,
            (
-             SELECT COUNT(*)::INTEGER
-             FROM bill_chats
-             WHERE user_id = $1 AND is_active = TRUE
-           ) AS bill_chats,
-           (
-             SELECT COUNT(*)::INTEGER
-             FROM act_chats
-             WHERE user_id = $1 AND is_active = TRUE
-           ) AS act_chats,
-           (
-             SELECT COUNT(*)::INTEGER
-             FROM bill_chats
-             WHERE user_id = $1
-               AND is_active = TRUE
-               AND summary IS NOT NULL
-               AND summary <> ''
-           ) + (
-             SELECT COUNT(*)::INTEGER
-             FROM act_chats
-             WHERE user_id = $1
-               AND is_active = TRUE
-               AND summary IS NOT NULL
-               AND summary <> ''
-           ) AS saved_summaries,
-           (
-             SELECT COALESCE(SUM(JSONB_ARRAY_LENGTH(messages)), 0)::INTEGER
-             FROM bill_chats
-             WHERE user_id = $1 AND is_active = TRUE
-           ) + (
-             SELECT COALESCE(SUM(JSONB_ARRAY_LENGTH(messages)), 0)::INTEGER
-             FROM act_chats
-             WHERE user_id = $1 AND is_active = TRUE
-           ) AS total_messages`,
+             SELECT COUNT(DISTINCT i.document_id)::INTEGER
+             FROM user_document_interactions i
+             JOIN legislative_documents d ON d.id = i.document_id
+             WHERE i.user_id = $1
+               AND (
+                 d.canonical_source IN ('egazette', 'state-gazette')
+                 OR d.source_name IN ('egazette', 'state-gazette')
+                 OR d.gazette_identifier IS NOT NULL
+                 OR d.document_type = 'gazette'
+               )
+           ) AS gazette_documents_opened,
+           COUNT(*) FILTER (
+             WHERE summary IS NOT NULL AND summary <> ''
+           )::INTEGER AS saved_summaries,
+           COALESCE(SUM(JSONB_ARRAY_LENGTH(messages)), 0)::INTEGER
+             AS total_messages
+         FROM document_chats
+         WHERE user_id = $1 AND is_active = TRUE`,
         [userId],
       ),
       query(`
@@ -575,7 +1065,35 @@ const getProfileData = async (userId) => {
           COUNT(*) FILTER (
             WHERE document_type = 'act'
               AND jurisdiction_level = 'state'
-          )::INTEGER AS state_acts
+          )::INTEGER AS state_acts,
+          COUNT(*) FILTER (
+            WHERE document_type IN (
+              'policy', 'scheme', 'guideline', 'consultation_paper',
+              'strategy_paper', 'white_paper', 'discussion_paper',
+              'recommendation', 'report', 'government_resolution',
+              'cabinet_decision'
+            )
+          )::INTEGER AS policy_documents,
+          COUNT(*) FILTER (
+            WHERE source_name LIKE 'regulator-%'
+               OR canonical_source LIKE 'regulator-%'
+          )::INTEGER AS regulator_documents,
+          (
+            SELECT COUNT(*)::INTEGER
+            FROM source_directory_entries
+            WHERE entity_type = 'ministry'
+          ) AS ministries_discovered,
+          (
+            SELECT COUNT(*)::INTEGER
+            FROM source_directory_entries
+            WHERE entity_type = 'state_or_union_territory'
+          ) AS states_discovered,
+          COUNT(*) FILTER (
+            WHERE canonical_source IN ('egazette', 'state-gazette')
+              OR source_name IN ('egazette', 'state-gazette')
+              OR gazette_identifier IS NOT NULL
+              OR document_type = 'gazette'
+          )::INTEGER AS gazette_documents
         FROM legislative_documents
       `),
       query(`
@@ -600,6 +1118,25 @@ const getProfileData = async (userId) => {
       getRecentUserChats(userId, 12),
       getSourceHealth(),
       getActivityInsights(userId),
+      query(
+        `SELECT
+           COALESCE(NULLIF(d.category, ''), NULLIF(d.ministry, ''), d.document_type)
+             AS label,
+           SUM(i.count)::INTEGER AS interactions
+         FROM user_document_interactions i
+         JOIN legislative_documents d ON d.id = i.document_id
+         WHERE i.user_id = $1
+           AND (
+             d.canonical_source IN ('egazette', 'state-gazette')
+             OR d.source_name IN ('egazette', 'state-gazette')
+             OR d.gazette_identifier IS NOT NULL
+             OR d.document_type = 'gazette'
+           )
+         GROUP BY label
+         ORDER BY interactions DESC, label
+         LIMIT 6`,
+        [userId],
+      ),
     ]);
 
   if (!user.rows[0]) return null;
@@ -607,7 +1144,12 @@ const getProfileData = async (userId) => {
   const activityRow = activity.rows[0];
   const coverageRow = coverage.rows[0];
   const researchHistoryCount =
-    activityRow.bill_chats + activityRow.act_chats;
+    activityRow.bill_chats +
+    activityRow.state_bill_chats +
+    activityRow.act_chats +
+    activityRow.policy_chats +
+    activityRow.gazette_chats;
+  const graphInsights = await getGraphProfileInsights(userId);
 
   return {
     user: {
@@ -627,12 +1169,16 @@ const getProfileData = async (userId) => {
     },
     userActivityStats: {
       billChats: activityRow.bill_chats,
+      stateBillChats: activityRow.state_bill_chats,
       actChats: activityRow.act_chats,
+      policyChats: activityRow.policy_chats,
+      gazetteChats: activityRow.gazette_chats,
+      gazetteDocumentsOpened: activityRow.gazette_documents_opened,
       researchHistoryCount,
-      documentsOpened: researchHistoryCount,
       savedSummaries: activityRow.saved_summaries,
       totalMessages: activityRow.total_messages,
     },
+    graphInsights,
     platformCoverageStats: {
       totalDocuments: coverageRow.total_documents,
       documentsWithPdf: coverageRow.documents_with_pdf,
@@ -642,6 +1188,11 @@ const getProfileData = async (userId) => {
       parliamentActs: coverageRow.parliament_acts,
       stateBills: coverageRow.state_bills,
       stateActs: coverageRow.state_acts,
+      policyDocuments: coverageRow.policy_documents,
+      regulatorDocuments: coverageRow.regulator_documents,
+      ministriesDiscovered: coverageRow.ministries_discovered,
+      statesDiscovered: coverageRow.states_discovered,
+      gazetteDocuments: coverageRow.gazette_documents,
       byDocumentType: typeCounts.rows.map((row) => ({
         documentType: row.document_type,
         documents: row.documents,
@@ -658,6 +1209,13 @@ const getProfileData = async (userId) => {
         : null,
     },
     recentChats,
+    recentGazetteResearch: recentChats.filter(
+      (chat) => chat.documentType === "gazette",
+    ),
+    favoriteGazetteCategories: favoriteGazetteCategories.rows.map((row) => ({
+      label: row.label,
+      interactions: row.interactions,
+    })),
     sourceConnections: sources,
     activityInsights,
   };

@@ -1,3 +1,4 @@
+import Image from "next/image";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
 
@@ -18,23 +19,21 @@ export function BrandMark({
     >
       <span
         className={cn(
-          "relative grid h-9 w-9 shrink-0 place-items-center overflow-hidden rounded-xl border",
+          "relative grid h-10 w-10 shrink-0 place-items-center overflow-hidden rounded-xl border p-1",
           inverse
-            ? "border-white/15 bg-white/10"
-            : "border-[#8f1d2c]/10 bg-[#8f1d2c]",
+            ? "border-white/20 bg-white/95"
+            : "border-[#8f1d2c]/10 bg-white/70",
         )}
-        aria-hidden="true"
       >
-        <span className="absolute -right-2 -top-2 h-6 w-6 rounded-full bg-[#a87961]" />
-        <span className="absolute -bottom-3 -left-2 h-7 w-7 rounded-full bg-[#984b4f]" />
-        <span
-          className={cn(
-            "relative font-serif text-lg font-semibold",
-            inverse ? "text-white" : "text-[#fffaf0]",
-          )}
-        >
-          R
-        </span>
+        <Image
+          src="/rashtram-ai-shield.png"
+          alt="Rashtram AI"
+          width={32}
+          height={32}
+          sizes="32px"
+          className="h-8 w-8 object-contain"
+          priority
+        />
       </span>
       {!compact && (
         <span

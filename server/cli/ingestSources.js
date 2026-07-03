@@ -5,7 +5,11 @@ require("dotenv").config({
   path: process.env.ENV_FILE || path.resolve(__dirname, "../.env.local"),
 });
 
-const { CONNECTORS, connectorByName } = require("../lib/ingestion/connectors");
+const {
+  CONNECTORS,
+  SOURCE_GROUPS,
+  connectorByName,
+} = require("../lib/ingestion/connectors");
 const { runIngestion } = require("../lib/ingestion/core/ingestionRunner");
 const { getPool } = require("../db");
 
@@ -71,6 +75,11 @@ const parseArguments = (argumentsList) => {
 
 const main = async () => {
   const options = parseArguments(process.argv.slice(2));
+  options.sources = [
+    ...new Set(
+      options.sources.flatMap((source) => SOURCE_GROUPS[source] || [source]),
+    ),
+  ];
   const unknown = options.sources.filter((source) => !connectorByName(source));
   if (unknown.length) {
     throw new Error(

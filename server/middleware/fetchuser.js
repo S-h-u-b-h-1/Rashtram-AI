@@ -1,7 +1,8 @@
 const jwt = require("jsonwebtoken");
+const { isSessionActive } = require("../auth/sessionService");
 require('dotenv').config();
 
-const fetchuser = (req, res, next) => {
+const fetchuser = async (req, res, next) => {
   const token = req.header("auth-token") || req.header("Authorization")?.replace("Bearer ", "");
 
   if (!token) {
@@ -17,6 +18,11 @@ const fetchuser = (req, res, next) => {
       issuer: 'rashtram-ai',
       audience: 'rashtram-ai-client'
     });
+    if (!(await isSessionActive(data.jti, data.user.id))) {
+      return res.status(401).json({
+        error: "This session has expired or was revoked.",
+      });
+    }
     req.user = data.user;
     next();
   } catch (error) {

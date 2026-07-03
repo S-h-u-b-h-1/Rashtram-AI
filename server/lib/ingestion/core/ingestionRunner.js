@@ -3,7 +3,9 @@ const {
   createRun,
   findCandidates,
   persistRecord,
+  recordRunItem,
   storeSnapshots,
+  upsertDirectoryEntries,
 } = require("./catalogRepository");
 const { chooseBestCandidate } = require("./dedupe");
 const { PoliteFetcher } = require("./fetcher");
@@ -27,6 +29,40 @@ const countPdfUrls = (record) =>
         .map((resource) => resource.url),
     ].filter(Boolean),
   ).size;
+
+const dateInRange = (record, options) => {
+  const value =
+    record.publicationDate ||
+    record.enactedDate ||
+    record.introducedDate ||
+    record.effectiveDate;
+  if (!value) return !options.from && !options.to;
+  const date = String(value).slice(0, 10);
+  return (!options.from || date >= options.from) &&
+    (!options.to || date <= options.to);
+};
+
+const matchesRequestedScope = (record, options) => {
+  const equals = (left, right) =>
+    String(left || "").toLowerCase() === String(right || "").toLowerCase();
+  if (!dateInRange(record, options)) return false;
+  if (
+    options.state &&
+    !equals(record.state || record.jurisdiction, options.state)
+  ) return false;
+  if (options.ministry && !equals(record.ministry, options.ministry)) return false;
+  if (
+    options.regulator &&
+    ![
+      record.sourceName,
+      record.authority,
+    ].some((value) => String(value || "").toLowerCase().includes(
+      String(options.regulator).toLowerCase(),
+    ))
+  ) return false;
+  if (options.category && !equals(record.category, options.category)) return false;
+  return true;
+};
 
 const runIngestion = async (connector, options = {}) => {
   if (!connector?.name || typeof connector.collect !== "function") {
@@ -62,6 +98,7 @@ const runIngestion = async (connector, options = {}) => {
       reviewsQueued: 0,
       snapshots: 0,
       relationships: 0,
+      directory_entries: 0,
       downloaded_pdfs: 0,
       stored_pdfs: 0,
       pdf_download_errors: 0,
@@ -80,9 +117,15 @@ const runIngestion = async (connector, options = {}) => {
         retries: options.retries,
       });
     const collection = await connector.collect(options, { fetcher });
-    const records = collection.records || [];
+    const records = (collection.records || []).filter((record) =>
+      matchesRequestedScope(record, options),
+    );
+    const directoryEntries = collection.directoryEntries || [];
     summary.discovered = records.length;
     summary.counters.discovered = records.length;
+    summary.counters.directory_entries = options.dryRun
+      ? directoryEntries.length
+      : await upsertDirectoryEntries(directoryEntries);
     summary.errors.push(...(collection.errors || []));
     for (const diagnostic of collection.diagnostics || []) {
       if (!["blocked", "error"].includes(diagnostic.type)) continue;
@@ -142,6 +185,18 @@ const runIngestion = async (connector, options = {}) => {
         const candidates = await findCandidates(record);
         const decision = chooseBestCandidate(record, candidates);
         const persisted = await persistRecord(record, decision);
+        await recordRunItem({
+          runId: run.id,
+          sourceRecordId: record.sourceRecordId,
+          documentId: persisted.documentId,
+          status: "stored",
+          action: persisted.action,
+          metadata: {
+            matchReason: persisted.matchReason,
+            sourceAdded: persisted.sourceAdded,
+            resources: persisted.resources,
+          },
+        });
         summary.stored += 1;
         summary.resources += persisted.resources;
         summary.counters.relationships += persisted.relationships;
@@ -159,6 +214,13 @@ const runIngestion = async (connector, options = {}) => {
         }
       } catch (error) {
         summary.counters.skipped += 1;
+        await recordRunItem({
+          runId: run.id,
+          sourceRecordId:
+            rawRecord.sourceRecordId || rawRecord.sourceDocumentId || null,
+          status: "failed",
+          errorMessage: error.message,
+        }).catch(() => undefined);
         summary.errors.push({
           sourceRecordId:
             rawRecord.sourceRecordId || rawRecord.sourceDocumentId || null,
@@ -184,5 +246,7 @@ const runIngestion = async (connector, options = {}) => {
 
 module.exports = {
   countPdfUrls,
+  dateInRange,
+  matchesRequestedScope,
   runIngestion,
 };

@@ -2,6 +2,9 @@ const { Pool } = require("pg");
 require("dotenv").config();
 
 const globalForDatabase = globalThis;
+const SCHEMA_VERSION = 2026070201;
+const SCHEMA_LOCK_KEY = 1_847_263_911;
+const { runMigrations } = require("./lib/database/migrator");
 
 const normalizeConnectionString = (connectionString) => {
   const url = new URL(connectionString);
@@ -34,8 +37,30 @@ const getPool = () => {
 
 const initializeSchema = async () => {
   const pool = getPool();
+  const client = await pool.connect();
+  let transactionOpen = false;
 
-  await pool.query(`
+  try {
+    await client.query("BEGIN");
+    transactionOpen = true;
+    await client.query("SELECT pg_advisory_xact_lock($1)", [SCHEMA_LOCK_KEY]);
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS application_schema_versions (
+        id SMALLINT PRIMARY KEY DEFAULT 1 CHECK (id = 1),
+        version BIGINT NOT NULL,
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )
+    `);
+    const versionResult = await client.query(
+      "SELECT version FROM application_schema_versions WHERE id = 1",
+    );
+    if (Number(versionResult.rows[0]?.version || 0) >= SCHEMA_VERSION) {
+      await client.query("COMMIT");
+      transactionOpen = false;
+      return;
+    }
+
+    await client.query(`
     CREATE TABLE IF NOT EXISTS users (
       id BIGSERIAL PRIMARY KEY,
       name TEXT NOT NULL,
@@ -83,6 +108,221 @@ const initializeSchema = async () => {
 
     CREATE INDEX IF NOT EXISTS act_chats_user_recent_idx
       ON act_chats (user_id, updated_at DESC);
+
+    CREATE TABLE IF NOT EXISTS egazette_chats (
+      id BIGSERIAL PRIMARY KEY,
+      gazette_id TEXT NOT NULL,
+      user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      gazette_title TEXT NOT NULL,
+      gazette_number TEXT,
+      notification_type TEXT,
+      status TEXT,
+      pdf_url TEXT,
+      source_url TEXT,
+      summary TEXT,
+      messages JSONB NOT NULL DEFAULT '[]'::jsonb,
+      metadata_json JSONB NOT NULL DEFAULT '{}'::jsonb,
+      last_message_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      last_accessed_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      is_active BOOLEAN NOT NULL DEFAULT TRUE,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      UNIQUE (user_id, gazette_id)
+    );
+
+    CREATE INDEX IF NOT EXISTS egazette_chats_user_recent_idx
+      ON egazette_chats (
+        user_id,
+        last_accessed_at DESC,
+        last_message_at DESC
+      );
+
+    CREATE TABLE IF NOT EXISTS document_chats (
+      id BIGSERIAL PRIMARY KEY,
+      user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      document_type TEXT NOT NULL,
+      document_id TEXT NOT NULL,
+      document_title TEXT NOT NULL,
+      status TEXT,
+      pdf_url TEXT,
+      source_url TEXT,
+      summary TEXT,
+      messages JSONB NOT NULL DEFAULT '[]'::jsonb,
+      metadata_json JSONB NOT NULL DEFAULT '{}'::jsonb,
+      is_pinned BOOLEAN NOT NULL DEFAULT FALSE,
+      is_active BOOLEAN NOT NULL DEFAULT TRUE,
+      last_message_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      last_accessed_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      UNIQUE (user_id, document_type, document_id)
+    );
+
+    CREATE INDEX IF NOT EXISTS document_chats_user_recent_idx
+      ON document_chats (
+        user_id,
+        last_accessed_at DESC,
+        last_message_at DESC
+      );
+
+    CREATE INDEX IF NOT EXISTS document_chats_document_idx
+      ON document_chats (document_type, document_id);
+
+    CREATE TABLE IF NOT EXISTS document_comparisons (
+      id BIGSERIAL PRIMARY KEY,
+      user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      title TEXT NOT NULL,
+      document_ids_json JSONB NOT NULL,
+      mode TEXT NOT NULL DEFAULT 'comprehensive',
+      language TEXT NOT NULL DEFAULT 'English',
+      result_json JSONB NOT NULL DEFAULT '{}'::jsonb,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      CHECK (JSONB_TYPEOF(document_ids_json) = 'array')
+    );
+
+    CREATE INDEX IF NOT EXISTS document_comparisons_user_recent_idx
+      ON document_comparisons (user_id, updated_at DESC);
+
+    CREATE TABLE IF NOT EXISTS multi_document_chats (
+      id BIGSERIAL PRIMARY KEY,
+      user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      selection_key TEXT NOT NULL,
+      document_ids_json JSONB NOT NULL,
+      comparison_id BIGINT
+        REFERENCES document_comparisons(id) ON DELETE SET NULL,
+      messages JSONB NOT NULL DEFAULT '[]'::jsonb,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      UNIQUE (user_id, selection_key),
+      CHECK (JSONB_TYPEOF(document_ids_json) = 'array')
+    );
+
+    CREATE INDEX IF NOT EXISTS multi_document_chats_user_recent_idx
+      ON multi_document_chats (user_id, updated_at DESC);
+
+    CREATE TABLE IF NOT EXISTS research_notes (
+      id BIGSERIAL PRIMARY KEY,
+      user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      document_type TEXT NOT NULL,
+      document_id TEXT NOT NULL,
+      body TEXT NOT NULL,
+      is_pinned BOOLEAN NOT NULL DEFAULT TRUE,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+
+    CREATE INDEX IF NOT EXISTS research_notes_document_idx
+      ON research_notes (user_id, document_type, document_id, updated_at DESC);
+
+    CREATE TABLE IF NOT EXISTS document_chat_feedback (
+      id BIGSERIAL PRIMARY KEY,
+      user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      document_type TEXT NOT NULL,
+      document_id TEXT NOT NULL,
+      message_id TEXT NOT NULL,
+      rating SMALLINT NOT NULL CHECK (rating IN (-1, 1)),
+      reason TEXT,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      UNIQUE (user_id, document_type, document_id, message_id)
+    );
+
+    CREATE TABLE IF NOT EXISTS user_profiles (
+      user_id BIGINT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+      username TEXT UNIQUE,
+      bio TEXT,
+      organization TEXT,
+      designation TEXT,
+      location TEXT,
+      phone TEXT,
+      timezone TEXT NOT NULL DEFAULT 'Asia/Kolkata',
+      language_preference TEXT NOT NULL DEFAULT 'English',
+      theme_preference TEXT NOT NULL DEFAULT 'system',
+      research_visibility TEXT NOT NULL DEFAULT 'private',
+      notification_preferences JSONB NOT NULL DEFAULT '{}'::jsonb,
+      research_interests JSONB NOT NULL DEFAULT '[]'::jsonb,
+      preferred_ministries JSONB NOT NULL DEFAULT '[]'::jsonb,
+      preferred_policy_areas JSONB NOT NULL DEFAULT '[]'::jsonb,
+      preferred_jurisdictions JSONB NOT NULL DEFAULT '[]'::jsonb,
+      preferred_document_types JSONB NOT NULL DEFAULT '[]'::jsonb,
+      preferred_sources JSONB NOT NULL DEFAULT '[]'::jsonb,
+      dashboard_widgets JSONB NOT NULL DEFAULT '[]'::jsonb,
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+
+    CREATE TABLE IF NOT EXISTS saved_content (
+      id BIGSERIAL PRIMARY KEY,
+      user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      item_type TEXT NOT NULL CHECK (
+        item_type IN ('bookmark', 'pinned_document', 'pinned_chat')
+      ),
+      document_type TEXT,
+      document_id TEXT,
+      chat_id BIGINT REFERENCES document_chats(id) ON DELETE CASCADE,
+      title TEXT NOT NULL,
+      metadata_json JSONB NOT NULL DEFAULT '{}'::jsonb,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+
+    CREATE UNIQUE INDEX IF NOT EXISTS saved_content_document_unique_idx
+      ON saved_content (
+        user_id,
+        item_type,
+        COALESCE(document_type, ''),
+        COALESCE(document_id, ''),
+        COALESCE(chat_id, 0)
+      );
+
+    CREATE INDEX IF NOT EXISTS saved_content_user_recent_idx
+      ON saved_content (user_id, created_at DESC);
+
+    CREATE TABLE IF NOT EXISTS saved_searches (
+      id BIGSERIAL PRIMARY KEY,
+      user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      name TEXT NOT NULL,
+      query_text TEXT,
+      filters_json JSONB NOT NULL DEFAULT '{}'::jsonb,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+
+    CREATE INDEX IF NOT EXISTS saved_searches_user_recent_idx
+      ON saved_searches (user_id, updated_at DESC);
+
+    CREATE TABLE IF NOT EXISTS research_collections (
+      id BIGSERIAL PRIMARY KEY,
+      user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      name TEXT NOT NULL,
+      description TEXT,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+
+    CREATE TABLE IF NOT EXISTS research_collection_items (
+      collection_id BIGINT NOT NULL
+        REFERENCES research_collections(id) ON DELETE CASCADE,
+      document_type TEXT NOT NULL,
+      document_id TEXT NOT NULL,
+      title TEXT NOT NULL,
+      metadata_json JSONB NOT NULL DEFAULT '{}'::jsonb,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      PRIMARY KEY (collection_id, document_type, document_id)
+    );
+
+    CREATE TABLE IF NOT EXISTS user_sessions (
+      id TEXT PRIMARY KEY,
+      user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      user_agent TEXT,
+      ip_address TEXT,
+      expires_at TIMESTAMPTZ NOT NULL,
+      last_seen_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      revoked_at TIMESTAMPTZ,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+
+    CREATE INDEX IF NOT EXISTS user_sessions_user_active_idx
+      ON user_sessions (user_id, revoked_at, last_seen_at DESC);
 
     CREATE TABLE IF NOT EXISTS related_bills (
       bill_id TEXT PRIMARY KEY,
@@ -165,6 +405,40 @@ const initializeSchema = async () => {
     CREATE INDEX IF NOT EXISTS legislative_resources_document_idx
       ON legislative_document_resources (document_id);
 
+    CREATE TABLE IF NOT EXISTS document_text_artifacts (
+      document_id BIGINT PRIMARY KEY
+        REFERENCES legislative_documents(id) ON DELETE CASCADE,
+      language_code TEXT NOT NULL DEFAULT 'und',
+      script TEXT NOT NULL DEFAULT 'Unknown',
+      language_confidence NUMERIC(5, 4),
+      original_text TEXT NOT NULL,
+      is_bilingual BOOLEAN NOT NULL DEFAULT FALSE,
+      english_summary TEXT,
+      extraction_method TEXT NOT NULL CHECK (
+        extraction_method IN ('pdf_text', 'gemini_ocr', 'openai_ocr')
+      ),
+      ocr_used BOOLEAN NOT NULL DEFAULT FALSE,
+      ocr_required BOOLEAN NOT NULL DEFAULT FALSE,
+      metadata_json JSONB NOT NULL DEFAULT '{}'::jsonb,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+
+    CREATE INDEX IF NOT EXISTS document_text_artifacts_language_idx
+      ON document_text_artifacts (language_code, updated_at DESC);
+
+    ALTER TABLE document_text_artifacts
+      ADD COLUMN IF NOT EXISTS is_bilingual BOOLEAN NOT NULL DEFAULT FALSE;
+    ALTER TABLE document_text_artifacts
+      ADD COLUMN IF NOT EXISTS ocr_required BOOLEAN NOT NULL DEFAULT FALSE;
+    ALTER TABLE document_text_artifacts
+      DROP CONSTRAINT IF EXISTS document_text_artifacts_extraction_method_check;
+    ALTER TABLE document_text_artifacts
+      ADD CONSTRAINT document_text_artifacts_extraction_method_check
+      CHECK (
+        extraction_method IN ('pdf_text', 'gemini_ocr', 'openai_ocr')
+      );
+
     CREATE TABLE IF NOT EXISTS source_collection_snapshots (
       id BIGSERIAL PRIMARY KEY,
       source_name TEXT NOT NULL,
@@ -178,6 +452,27 @@ const initializeSchema = async () => {
     CREATE INDEX IF NOT EXISTS source_snapshots_recent_idx
       ON source_collection_snapshots (source_name, fetched_at DESC);
 
+    CREATE TABLE IF NOT EXISTS source_directory_entries (
+      id BIGSERIAL PRIMARY KEY,
+      source_name TEXT NOT NULL,
+      entry_key TEXT NOT NULL,
+      entity_type TEXT NOT NULL,
+      name TEXT NOT NULL,
+      jurisdiction TEXT,
+      parent_name TEXT,
+      official_url TEXT,
+      directory_url TEXT NOT NULL,
+      metadata_json JSONB NOT NULL DEFAULT '{}'::jsonb,
+      first_seen_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      last_seen_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      UNIQUE (source_name, entry_key)
+    );
+
+    CREATE INDEX IF NOT EXISTS source_directory_entries_scope_idx
+      ON source_directory_entries (entity_type, jurisdiction, name);
+
     ALTER TABLE legislative_documents
       DROP CONSTRAINT IF EXISTS legislative_documents_document_type_check;
 
@@ -185,6 +480,9 @@ const initializeSchema = async () => {
       DROP CONSTRAINT IF EXISTS legislative_documents_jurisdiction_level_check;
 
     ALTER TABLE legislative_documents
+      ADD COLUMN IF NOT EXISTS processing_status TEXT,
+      ADD COLUMN IF NOT EXISTS processing_error TEXT,
+      ADD COLUMN IF NOT EXISTS processed_at TIMESTAMPTZ,
       ADD COLUMN IF NOT EXISTS canonical_id TEXT,
       ADD COLUMN IF NOT EXISTS normalized_title TEXT,
       ADD COLUMN IF NOT EXISTS authority TEXT,
@@ -205,8 +503,58 @@ const initializeSchema = async () => {
       ADD COLUMN IF NOT EXISTS canonical_url TEXT,
       ADD COLUMN IF NOT EXISTS source_priority INTEGER NOT NULL DEFAULT 100,
       ADD COLUMN IF NOT EXISTS content_hash TEXT,
+      ADD COLUMN IF NOT EXISTS file_hash TEXT,
+      ADD COLUMN IF NOT EXISTS mime_type TEXT,
+      ADD COLUMN IF NOT EXISTS file_size_bytes BIGINT,
       ADD COLUMN IF NOT EXISTS text_fingerprint TEXT,
       ADD COLUMN IF NOT EXISTS metadata_json JSONB NOT NULL DEFAULT '{}'::jsonb;
+
+    CREATE INDEX IF NOT EXISTS legislative_documents_publication_idx
+      ON legislative_documents (publication_date DESC NULLS LAST, id DESC);
+
+    CREATE INDEX IF NOT EXISTS legislative_documents_ministry_idx
+      ON legislative_documents (ministry, publication_date DESC NULLS LAST)
+      WHERE ministry IS NOT NULL;
+
+    CREATE INDEX IF NOT EXISTS legislative_documents_source_idx
+      ON legislative_documents (
+        (COALESCE(canonical_source, source_name)),
+        updated_at DESC
+      );
+
+    ALTER TABLE legislative_documents
+      ADD COLUMN IF NOT EXISTS search_vector TSVECTOR
+      GENERATED ALWAYS AS (
+        TO_TSVECTOR(
+          'english',
+          COALESCE(title, '') || ' ' ||
+          COALESCE(legal_identifier, '') || ' ' ||
+          COALESCE(bill_number, '') || ' ' ||
+          COALESCE(act_number, '') || ' ' ||
+          COALESCE(gazette_identifier, '') || ' ' ||
+          COALESCE(ministry, '') || ' ' ||
+          COALESCE(department, '') || ' ' ||
+          COALESCE(authority, '') || ' ' ||
+          COALESCE(category, '')
+        )
+      ) STORED;
+
+    CREATE INDEX IF NOT EXISTS legislative_documents_search_idx
+      ON legislative_documents USING GIN (search_vector);
+
+    CREATE INDEX IF NOT EXISTS legislative_documents_type_date_idx
+      ON legislative_documents (
+        document_type,
+        publication_date DESC NULLS LAST,
+        id DESC
+      );
+
+    CREATE INDEX IF NOT EXISTS legislative_documents_authority_idx
+      ON legislative_documents (authority, publication_date DESC NULLS LAST)
+      WHERE authority IS NOT NULL;
+
+    CREATE INDEX IF NOT EXISTS legislative_documents_metadata_idx
+      ON legislative_documents USING GIN (metadata_json);
 
     UPDATE legislative_documents
        SET canonical_id = 'rashtram-' || id
@@ -331,6 +679,9 @@ const initializeSchema = async () => {
     ALTER TABLE document_sources
       ADD COLUMN IF NOT EXISTS pdf_hash TEXT,
       ADD COLUMN IF NOT EXISTS html_hash TEXT,
+      ADD COLUMN IF NOT EXISTS file_hash TEXT,
+      ADD COLUMN IF NOT EXISTS mime_type TEXT,
+      ADD COLUMN IF NOT EXISTS file_size_bytes BIGINT,
       ADD COLUMN IF NOT EXISTS source_title TEXT,
       ADD COLUMN IF NOT EXISTS source_status TEXT,
       ADD COLUMN IF NOT EXISTS source_metadata JSONB NOT NULL DEFAULT '{}'::jsonb;
@@ -404,6 +755,10 @@ const initializeSchema = async () => {
       source_name TEXT,
       source_url TEXT,
       confidence NUMERIC(5, 4),
+      relationship_strength NUMERIC(5, 4),
+      relationship_source TEXT,
+      explanation TEXT,
+      relationship_evidence JSONB NOT NULL DEFAULT '{}'::jsonb,
       metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
       metadata_json JSONB NOT NULL DEFAULT '{}'::jsonb,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -419,12 +774,91 @@ const initializeSchema = async () => {
 
     ALTER TABLE document_relationships
       ADD COLUMN IF NOT EXISTS source_url TEXT,
-      ADD COLUMN IF NOT EXISTS metadata_json JSONB NOT NULL DEFAULT '{}'::jsonb;
+      ADD COLUMN IF NOT EXISTS metadata_json JSONB NOT NULL DEFAULT '{}'::jsonb,
+      ADD COLUMN IF NOT EXISTS relationship_strength NUMERIC(5, 4),
+      ADD COLUMN IF NOT EXISTS relationship_source TEXT,
+      ADD COLUMN IF NOT EXISTS explanation TEXT,
+      ADD COLUMN IF NOT EXISTS relationship_evidence JSONB
+        NOT NULL DEFAULT '{}'::jsonb;
 
     UPDATE document_relationships
        SET metadata_json = metadata
      WHERE metadata_json = '{}'::jsonb
        AND metadata <> '{}'::jsonb;
+
+    UPDATE document_relationships
+       SET relationship_strength = COALESCE(
+             relationship_strength,
+             confidence,
+             0.5
+           ),
+           relationship_source = COALESCE(
+             relationship_source,
+             source_name,
+             'catalogue'
+           ),
+           explanation = COALESCE(
+             explanation,
+             metadata_json->>'explanation',
+             metadata->>'explanation',
+             'Imported catalogue relationship.'
+           ),
+           relationship_evidence = CASE
+             WHEN relationship_evidence = '{}'::jsonb
+             THEN COALESCE(
+               NULLIF(metadata_json, '{}'::jsonb),
+               metadata,
+               '{}'::jsonb
+             )
+             ELSE relationship_evidence
+           END
+     WHERE relationship_strength IS NULL
+        OR relationship_source IS NULL
+        OR explanation IS NULL
+        OR (
+          relationship_evidence = '{}'::jsonb
+          AND (
+            metadata_json <> '{}'::jsonb
+            OR metadata <> '{}'::jsonb
+          )
+        );
+
+    ALTER TABLE document_relationships
+      ADD COLUMN IF NOT EXISTS source_document_id BIGINT
+        GENERATED ALWAYS AS (from_document_id) STORED,
+      ADD COLUMN IF NOT EXISTS target_document_id BIGINT
+        GENERATED ALWAYS AS (to_document_id) STORED;
+
+    CREATE INDEX IF NOT EXISTS document_relationships_source_type_strength_idx
+      ON document_relationships (
+        source_document_id,
+        relationship_type,
+        relationship_strength DESC
+      );
+
+    CREATE INDEX IF NOT EXISTS document_relationships_target_type_strength_idx
+      ON document_relationships (
+        target_document_id,
+        relationship_type,
+        relationship_strength DESC
+      );
+
+    CREATE TABLE IF NOT EXISTS saved_graph_paths (
+      id BIGSERIAL PRIMARY KEY,
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      source_document_id BIGINT NOT NULL
+        REFERENCES legislative_documents(id) ON DELETE CASCADE,
+      target_document_id BIGINT NOT NULL
+        REFERENCES legislative_documents(id) ON DELETE CASCADE,
+      path_json JSONB NOT NULL DEFAULT '{}'::jsonb,
+      title TEXT,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      UNIQUE (user_id, source_document_id, target_document_id)
+    );
+
+    CREATE INDEX IF NOT EXISTS saved_graph_paths_user_recent_idx
+      ON saved_graph_paths (user_id, updated_at DESC);
 
     CREATE TABLE IF NOT EXISTS catalog_match_reviews (
       id BIGSERIAL PRIMARY KEY,
@@ -503,8 +937,7 @@ const initializeSchema = async () => {
           'source_opened',
           'profile_viewed',
           'research_continued',
-          'export_clicked',
-          'watchlist_placeholder_clicked'
+          'export_clicked'
         )
       ),
       entity_type TEXT,
@@ -527,6 +960,50 @@ const initializeSchema = async () => {
       ON user_activity_events (document_id, created_at DESC)
       WHERE document_id IS NOT NULL;
 
+    DELETE FROM user_activity_events
+      WHERE event_type = 'watchlist_placeholder_clicked';
+
+    ALTER TABLE user_activity_events
+      DROP CONSTRAINT IF EXISTS user_activity_events_event_type_check;
+
+    ALTER TABLE user_activity_events
+      ADD CONSTRAINT user_activity_events_event_type_check CHECK (
+        event_type IN (
+          'login',
+          'logout',
+          'dashboard_viewed',
+          'document_opened',
+          'bill_opened',
+          'act_opened',
+          'search_performed',
+          'filter_used',
+          'chat_started',
+          'chat_message_sent',
+          'summary_viewed',
+          'source_opened',
+          'profile_viewed',
+          'research_continued',
+          'export_clicked'
+        )
+      );
+
+    CREATE TABLE IF NOT EXISTS contact_requests (
+      id BIGSERIAL PRIMARY KEY,
+      first_name TEXT NOT NULL,
+      last_name TEXT,
+      organization TEXT,
+      email TEXT NOT NULL,
+      phone TEXT,
+      message TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'new' CHECK (
+        status IN ('new', 'reviewed', 'closed')
+      ),
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+
+    CREATE INDEX IF NOT EXISTS contact_requests_recent_idx
+      ON contact_requests (created_at DESC);
+
     CREATE INDEX IF NOT EXISTS user_activity_events_type_idx
       ON user_activity_events (event_type, created_at DESC);
 
@@ -543,6 +1020,42 @@ const initializeSchema = async () => {
       last_active_at TIMESTAMPTZ,
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
+
+    INSERT INTO document_chats (
+      user_id, document_type, document_id, document_title, status, pdf_url,
+      summary, messages, last_message_at, last_accessed_at, is_active,
+      created_at, updated_at
+    )
+    SELECT
+      user_id, 'bill', bill_id, bill_title, bill_status, pdf_url,
+      summary, messages, last_message_at, updated_at, is_active,
+      created_at, updated_at
+    FROM bill_chats
+    ON CONFLICT (user_id, document_type, document_id) DO NOTHING;
+
+    INSERT INTO document_chats (
+      user_id, document_type, document_id, document_title, status, pdf_url,
+      summary, messages, last_message_at, last_accessed_at, is_active,
+      created_at, updated_at
+    )
+    SELECT
+      user_id, 'act', act_id, act_title, act_status, pdf_url,
+      summary, messages, updated_at, updated_at, is_active,
+      created_at, updated_at
+    FROM act_chats
+    ON CONFLICT (user_id, document_type, document_id) DO NOTHING;
+
+    INSERT INTO document_chats (
+      user_id, document_type, document_id, document_title, status, pdf_url,
+      source_url, summary, messages, metadata_json, last_message_at,
+      last_accessed_at, is_active, created_at, updated_at
+    )
+    SELECT
+      user_id, 'gazette', gazette_id, gazette_title, status, pdf_url,
+      source_url, summary, messages, metadata_json, last_message_at,
+      last_accessed_at, is_active, created_at, updated_at
+    FROM egazette_chats
+    ON CONFLICT (user_id, document_type, document_id) DO NOTHING;
 
     CREATE TABLE IF NOT EXISTS user_document_interactions (
       id BIGSERIAL PRIMARY KEY,
@@ -643,15 +1156,35 @@ const initializeSchema = async () => {
      WHERE html_hash IS NULL
         OR collected_at IS NULL
         OR metadata_json = '{}'::jsonb;
-  `);
+    `);
+    await client.query(
+      `INSERT INTO application_schema_versions (id, version)
+       VALUES (1, $1)
+       ON CONFLICT (id) DO UPDATE SET
+         version = EXCLUDED.version,
+         updated_at = NOW()`,
+      [SCHEMA_VERSION],
+    );
+    await client.query("COMMIT");
+    transactionOpen = false;
+  } catch (error) {
+    if (transactionOpen) {
+      await client.query("ROLLBACK").catch(() => undefined);
+    }
+    throw error;
+  } finally {
+    client.release();
+  }
 };
 
 const connectDB = async () => {
   if (!globalForDatabase.__rashtramSchemaPromise) {
-    globalForDatabase.__rashtramSchemaPromise = initializeSchema().catch((error) => {
-      globalForDatabase.__rashtramSchemaPromise = null;
-      throw error;
-    });
+    globalForDatabase.__rashtramSchemaPromise = initializeSchema()
+      .then(() => runMigrations(getPool()))
+      .catch((error) => {
+        globalForDatabase.__rashtramSchemaPromise = null;
+        throw error;
+      });
   }
 
   return globalForDatabase.__rashtramSchemaPromise;

@@ -1,5 +1,11 @@
 const express = require('express');
 const { searchSimilarContentForAct, generateResponse } = require('../lib/vectordb');
+const {
+  completeSSE,
+  errorSSE,
+  sendSSE,
+  startSSE,
+} = require("../lib/sse");
 
 const router = express.Router();
 
@@ -25,26 +31,22 @@ router.post('/', async (req, res) => {
     }));
 
 
-    res.setHeader('Content-Type', 'text/event-stream');
-    res.setHeader('Cache-Control', 'no-cache');
-    res.setHeader('Connection', 'keep-alive');
-
-
-    res.write(`data: ${JSON.stringify({ type: 'meta', sources, actId })}\n\n`);
+    startSSE(res);
+    sendSSE(res, { type: "meta", sources, actId });
 
     console.log('Generating response...');
     const stream = await generateResponse(message, context);
 
     for await (const chunk of stream) {
+      if (res.destroyed || res.writableEnded) break;
       const content =
         typeof chunk.text === "function" ? chunk.text() : chunk.text || "";
       if (content) {
-        res.write(`data: ${JSON.stringify({ type: 'content', content })}\n\n`);
+        sendSSE(res, { type: "content", content });
       }
     }
 
-    res.write('data: [DONE]\n\n');
-    res.end();
+    if (!res.destroyed && !res.writableEnded) completeSSE(res);
   } catch (error) {
     console.error('Error in chat:', error);
 
@@ -54,8 +56,7 @@ router.post('/', async (req, res) => {
       });
     } else {
 
-      res.write(`data: ${JSON.stringify({ type: 'error', error: error.message })}\n\n`);
-      res.end();
+      errorSSE(res, error);
     }
   }
 });

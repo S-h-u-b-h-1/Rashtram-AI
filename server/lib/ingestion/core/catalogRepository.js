@@ -36,6 +36,130 @@ const completeRun = async (runId, summary) => {
       JSON.stringify(errors),
     ],
   );
+  await query(
+    `INSERT INTO source_registry (
+       source_name, normalized_source_name, display_name, source_type,
+       connector_name, ingestion_frequency, status, enabled,
+       last_successful_run_at, last_failed_run_at, notes
+     )
+     VALUES (
+       $1, REPLACE($1, '-', '_'), INITCAP(REPLACE($1, '-', ' ')),
+       CASE
+         WHEN $1 LIKE 'regulator-%' THEN 'Official Regulator Source'
+         WHEN $1 LIKE 'state-%' THEN 'State Government Source'
+         WHEN $1 LIKE 'ministry%' THEN 'Ministry Source'
+         ELSE 'Official Government Source'
+       END,
+       $1, 'manual', $2, TRUE,
+       CASE WHEN $2 IN ('completed', 'completed_with_errors') THEN NOW() END,
+       CASE WHEN $2 = 'failed' THEN NOW() END,
+       'Automatically registered from an ingestion run.'
+     )
+     ON CONFLICT (source_name) DO UPDATE SET
+       status = EXCLUDED.status,
+       last_successful_run_at = COALESCE(
+         EXCLUDED.last_successful_run_at,
+         source_registry.last_successful_run_at
+       ),
+       last_failed_run_at = COALESCE(
+         EXCLUDED.last_failed_run_at,
+         source_registry.last_failed_run_at
+       ),
+       updated_at = NOW()`,
+    [summary.source, summary.status],
+  );
+  await query(
+    `INSERT INTO source_health (
+       source_name, status, reachable, parser_status, records_discovered,
+       records_stored, resources_discovered, last_checked_at,
+       last_successful_run_at, last_failed_run_at, consecutive_failures,
+       last_error, metadata_json, updated_at
+     )
+     VALUES (
+       $1,
+       CASE
+         WHEN $2 = 'completed' THEN 'fresh'
+         WHEN $2 = 'completed_with_errors' THEN 'degraded'
+         ELSE 'failed'
+       END,
+       $2 <> 'failed',
+       CASE WHEN $2 = 'failed' THEN 'failed' ELSE 'valid' END,
+       $3, $4, $5, NOW(),
+       CASE WHEN $2 IN ('completed', 'completed_with_errors') THEN NOW() END,
+       CASE WHEN $2 = 'failed' THEN NOW() END,
+       CASE WHEN $2 = 'failed' THEN 1 ELSE 0 END,
+       $6,
+       $7::jsonb,
+       NOW()
+     )
+     ON CONFLICT (source_name) DO UPDATE SET
+       status = EXCLUDED.status,
+       reachable = EXCLUDED.reachable,
+       parser_status = EXCLUDED.parser_status,
+       records_discovered = EXCLUDED.records_discovered,
+       records_stored = EXCLUDED.records_stored,
+       resources_discovered = EXCLUDED.resources_discovered,
+       last_checked_at = NOW(),
+       last_successful_run_at = COALESCE(
+         EXCLUDED.last_successful_run_at,
+         source_health.last_successful_run_at
+       ),
+       last_failed_run_at = COALESCE(
+         EXCLUDED.last_failed_run_at,
+         source_health.last_failed_run_at
+       ),
+       consecutive_failures = CASE
+         WHEN EXCLUDED.status = 'failed'
+           THEN source_health.consecutive_failures + 1
+         ELSE 0
+       END,
+       last_error = EXCLUDED.last_error,
+       metadata_json = source_health.metadata_json || EXCLUDED.metadata_json,
+       updated_at = NOW()`,
+    [
+      summary.source,
+      summary.status,
+      summary.discovered || 0,
+      summary.stored || 0,
+      summary.resources || 0,
+      errors[0]?.message ? String(errors[0].message).slice(0, 2_000) : null,
+      JSON.stringify({
+        runId,
+        collection: summary.collection || null,
+        counters: summary.counters || {},
+      }),
+    ],
+  );
+};
+
+const recordRunItem = async ({
+  runId,
+  sourceRecordId,
+  documentId = null,
+  status,
+  action = null,
+  errorMessage = null,
+  metadata = {},
+}) => {
+  if (!runId) return null;
+  const result = await query(
+    `INSERT INTO ingestion_run_items (
+       run_id, source_record_id, document_id, status, action,
+       error_message, metadata_json
+     )
+     VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb)
+     RETURNING id`,
+    [
+      runId,
+      sourceRecordId || null,
+      documentId,
+      status,
+      action,
+      errorMessage ? String(errorMessage).slice(0, 2_000) : null,
+      JSON.stringify(metadata || {}),
+    ],
+  );
+  return result.rows[0];
 };
 
 const findCandidates = async (record) => {
@@ -57,6 +181,9 @@ const findCandidates = async (record) => {
      FROM legislative_documents d
      LEFT JOIN document_sources s ON s.document_id = d.id
      WHERE (s.source_name = $1 AND s.source_record_id = $2)
+        OR d.canonical_url = $11
+        OR d.source_url = $11
+        OR ($12::TEXT IS NOT NULL AND d.pdf_url = $12)
         OR ($3::TEXT[] <> '{}'::TEXT[] AND (
              d.legal_identifier = ANY($3::TEXT[])
           OR d.gazette_identifier = ANY($3::TEXT[])
@@ -70,6 +197,20 @@ const findCandidates = async (record) => {
           AND ($7::INTEGER IS NULL OR d.year = $7)
           AND d.jurisdiction = $8
           AND d.document_type = $9
+        )
+        OR (
+          d.normalized_title = $6
+          AND d.document_type = $9
+          AND COALESCE(LOWER(d.authority), '') =
+              COALESCE(LOWER($13), '')
+          AND ($7::INTEGER IS NULL OR d.year = $7)
+        )
+        OR (
+          d.normalized_title = $6
+          AND d.document_type = $9
+          AND COALESCE(LOWER(d.ministry), '') =
+              COALESCE(LOWER($14), '')
+          AND ($15::DATE IS NULL OR d.publication_date = $15)
         )
         OR (
           $7::INTEGER IS NOT NULL
@@ -91,6 +232,11 @@ const findCandidates = async (record) => {
       record.jurisdiction,
       record.documentType,
       titleAnchor,
+      record.sourceUrl,
+      record.pdfUrl,
+      record.authority,
+      record.ministry,
+      record.publicationDate,
     ],
   );
   return result.rows;
@@ -129,11 +275,14 @@ const documentInsertValues = (record) => [
   record.sourceUrl,
   JSON.stringify(record.sourceMetadata || {}),
   record.sourceName,
-  record.detailUrl || record.sourceUrl,
+  record.sourceUrl,
   record.sourcePriority,
   record.contentHash,
   record.textFingerprint,
   JSON.stringify(record.metadata || {}),
+  record.fileHash,
+  record.mimeType,
+  record.fileSizeBytes,
 ];
 
 const insertDocument = async (client, record) => {
@@ -175,13 +324,16 @@ const insertDocument = async (client, record) => {
        source_priority,
        content_hash,
        text_fingerprint,
-       metadata_json
+       metadata_json,
+       file_hash,
+       mime_type,
+       file_size_bytes
      )
      VALUES (
        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14,
        $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26,
        $27, $28, $29, $30, $31::jsonb, $32, $33, $34, $35, $36,
-       $37::jsonb
+       $37::jsonb, $38, $39, $40
      )
      RETURNING *`,
     documentInsertValues(record),
@@ -237,6 +389,9 @@ const updateCanonicalDocument = async (client, documentId, record) => {
                                  THEN $27 ELSE canonical_url END,
             source_priority = LEAST(source_priority, $2),
             metadata_json = metadata_json || $28::jsonb,
+            file_hash = COALESCE(file_hash, $29),
+            mime_type = COALESCE(mime_type, $30),
+            file_size_bytes = COALESCE(file_size_bytes, $31),
             last_seen_at = NOW(),
             updated_at = NOW()
       WHERE id = $1
@@ -268,8 +423,11 @@ const updateCanonicalDocument = async (client, documentId, record) => {
       record.contentHash,
       record.textFingerprint,
       record.sourceName,
-      record.detailUrl || record.sourceUrl,
+      record.sourceUrl,
       JSON.stringify(record.metadata || {}),
+      record.fileHash,
+      record.mimeType,
+      record.fileSizeBytes,
     ],
   );
   return result.rows[0];
@@ -296,6 +454,9 @@ const upsertSource = async (client, documentId, record) => {
        content_hash,
        pdf_hash,
        html_hash,
+       file_hash,
+       mime_type,
+       file_size_bytes,
        text_fingerprint,
        source_title,
        source_status,
@@ -304,7 +465,7 @@ const upsertSource = async (client, documentId, record) => {
      )
      VALUES (
        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14,
-       $15::jsonb, $15::jsonb
+       $15, $16, $17, $18::jsonb, $18::jsonb
      )
      ON CONFLICT (source_name, source_record_id)
      DO UPDATE SET
@@ -323,6 +484,12 @@ const upsertSource = async (client, documentId, record) => {
        ),
        pdf_hash = COALESCE(EXCLUDED.pdf_hash, document_sources.pdf_hash),
        html_hash = COALESCE(EXCLUDED.html_hash, document_sources.html_hash),
+       file_hash = COALESCE(EXCLUDED.file_hash, document_sources.file_hash),
+       mime_type = COALESCE(EXCLUDED.mime_type, document_sources.mime_type),
+       file_size_bytes = COALESCE(
+         EXCLUDED.file_size_bytes,
+         document_sources.file_size_bytes
+       ),
        text_fingerprint = COALESCE(
          EXCLUDED.text_fingerprint,
          document_sources.text_fingerprint
@@ -352,6 +519,9 @@ const upsertSource = async (client, documentId, record) => {
       record.contentHash,
       record.pdfHash,
       record.htmlHash,
+      record.fileHash,
+      record.mimeType,
+      record.fileSizeBytes,
       record.textFingerprint,
       record.sourceTitle || record.title,
       record.sourceStatus || record.status,
@@ -482,6 +652,7 @@ const eventTypeForRecord = (record) => {
     act: "act_published",
     rule: "rule_published",
     ordinance: "ordinance_published",
+    order: "government_order",
     committee_report: "committee_report_published",
     debate: "debate_published",
     question: "question_published",
@@ -491,6 +662,14 @@ const eventTypeForRecord = (record) => {
 };
 
 const updateEventTypeForRecord = (candidate, record) => {
+  if (
+    ["egazette", "state-gazette"].includes(record.sourceName) &&
+    ["gazette", "notification", "rule", "ordinance", "order"].includes(
+      record.documentType,
+    )
+  ) {
+    return "notification_updated";
+  }
   if (
     record.documentType === "bill" &&
     record.status &&
@@ -558,7 +737,7 @@ const recordIntelligenceEvent = async (
       record.title,
       document.id,
       record.sourceName,
-      record.detailUrl || record.sourceUrl,
+      record.sourceUrl,
       record.documentType,
       record.jurisdiction,
       record.authority,
@@ -737,6 +916,61 @@ const storeSnapshots = async (snapshots) => {
 
 const recordSourceSnapshot = async (snapshot) => storeSnapshots([snapshot]);
 
+const upsertDirectoryEntries = async (entries = []) => {
+  let stored = 0;
+  for (const entry of entries) {
+    if (!entry?.sourceName || !entry?.entryKey || !entry?.name) continue;
+    await query(
+      `INSERT INTO source_directory_entries (
+         source_name,
+         entry_key,
+         entity_type,
+         name,
+         jurisdiction,
+         parent_name,
+         official_url,
+         directory_url,
+         metadata_json
+       )
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb)
+       ON CONFLICT (source_name, entry_key)
+       DO UPDATE SET
+         entity_type = EXCLUDED.entity_type,
+         name = EXCLUDED.name,
+         jurisdiction = COALESCE(
+           EXCLUDED.jurisdiction,
+           source_directory_entries.jurisdiction
+         ),
+         parent_name = COALESCE(
+           EXCLUDED.parent_name,
+           source_directory_entries.parent_name
+         ),
+         official_url = COALESCE(
+           EXCLUDED.official_url,
+           source_directory_entries.official_url
+         ),
+         directory_url = EXCLUDED.directory_url,
+         metadata_json =
+           source_directory_entries.metadata_json || EXCLUDED.metadata_json,
+         last_seen_at = NOW(),
+         updated_at = NOW()`,
+      [
+        entry.sourceName,
+        entry.entryKey,
+        entry.entityType || "organization",
+        entry.name,
+        entry.jurisdiction || null,
+        entry.parentName || null,
+        entry.officialUrl || null,
+        entry.directoryUrl,
+        JSON.stringify(entry.metadata || {}),
+      ],
+    );
+    stored += 1;
+  }
+  return stored;
+};
+
 const getUniversalStats = async () => {
   const [
     totals,
@@ -798,7 +1032,19 @@ const getUniversalStats = async () => {
       SELECT
         COUNT(*)::INTEGER AS probable_duplicate_groups,
         COALESCE(SUM(documents), 0)::INTEGER
-          AS documents_in_probable_groups
+          AS documents_in_probable_groups,
+        (
+          SELECT COUNT(*)::INTEGER
+          FROM (
+            SELECT COALESCE(content_hash, text_fingerprint, pdf_url)
+              AS exact_signature
+            FROM legislative_documents
+            WHERE COALESCE(content_hash, text_fingerprint, pdf_url)
+              IS NOT NULL
+            GROUP BY COALESCE(content_hash, text_fingerprint, pdf_url)
+            HAVING COUNT(*) > 1
+          ) exact_groups
+        ) AS exact_duplicate_groups
       FROM (
         SELECT COUNT(*)::INTEGER AS documents
         FROM legislative_documents
@@ -1026,6 +1272,7 @@ module.exports = {
   getUniversalStats,
   hasMeaningfulDocumentUpdate,
   persistRecord,
+  recordRunItem,
   recordIngestionRun,
   eventTypeForRecord,
   updateEventTypeForRecord,
@@ -1033,5 +1280,6 @@ module.exports = {
   repairCrossTypeIndiaCodeMerges,
   storeSnapshots,
   upsertCanonicalDocument,
+  upsertDirectoryEntries,
   upsertDocumentSource,
 };

@@ -24,7 +24,8 @@ export function ContinueResearch({ chats }) {
             No research conversations yet
           </p>
           <p className="mt-1 text-xs text-[#8a8277]">
-            Open a Bill or Act to begin a grounded research thread.
+            Open a Bill, Act, or Gazette document to begin a grounded research
+            thread.
           </p>
         </div>
       ) : (

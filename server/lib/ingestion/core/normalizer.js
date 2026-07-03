@@ -1,27 +1,8 @@
 const { textFingerprint } = require("./hashing");
-
-const DOCUMENT_TYPES = new Set([
-  "bill",
-  "act",
-  "rule",
-  "regulation",
-  "notification",
-  "gazette",
-  "policy",
-  "scheme",
-  "circular",
-  "committee_report",
-  "debate",
-  "question",
-  "proceeding",
-  "office_memorandum",
-  "guideline",
-  "ordinance",
-  "order",
-  "resolution",
-  "report",
-  "other",
-]);
+const {
+  DOCUMENT_TYPES,
+  normalizeDocumentType: normalizeExplicitDocumentType,
+} = require("../../../document/documentTypes");
 
 const SOURCE_PRIORITIES = {
   egazette: 10,
@@ -35,6 +16,31 @@ const SOURCE_PRIORITIES = {
   regulator: 40,
   "prs-india": 50,
   other: 100,
+};
+
+const sourceClassificationFor = (record) => {
+  if (record.sourceClassification) return cleanText(record.sourceClassification);
+  const source = String(record.sourceName || "").toLowerCase();
+  if (source.startsWith("regulator-")) return "Official Regulator Source";
+  if (source === "policy-edge" || source.startsWith("research-")) {
+    return "Secondary Research Source";
+  }
+  if (source.startsWith("international-")) {
+    return "International Organization Source";
+  }
+  if (source.includes("gazette")) return "Gazette Source";
+  if (
+    source.includes("sansad") ||
+    source.includes("sabha") ||
+    source === "prs-india"
+  ) {
+    return "Parliamentary Source";
+  }
+  if (source === "state-policy" || record.jurisdictionLevel === "state") {
+    return "State Government Source";
+  }
+  if (source.includes("ministry")) return "Ministry Source";
+  return "Official Government Source";
 };
 
 const cleanText = (value) => {
@@ -58,6 +64,13 @@ const normalizeTitle = (value) =>
 
 const normalizeDate = (value) => {
   if (!value) return null;
+  const monthOnlyMatch = String(value).trim().match(
+    /^(Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)[,\s]+((?:19|20)\d{2})$/i,
+  );
+  if (monthOnlyMatch) {
+    const month = new Date(`${monthOnlyMatch[1]} 1, 2000 UTC`).getUTCMonth() + 1;
+    return `${monthOnlyMatch[2]}-${String(month).padStart(2, "0")}-01`;
+  }
   const numericMatch = String(value).match(
     /^(\d{1,2})[-/](\d{1,2})[-/](\d{4})$/,
   );
@@ -100,15 +113,29 @@ const sourcePriorityFor = (sourceName) => {
 };
 
 const inferDocumentType = (record) => {
-  const explicit = String(record.documentType || "")
-    .toLowerCase()
-    .replace(/[\s-]+/g, "_");
-  if (DOCUMENT_TYPES.has(explicit)) return explicit;
+  if (record.documentType) {
+    try {
+      return normalizeExplicitDocumentType(record.documentType);
+    } catch {
+      // Continue with evidence-based inference for source-specific labels.
+    }
+  }
 
   const value = `${record.title || ""} ${record.category || ""}`.toLowerCase();
   const matches = [
     ["office memorandum", "office_memorandum"],
     ["committee report", "committee_report"],
+    ["cabinet decision", "cabinet_decision"],
+    ["press release", "press_release"],
+    ["government resolution", "government_resolution"],
+    ["strategy paper", "strategy_paper"],
+    ["strategy document", "strategy_paper"],
+    ["white paper", "white_paper"],
+    ["discussion paper", "discussion_paper"],
+    ["consultation paper", "consultation_paper"],
+    ["manual", "manual"],
+    ["recommendation", "recommendation"],
+    ["report", "report"],
     ["regulation", "regulation"],
     ["notification", "notification"],
     ["ordinance", "ordinance"],
@@ -174,6 +201,16 @@ const normalizeRecord = (record) => {
     (circularNumber && record.authority && publicationDate
       ? `${cleanText(record.authority)}:${circularNumber}:${publicationDate}`
       : null);
+  const sourceClassification = sourceClassificationFor(record);
+  const language = cleanText(
+    record.language || record.metadata?.language || record.sourceMetadata?.language,
+  ) || (/[\u0900-\u097f]/u.test(title) ? "Hindi" : "English");
+  const state =
+    cleanText(record.state) ||
+    (cleanText(record.jurisdictionLevel) === "state"
+      ? normalizeJurisdiction(record.jurisdiction, "state")
+      : null);
+  const country = cleanText(record.country) || "India";
 
   return {
     ...record,
@@ -217,6 +254,11 @@ const normalizeRecord = (record) => {
         ? record.sourcePriority
         : sourcePriorityFor(sourceName),
     contentHash: cleanText(record.contentHash || record.pdfHash),
+    fileHash: cleanText(record.fileHash || record.pdfHash),
+    mimeType: cleanText(record.mimeType),
+    fileSizeBytes: Number.isFinite(Number(record.fileSizeBytes))
+      ? Math.max(0, Math.trunc(Number(record.fileSizeBytes)))
+      : null,
     pdfHash: cleanText(record.pdfHash),
     htmlHash: cleanText(record.htmlHash),
     textFingerprint:
@@ -228,6 +270,10 @@ const normalizeRecord = (record) => {
     metadata: {
       ...(record.metadata || record.sourceMetadata || {}),
       ...(house ? { house } : {}),
+      sourceClassification,
+      language,
+      country,
+      ...(state ? { state } : {}),
     },
     resources: Array.isArray(record.resources) ? record.resources : [],
     relationships: Array.isArray(record.relationships)
@@ -248,4 +294,5 @@ module.exports = {
   normalizeTitle,
   normalizeYear,
   sourcePriorityFor,
+  sourceClassificationFor,
 };

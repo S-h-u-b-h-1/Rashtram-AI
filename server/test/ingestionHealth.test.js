@@ -46,6 +46,35 @@ test("connector health accepts the universal record shape", async () => {
   assert.equal(report.samplePdfLinksDiscovered, 1);
 });
 
+test("connector health accepts official directory discovery without documents", async () => {
+  const report = await probeConnector(
+    {
+      name: "state-directory",
+      async collect() {
+        return {
+          records: [],
+          directoryEntries: [
+            {
+              sourceName: "state-directory",
+              entryKey: "DL",
+              entityType: "state_or_union_territory",
+              name: "Delhi",
+              directoryUrl: "https://igod.gov.in/sg/DL/categories",
+            },
+          ],
+          snapshots: [{ sourceName: "state-directory" }],
+          errors: [],
+        };
+      },
+    },
+    {},
+    { fetcher: {}, history: {} },
+  );
+  assert.equal(report.status, "connected");
+  assert.equal(report.reachable, true);
+  assert.equal(report.sampleDirectoryEntriesDiscovered, 1);
+});
+
 test("health display status reports freshness without hiding live failures", () => {
   assert.equal(
     displayStatusFor("connected", {
@@ -146,6 +175,31 @@ test("connector health reports interactive official catalogues as blocked", asyn
   );
   assert.equal(report.status, "blocked");
   assert.match(report.error, /Interactive ASP.NET/);
+});
+
+test("connector health treats robots and HTTP 403 refusals as blocked", async () => {
+  const report = await probeConnector(
+    {
+      name: "official-regulator",
+      async collect() {
+        return {
+          records: [],
+          snapshots: [],
+          errors: [
+            {
+              message:
+                "robots.txt disallows catalog fetch: https://example.gov.in",
+            },
+          ],
+          diagnostics: [],
+        };
+      },
+    },
+    {},
+    { fetcher: {}, history: {} },
+  );
+  assert.equal(report.status, "blocked");
+  assert.match(report.error, /robots\.txt/);
 });
 
 test("blocked diagnostics are retained in ingestion-run summaries", async () => {

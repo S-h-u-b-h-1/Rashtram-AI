@@ -29,6 +29,27 @@ const evaluateCandidate = (record, candidate) => {
   ) {
     return { action: "merge", reason: "exact-source", similarity: 1 };
   }
+  const recordCanonicalUrl = normalizedIdentifier(
+    record.sourceUrl,
+  );
+  const candidateCanonicalUrl = normalizedIdentifier(
+    candidate.canonical_url || candidate.detail_url || candidate.source_url,
+  );
+  const sameCanonicalUrl =
+    recordCanonicalUrl &&
+    candidateCanonicalUrl &&
+    recordCanonicalUrl === candidateCanonicalUrl;
+  const samePdfUrl =
+    normalizedIdentifier(record.pdfUrl) &&
+    normalizedIdentifier(record.pdfUrl) ===
+      normalizedIdentifier(candidate.pdf_url);
+  if (sameCanonicalUrl || samePdfUrl) {
+    return {
+      action: "merge",
+      reason: samePdfUrl ? "pdf-url" : "canonical-url",
+      similarity: 1,
+    };
+  }
 
   const sameJurisdiction =
     record.jurisdiction &&

@@ -1,0 +1,84 @@
+name: Scheduled public-record ingestion
+
+on:
+  workflow_dispatch:
+    inputs:
+      profile:
+        description: Ingestion profile
+        required: true
+        default: daily
+        type: choice
+        options:
+          - daily
+          - weekly
+      dry_run:
+        description: Validate without writing
+        required: true
+        default: false
+        type: boolean
+  schedule:
+    - cron: "30 14 * * *"
+    - cron: "0 2 * * 0"
+
+concurrency:
+  group: rashtram-scheduled-ingestion
+  cancel-in-progress: false
+
+jobs:
+  ingest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 55
+    permissions:
+      contents: read
+    defaults:
+      run:
+        working-directory: server
+    env:
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      NODE_ENV: production
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: server/package-lock.json
+
+      - name: Install backend dependencies
+        run: npm ci
+
+      - name: Select schedule profile
+        id: profile
+        shell: bash
+        run: |
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            echo "name=${{ inputs.profile }}" >> "$GITHUB_OUTPUT"
+            echo "dry_run=${{ inputs.dry_run }}" >> "$GITHUB_OUTPUT"
+          elif [[ "${{ github.event.schedule }}" == "0 2 * * 0" ]]; then
+            echo "name=weekly" >> "$GITHUB_OUTPUT"
+            echo "dry_run=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "name=daily" >> "$GITHUB_OUTPUT"
+            echo "dry_run=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Apply additive database migrations
+        run: npm run db:migrate
+
+      - name: Run scheduled ingestion
+        shell: bash
+        run: |
+          EXTRA_ARGS=""
+          if [[ "${{ steps.profile.outputs.dry_run }}" == "true" ]]; then
+            EXTRA_ARGS="--dry-run"
+          fi
+          npm run ingest:scheduled -- --profile=${{ steps.profile.outputs.name }} $EXTRA_ARGS
+
+      - name: Verify normalized database
+        if: ${{ steps.profile.outputs.dry_run != 'true' }}
+        run: npm run db:verify
+
+      - name: Weekly duplicate audit
+        if: ${{ steps.profile.outputs.name == 'weekly' && steps.profile.outputs.dry_run != 'true' }}
+        run: npm run catalog:duplicates

@@ -6,8 +6,16 @@ export function ProfileIdentity({ user }) {
     <section className="relative overflow-hidden rounded-[1.8rem] bg-[#8f1d2c] p-6 text-white sm:p-8">
       <div className="policy-grid absolute inset-0 opacity-20" />
       <div className="relative flex flex-col gap-6 sm:flex-row sm:items-center">
-        <div className="grid h-20 w-20 shrink-0 place-items-center rounded-3xl bg-[#a85a52] font-serif text-2xl font-semibold">
-          {user.initials}
+        <div
+          className="grid h-20 w-20 shrink-0 place-items-center rounded-3xl bg-[#a85a52] bg-cover bg-center font-serif text-2xl font-semibold"
+          style={
+            user.avatar
+              ? { backgroundImage: `url("${user.avatar}")` }
+              : undefined
+          }
+          aria-label={user.avatar ? `${user.name} profile photo` : undefined}
+        >
+          {!user.avatar && user.initials}
         </div>
         <div className="min-w-0">
           <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[#c1a06f]">

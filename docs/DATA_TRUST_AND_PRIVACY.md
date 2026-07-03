@@ -1,6 +1,21 @@
 # Data Trust and Privacy
 
-Last reviewed: 28 June 2026
+Last reviewed: 2 July 2026
+
+## v1.0 account and chat additions
+
+Unified conversations are stored in `document_chats`; private notes and
+explicit response feedback are stored separately. Activity analytics never
+copy chat text or document content.
+
+Profile visibility defaults to private. Saved documents, searches,
+collections, preferences, exports, and sessions are scoped by `user_id`. New
+JWTs are tied to revocable `user_sessions`; session records are excluded from
+user data downloads.
+
+Reading-time analytics use consecutive consented events in one session, with
+each interval capped at 30 minutes. Engagement time is not fabricated when
+tracking is disabled.
 
 ## Public source branding policy
 
@@ -39,15 +54,21 @@ Public simplification does not remove evidence. PostgreSQL retains:
 Source priority affects canonical presentation but never deletes the attached
 source record.
 
+Secondary research remains classified and attributed and is never presented as
+an official government record. The Policy Edge connector reads only public
+paths explicitly allowed by its robots policy.
+
 ## Deduplication
 
 Matching remains layered:
 
 1. exact source identity;
-2. scoped legal identifiers;
-3. PDF/content SHA-256;
-4. normalized text fingerprint;
-5. same-year, same-type, same-jurisdiction title similarity.
+2. canonical source URL and PDF URL;
+3. scoped legal identifiers;
+4. PDF/content SHA-256;
+5. normalized text fingerprint;
+6. normalized title plus authority/ministry, year/date, and document type;
+7. same-year, same-type, same-jurisdiction title similarity.
 
 Scores at or above `0.92` can merge, `0.80–0.92` are queued for review, and
 lower scores create a separate canonical document. Bills and enacted Acts stay

@@ -1,26 +1,9 @@
-const jwt = require("jsonwebtoken");
+const { createSessionToken } = require("./sessionService");
 require('dotenv').config();
-
-const getSecretKey = () => {
-  if (!process.env.JWT_SECRET) {
-    throw new Error("JWT_SECRET is required");
-  }
-  return process.env.JWT_SECRET;
-};
 
 const googleLoginController = async (req, res) => {
     try{
-    const data = {
-      user: {
-        id: req.user._id,
-      },
-    };
-
-    const token = jwt.sign(data, getSecretKey(), {
-      expiresIn: '24h',
-      issuer: 'rashtram-ai',
-      audience: 'rashtram-ai-client'
-    });
+    const token = await createSessionToken(req.user._id, req);
 
 
 

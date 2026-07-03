@@ -3,12 +3,14 @@
 import { useEffect, useState } from "react";
 import * as api from "@/lib/api";
 import { ContinueResearch } from "@/components/intelligence/ContinueResearch";
-import { SourceHealthPanel } from "@/components/intelligence/SourceHealthPanel";
 import { AccountSettings } from "./AccountSettings";
-import { PlatformCoverage } from "./PlatformCoverage";
 import { ProfileIdentity } from "./ProfileIdentity";
+import { ProfileSupportForms } from "./ProfileSupportForms";
 import { ResearchActivity } from "./ResearchActivity";
 import { DataPersonalization } from "./DataPersonalization";
+import { ComparisonHistory } from "./ComparisonHistory";
+import { RecommendationHistory } from "./RecommendationHistory";
+import { GraphResearchJourneys } from "./GraphResearchJourneys";
 
 export function ProfileView() {
   const [profile, setProfile] = useState(null);
@@ -67,10 +69,41 @@ export function ProfileView() {
   return (
     <div className="space-y-5 pb-5">
       <ProfileIdentity user={profile.user} />
-      <ResearchActivity stats={profile.userActivityStats} />
-      <PlatformCoverage coverage={profile.platformCoverageStats} />
+      <ResearchActivity
+        stats={{
+          ...profile.userActivityStats,
+          ...(profile.account?.analytics || {}),
+        }}
+      />
       <ContinueResearch chats={profile.recentChats} />
-      <SourceHealthPanel sources={profile.sourceConnections} />
+      <ComparisonHistory />
+      <RecommendationHistory />
+      <GraphResearchJourneys insights={profile.graphInsights} />
+      <AccountSettings
+        account={profile.account}
+        onUpdate={(updates) =>
+          setProfile((current) => ({
+            ...current,
+            account: {
+              ...current.account,
+              ...updates,
+            },
+            user: updates.profile
+              ? {
+                  ...current.user,
+                  name: updates.profile.name,
+                  avatar: updates.profile.avatar,
+                  initials: updates.profile.name
+                    .split(" ")
+                    .slice(0, 2)
+                    .map((part) => part[0])
+                    .join("")
+                    .toUpperCase(),
+                }
+              : current.user,
+          }))
+        }
+      />
       <DataPersonalization
         insights={profile.activityInsights}
         onUpdate={(preferences) =>
@@ -83,7 +116,7 @@ export function ProfileView() {
           }))
         }
       />
-      <AccountSettings />
+      <ProfileSupportForms defaultEmail={profile.user.email} />
     </div>
   );
 }

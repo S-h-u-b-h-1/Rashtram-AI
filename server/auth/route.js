@@ -46,7 +46,29 @@ router.post(
 );
 
 router.post('/getuser', fetchuser, getUserController);
-router.get('/google',passport.authenticate('google', { scope: ['profile', 'email'] }));
-router.get('/google/callback', passport.authenticate('google', { failureRedirect: '/login', session: false }), googleLoginController);
+const googleConfigured = Boolean(
+  process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET,
+);
+const googleUnavailable = (_req, res) =>
+  res.status(503).json({
+    error: "Google sign-in is temporarily unavailable.",
+  });
+
+router.get(
+  '/google',
+  googleConfigured
+    ? passport.authenticate('google', { scope: ['profile', 'email'] })
+    : googleUnavailable,
+);
+router.get(
+  '/google/callback',
+  googleConfigured
+    ? passport.authenticate('google', {
+        failureRedirect: '/login',
+        session: false,
+      })
+    : googleUnavailable,
+  googleLoginController,
+);
 
 module.exports = router;

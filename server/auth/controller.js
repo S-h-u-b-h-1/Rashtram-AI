@@ -1,15 +1,8 @@
 const User = require("../models/User");
 const bcrypt = require("bcryptjs");
-const jwt = require("jsonwebtoken");
 const { validationResult } = require("express-validator");
+const { createSessionToken } = require("./sessionService");
 require('dotenv').config();
-
-const getSecretKey = () => {
-  if (!process.env.JWT_SECRET) {
-    throw new Error("JWT_SECRET is required");
-  }
-  return process.env.JWT_SECRET;
-};
 
 const LoginController = async (req, res) => {
   const errors = validationResult(req);
@@ -34,18 +27,7 @@ const LoginController = async (req, res) => {
       return res.status(400).json({ error: "Invalid email or password" });
     }
 
-    const data = {
-      user: {
-        id: user._id,
-      },
-    };
-
-
-    const authToken = jwt.sign(data, getSecretKey(), {
-      expiresIn: '24h',
-      issuer: 'rashtram-ai',
-      audience: 'rashtram-ai-client'
-    });
+    const authToken = await createSessionToken(user._id, req);
 
     res.status(200).json({
       authToken,
@@ -91,18 +73,7 @@ const RegisterController = async (req, res) => {
       password: hashedPassword,
     });
 
-    const data = {
-      user: {
-        id: user._id,
-      },
-    };
-
-
-    const authToken = jwt.sign(data, getSecretKey(), {
-      expiresIn: '24h',
-      issuer: 'rashtram-ai',
-      audience: 'rashtram-ai-client'
-    });
+    const authToken = await createSessionToken(user._id, req);
 
     res.status(201).json({
       authToken,

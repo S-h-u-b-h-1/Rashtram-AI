@@ -1,6 +1,6 @@
 # Dashboard and Profile Redesign
 
-Last reviewed: 28 June 2026
+Last reviewed: 29 June 2026
 
 ## Product purpose
 
@@ -28,9 +28,9 @@ Official and trusted sources
 The browser never scrapes external sites. Dashboard and profile pages only read
 structured data from the Rashtram AI backend.
 
-PDF extraction, OCR, embeddings, Gemini summaries, and Pinecone indexing remain
-on demand when a user opens a supported Bill or Act. The dashboard does not
-bulk-process documents.
+PDF extraction, OCR, embeddings, OpenAI summaries, and Pinecone indexing remain
+on demand when a user opens a supported Bill, Act, or eGazette record. The
+dashboard does not bulk-process documents.
 
 ## Official source list
 
@@ -104,6 +104,7 @@ Returns:
 - active Bills with safely recognized statuses;
 - latest Acts, rules, regulations, notifications, Gazettes, policies,
   circulars, ordinances, and orders;
+- a dedicated recent Gazette-notifications collection;
 - real category/ministry trends;
 - source health;
 - recent user chats;
@@ -125,7 +126,7 @@ Returns all nine source groups with:
 Returns:
 
 - safe user identity fields, with no password or token;
-- personal Bill/Act chat, summary, and message counts;
+- personal Bill/Act/eGazette chat, summary, and message counts;
 - research-history and safely inferred opened-document counts;
 - platform catalogue/PDF/resource/jurisdiction counts;
 - coverage by document type;
@@ -137,29 +138,40 @@ All three endpoints use the existing JWT middleware and parameterized SQL.
 
 ## Dashboard sections
 
-1. Parliament Intelligence Brief
-2. Today in Parliament & policy feed
-3. Latest Bills
-4. Latest legal updates
-5. Parliamentary calendar connection state
-6. Trending policy areas
-7. Continue research
-8. Watchlist placeholder
-9. Source coverage and freshness
-10. Recently added documents
+1. Today’s Parliament Intelligence Brief
+2. Major legislative developments by document type
+3. Live Parliament activity from verified source records
+4. Latest Bills
+5. Legal and Gazette updates
+6. Ministry activity
+7. Trending policy areas
+8. Preference-aware recommended reading
+9. Continue research
+10. Compact source coverage and freshness
+11. Recently added documents
 
 Source names, document types, dates, and source links remain visible in the
-feed. Research links are offered only for supported Bill/Act records with PDFs.
+feed. Research links are offered for supported Bill, Act, and eGazette records
+with official PDFs.
 
 ## Profile sections
 
 1. User identity
 2. Personal research activity
 3. Platform-wide coverage
-4. Recent research history
-5. Source connections
-6. Non-destructive settings placeholders
-7. Consent-based Data & Personalization controls and opted-in research insights
+4. Recent Gazette research and favorite Gazette categories
+5. Recent research history
+6. Source connections
+7. Non-destructive settings placeholders
+8. Consent-based Data & Personalization controls and opted-in research insights
+
+The v1.0 account center adds editable professional details, research/language/
+theme preferences, bookmarks, saved searches, pinned chats, collections,
+session management, password changes, and export. See `PROFILE_SYSTEM.md`.
+
+Dashboard counts, ministry activity, major-development counts, source status,
+and recommendations come from PostgreSQL. Placeholder calendar and watchlist
+cards are no longer presented as implemented functionality.
 
 Personal activity is labelled separately from shared platform coverage so
 catalogue totals cannot be mistaken for user achievements.

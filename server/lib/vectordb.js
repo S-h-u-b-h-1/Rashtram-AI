@@ -3,21 +3,21 @@ const { Pinecone } = require("@pinecone-database/pinecone");
 const EMBEDDING_DIMENSION = 768;
 const EMBEDDING_BATCH_SIZE = 50;
 const EMBEDDING_PROVIDER =
-  (process.env.EMBEDDING_PROVIDER || "local").toLowerCase();
+  (process.env.EMBEDDING_PROVIDER || "openai").toLowerCase();
 const GENERATION_MODEL =
-  process.env.GEMINI_MODEL || "gemini-2.5-flash-lite";
+  process.env.OPENAI_MODEL || "gpt-5.4-mini";
 const FALLBACK_GENERATION_MODEL =
-  process.env.GEMINI_FALLBACK_MODEL || "gemini-2.0-flash-lite";
+  process.env.OPENAI_FALLBACK_MODEL || "gpt-4.1-mini";
 const EMBEDDING_MODEL =
-  process.env.GEMINI_EMBEDDING_MODEL || "gemini-embedding-001";
+  process.env.OPENAI_EMBEDDING_MODEL || "text-embedding-3-large";
 const VECTOR_NAMESPACE =
   process.env.PINECONE_NAMESPACE ||
   (EMBEDDING_PROVIDER === "local"
     ? "local-hash-v1"
-    : `${EMBEDDING_MODEL}-v1`);
+    : `${EMBEDDING_MODEL}-${EMBEDDING_DIMENSION}-v1`);
 
 let pineconeClient;
-let geminiClientPromise;
+let openAIClientPromise;
 
 const getPinecone = () => {
   if (!process.env.PINECONE_API_KEY) {
@@ -31,19 +31,19 @@ const getPinecone = () => {
   return pineconeClient;
 };
 
-const getGemini = async () => {
-  if (!process.env.GEMINI_API_KEY) {
-    throw new Error("GEMINI_API_KEY is required");
+const getOpenAI = async () => {
+  if (!process.env.OPENAI_API_KEY) {
+    throw new Error("OPENAI_API_KEY is required");
   }
 
-  if (!geminiClientPromise) {
-    geminiClientPromise = import("@google/genai").then(
-      ({ GoogleGenAI }) =>
-        new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY }),
+  if (!openAIClientPromise) {
+    openAIClientPromise = import("openai").then(
+      ({ default: OpenAI }) =>
+        new OpenAI({ apiKey: process.env.OPENAI_API_KEY }),
     );
   }
 
-  return geminiClientPromise;
+  return openAIClientPromise;
 };
 
 const normalizeVector = (values) => {
@@ -95,22 +95,30 @@ const createProbeVector = () => {
 };
 
 const responseText = (response) => {
+  if (typeof response?.output_text === "string") return response.output_text;
   if (typeof response?.text === "function") return response.text();
   return response?.text || "";
 };
 
-const isTransientGeminiError = (error) => {
+const isTransientOpenAIError = (error) => {
   const status = Number(error?.status || error?.code);
   const message = String(error?.message || "");
   return (
-    [429, 500, 502, 503, 504].includes(status) ||
-    /RESOURCE_EXHAUSTED|UNAVAILABLE|high demand|rate limit|temporar/i.test(
-      message,
-    )
+    [408, 409, 429, 500, 502, 503, 504].includes(status) ||
+    /overloaded|unavailable|rate limit|temporar|timeout/i.test(message)
   );
 };
 
-const withGeminiRetry = async (operation, label, attempts = 3) => {
+const isUnavailableModelError = (error) => {
+  const status = Number(error?.status || error?.code);
+  const message = String(error?.message || "");
+  return (
+    [400, 403, 404].includes(status) &&
+    /model|access|not found|does not exist|unsupported/i.test(message)
+  );
+};
+
+const withOpenAIRetry = async (operation, label, attempts = 3) => {
   let lastError;
 
   for (let attempt = 1; attempt <= attempts; attempt += 1) {
@@ -118,7 +126,7 @@ const withGeminiRetry = async (operation, label, attempts = 3) => {
       return await operation();
     } catch (error) {
       lastError = error;
-      if (!isTransientGeminiError(error) || attempt === attempts) throw error;
+      if (!isTransientOpenAIError(error) || attempt === attempts) throw error;
 
       const delay = 1_000 * 2 ** (attempt - 1);
       console.warn(
@@ -134,20 +142,46 @@ const withGeminiRetry = async (operation, label, attempts = 3) => {
 const generationModels = () =>
   [...new Set([GENERATION_MODEL, FALLBACK_GENERATION_MODEL])].filter(Boolean);
 
+const responseEventStream = async function* (events) {
+  for await (const event of events) {
+    if (event.type === "response.output_text.delta" && event.delta) {
+      yield { text: event.delta };
+    } else if (event.type === "error") {
+      throw new Error(event.message || "OpenAI streaming response failed.");
+    } else if (event.type === "response.failed") {
+      throw new Error(
+        event.response?.error?.message || "OpenAI response failed.",
+      );
+    }
+  }
+};
+
 const runGeneration = async (method, contents) => {
-  const ai = await getGemini();
+  const openai = await getOpenAI();
+  const stream = method === "generateContentStream";
   let lastError;
 
   for (const model of generationModels()) {
     try {
-      return await withGeminiRetry(
-        () => ai.models[method]({ model, contents }),
-        `Gemini model ${model}`,
+      const response = await withOpenAIRetry(
+        () =>
+          openai.responses.create({
+            model,
+            input: contents,
+            stream,
+          }),
+        `OpenAI model ${model}`,
       );
+      return stream ? responseEventStream(response) : response;
     } catch (error) {
       lastError = error;
-      if (!isTransientGeminiError(error)) throw error;
-      console.warn(`Gemini model ${model} unavailable; trying fallback`);
+      if (
+        !isTransientOpenAIError(error) &&
+        !isUnavailableModelError(error)
+      ) {
+        throw error;
+      }
+      console.warn(`OpenAI model ${model} unavailable; trying fallback`);
     }
   }
 
@@ -162,6 +196,15 @@ const getIndex = () =>
 const getActIndex = () =>
   getPinecone()
     .index(process.env.PINECONE_ACT_INDEX_NAME || "rashtram-acts")
+    .namespace(VECTOR_NAMESPACE);
+
+const getEGazetteIndex = () =>
+  getPinecone()
+    .index(
+      process.env.PINECONE_EGAZETTE_INDEX_NAME ||
+        process.env.PINECONE_ACT_INDEX_NAME ||
+        "rashtram-acts",
+    )
     .namespace(VECTOR_NAMESPACE);
 
 const checkDocumentExists = async (index, idField, id) => {
@@ -208,6 +251,18 @@ const checkActExists = async (actId) => {
   };
 };
 
+const checkEGazetteExists = async (gazetteId) => {
+  const result = await checkDocumentExists(
+    getEGazetteIndex(),
+    "gazetteId",
+    gazetteId,
+  );
+  return {
+    ...result,
+    gazetteTitle: result.title,
+  };
+};
+
 const generateEmbeddings = async (
   texts,
   taskType = "RETRIEVAL_DOCUMENT",
@@ -216,37 +271,37 @@ const generateEmbeddings = async (
   if (EMBEDDING_PROVIDER === "local") {
     return texts.map(generateLocalEmbedding);
   }
-  if (EMBEDDING_PROVIDER !== "gemini") {
+  if (EMBEDDING_PROVIDER !== "openai") {
     throw new Error(
       `Unsupported EMBEDDING_PROVIDER: ${EMBEDDING_PROVIDER}`,
     );
   }
 
-  const ai = await getGemini();
-  const response = await withGeminiRetry(
+  const openai = await getOpenAI();
+  const response = await withOpenAIRetry(
     () =>
-      ai.models.embedContent({
+      openai.embeddings.create({
         model: EMBEDDING_MODEL,
-        contents: texts,
-        config: {
-          outputDimensionality: EMBEDDING_DIMENSION,
-          taskType,
-        },
+        input: texts,
+        encoding_format: "float",
+        dimensions: EMBEDDING_DIMENSION,
       }),
-    `Gemini embedding model ${EMBEDDING_MODEL}`,
+    `OpenAI embedding model ${EMBEDDING_MODEL}`,
   );
 
-  const embeddings = response.embeddings || [];
+  const embeddings = [...(response.data || [])].sort(
+    (left, right) => left.index - right.index,
+  );
   if (embeddings.length !== texts.length) {
     throw new Error(
-      `Gemini returned ${embeddings.length} embeddings for ${texts.length} inputs`,
+      `OpenAI returned ${embeddings.length} embeddings for ${texts.length} inputs`,
     );
   }
 
   return embeddings.map((embedding, index) => {
-    const values = embedding.values;
+    const values = embedding.embedding;
     if (!values?.length) {
-      throw new Error(`Gemini returned no values for embedding ${index}`);
+      throw new Error(`OpenAI returned no values for embedding ${index}`);
     }
     return normalizeVector(values);
   });
@@ -255,10 +310,24 @@ const generateEmbeddings = async (
 const generateEmbedding = async (text) =>
   (await generateEmbeddings([text], "RETRIEVAL_QUERY"))[0];
 
-const generateResponse = async (prompt, context = "") => {
+const normalizeResponseLanguage = (value, prompt = "") => {
+  const requested = String(value || "Auto").trim().toLowerCase();
+  if (requested.startsWith("hi") || requested === "hindi") return "Hindi";
+  if (requested.startsWith("en") || requested === "english") return "English";
+  return /[\u0900-\u097f]/u.test(String(prompt || ""))
+    ? "Hindi"
+    : "English";
+};
+
+const generateResponse = async (
+  prompt,
+  context = "",
+  { responseLanguage = "Auto" } = {},
+) => {
+  const language = normalizeResponseLanguage(responseLanguage, prompt);
   const fullPrompt = `
-You are Rashtram AI, an assistant for researching Indian parliamentary
-documents. Answer using the supplied document context.
+You are Rashtram AI, an assistant for researching Indian legislative, legal,
+and Gazette documents. Answer using the supplied document context.
 
 Document context:
 ${context}
@@ -268,37 +337,247 @@ ${prompt}
 
 Give a comprehensive, accessible answer. Clearly state when the context does
 not contain enough information. Do not invent provisions, dates, or citations.
+When the context contains labels such as [Source 1: Document | Page | Section |
+Chunk], cite those exact labels inline for every substantive claim. Respond in
+${language}. Preserve quoted source text in its original
+language and explain it in ${language} when needed.
 `;
 
   return runGeneration("generateContentStream", fullPrompt);
 };
 
-const generateSummary = async (documentType, content) => {
+const SUMMARY_GUIDANCE = {
+  bill: "purpose, clauses, legislative stage, affected groups, fiscal implications, and implementation questions",
+  act: "purpose, operative provisions, rights, duties, authorities, enforcement, penalties, commencement, and amendments",
+  gazette: "operative change, issuing authority, affected persons, legal basis, compliance dates, obligations, enforcement, and linked instruments",
+  notification: "operative change, legal authority, affected persons, compliance dates, obligations, exemptions, and enforcement",
+  rule: "enabling Act, delegated powers, procedures, duties, forms, timelines, enforcement, and commencement",
+  regulation: "regulator, statutory authority, regulated entities, obligations, reporting, timelines, enforcement, and transitional provisions",
+  circular: "issuing authority, audience, instructions, clarification, effective date, compliance action, and referenced law",
+  order: "issuing authority, legal basis, operative direction, affected parties, dates, conditions, and appeal or review",
+  office_memorandum: "issuing department, administrative purpose, applicable personnel or institutions, instructions, dates, and implementation",
+  policy: "objectives, policy instruments, responsible institutions, beneficiaries, funding, implementation, monitoring, and risks",
+  consultation_paper: "problem statement, proposals, questions for consultation, affected stakeholders, evidence, alternatives, and response deadline",
+  committee_report: "mandate, evidence considered, findings, recommendations, government response, and legislative implications",
+  question: "member, ministry, issue raised, answer, data cited, commitments, and follow-up implications",
+  debate: "subject, principal arguments, speakers, government position, disagreements, commitments, and legislative context",
+  proceeding: "institution, agenda, decisions, motions, votes, referrals, and next steps",
+  guideline: "issuing authority, scope, recommended or mandatory actions, standards, implementation, and monitoring",
+  scheme: "objective, eligibility, benefits, delivery institutions, funding, application process, monitoring, and timelines",
+  strategy_paper: "strategic objective, evidence base, scenarios, priorities, institutional responsibilities, milestones, risks, and evaluation",
+  white_paper: "problem definition, evidence, government position, policy options, recommendations, implementation, and unresolved questions",
+  discussion_paper: "problem statement, evidence, options, stakeholder questions, trade-offs, and response process",
+  manual: "scope, intended users, procedures, responsibilities, controls, forms, escalation paths, and revision history",
+  report: "mandate, methodology, evidence, findings, recommendations, limitations, and responsible institutions",
+  cabinet_decision: "decision, approving authority, affected ministries, programme or legal impact, funding, timelines, and implementation",
+  press_release: "announcement, issuing authority, policy or legislative context, commitments, dates, and linked official instruments",
+  government_resolution: "issuing authority, legal or administrative basis, operative resolution, affected institutions, dates, and implementation",
+  recommendation: "issuing body, evidence, recommended action, addressee, rationale, implementation, and follow-up",
+  ordinance: "necessity, operative provisions, legal effect, duration, replacement legislation, and affected parties",
+};
+
+const generateDocumentSummary = async (
+  documentType,
+  content,
+  { sourceLanguage = "und" } = {},
+) => {
+  const normalizedType = String(documentType || "document")
+    .trim()
+    .toLowerCase()
+    .replace(/-/g, "_");
+  const guidance =
+    SUMMARY_GUIDANCE[normalizedType] ||
+    "purpose, legal effect, authorities, affected persons, obligations, timelines, implementation, enforcement, and related instruments";
   const prompt = `
-Provide a comprehensive summary of this Indian parliamentary ${documentType}.
-Include:
-1. Main purpose and objectives
-2. Key provisions and sections
-3. Potential impact and applicability
-4. Important dates or timelines
-5. Notable amendments or changes
+Prepare a grounded research brief for this Indian legislative or public-policy
+document.
+
+Document type: ${normalizedType}
+Detected source language: ${sourceLanguage}
+Focus on: ${guidance}.
+
+Use only the supplied text. Distinguish facts stated in the document from
+reasonable implications. Clearly state "Not identified in the document" when
+evidence is absent. Preserve important numbers, dates, sections, authorities,
+and defined terms. Do not invent legal provisions or relationships. Write in
+English. When translating Hindi terms, retain the important original Hindi
+term in parentheses on first use.
+
+Use exactly these Markdown sections:
+## Executive Summary
+## Key Provisions
+## Affected Authorities
+## Important Dates
+## Implementation
+## Legal Impact
+## Compliance Notes
+## Related Documents
+## Suggested Questions
 
 Document content:
 ${content}
-
-Write an accurate, well-structured summary. Do not invent information that is
-not present in the document.
 `;
 
   const response = await runGeneration("generateContent", prompt);
   return responseText(response);
 };
 
+const parseSuggestedQuestions = (value) => {
+  const normalized = String(value || "")
+    .replace(/^```(?:json)?\s*/i, "")
+    .replace(/\s*```$/i, "")
+    .trim();
+  try {
+    const parsed = JSON.parse(normalized);
+    return (Array.isArray(parsed) ? parsed : parsed.questions || [])
+      .map((question) => String(question || "").trim())
+      .filter(Boolean)
+      .slice(0, 4);
+  } catch {
+    return [];
+  }
+};
+
+const generateSuggestedQuestions = async (documentType, summary) => {
+  const response = await runGeneration(
+    "generateContent",
+    [
+      "Create four concise research questions grounded in this document brief.",
+      `Document type: ${documentType}.`,
+      "Return only a JSON array of strings. Do not add Markdown.",
+      summary,
+    ].join("\n\n"),
+  );
+  return parseSuggestedQuestions(responseText(response));
+};
+
+const parseJsonResponse = (value) => {
+  const normalized = String(value || "")
+    .replace(/^```(?:json)?\s*/i, "")
+    .replace(/\s*```$/i, "")
+    .trim();
+  const start = normalized.indexOf("{");
+  const end = normalized.lastIndexOf("}");
+  if (start < 0 || end <= start) {
+    throw new Error("The comparison model returned an invalid response.");
+  }
+  return JSON.parse(normalized.slice(start, end + 1));
+};
+
+const generateDocumentComparison = async ({
+  mode,
+  language,
+  userQuestion,
+  documents,
+  context,
+}) => {
+  const responseLanguage =
+    language === "hindi"
+      ? "Hindi"
+      : language === "english"
+        ? "English"
+        : "the language used in the focused question, otherwise English";
+  const prompt = `
+Compare the supplied Indian legislative and public-policy documents using only
+the labelled source passages. Never use a document title as evidence. Every
+substantive claim must include one or more citation labels exactly as supplied
+(for example "[D1-C2]"). If evidence is absent, say "Not identified in the
+retrieved text." Keep the documents distinct and do not merge their provisions.
+
+Comparison mode: ${mode}
+Response language: ${responseLanguage}
+Focused comparison question: ${userQuestion || "None; provide the requested mode."}
+Documents:
+${JSON.stringify(documents)}
+
+Return only valid JSON with this shape:
+{
+  "executiveSummary": "string",
+  "similarities": [{"point":"string","citations":["D1-C1"]}],
+  "differences": [{"topic":"string","analysis":"string","citations":["D1-C1","D2-C1"]}],
+  "keyClauses": [{"documentId":"string","clause":"string","analysis":"string","citations":["D1-C1"]}],
+  "stakeholders": [{"name":"string","impact":"string","citations":["D1-C1"]}],
+  "complianceImpact": [{"point":"string","citations":["D1-C1"]}],
+  "timeline": [{"date":"string","event":"string","documentId":"string","citations":["D1-C1"]}],
+  "authorityDifferences": [{"point":"string","citations":["D1-C1"]}],
+  "impactAssessment": [{"point":"string","citations":["D1-C1"]}],
+  "keyFindings": [{"point":"string","citations":["D1-C1"]}],
+  "suggestedQuestions": ["string"]
+}
+
+Source passages:
+${context}
+`;
+  const response = await runGeneration("generateContent", prompt);
+  return parseJsonResponse(responseText(response));
+};
+
+const generateDashboardOverview = async (evidence) => {
+  const prompt = `
+Write a concise two-sentence legislative intelligence overview of no more than
+70 words. Use only the supplied JSON evidence. Do not call an item recent,
+active, important, or recommended unless the evidence explicitly supports it.
+Do not infer legal effects. If evidence is sparse, say so plainly.
+
+Evidence:
+${JSON.stringify(evidence)}
+`;
+  const response = await runGeneration("generateContent", prompt);
+  return responseText(response).trim().slice(0, 600);
+};
+
+const verifyDocumentRelationship = async ({
+  sourceDocument,
+  targetDocument,
+  proposedRelationship,
+  evidence,
+}) => {
+  const prompt = `
+You verify proposed relationships between Indian government documents. Use only
+the supplied document metadata and evidence. Reject the relationship unless the
+evidence explicitly supports it. Do not infer legal effect from similar titles
+alone.
+
+Return only valid JSON:
+{
+  "supported": true,
+  "relationshipType": "UPPER_SNAKE_CASE",
+  "confidence": 0.0,
+  "explanation": "one concise evidence-based sentence",
+  "evidenceQuote": "short supplied excerpt or empty string"
+}
+
+Source document:
+${JSON.stringify(sourceDocument)}
+
+Target document:
+${JSON.stringify(targetDocument)}
+
+Proposed relationship: ${proposedRelationship}
+Evidence:
+${JSON.stringify(evidence)}
+`;
+  const response = await runGeneration("generateContent", prompt);
+  const parsed = parseJsonResponse(responseText(response));
+  return {
+    supported: parsed.supported === true,
+    relationshipType: String(parsed.relationshipType || "")
+      .trim()
+      .toUpperCase(),
+    confidence: Math.min(Math.max(Number(parsed.confidence || 0), 0), 1),
+    explanation: String(parsed.explanation || "").trim().slice(0, 1_000),
+    evidenceQuote: String(parsed.evidenceQuote || "").trim().slice(0, 1_000),
+  };
+};
+
 const generateBillSummary = (billContent) =>
-  generateSummary("bill", billContent);
+  generateDocumentSummary("bill", billContent);
 
 const generateActSummary = (actContent) =>
-  generateSummary("act", actContent);
+  generateDocumentSummary("act", actContent);
+
+const generateEGazetteSummary = (content) =>
+  generateDocumentSummary("gazette", content);
 
 const searchContent = async (index, idField, id, query, topK = 5) => {
   const queryEmbedding = await generateEmbedding(query);
@@ -327,6 +606,34 @@ const searchSimilarContent = (query, billId, topK = 5) =>
 const searchSimilarContentForAct = (query, actId, topK = 5) =>
   searchContent(getActIndex(), "actId", actId, query, topK);
 
+const searchSimilarContentForEGazette = (query, gazetteId, topK = 5) =>
+  searchContent(
+    getEGazetteIndex(),
+    "gazetteId",
+    gazetteId,
+    query,
+    topK,
+  );
+
+const searchIndexedEGazetteIds = async (query, topK = 100) => {
+  if (!String(query || "").trim()) return [];
+  const queryEmbedding = await generateEmbedding(query);
+  const result = await getEGazetteIndex().query({
+    vector: queryEmbedding,
+    topK,
+    filter: { gazetteId: { $exists: true } },
+    includeMetadata: true,
+  });
+  return [
+    ...new Set(
+      (result.matches || [])
+        .map((match) => match.metadata?.gazetteId)
+        .filter(Boolean)
+        .map(String),
+    ),
+  ];
+};
+
 const upsertWithRetry = async (index, vectors, retryCount = 0) => {
   const maxRetries = 3;
   try {
@@ -350,8 +657,11 @@ const storeContentInChunks = async ({
   index,
   idField,
   titleField,
+  chunkIdField = "billId",
 }) => {
   let totalStored = 0;
+  let embeddingsMs = 0;
+  let pineconeMs = 0;
 
   for (
     let start = 0;
@@ -359,30 +669,47 @@ const storeContentInChunks = async ({
     start += EMBEDDING_BATCH_SIZE
   ) {
     const batch = chunks.slice(start, start + EMBEDDING_BATCH_SIZE);
+    const embeddingStartedAt = Date.now();
     const embeddings = await generateEmbeddings(
-      batch.map((chunk) => chunk.content),
+      batch.map((chunk) => chunk.embeddingText || chunk.content),
       "RETRIEVAL_DOCUMENT",
     );
-    const vectors = batch.map((chunk, index) => ({
+    embeddingsMs += Date.now() - embeddingStartedAt;
+    const vectors = batch.map((chunk, index) => {
+      const metadata = {
+        [idField]: String(
+          chunk[chunkIdField] ?? chunk.billId ?? chunk.documentId,
+        ),
+        [titleField]: chunk.title,
+        content: chunk.content,
+        chunkIndex: chunk.chunkIndex,
+        totalChunks: chunk.totalChunks,
+        timestamp: new Date().toISOString(),
+        embeddingProvider: EMBEDDING_PROVIDER,
+        ...chunk.metadata,
+      };
+      return {
         id: chunk.id,
         values: embeddings[index],
-        metadata: {
-          [idField]: String(chunk.billId),
-          [titleField]: chunk.title,
-          content: chunk.content,
-          chunkIndex: chunk.chunkIndex,
-          totalChunks: chunk.totalChunks,
-          timestamp: new Date().toISOString(),
-          embeddingProvider: EMBEDDING_PROVIDER,
-          ...chunk.metadata,
-        },
-      }));
+        metadata: Object.fromEntries(
+          Object.entries(metadata).filter(
+            ([, value]) => value !== null && value !== undefined,
+          ),
+        ),
+      };
+    });
 
+    const pineconeStartedAt = Date.now();
     await upsertWithRetry(index, vectors);
+    pineconeMs += Date.now() - pineconeStartedAt;
     totalStored += vectors.length;
   }
 
-  return { chunksStored: totalStored, success: true };
+  return {
+    chunksStored: totalStored,
+    success: true,
+    metrics: { embeddingsMs, pineconeMs },
+  };
 };
 
 const storeBillContentInChunks = (chunks) =>
@@ -399,6 +726,15 @@ const storeActContentInChunks = (chunks) =>
     index: getActIndex(),
     idField: "actId",
     titleField: "actTitle",
+  });
+
+const storeEGazetteContentInChunks = (chunks) =>
+  storeContentInChunks({
+    chunks,
+    index: getEGazetteIndex(),
+    idField: "gazetteId",
+    titleField: "gazetteTitle",
+    chunkIdField: "gazetteId",
   });
 
 const splitIntoChunks = (text, chunkSize = 1_000) => {
@@ -468,18 +804,32 @@ const findSimilarBills = async (billId, billTitle, topK = 5) => {
 module.exports = {
   checkActExists,
   checkBillExists,
+  checkEGazetteExists,
   createProbeVector,
   findSimilarBills,
   generateActSummary,
   generateBillSummary,
+  generateDocumentSummary,
+  generateDocumentComparison,
+  generateDashboardOverview,
+  generateEGazetteSummary,
   generateEmbedding,
   generateEmbeddings,
+  generateLocalEmbedding,
   generateResponse,
+  generateSuggestedQuestions,
+  verifyDocumentRelationship,
   getActIndex,
+  getEGazetteIndex,
   getIndex,
+  normalizeResponseLanguage,
+  parseSuggestedQuestions,
   searchSimilarContent,
   searchSimilarContentForAct,
+  searchSimilarContentForEGazette,
+  searchIndexedEGazetteIds,
   storeActContentInChunks,
   storeBillContent,
   storeBillContentInChunks,
+  storeEGazetteContentInChunks,
 };

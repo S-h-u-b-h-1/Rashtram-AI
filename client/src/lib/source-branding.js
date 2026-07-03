@@ -27,7 +27,7 @@ const SOURCE_GROUPS = [
     key: "policy-and-state",
     label: "Public Policy & State Records",
     purpose: "Policies, schemes, state legislation, and public proceedings",
-    sources: ["ministry", "state-legislature"],
+    sources: ["ministry", "ministry-environment", "state-legislature"],
   },
 ];
 
@@ -39,7 +39,6 @@ const STATUS_PRIORITY = {
   Fresh: 3,
   Connected: 2,
   "Not Run": 1,
-  Planned: 0,
 };
 
 export const getPublicSourceLabel = (sourceName) => {
@@ -57,11 +56,11 @@ export const summarizePublicSources = (sources = []) =>
     );
     const status =
       members
-        .map((source) => source.status || "Planned")
+        .map((source) => source.status || "Not Run")
         .sort(
           (left, right) =>
             (STATUS_PRIORITY[right] || 0) - (STATUS_PRIORITY[left] || 0),
-        )[0] || "Planned";
+        )[0] || "Not Run";
     const timestamps = members
       .map((source) => source.lastRefresh)
       .filter(Boolean)

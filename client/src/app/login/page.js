@@ -34,7 +34,7 @@ export default function Login() {
       <AuthShell
         eyebrow="Welcome back"
         title="Continue your research."
-        description="Sign in to return to your saved bill and act conversations."
+        description="Sign in to return to saved documents, conversations, notes, and collections."
       >
         <button
           type="button"

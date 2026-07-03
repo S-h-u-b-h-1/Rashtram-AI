@@ -47,7 +47,7 @@ const helmetConfig = helmet({
       fontSrc: ["'self'", "https://fonts.gstatic.com"],
       scriptSrc: ["'self'"],
       imgSrc: ["'self'", "data:", "https:"],
-      connectSrc: ["'self'", "https://api.gemini.google.com"],
+      connectSrc: ["'self'", "https://api.openai.com"],
     },
   },
   crossOriginEmbedderPolicy: false,

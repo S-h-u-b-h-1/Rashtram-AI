@@ -1,26 +1,12 @@
 export const buildResearchHref = (document) => {
-  const documentType = document.documentType;
-  if (!["bill", "act"].includes(documentType) || !document.pdfUrl) return null;
-  const payload =
-    documentType === "bill"
-      ? {
-          billId: document.documentId || document.id,
-          title: document.title,
-          pdfUrl: document.pdfUrl,
-          link: document.sourceUrl,
-          status: document.status,
-        }
-      : {
-          actId: document.documentId || document.id,
-          title: document.title,
-          pdfUrl: document.pdfUrl,
-          link: document.sourceUrl,
-          status: document.status,
-        };
-  const parameter = documentType === "bill" ? "bill" : "act";
-  return `/app/${documentType}-chat?${parameter}=${encodeURIComponent(
-    JSON.stringify(payload),
-  )}`;
+  const id = document.documentId || document.id;
+  if (
+    document.researchReady === false ||
+    (document.readiness && document.readiness !== "research_ready")
+  ) {
+    return null;
+  }
+  return id ? `/app/document/${id}` : null;
 };
 
 export const formatDate = (value, fallback = "Date unavailable") => {

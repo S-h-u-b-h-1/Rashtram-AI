@@ -1,30 +1,39 @@
 # Rashtram AI
 
-Rashtram AI is a full-stack parliamentary research application for exploring
-Indian bills and acts. It retrieves public records from PRS India, processes
-the associated PDFs, creates AI summaries, and supports source-grounded chat.
+Rashtram AI is a full-stack legislative and public-policy intelligence
+platform for exploring Indian Bills, Acts, Gazettes, policies, consultations,
+regulatory instruments, and related official records. It preserves source
+provenance, processes selected public documents on demand, creates grounded AI
+summaries, and supports source-grounded chat.
 
 ## Architecture
 
 - `client/`: Next.js 15 and React 19 web application
 - `server/`: Express API, authentication, document processing, and AI services
 - PostgreSQL: users, chats, related-bill cache, and the legislative catalogue
-- Pinecone: separate vector indexes for bills and acts
-- Gemini: embeddings, summaries, and streamed chat responses
+- Pinecone: vector retrieval for Bills, Acts, and universal documents
+- OpenAI: multilingual embeddings, OCR, summaries, and streamed chat responses
 
 Detailed references:
 
 - [Project understanding](docs/PROJECT_UNDERSTANDING.md)
+- [Architecture v2](docs/ARCHITECTURE_V2.md)
 - [Legislative data catalogue](docs/DATA_CATALOG.md)
 - [Legislative ingestion architecture](docs/LEGISLATIVE_INGESTION_ARCHITECTURE.md)
+- [Policy platform architecture](docs/POLICY_PLATFORM_ARCHITECTURE.md)
+- [State connector architecture](docs/STATE_CONNECTOR_ARCHITECTURE.md)
+- [Source connector status](docs/SOURCE_CONNECTOR_STATUS.md)
 - [Dashboard and profile redesign](docs/DASHBOARD_AND_PROFILE_REDESIGN.md)
 - [Data trust and privacy](docs/DATA_TRUST_AND_PRIVACY.md)
+- [Multilingual document pipeline](docs/MULTILINGUAL_DOCUMENT_PIPELINE.md)
+- [OpenAI migration](docs/OPENAI_MIGRATION.md)
+- [Contact form setup](docs/CONTACT_FORM_SETUP.md)
 
 ## Prerequisites
 
 - Node.js 22
 - PostgreSQL (Neon is supported)
-- Gemini API access
+- OpenAI API access
 - Pinecone account with two 768-dimension indexes:
   - `rashtram-bills` (or the value of `PINECONE_INDEX_NAME`)
   - `rashtram-acts`
@@ -118,6 +127,9 @@ Deploy `client/` and `server/` as separate Vercel projects:
 Set `NEXT_PUBLIC_API_URL` on the frontend to the backend production URL with
 the `/api` suffix.
 
+Set `NEXT_PUBLIC_FORMSPREE_CONTACT_ENDPOINT` on the frontend to the verified
+Formspree form endpoint. See `docs/CONTACT_FORM_SETUP.md`.
+
 The backend requires these encrypted Vercel environment variables:
 
 - `DATABASE_URL`
@@ -126,12 +138,16 @@ The backend requires these encrypted Vercel environment variables:
 - `GOOGLE_CLIENT_ID`
 - `GOOGLE_CLIENT_SECRET`
 - `GOOGLE_CALLBACK_URL`
-- `GEMINI_API_KEY`
-- `GEMINI_MODEL`
-- `GEMINI_EMBEDDING_MODEL`
+- `OPENAI_API_KEY`
+- `OPENAI_MODEL`
+- `OPENAI_FALLBACK_MODEL`
+- `OPENAI_OCR_MODEL`
+- `OPENAI_EMBEDDING_MODEL`
+- `EMBEDDING_PROVIDER=openai`
 - `PINECONE_API_KEY`
 - `PINECONE_INDEX_NAME`
 - `PINECONE_ACT_INDEX_NAME`
+- `PINECONE_NAMESPACE=openai-text-embedding-3-large-768-v1`
 
 ## Security
 

@@ -5,9 +5,13 @@ import * as api from "@/lib/api";
 import { ContinueResearch } from "./ContinueResearch";
 import { DashboardHero } from "./DashboardHero";
 import { DocumentListSection } from "./DocumentListSection";
-import { IntelligenceFeed } from "./IntelligenceFeed";
-import { IntelligenceSidebar } from "./IntelligenceSidebar";
+import { LegislativeUpdateGrid } from "./LegislativeUpdateGrid";
+import { PlatformCoverageOverview } from "./PlatformCoverageOverview";
 import { SourceHealthPanel } from "./SourceHealthPanel";
+import { TrendingMinistries } from "./TrendingMinistries";
+import { RecommendationSection } from "@/components/recommendations/RecommendationSection";
+import { KnowledgeNetworkMetrics } from "./KnowledgeNetworkMetrics";
+import { ResearchReadinessMetrics } from "./ResearchReadinessMetrics";
 
 export function IntelligenceDashboard({ onNavigate }) {
   const [data, setData] = useState(null);
@@ -15,41 +19,47 @@ export function IntelligenceDashboard({ onNavigate }) {
   const [error, setError] = useState("");
 
   useEffect(() => {
-    const controller = new AbortController();
-    const loadDashboard = async () => {
-      try {
-        const intelligence = await api.getDashboardIntelligence();
-        if (!controller.signal.aborted) {
+    let active = true;
+    let firstLoad = true;
+    const loadDashboard = () =>
+      api
+        .getDashboardIntelligence()
+        .then((intelligence) => {
+          if (!active) return;
           setData(intelligence);
-          api.trackActivity({
-            event_type: "dashboard_viewed",
-            entity_type: "dashboard",
-            page_path: "/app",
-          });
-        }
-      } catch (requestError) {
-        console.error("Failed to load legislative intelligence:", requestError);
-        if (!controller.signal.aborted) {
-          setError(
-            "The intelligence desk could not be loaded. Your Bills and Acts remain available.",
-          );
-        }
-      } finally {
-        if (!controller.signal.aborted) setLoading(false);
-      }
-    };
+          setError("");
+          if (firstLoad) {
+            api.trackActivity({
+              event_type: "dashboard_viewed",
+              entity_type: "dashboard",
+              page_path: "/app",
+            });
+          }
+        })
+        .catch(() => {
+          if (active && firstLoad) {
+            setError("The intelligence desk could not be loaded.");
+          }
+        })
+        .finally(() => {
+          if (active && firstLoad) {
+            firstLoad = false;
+            setLoading(false);
+          }
+        });
     loadDashboard();
-    return () => controller.abort();
+    const refreshTimer = window.setInterval(loadDashboard, 60_000);
+    return () => {
+      active = false;
+      window.clearInterval(refreshTimer);
+    };
   }, []);
 
   if (loading) {
     return (
       <div className="space-y-5" aria-label="Loading intelligence dashboard">
-        <div className="h-80 animate-pulse rounded-[1.8rem] bg-[#8f1d2c]/90" />
-        <div className="grid gap-5 xl:grid-cols-[minmax(0,1.7fr)_minmax(300px,0.8fr)]">
-          <div className="h-[520px] animate-pulse rounded-[1.4rem] bg-white/55" />
-          <div className="h-[520px] animate-pulse rounded-[1.4rem] bg-white/55" />
-        </div>
+        <div className="h-72 animate-pulse rounded-[1.8rem] bg-[#8f1d2c]/90" />
+        <div className="h-96 animate-pulse rounded-[1.4rem] bg-white/55" />
       </div>
     );
   }
@@ -61,25 +71,14 @@ export function IntelligenceDashboard({ onNavigate }) {
           <p className="font-serif text-2xl text-[#8f1d2c]">
             The intelligence desk is temporarily unavailable.
           </p>
-          <p className="mt-2 max-w-md text-sm leading-6 text-[#85434a]">
-            {error}
-          </p>
-          <div className="mt-5 flex justify-center gap-3">
-            <button
-              type="button"
-              onClick={() => onNavigate("bills")}
-              className="rounded-full bg-[#8f1d2c] px-4 py-2.5 text-xs font-semibold text-white"
-            >
-              Open Bills
-            </button>
-            <button
-              type="button"
-              onClick={() => onNavigate("acts")}
-              className="rounded-full border border-[#8f1d2c]/12 px-4 py-2.5 text-xs font-semibold text-[#8f1d2c]"
-            >
-              Open Acts
-            </button>
-          </div>
+          <p className="mt-2 text-sm text-[#85434a]">{error}</p>
+          <button
+            type="button"
+            onClick={() => onNavigate("bills")}
+            className="mt-5 rounded-full bg-[#8f1d2c] px-4 py-2.5 text-xs font-semibold text-white"
+          >
+            Open Bills
+          </button>
         </div>
       </div>
     );
@@ -87,44 +86,89 @@ export function IntelligenceDashboard({ onNavigate }) {
 
   return (
     <div className="space-y-5 pb-5">
-      <DashboardHero data={data} />
+      <DashboardHero
+        data={data}
+        onSearch={(query) =>
+          window.location.assign(
+            `/app?view=documents&q=${encodeURIComponent(query)}`,
+          )
+        }
+      />
 
-      <div className="grid gap-5 xl:grid-cols-[minmax(0,1.65fr)_minmax(310px,0.75fr)]">
-        <IntelligenceFeed
-          events={data.intelligenceEvents}
-          isFallback={data.emptyStateFlags.noLiveEvents}
+      <LegislativeUpdateGrid
+        groups={[
+          {
+            label: "Parliament Bills",
+            documents: data.activeBills || [],
+            href: "/app?view=bills",
+          },
+          {
+            label: "State Bills",
+            documents: data.latestStateBills || [],
+            href: "/app/state-bills",
+          },
+          {
+            label: "Parliament Acts",
+            documents: (data.latestActs || []).filter(
+              (document) => document.jurisdictionLevel !== "state",
+            ),
+            href: "/app?view=acts",
+          },
+          {
+            label: "State Acts",
+            documents: (data.latestActs || []).filter(
+              (document) => document.jurisdictionLevel === "state",
+            ),
+            href: "/app/state-acts",
+          },
+          {
+            label: "Gazette Notifications",
+            documents: data.recentGazetteNotifications || [],
+            href: "/app/egazette",
+          },
+          {
+            label: "Policies",
+            documents: data.latestPolicies || [],
+            href: "/app?view=policies",
+          },
+          {
+            label: "Committee Reports",
+            documents: data.committeeActivity || [],
+            href: "/app?view=documents",
+          },
+        ]}
+      />
+
+      <PlatformCoverageOverview coverage={data.platformCoverage || {}} />
+
+      <KnowledgeNetworkMetrics metrics={data.knowledgeGraph} />
+
+      <ResearchReadinessMetrics metrics={data.processingReadiness} />
+
+      <ContinueResearch chats={data.recentUserChats || []} />
+
+      {(data.recommendedReading || []).length > 0 && (
+        <RecommendationSection
+          eyebrow="High-confidence recommendations"
+          title="Recommended reading"
+          recommendations={data.recommendedReading}
+          emptyMessage="No sufficiently supported policy recommendation is available yet."
+          pagePath="/app"
         />
-        <IntelligenceSidebar
-          trendingCategories={data.trendingCategories}
-        />
-      </div>
+      )}
 
       <div className="grid gap-5 xl:grid-cols-2">
+        <TrendingMinistries ministries={data.ministryActivity || []} />
         <DocumentListSection
-          eyebrow="Legislative pipeline"
-          title="Latest Bills"
-          documents={data.activeBills}
-          emptyMessage="No Bills with a safely identified active status are currently available."
-          onViewAll={() => onNavigate("bills")}
-        />
-        <DocumentListSection
-          eyebrow="Law & Gazette"
-          title="Latest legal updates"
-          documents={data.latestLegalUpdates}
-          emptyMessage="No recent Acts, rules, notifications, or Gazettes are available."
-          onViewAll={() => onNavigate("acts")}
+          eyebrow="Policies, schemes and consultations"
+          title="Recent policy updates"
+          documents={data.latestPolicies || []}
+          emptyMessage="No recent policy records are available from connected sources."
+          onViewAll={() => onNavigate("policies")}
         />
       </div>
 
-      <ContinueResearch chats={data.recentUserChats} />
-      <SourceHealthPanel sources={data.sourceHealth} />
-
-      <DocumentListSection
-        eyebrow="Catalogue arrivals"
-        title="Recently added documents"
-        documents={data.recentDocuments}
-        emptyMessage="No catalogue documents have been stored yet."
-      />
+      <SourceHealthPanel sources={data.sourceHealth || []} compact />
     </div>
   );
 }
