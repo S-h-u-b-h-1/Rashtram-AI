@@ -2,6 +2,13 @@ const { Pinecone } = require("@pinecone-database/pinecone");
 
 const EMBEDDING_DIMENSION = 768;
 const EMBEDDING_BATCH_SIZE = 50;
+const EMBEDDING_BATCH_TOKEN_BUDGET = Math.min(
+  250_000,
+  Math.max(
+    10_000,
+    Number(process.env.EMBEDDING_BATCH_TOKEN_BUDGET || 240_000),
+  ),
+);
 const EMBEDDING_PROVIDER =
   (process.env.EMBEDDING_PROVIDER || "openai").toLowerCase();
 const GENERATION_MODEL =
@@ -86,6 +93,49 @@ const generateLocalEmbedding = (text) => {
   }
 
   return normalizeVector(values);
+};
+
+const estimateEmbeddingTokens = (text) => {
+  const value = String(text || "");
+  let asciiCharacters = 0;
+  let nonAsciiCharacters = 0;
+  for (const character of value) {
+    if (character.codePointAt(0) <= 0x7f) asciiCharacters += 1;
+    else nonAsciiCharacters += 1;
+  }
+  return Math.max(
+    1,
+    Math.ceil(asciiCharacters / 4) + nonAsciiCharacters,
+  );
+};
+
+const buildEmbeddingBatches = (
+  texts,
+  {
+    maxInputs = EMBEDDING_BATCH_SIZE,
+    tokenBudget = EMBEDDING_BATCH_TOKEN_BUDGET,
+  } = {},
+) => {
+  const batches = [];
+  let batch = [];
+  let estimatedTokens = 0;
+
+  for (const text of texts) {
+    const textTokens = estimateEmbeddingTokens(text);
+    if (
+      batch.length > 0 &&
+      (batch.length >= maxInputs ||
+        estimatedTokens + textTokens > tokenBudget)
+    ) {
+      batches.push(batch);
+      batch = [];
+      estimatedTokens = 0;
+    }
+    batch.push(text);
+    estimatedTokens += textTokens;
+  }
+  if (batch.length > 0) batches.push(batch);
+  return batches;
 };
 
 const createProbeVector = () => {
@@ -278,33 +328,35 @@ const generateEmbeddings = async (
   }
 
   const openai = await getOpenAI();
-  const response = await withOpenAIRetry(
-    () =>
-      openai.embeddings.create({
-        model: EMBEDDING_MODEL,
-        input: texts,
-        encoding_format: "float",
-        dimensions: EMBEDDING_DIMENSION,
-      }),
-    `OpenAI embedding model ${EMBEDDING_MODEL}`,
-  );
-
-  const embeddings = [...(response.data || [])].sort(
-    (left, right) => left.index - right.index,
-  );
-  if (embeddings.length !== texts.length) {
-    throw new Error(
-      `OpenAI returned ${embeddings.length} embeddings for ${texts.length} inputs`,
+  const vectors = [];
+  for (const batch of buildEmbeddingBatches(texts)) {
+    const response = await withOpenAIRetry(
+      () =>
+        openai.embeddings.create({
+          model: EMBEDDING_MODEL,
+          input: batch,
+          encoding_format: "float",
+          dimensions: EMBEDDING_DIMENSION,
+        }),
+      `OpenAI embedding model ${EMBEDDING_MODEL}`,
     );
-  }
 
-  return embeddings.map((embedding, index) => {
-    const values = embedding.embedding;
-    if (!values?.length) {
-      throw new Error(`OpenAI returned no values for embedding ${index}`);
+    const embeddings = [...(response.data || [])].sort(
+      (left, right) => left.index - right.index,
+    );
+    if (embeddings.length !== batch.length) {
+      throw new Error(
+        `OpenAI returned ${embeddings.length} embeddings for ${batch.length} inputs`,
+      );
     }
-    return normalizeVector(values);
-  });
+    embeddings.forEach((embedding, index) => {
+      if (!embedding.embedding?.length) {
+        throw new Error(`OpenAI returned no values for embedding ${index}`);
+      }
+      vectors.push(normalizeVector(embedding.embedding));
+    });
+  }
+  return vectors;
 };
 
 const generateEmbedding = async (text) =>
@@ -802,6 +854,7 @@ const findSimilarBills = async (billId, billTitle, topK = 5) => {
 };
 
 module.exports = {
+  buildEmbeddingBatches,
   checkActExists,
   checkBillExists,
   checkEGazetteExists,
@@ -816,6 +869,7 @@ module.exports = {
   generateEmbedding,
   generateEmbeddings,
   generateLocalEmbedding,
+  estimateEmbeddingTokens,
   generateResponse,
   generateSuggestedQuestions,
   verifyDocumentRelationship,
