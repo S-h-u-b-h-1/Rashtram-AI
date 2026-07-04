@@ -79,6 +79,7 @@ const documentDateLabel = (document) => {
 export function DocumentExplorer({
   type,
   scope,
+  source,
   jurisdictionLevel,
   title,
   description,
@@ -114,9 +115,10 @@ export function DocumentExplorer({
       ...filters,
       type: type || filters.type,
       scope,
+      source: source || filters.source,
       jurisdictionLevel,
     }),
-    [filters, jurisdictionLevel, scope, type],
+    [filters, jurisdictionLevel, scope, source, type],
   );
 
   useEffect(() => {
@@ -250,7 +252,7 @@ export function DocumentExplorer({
               const readiness =
                 document.readinessClass ||
                 document.readiness ||
-                (document.pdfUrl ? "pdf_available" : "source_only");
+                (document.pdfUrl || document.type === "policy" ? "pdf_available" : "source_only");
               const canPrepare =
                 ["comparison_ready", "research_ready", "pdf_available",
                   "pdf_available_not_processed",

@@ -137,6 +137,32 @@ const initializeSchema = async () => {
         last_message_at DESC
       );
 
+    CREATE TABLE IF NOT EXISTS policy_chats (
+      id BIGSERIAL PRIMARY KEY,
+      policy_id TEXT NOT NULL,
+      user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      policy_title TEXT NOT NULL,
+      category TEXT,
+      status TEXT,
+      source_url TEXT,
+      summary TEXT,
+      messages JSONB NOT NULL DEFAULT '[]'::jsonb,
+      metadata_json JSONB NOT NULL DEFAULT '{}'::jsonb,
+      last_message_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      last_accessed_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      is_active BOOLEAN NOT NULL DEFAULT TRUE,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      UNIQUE (user_id, policy_id)
+    );
+
+    CREATE INDEX IF NOT EXISTS policy_chats_user_recent_idx
+      ON policy_chats (
+        user_id,
+        last_accessed_at DESC,
+        last_message_at DESC
+      );
+
     CREATE TABLE IF NOT EXISTS document_chats (
       id BIGSERIAL PRIMARY KEY,
       user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,

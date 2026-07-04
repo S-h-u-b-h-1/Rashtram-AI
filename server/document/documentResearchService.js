@@ -14,6 +14,11 @@ const {
   getActIndex,
   getEGazetteIndex,
   getIndex,
+  getPolicyIndex,
+  checkPolicyExists,
+  generatePolicySummary,
+  searchSimilarContentForPolicy,
+  storePolicyContentInChunks,
   searchSimilarContent,
   searchSimilarContentForAct,
   searchSimilarContentForEGazette,
@@ -54,6 +59,15 @@ const TYPE_CONFIG = {
     store: storeEGazetteContentInChunks,
     idField: "gazetteId",
     titleField: "gazetteTitle",
+  },
+  policy: {
+    index: getPolicyIndex,
+    check: checkPolicyExists,
+    generateSummary: generatePolicySummary,
+    search: searchSimilarContentForPolicy,
+    store: storePolicyContentInChunks,
+    idField: "policyId",
+    titleField: "policyTitle",
   },
 };
 

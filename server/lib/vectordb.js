@@ -257,6 +257,15 @@ const getEGazetteIndex = () =>
     )
     .namespace(VECTOR_NAMESPACE);
 
+const getPolicyIndex = () =>
+  getPinecone()
+    .index(
+      process.env.PINECONE_POLICY_INDEX_NAME ||
+        process.env.PINECONE_ACT_INDEX_NAME ||
+        "rashtram-acts",
+    )
+    .namespace(VECTOR_NAMESPACE);
+
 const checkDocumentExists = async (index, idField, id) => {
   try {
     const queryResults = await index.query({
@@ -310,6 +319,18 @@ const checkEGazetteExists = async (gazetteId) => {
   return {
     ...result,
     gazetteTitle: result.title,
+  };
+};
+
+const checkPolicyExists = async (policyId) => {
+  const result = await checkDocumentExists(
+    getPolicyIndex(),
+    "policyId",
+    policyId,
+  );
+  return {
+    ...result,
+    policyTitle: result.title,
   };
 };
 
@@ -631,6 +652,9 @@ const generateActSummary = (actContent) =>
 const generateEGazetteSummary = (content) =>
   generateDocumentSummary("gazette", content);
 
+const generatePolicySummary = (content) =>
+  generateDocumentSummary("policy", content);
+
 const searchContent = async (index, idField, id, query, topK = 5) => {
   const queryEmbedding = await generateEmbedding(query);
   const searchResults = await index.query({
@@ -667,6 +691,15 @@ const searchSimilarContentForEGazette = (query, gazetteId, topK = 5) =>
     topK,
   );
 
+const searchSimilarContentForPolicy = (query, policyId, topK = 5) =>
+  searchContent(
+    getPolicyIndex(),
+    "policyId",
+    policyId,
+    query,
+    topK,
+  );
+
 const searchIndexedEGazetteIds = async (query, topK = 100) => {
   if (!String(query || "").trim()) return [];
   const queryEmbedding = await generateEmbedding(query);
@@ -680,6 +713,25 @@ const searchIndexedEGazetteIds = async (query, topK = 100) => {
     ...new Set(
       (result.matches || [])
         .map((match) => match.metadata?.gazetteId)
+        .filter(Boolean)
+        .map(String),
+    ),
+  ];
+};
+
+const searchIndexedPolicyIds = async (query, topK = 100) => {
+  if (!String(query || "").trim()) return [];
+  const queryEmbedding = await generateEmbedding(query);
+  const result = await getPolicyIndex().query({
+    vector: queryEmbedding,
+    topK,
+    filter: { policyId: { $exists: true } },
+    includeMetadata: true,
+  });
+  return [
+    ...new Set(
+      (result.matches || [])
+        .map((match) => match.metadata?.policyId)
         .filter(Boolean)
         .map(String),
     ),
@@ -789,6 +841,15 @@ const storeEGazetteContentInChunks = (chunks) =>
     chunkIdField: "gazetteId",
   });
 
+const storePolicyContentInChunks = (chunks) =>
+  storeContentInChunks({
+    chunks,
+    index: getPolicyIndex(),
+    idField: "policyId",
+    titleField: "policyTitle",
+    chunkIdField: "policyId",
+  });
+
 const splitIntoChunks = (text, chunkSize = 1_000) => {
   const words = text.split(" ");
   const chunks = [];
@@ -858,6 +919,7 @@ module.exports = {
   checkActExists,
   checkBillExists,
   checkEGazetteExists,
+  checkPolicyExists,
   createProbeVector,
   findSimilarBills,
   generateActSummary,
@@ -866,6 +928,7 @@ module.exports = {
   generateDocumentComparison,
   generateDashboardOverview,
   generateEGazetteSummary,
+  generatePolicySummary,
   generateEmbedding,
   generateEmbeddings,
   generateLocalEmbedding,
@@ -876,14 +939,18 @@ module.exports = {
   getActIndex,
   getEGazetteIndex,
   getIndex,
+  getPolicyIndex,
   normalizeResponseLanguage,
   parseSuggestedQuestions,
   searchSimilarContent,
   searchSimilarContentForAct,
   searchSimilarContentForEGazette,
+  searchSimilarContentForPolicy,
   searchIndexedEGazetteIds,
+  searchIndexedPolicyIds,
   storeActContentInChunks,
   storeBillContent,
   storeBillContentInChunks,
   storeEGazetteContentInChunks,
+  storePolicyContentInChunks,
 };
