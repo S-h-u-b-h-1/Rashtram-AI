@@ -8,85 +8,68 @@ import { cn } from "@/lib/utils";
 const POLICY_VIEWS = [
   {
     key: "all",
-    label: "All policy records",
-    type: "policy,scheme,guideline,office-memorandum,circular,consultation-paper,strategy-paper,white-paper,discussion-paper,recommendation,report,government-resolution,cabinet-decision",
-    title: "Policies and public programmes",
+    label: "All Reports",
+    type: "policy",
+    source: "policyedge",
+    title: "PolicyEdge Policy Reports",
     description:
-      "Research official policies, schemes, guidelines, consultations, reports, memoranda, circulars, and frameworks through one source-aware catalogue.",
+      "Latest policy reports and analyses from PolicyEdge — covering governance, finance, health, agriculture, infrastructure, and development.",
   },
   {
-    key: "national",
-    label: "National Policies",
+    key: "governance",
+    label: "Governance",
     type: "policy",
-    scope: "policy-national",
-    title: "National Policies",
+    source: "policyedge",
+    category: "Governance",
+    title: "Governance Reports",
+    description:
+      "Policy reports on governance, public administration, and institutional reform.",
   },
   {
-    key: "state",
-    label: "State Policies",
+    key: "economy",
+    label: "Economy & Finance",
     type: "policy",
-    scope: "policy-state",
-    title: "State Policies",
-  },
-  { key: "schemes", label: "Schemes", type: "scheme", title: "Schemes" },
-  {
-    key: "guidelines",
-    label: "Guidelines",
-    type: "guideline",
-    title: "Guidelines",
+    source: "policyedge",
+    category: "Economy",
+    title: "Economy & Finance Reports",
+    description:
+      "Analyses on fiscal policy, financial stability, capital markets, and economic development.",
   },
   {
-    key: "memoranda",
-    label: "Office Memoranda",
-    type: "office-memorandum",
-    title: "Office Memoranda",
+    key: "health",
+    label: "Health",
+    type: "policy",
+    source: "policyedge",
+    category: "Health",
+    title: "Health Policy Reports",
+    description:
+      "Policy research on public health, healthcare systems, and health financing.",
   },
   {
-    key: "consultations",
-    label: "Consultation Papers",
-    type: "consultation-paper",
-    title: "Consultation Papers",
-  },
-  {
-    key: "circulars",
-    label: "Circulars",
-    type: "circular",
-    title: "Circulars",
-  },
-  {
-    key: "frameworks",
-    label: "Framework Documents",
-    type: "strategy-paper,discussion-paper,recommendation,government-resolution,cabinet-decision",
-    title: "Framework Documents",
-  },
-  {
-    key: "reports",
-    label: "Reports & White Papers",
-    type: "report,white-paper",
-    title: "Reports and White Papers",
+    key: "environment",
+    label: "Environment & Climate",
+    type: "policy",
+    source: "policyedge",
+    category: "Environment",
+    title: "Environment & Climate Reports",
+    description:
+      "Reports on climate policy, sustainability, and environmental governance.",
   },
 ];
 
 export default function Policies() {
   const searchParams = useSearchParams();
-  const requestedView = searchParams.get("policyType") || "all";
+  const policyType = searchParams.get("policyType") || "all";
   const activeView =
-    POLICY_VIEWS.find((view) => view.key === requestedView) || POLICY_VIEWS[0];
+    POLICY_VIEWS.find((v) => v.key === policyType) || POLICY_VIEWS[0];
 
   return (
-    <div className="space-y-4">
-      <nav
-        aria-label="Policy document categories"
-        className="flex gap-2 overflow-x-auto rounded-2xl border border-[#8f1d2c]/9 bg-[#f7f2eb] p-2"
-      >
+    <div className="flex flex-col gap-6">
+      <nav className="flex flex-wrap gap-2 px-1">
         {POLICY_VIEWS.map((view) => (
           <Link
             key={view.key}
-            href={
-              view.key === "all"
-                ? "/app?view=policies"
-                : `/app?view=policies&policyType=${view.key}`
-            }
+            href={`/app?view=policies&policyType=${view.key}`}
             className={cn(
               "shrink-0 rounded-xl px-3 py-2 text-xs font-semibold transition",
               activeView.key === view.key
@@ -101,26 +84,17 @@ export default function Policies() {
       <DocumentExplorer
         key={activeView.key}
         type={activeView.type}
-        scope={activeView.scope}
+        source={activeView.source}
         title={activeView.title}
-        description={
-          activeView.description ||
-          `Search and research source-backed ${activeView.label.toLowerCase()} with AI summaries, chat, related records, and original PDFs.`
-        }
-        eyebrow="Public policy library"
+        description={activeView.description}
+        eyebrow="PolicyEdge · Reports & Data Releases"
         filterKeys={[
           "year",
-          "ministry",
-          "authority",
           "category",
           "jurisdiction",
-          "source",
-          "sourceType",
-          "state",
-          "language",
         ]}
-        filterLabels={{ jurisdiction: "State / jurisdiction" }}
-        dataNote="Only official public records available through connected sources are shown. Missing coverage is never estimated."
+        filterLabels={{ jurisdiction: "Jurisdiction" }}
+        dataNote="Reports sourced from PolicyEdge covering Indian and international policy research."
       />
     </div>
   );

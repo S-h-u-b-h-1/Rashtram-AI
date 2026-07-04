@@ -86,7 +86,7 @@ export function DocumentChatLayout({
   } = usePinnedChatScroll(messages);
 
   const prepareDocument = useCallback(async (canonicalDocument) => {
-    if (!canonicalDocument?.pdfUrl) return null;
+    if (!canonicalDocument?.pdfUrl && canonicalDocument?.type !== "policy") return null;
     setProcessing(true);
     setProcessingError("");
     try {
@@ -470,11 +470,11 @@ export function DocumentChatLayout({
               <p className="mt-1">
                 {processingError ||
                   document.readinessReason ||
-                  (document.pdfUrl
+                  ((document.pdfUrl || document.type === "policy")
                     ? "Choose Retry to prepare searchable passages."
                     : "View the source or PDF when available; grounded chat remains disabled.")}
               </p>
-              {document.pdfUrl && !processingError && (
+              {(document.pdfUrl || document.type === "policy") && !processingError && (
                 <button
                   type="button"
                   onClick={retryProcessing}

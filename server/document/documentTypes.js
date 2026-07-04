@@ -99,6 +99,7 @@ const retrievalFamilyForType = (value) => {
   const type = normalizeDocumentType(value);
   if (type === "bill") return "bill";
   if (type === "act") return "act";
+  if (type === "policy") return "policy";
   return "gazette";
 };
 

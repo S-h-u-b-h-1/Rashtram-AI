@@ -14,15 +14,20 @@ export const comparisonDisabledReason = (document) => {
   ) {
     return document.readinessReason || document.failureReason || "Processing failed";
   }
-  if (!document.hasAccessibleResource && !document?.pdfUrl) {
+  const isPolicyWithEmbeddings =
+    (document.type === "policy" || document.documentType === "policy") &&
+    document.researchReady;
+
+  if (!document.hasAccessibleResource && !document?.pdfUrl && !isPolicyWithEmbeddings) {
     return "PDF unavailable";
   }
-  if (document.extractionStatus && document.extractionStatus !== "ready") {
+  if (document.extractionStatus && document.extractionStatus !== "ready" && !isPolicyWithEmbeddings) {
     return "Text extraction pending";
   }
   if (
     document.extractionStatus === "ready" &&
-    Number(document.chunksCount || 0) <= 0
+    Number(document.chunksCount || 0) <= 0 &&
+    !isPolicyWithEmbeddings
   ) {
     return "No extractable text found";
   }
