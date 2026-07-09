@@ -1,8 +1,9 @@
 const { query } = require("../db");
 const DocumentRepository = require("./DocumentRepository");
 const {
-  retrievePassages,
+  retrieveDocumentContext,
 } = require("./documentResearchService");
+const { getDocumentReadiness } = require("./readinessContract");
 const {
   getDocumentRecommendations,
 } = require("./recommendationService");
@@ -94,7 +95,7 @@ const readinessReason = (document) => {
   }
   if (
     document.embeddingStatus &&
-    document.embeddingStatus !== "ready"
+    !["ready", "fallback", "success"].includes(document.embeddingStatus)
   ) {
     return "Research workspace unavailable";
   }
@@ -112,14 +113,21 @@ const readinessReason = (document) => {
 };
 
 const ensureResearchReady = async (document) => {
-  const reason = readinessReason(document);
+  const readiness = await getDocumentReadiness(document.id);
+  const reason = readiness?.comparisonReady ? null : readiness?.reason || readinessReason(document);
   if (reason) {
-    throw validationError(
+    const error = validationError(
       `${document?.title || "Document"}: ${reason}.`,
       422,
     );
+    error.details = {
+      documentId: document?.id,
+      needsPreparation: Boolean(readiness?.canPrepare),
+      readiness,
+    };
+    throw error;
   }
-  return document;
+  return { document, readiness };
 };
 
 const comparisonQuery = (mode) =>
@@ -155,6 +163,69 @@ const mapComparison = (row) => row && ({
   updatedAt: row.updated_at,
 });
 
+const extractiveComparisonFallback = ({
+  mode,
+  language,
+  userQuestion,
+  documents,
+  groups,
+  citations,
+  generationError,
+}) => {
+  const executiveSummary = [
+    "Rashtram AI generated this comparison from retrieved document passages because the AI generation provider was unavailable.",
+    `Mode: ${mode}.`,
+    userQuestion ? `Focused question: ${userQuestion}` : null,
+  ].filter(Boolean).join(" ");
+  const keyFindings = groups.map(({ document, passages }, index) => ({
+    point: `${document.title}: ${passages[0]?.content?.slice(0, 280) || "No passage available."}`,
+    citations: passages.slice(0, 2).map((_, passageIndex) => `D${index + 1}-C${passageIndex + 1}`),
+  }));
+  const similarities = [
+    {
+      point: "All compared documents were processed through Rashtram AI's grounded retrieval pipeline and include source passages.",
+      citations: citations.slice(0, Math.min(4, citations.length)).map((citation) => citation.id),
+    },
+  ];
+  const differences = groups.map(({ document, passages }, index) => ({
+    topic: document.title,
+    analysis: passages
+      .slice(0, 2)
+      .map((passage) => passage.content.slice(0, 360))
+      .join(" "),
+    citations: passages.slice(0, 2).map((_, passageIndex) => `D${index + 1}-C${passageIndex + 1}`),
+  }));
+  return {
+    generationMode: "extractive_fallback",
+    generationError: String(generationError?.message || generationError || "")
+      .slice(0, 500),
+    language,
+    executiveSummary,
+    similarities,
+    differences,
+    keyClauses: differences.map((item) => ({
+      documentId: documents.find((document) => document.title === item.topic)?.id,
+      clause: "Retrieved passage",
+      analysis: item.analysis,
+      citations: item.citations,
+    })),
+    stakeholders: [],
+    complianceImpact: [],
+    timeline: [],
+    authorityDifferences: [],
+    impactAssessment: differences.map((item) => ({
+      point: item.analysis,
+      citations: item.citations,
+    })),
+    keyFindings,
+    suggestedQuestions: [
+      "What are the main implementation differences?",
+      "Which authorities or institutions are affected?",
+      "What evidence supports each difference?",
+    ],
+  };
+};
+
 const createComparison = async (userId, payload) => {
   const { documentIds, mode, language, userQuestion } =
     normalizeRequest(payload);
@@ -164,16 +235,18 @@ const createComparison = async (userId, payload) => {
   if (loaded.some((document) => !document)) {
     throw validationError("One or more selected documents were not found.", 404);
   }
-  const documents = await Promise.all(loaded.map(ensureResearchReady));
+  const readyPayloads = await Promise.all(loaded.map(ensureResearchReady));
+  const documents = readyPayloads.map((payload) => payload.document);
   const topK = Math.max(4, Math.floor(20 / documents.length));
   const groups = await Promise.all(
     documents.map(async (document, documentIndex) => {
-      const passages = await retrievePassages(
+      const retrieval = await retrieveDocumentContext(
         document.type,
         document.id,
         userQuestion || comparisonQuery(mode),
-        topK,
+        { topK },
       );
+      const passages = retrieval.passages || [];
       if (!passages.some((passage) => passage.content.trim())) {
         throw validationError(`${document.title}: No extractable text.`, 422);
       }
@@ -181,6 +254,7 @@ const createComparison = async (userId, payload) => {
         document,
         passages: passages.filter((passage) => passage.content.trim()),
         documentIndex,
+        retrievalMode: retrieval.retrievalMode,
       };
     }),
   );
@@ -229,35 +303,50 @@ const createComparison = async (userId, payload) => {
         ),
       ].join("\n\n")
     : "";
-  const generated = await generateDocumentComparison({
-    mode,
-    language,
-    userQuestion,
-    documents: documents.map(({
-      id,
-      type,
-      title,
-      authority,
-      status,
-      ministry,
-      state,
-      jurisdiction,
-      year,
-      publicationDate,
-    }) => ({
-      id,
-      type,
-      title,
-      authority,
-      status,
-      ministry,
-      state,
-      jurisdiction,
-      year,
-      publicationDate,
-    })),
-    context: [context, graphContext].filter(Boolean).join("\n\n"),
-  });
+  const comparisonDocuments = documents.map(({
+    id,
+    type,
+    title,
+    authority,
+    status,
+    ministry,
+    state,
+    jurisdiction,
+    year,
+    publicationDate,
+  }) => ({
+    id,
+    type,
+    title,
+    authority,
+    status,
+    ministry,
+    state,
+    jurisdiction,
+    year,
+    publicationDate,
+  }));
+  let generated;
+  try {
+    generated = await generateDocumentComparison({
+      mode,
+      language,
+      userQuestion,
+      documents: comparisonDocuments,
+      context: [context, graphContext].filter(Boolean).join("\n\n"),
+    });
+    generated.generationMode = generated.generationMode || "ai";
+  } catch (error) {
+    generated = extractiveComparisonFallback({
+      mode,
+      language,
+      userQuestion,
+      documents: comparisonDocuments,
+      groups,
+      citations,
+      generationError: error,
+    });
+  }
   const recommendedDocuments = [
     ...new Map(
       (
@@ -312,6 +401,11 @@ const createComparison = async (userId, payload) => {
       }),
     ),
     citations,
+    retrieval: groups.map(({ document, retrievalMode, passages }) => ({
+      documentId: document.id,
+      retrievalMode,
+      passages: passages.length,
+    })),
     relationshipIntelligence: graphIntelligence,
     recommendedDocuments,
   };

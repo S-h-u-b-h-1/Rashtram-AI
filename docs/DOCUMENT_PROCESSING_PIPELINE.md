@@ -11,9 +11,10 @@ not research-ready merely because it has a PDF or a summary.
 - a public accessible PDF, text, or HTML resource;
 - successful extraction;
 - stored text chunks;
-- an embedding for every stored chunk;
+- either an embedding/vector reference for every stored chunk or verified local
+  PostgreSQL text-chunk retrieval;
 - no processing error; and
-- a successful retrieval probe after vector storage.
+- a successful retrieval probe after vector storage or local text fallback.
 
 `comparison_ready` currently uses the same strict retrieval contract. This is
 intentional: comparison is grounded in retrieved passages and must never fall
@@ -28,10 +29,11 @@ back to catalogue metadata or a title-only model response.
 5. Preserve original Hindi/English text and detect language/script.
 6. Normalize and chunk with Hindi-aware sentence boundaries.
 7. Generate multilingual embeddings in count- and token-bounded batches.
-8. Store vectors in Pinecone and normalized chunks/vector references in
-   PostgreSQL.
+8. Store normalized chunks in PostgreSQL before remote vector storage, then
+   store vectors/vector references when the provider is available.
 9. Generate and store an English summary separately from original text.
-10. Probe retrieval using the stored vectors.
+10. Probe retrieval using stored vectors first, with PostgreSQL chunk retrieval
+    as the fallback.
 11. Promote the document only after the probe succeeds.
 
 Every failure records its stage, bounded reason, diagnostic metadata, attempt
@@ -59,7 +61,26 @@ product gates are mirrored to `documents.research_ready` and
 PolicyEdge policy records are a supported HTML-source path. They start as
 `source_extractable_not_processed`, are fetched through the PolicyEdge
 connector, are stored as `source_html` text artifacts, and are promoted only
-after chunk/vector persistence and retrieval verification succeed.
+after chunk persistence and retrieval verification succeed. Vector persistence
+is still preferred, but local text retrieval is accepted as an explicit
+fallback when the embedding/vector provider is unavailable.
+
+## Canonical readiness and preparation
+
+`getDocumentReadiness(documentId)` is the single server-side readiness
+contract used by:
+
+- `GET /api/documents/:id/readiness`
+- `POST /api/documents/:id/prepare`
+- document chat processing
+- document comparison validation
+- frontend `Prepare & compare`
+
+The readiness response includes `researchReady`, `comparisonReady`,
+`canPrepare`, `status`, `reason`, `requirements`, chunk/vector counts,
+`embeddingStatus`, `retrievalMode`, and failure metadata. The frontend should
+use this response directly instead of inferring readiness from catalogue fields
+alone.
 
 ## Queue and operational commands
 
@@ -117,6 +138,12 @@ processor may use deterministic local fallbacks for summaries/embeddings so
 source extraction and persistence can continue. These fallbacks are explicitly
 logged. They are an operational resilience path, not a substitute for fixing
 production AI provider configuration.
+
+When vector storage fails after extraction, normalized chunks remain in
+PostgreSQL and the document may still be promoted with
+`embedding_status = fallback` and `retrieval_mode = local_text` after retrieval
+verification succeeds. This prevents provider outages from discarding usable
+official text.
 
 ## Known operational limitation
 

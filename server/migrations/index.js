@@ -31,4 +31,8 @@ module.exports = [
     name: "008_source_html_extraction.js",
     migration: require("./008_source_html_extraction"),
   },
+  {
+    name: "009_retrieval_fallback_readiness.js",
+    migration: require("./009_retrieval_fallback_readiness"),
+  },
 ];

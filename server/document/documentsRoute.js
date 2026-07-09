@@ -22,6 +22,8 @@ const {
   getComparisonRecommendations,
   getDocumentRecommendations,
 } = require("./recommendationService");
+const { prepareDocument } = require("./readinessService");
+const { getDocumentReadiness } = require("./readinessContract");
 
 const router = express.Router();
 
@@ -41,7 +43,10 @@ const selectionKey = (ids) =>
 const sendError = (res, error, context) => {
   const status = error.status || 500;
   if (status >= 500) console.error(`${context}:`, error);
-  return res.status(status).json({ error: error.message });
+  return res.status(status).json({
+    error: error.message,
+    ...(error.details ? { details: error.details } : {}),
+  });
 };
 
 router.get("/", async (req, res) => {
@@ -334,33 +339,48 @@ router.get("/:id/summary", async (req, res) => {
 
 router.get("/:id/readiness", async (req, res) => {
   try {
-    const document = await DocumentRepository.getById(req.params.id);
-    if (!document) {
+    const readiness = await getDocumentReadiness(req.params.id);
+    if (!readiness) {
       return res.status(404).json({ error: "Document not found." });
     }
-    return res.json({
-      documentId: document.id,
-      researchReady: document.researchReady,
-      comparisonReady: document.comparisonReady,
-      readinessClass: document.readinessClass,
-      readinessReason: document.readinessReason,
-      processingStatus: document.processingStatus,
-      pdfStatus: document.pdfStatus,
-      extractionStatus: document.extractionStatus,
-      ocrStatus: document.ocrStatus,
-      chunkingStatus: document.chunkingStatus,
-      embeddingStatus: document.embeddingStatus,
-      summaryStatus: document.summaryStatus,
-      chunksCount: document.chunksCount,
-      embeddingsCount: document.embeddingsCount,
-      failureStage: document.failureStage,
-      failureReason: document.failureReason,
-      retryCount: document.retryCount,
-      lastAttemptedAt: document.lastAttemptedAt,
-      processedAt: document.processedAt,
-    });
+    const { document: _document, ...payload } = readiness;
+    return res.json(payload);
   } catch (error) {
     return sendError(res, error, "Document readiness lookup failed");
+  }
+});
+
+router.post("/:id/prepare", async (req, res) => {
+  try {
+    const before = await getDocumentReadiness(req.params.id);
+    if (!before) {
+      return res.status(404).json({ error: "Document not found." });
+    }
+    if (before.comparisonReady) {
+      const { document: _document, ...payload } = before;
+      return res.json({ success: true, alreadyReady: true, readiness: payload });
+    }
+    if (!before.canPrepare) {
+      const error = new Error(before.reason || "This document cannot be prepared.");
+      error.status = 422;
+      throw error;
+    }
+    const result = await prepareDocument(req.params.id, {
+      userId: req.user.id,
+      priority: 100,
+      reason: "document_prepare",
+    });
+    const after = await getDocumentReadiness(req.params.id);
+    const { document: _document, ...readiness } = after || {};
+    return res.json({
+      success: Boolean(after?.comparisonReady),
+      ...result,
+      readiness,
+      researchReady: Boolean(after?.researchReady),
+      comparisonReady: Boolean(after?.comparisonReady),
+    });
+  } catch (error) {
+    return sendError(res, error, "Document preparation failed");
   }
 });
 

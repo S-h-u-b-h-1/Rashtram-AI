@@ -109,18 +109,21 @@ const enqueueProcessing = async (
 };
 
 const verifyRetrieval = async (document) => {
-  const { retrievePassages } = require("./documentResearchService");
+  const { retrieveDocumentContext } = require("./documentResearchService");
   let lastError;
   for (let attempt = 0; attempt < 2; attempt += 1) {
     try {
-      const passages = await retrievePassages(
+      const context = await retrieveDocumentContext(
         document.type,
         document.id,
         document.title,
-        2,
+        { topK: 2 },
       );
-      if (passages.some((passage) => String(passage.content || "").trim())) {
-        return true;
+      if (
+        context.retrievalVerified &&
+        context.passages.some((passage) => String(passage.content || "").trim())
+      ) {
+        return context;
       }
     } catch (error) {
       lastError = error;
@@ -130,7 +133,7 @@ const verifyRetrieval = async (document) => {
     }
   }
   if (lastError) throw lastError;
-  return false;
+  return { retrievalVerified: false, retrievalMode: "none", passages: [] };
 };
 
 const prepareDocument = async (
@@ -236,9 +239,9 @@ const prepareDocument = async (
       throw error;
     }
     const retrievalStartedAt = Date.now();
-    const retrievalVerified = await verifyRetrieval(document);
+    const retrieval = await verifyRetrieval(document);
     const retrievalMs = Date.now() - retrievalStartedAt;
-    if (!retrievalVerified) {
+    if (!retrieval.retrievalVerified) {
       const error = new Error(
         "Research passages were stored but retrieval verification failed.",
       );
@@ -264,10 +267,12 @@ const prepareDocument = async (
             ? "pending"
             : "not_required",
         chunkingStatus: "ready",
-        embeddingStatus: "ready",
+        embeddingStatus:
+          retrieval.retrievalMode === "local_text" ? "fallback" : "ready",
         summaryStatus: result.summary ? "ready" : "not_started",
         chunksCount,
-        embeddingsCount: chunksCount,
+        embeddingsCount:
+          retrieval.retrievalMode === "local_text" ? 0 : chunksCount,
         textLength: Number(result.textLength || 0),
         language:
           artifact.languageCode || result.language?.languageCode || "und",
@@ -278,7 +283,8 @@ const prepareDocument = async (
         embeddingProvider:
           process.env.OPENAI_EMBEDDING_MODEL || "text-embedding-3-large",
         aiProvider: "openai",
-        retrievalVerified,
+        retrievalVerified: true,
+        retrievalMode: retrieval.retrievalMode,
         readinessClass: "comparison_ready",
       },
     );
@@ -366,7 +372,8 @@ const prepareDocument = async (
       jobId: String(job.id),
       researchReady: true,
       comparisonReady: true,
-      retrievalVerified,
+      retrievalVerified: true,
+      retrievalMode: retrieval.retrievalMode,
       stageMetrics,
     };
   } catch (error) {
@@ -517,6 +524,8 @@ const runReadinessAudit = async () => {
         state.failure_reason,
         state.chunks_count,
         state.embeddings_count,
+        state.retrieval_mode,
+        state.retrieval_verified,
         EXISTS (
           SELECT 1 FROM document_resources resource
           WHERE resource.document_id = document.id
@@ -543,9 +552,18 @@ const runReadinessAudit = async () => {
           AND processing_status = 'ready'
           AND extraction_status = 'ready'
           AND chunking_status = 'ready'
-          AND embedding_status = 'ready'
           AND chunks_count > 0
-          AND embeddings_count >= chunks_count
+          AND (
+            (
+              embedding_status = 'ready'
+              AND embeddings_count >= chunks_count
+            )
+            OR (
+              embedding_status = 'fallback'
+              AND retrieval_mode IN ('local_text', 'hybrid')
+            )
+          )
+          AND retrieval_verified
           AND error_message IS NULL
         ) AS genuinely_ready,
         (
@@ -569,6 +587,25 @@ const runReadinessAudit = async () => {
         END,
         research_ready = readiness.genuinely_ready,
         comparison_ready = readiness.genuinely_ready,
+        retrieval_mode = CASE
+          WHEN readiness.retrieval_mode <> 'unknown' THEN readiness.retrieval_mode
+          WHEN readiness.chunks_count > 0 THEN 'local_text'
+          ELSE readiness.retrieval_mode
+        END,
+        retrieval_verified = CASE
+          WHEN readiness.retrieval_verified THEN TRUE
+          WHEN readiness.chunks_count > 0
+            AND readiness.embedding_status = 'fallback'
+            THEN TRUE
+          ELSE readiness.retrieval_verified
+        END,
+        retrieval_verified_at = CASE
+          WHEN readiness.retrieval_verified THEN state.retrieval_verified_at
+          WHEN readiness.chunks_count > 0
+            AND readiness.embedding_status = 'fallback'
+            THEN COALESCE(state.retrieval_verified_at, state.last_processed_at, NOW())
+          ELSE state.retrieval_verified_at
+        END,
         readiness_class = CASE
           WHEN readiness.visibility_status = 'hidden_invalid'
             THEN 'invalid_or_quarantined'

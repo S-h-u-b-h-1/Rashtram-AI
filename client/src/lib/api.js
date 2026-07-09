@@ -165,6 +165,11 @@ export const recommendDocumentsForComparison = async (payload) =>
 export const getDocumentReadiness = async (documentId) =>
   apiRequest(`/documents/${encodeURIComponent(documentId)}/readiness`);
 
+export const prepareDocumentForComparison = async (documentId) =>
+  apiRequest(`/documents/${encodeURIComponent(documentId)}/prepare`, {
+    method: "POST",
+  });
+
 export const getRecentRecommendations = async (limit = 12) => {
   return apiRequest(
     `/profile/recommendations?limit=${encodeURIComponent(limit)}`,
@@ -298,16 +303,7 @@ export const processDocumentResearch = async (
   documentType,
   documentId,
 ) => {
-  if (documentType === "policy") {
-    return apiRequest("/process-policy", {
-      method: "POST",
-      body: JSON.stringify({ policyId: documentId }),
-    });
-  }
-  return apiRequest("/document-chat/process", {
-    method: "POST",
-    body: JSON.stringify({ documentType, documentId }),
-  });
+  return prepareDocumentForComparison(documentId);
 };
 
 export const createDocumentChatSession = async (

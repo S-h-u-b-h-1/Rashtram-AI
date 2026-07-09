@@ -95,6 +95,23 @@ test("comparison readiness exposes specific disabled reasons", () => {
       title: "Bill",
       pdfUrl: "https://example.test/a.pdf",
       researchReady: true,
+      comparisonReady: true,
+      processingStatus: "ready",
+      extractionStatus: "ready",
+      embeddingStatus: "fallback",
+      chunksCount: 3,
+      embeddingsCount: 0,
+      retrievalMode: "local_text",
+      retrievalVerified: true,
+    }),
+    null,
+  );
+  assert.equal(
+    readinessReason({
+      id: "1",
+      title: "Bill",
+      pdfUrl: "https://example.test/a.pdf",
+      researchReady: true,
       comparisonReady: false,
       readinessReason: "Retrieval verification is pending.",
       processingStatus: "ready",

@@ -63,8 +63,8 @@ After `npm run process:audit --prefix server`, whole-corpus readiness was:
 | Metric | Count |
 | --- | ---: |
 | Total documents | 19,216 |
-| Research-ready documents | 499 |
-| Comparison-ready documents | 499 |
+| Research-ready documents | 501 |
+| Comparison-ready documents | 501 |
 | Stored chunks | 7,174 |
 | Stored embeddings | 7,174 |
 
@@ -79,7 +79,10 @@ After `npm run process:audit --prefix server`, whole-corpus readiness was:
 - Prepare for Research accepts PolicyEdge source documents even when no PDF
   exists.
 - Comparison readiness rejects any policy without successful processing,
-  chunks, embeddings, and readiness flags.
+  chunks, a verified retrieval path, and readiness flags.
+- If vector retrieval/provider configuration fails but PostgreSQL chunks exist,
+  policy comparison uses local text retrieval instead of failing with
+  `No extractable text`.
 - Recommendation payloads now expose readiness details so the UI can avoid
   broken Compare actions.
 

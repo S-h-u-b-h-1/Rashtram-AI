@@ -76,6 +76,9 @@ const mapDocument = (row) => {
     chunkingStatus: row.chunking_status || null,
     chunksCount: Number(row.chunks_count || 0),
     embeddingsCount: Number(row.embeddings_count || 0),
+    retrievalMode: row.retrieval_mode || "unknown",
+    retrievalVerified: Boolean(row.retrieval_verified),
+    retrievalVerifiedAt: toIso(row.retrieval_verified_at),
     textLength: Number(row.text_length || 0),
     retryCount: Number(row.retry_count || 0),
     failureStage: row.failure_stage || null,
@@ -515,6 +518,21 @@ const getById = async (id) => {
          WHERE state.document_id = legislative_documents.id
        ) AS embeddings_count,
        (
+         SELECT state.retrieval_mode
+         FROM document_processing_state state
+         WHERE state.document_id = legislative_documents.id
+       ) AS retrieval_mode,
+       (
+         SELECT state.retrieval_verified
+         FROM document_processing_state state
+         WHERE state.document_id = legislative_documents.id
+       ) AS retrieval_verified,
+       (
+         SELECT state.retrieval_verified_at
+         FROM document_processing_state state
+         WHERE state.document_id = legislative_documents.id
+       ) AS retrieval_verified_at,
+       (
          SELECT state.text_length
          FROM document_processing_state state
          WHERE state.document_id = legislative_documents.id
@@ -644,6 +662,13 @@ const updateProcessingStatus = async (
   const readinessReason =
     details.readinessReason ||
     (status === "ready" ? null : failureReason || "Document processing is pending.");
+  const retrievalMode =
+    details.retrievalMode ||
+    existing.retrieval_mode ||
+    (status === "ready" ? "vector" : "unknown");
+  const retrievalVerified = Boolean(
+    details.retrievalVerified ?? existing.retrieval_verified,
+  );
   await query(
     `UPDATE legislative_documents
      SET processing_status = $2,
@@ -661,13 +686,15 @@ const updateProcessingStatus = async (
        pdf_status, chunking_status, research_ready, comparison_ready,
        embeddings_count, text_length, language, script, is_bilingual,
        retry_count, failure_stage, failure_reason, failure_details_json,
-       readiness_class, readiness_reason, last_attempted_at
+       readiness_class, readiness_reason, last_attempted_at,
+       retrieval_mode, retrieval_verified, retrieval_verified_at
      )
      VALUES (
        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10,
        CASE WHEN $2 = 'ready' THEN NOW() ELSE $11 END,
        NOW(), $12, $13, FALSE, FALSE, $14, $15, $16, $17, $18,
-       $19, $20, $21, $22::jsonb, $23, $24, NOW()
+       $19, $20, $21, $22::jsonb, $23, $24, NOW(),
+       $25, $26, CASE WHEN $26 THEN NOW() ELSE NULL END
      )
      ON CONFLICT (document_id) DO UPDATE SET
        processing_status = EXCLUDED.processing_status,
@@ -697,6 +724,12 @@ const updateProcessingStatus = async (
        readiness_class = EXCLUDED.readiness_class,
        readiness_reason = EXCLUDED.readiness_reason,
        last_attempted_at = EXCLUDED.last_attempted_at,
+       retrieval_mode = EXCLUDED.retrieval_mode,
+       retrieval_verified = EXCLUDED.retrieval_verified,
+       retrieval_verified_at = COALESCE(
+         EXCLUDED.retrieval_verified_at,
+         document_processing_state.retrieval_verified_at
+       ),
        updated_at = NOW()`,
     [
       id,
@@ -724,6 +757,8 @@ const updateProcessingStatus = async (
       JSON.stringify(details.failureDetails || {}),
       readinessClass,
       readinessReason,
+      retrievalMode,
+      retrievalVerified,
     ],
   );
   await query(
@@ -741,9 +776,18 @@ const updateProcessingStatus = async (
            AND ps.processing_status = 'ready'
            AND ps.extraction_status = 'ready'
            AND ps.chunking_status = 'ready'
-           AND ps.embedding_status = 'ready'
            AND ps.chunks_count > 0
-           AND ps.embeddings_count >= ps.chunks_count
+           AND (
+             (
+               ps.embedding_status = 'ready'
+               AND ps.embeddings_count >= ps.chunks_count
+             )
+             OR (
+               ps.embedding_status = 'fallback'
+               AND ps.retrieval_mode IN ('local_text', 'hybrid')
+             )
+           )
+           AND ps.retrieval_verified
            AND ps.error_message IS NULL
            AND $2 = 'ready'
            AND $3
@@ -762,9 +806,18 @@ const updateProcessingStatus = async (
            AND ps.processing_status = 'ready'
            AND ps.extraction_status = 'ready'
            AND ps.chunking_status = 'ready'
-           AND ps.embedding_status = 'ready'
            AND ps.chunks_count > 0
-           AND ps.embeddings_count >= ps.chunks_count
+           AND (
+             (
+               ps.embedding_status = 'ready'
+               AND ps.embeddings_count >= ps.chunks_count
+             )
+             OR (
+               ps.embedding_status = 'fallback'
+               AND ps.retrieval_mode IN ('local_text', 'hybrid')
+             )
+           )
+           AND ps.retrieval_verified
            AND ps.error_message IS NULL
            AND $2 = 'ready'
            AND $3

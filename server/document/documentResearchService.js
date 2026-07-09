@@ -506,15 +506,6 @@ const processExtractableSourceDocument = async (
     },
   });
 
-  const stored = await config.store(
-    sourceChunks.map((chunk) => ({
-      ...chunk,
-      metadata: {
-        ...chunk.metadata,
-        summary,
-      },
-    })),
-  );
   const chunkPersistenceStartedAt = Date.now();
   await saveNormalizedChunks(
     document.id,
@@ -522,6 +513,29 @@ const processExtractableSourceDocument = async (
     detectedLanguage.languageCode,
   );
   const chunkPersistenceMs = Date.now() - chunkPersistenceStartedAt;
+  let stored = {
+    chunksStored: sourceChunks.length,
+    success: false,
+    metrics: { embeddingsMs: 0, pineconeMs: 0 },
+    fallbackRetrieval: true,
+  };
+  let vectorStorageError = null;
+  try {
+    stored = await config.store(
+      sourceChunks.map((chunk) => ({
+        ...chunk,
+        metadata: {
+          ...chunk.metadata,
+          summary,
+        },
+      })),
+    );
+  } catch (error) {
+    vectorStorageError = error;
+    console.warn(
+      `Vector storage unavailable for source document ${document.id}; using local text retrieval fallback: ${error.message}`,
+    );
+  }
   const embeddingInputTokens = sourceChunks.reduce(
     (sum, chunk) => sum + Math.ceil(String(chunk.content || "").length / 4),
     0,
@@ -547,6 +561,7 @@ const processExtractableSourceDocument = async (
       pineconeMs: Number(stored.metrics?.pineconeMs || 0),
       chunkPersistenceMs,
       totalMs: Date.now() - Number(totalStartedAt || Date.now()),
+      vectorStorageFailed: Boolean(vectorStorageError),
     },
     usage: {
       estimated: true,
@@ -554,6 +569,7 @@ const processExtractableSourceDocument = async (
       generationOutputTokens: Math.ceil(summary.length / 4),
       embeddingInputTokens,
       ocrUsed: false,
+      retrievalMode: vectorStorageError ? "local_text" : "hybrid",
     },
   };
 };
@@ -745,7 +761,6 @@ const processDocument = async (documentType, documentId) => {
       originalLanguage: processed.language.languageCode,
     },
   }));
-  const stored = await config.store(chunks);
   const chunkPersistenceStartedAt = Date.now();
   await saveNormalizedChunks(
     documentId,
@@ -753,6 +768,21 @@ const processDocument = async (documentType, documentId) => {
     processed.language.languageCode,
   );
   const chunkPersistenceMs = Date.now() - chunkPersistenceStartedAt;
+  let stored = {
+    chunksStored: chunks.length,
+    success: false,
+    metrics: { embeddingsMs: 0, pineconeMs: 0 },
+    fallbackRetrieval: true,
+  };
+  let vectorStorageError = null;
+  try {
+    stored = await config.store(chunks);
+  } catch (error) {
+    vectorStorageError = error;
+    console.warn(
+      `Vector storage unavailable for document ${documentId}; using local text retrieval fallback: ${error.message}`,
+    );
+  }
   const embeddingInputTokens = chunks.reduce(
     (sum, chunk) =>
       sum + Math.ceil(String(chunk.embeddingText || chunk.content).length / 4),
@@ -778,6 +808,7 @@ const processDocument = async (documentType, documentId) => {
       pineconeMs: Number(stored.metrics?.pineconeMs || 0),
       chunkPersistenceMs,
       totalMs: Date.now() - totalStartedAt,
+      vectorStorageFailed: Boolean(vectorStorageError),
     },
     usage: {
       estimated: true,
@@ -785,7 +816,178 @@ const processDocument = async (documentType, documentId) => {
       generationOutputTokens: Math.ceil(summary.length / 4),
       embeddingInputTokens,
       ocrUsed: processed.ocrUsed,
+      retrievalMode: vectorStorageError ? "local_text" : "hybrid",
     },
+  };
+};
+
+const passageFromVectorMatch = (match, index) => ({
+  passage: index + 1,
+  score: Number(match.score || match.relevanceScore || 0),
+  chunkIndex: match.metadata?.chunkIndex ?? match.chunkInfo?.index ?? index,
+  totalChunks:
+    match.metadata?.totalChunks ?? match.chunkInfo?.total ?? null,
+  content: String(match.metadata?.content || match.content || ""),
+  source: match.metadata?.source || "Official document PDF",
+  pdfUrl: match.metadata?.pdfUrl || null,
+  languageCode:
+    match.metadata?.languageCode ||
+    match.metadata?.originalLanguage ||
+    "und",
+  pageStart: match.metadata?.pageStart || null,
+  pageEnd: match.metadata?.pageEnd || null,
+  pageEstimate: Boolean(match.metadata?.pageEstimate),
+  sectionId: match.metadata?.sectionId || null,
+  sectionTitle: match.metadata?.sectionTitle || null,
+  clauseId: match.metadata?.clauseId || null,
+  structuralType: match.metadata?.structuralType || "passage",
+  sourceUrl: match.metadata?.sourceUrl || null,
+  retrievalMode: "vector",
+});
+
+const tokenizeForLocalRetrieval = (value) => [
+  ...new Set(
+    String(value || "")
+      .toLowerCase()
+      .normalize("NFKC")
+      .replace(/[^\p{L}\p{N}\s]+/gu, " ")
+      .split(/\s+/u)
+      .map((token) => token.trim())
+      .filter((token) => token.length >= 3)
+      .filter(
+        (token) =>
+          !new Set([
+            "the",
+            "and",
+            "for",
+            "with",
+            "this",
+            "that",
+            "from",
+            "into",
+            "are",
+            "was",
+            "were",
+            "document",
+            "policy",
+            "bill",
+            "act",
+            "gazette",
+            "compare",
+            "comparison",
+          ]).has(token),
+      ),
+  ),
+];
+
+const localChunkScore = (chunk, queryTokens) => {
+  const content = String(chunk.original_text || chunk.translated_text || "");
+  if (!queryTokens.length) return 0.1;
+  const lower = content.toLowerCase();
+  const hits = queryTokens.reduce(
+    (count, token) => count + (lower.includes(token) ? 1 : 0),
+    0,
+  );
+  return hits / queryTokens.length;
+};
+
+const retrieveLocalTextPassages = async (documentId, message, topK = 6) => {
+  const result = await query(
+    `SELECT
+       chunk_index, original_text, translated_text, language,
+       vector_reference, metadata_json
+     FROM document_text_chunks
+     WHERE document_id = $1
+     ORDER BY chunk_index ASC
+     LIMIT 200`,
+    [documentId],
+  );
+  const queryTokens = tokenizeForLocalRetrieval(message);
+  return result.rows
+    .map((row, index) => {
+      const metadata = row.metadata_json || {};
+      const content = String(row.original_text || row.translated_text || "")
+        .trim();
+      return {
+        passage: index + 1,
+        score: localChunkScore(row, queryTokens),
+        chunkIndex: Number(row.chunk_index ?? index),
+        totalChunks: metadata.totalChunks || result.rows.length,
+        content,
+        source: metadata.source || "Indexed document text",
+        pdfUrl: metadata.pdfUrl || null,
+        languageCode:
+          metadata.languageCode ||
+          metadata.originalLanguage ||
+          row.language ||
+          "und",
+        pageStart: metadata.pageStart || null,
+        pageEnd: metadata.pageEnd || null,
+        pageEstimate: Boolean(metadata.pageEstimate),
+        sectionId: metadata.sectionId || null,
+        sectionTitle: metadata.sectionTitle || null,
+        clauseId: metadata.clauseId || null,
+        structuralType: metadata.structuralType || "passage",
+        sourceUrl: metadata.sourceUrl || null,
+        retrievalMode: queryTokens.length ? "local_text" : "representative",
+      };
+    })
+    .filter((passage) => passage.content)
+    .sort((left, right) => {
+      if (right.score !== left.score) return right.score - left.score;
+      return left.chunkIndex - right.chunkIndex;
+    })
+    .slice(0, Math.max(1, Number(topK) || 6))
+    .map((passage, index) => ({ ...passage, passage: index + 1 }));
+};
+
+const retrieveDocumentContext = async (
+  documentType,
+  documentId,
+  message,
+  options = {},
+) => {
+  const topK = Math.max(1, Number(options.topK || 6));
+  const config = typeConfig(documentType);
+  let vectorError = null;
+  try {
+    const matches = await config.search(message, documentId, topK);
+    const passages = matches
+      .map(passageFromVectorMatch)
+      .filter((passage) => passage.content.trim());
+    if (passages.length > 0) {
+      return {
+        documentId: String(documentId),
+        retrievalMode: "vector",
+        retrievalVerified: true,
+        passages,
+      };
+    }
+  } catch (error) {
+    vectorError = error;
+  }
+
+  const localPassages = await retrieveLocalTextPassages(
+    documentId,
+    message,
+    topK,
+  );
+  if (localPassages.length > 0) {
+    return {
+      documentId: String(documentId),
+      retrievalMode: vectorError ? "local_text" : "hybrid",
+      retrievalVerified: true,
+      vectorError: vectorError?.message || null,
+      passages: localPassages,
+    };
+  }
+
+  if (vectorError) throw vectorError;
+  return {
+    documentId: String(documentId),
+    retrievalMode: "none",
+    retrievalVerified: false,
+    passages: [],
   };
 };
 
@@ -795,30 +997,10 @@ const retrievePassages = async (
   message,
   topK = 6,
 ) => {
-  const config = typeConfig(documentType);
-  const matches = await config.search(message, documentId, topK);
-  return matches.map((match, index) => ({
-    passage: index + 1,
-    score: Number(match.score || match.relevanceScore || 0),
-    chunkIndex: match.metadata?.chunkIndex ?? match.chunkInfo?.index ?? index,
-    totalChunks:
-      match.metadata?.totalChunks ?? match.chunkInfo?.total ?? null,
-    content: String(match.metadata?.content || match.content || ""),
-    source: match.metadata?.source || "Official document PDF",
-    pdfUrl: match.metadata?.pdfUrl || null,
-    languageCode:
-      match.metadata?.languageCode ||
-      match.metadata?.originalLanguage ||
-      "und",
-    pageStart: match.metadata?.pageStart || null,
-    pageEnd: match.metadata?.pageEnd || null,
-    pageEstimate: Boolean(match.metadata?.pageEstimate),
-    sectionId: match.metadata?.sectionId || null,
-    sectionTitle: match.metadata?.sectionTitle || null,
-    clauseId: match.metadata?.clauseId || null,
-    structuralType: match.metadata?.structuralType || "passage",
-    sourceUrl: match.metadata?.sourceUrl || null,
-  }));
+  const result = await retrieveDocumentContext(documentType, documentId, message, {
+    topK,
+  });
+  return result.passages;
 };
 
 const searchAcrossIndexedDocuments = async (searchQuery, topK = 40) => {
@@ -859,6 +1041,7 @@ module.exports = {
   isExtractableSourceDocument,
   processDocument,
   getTextArtifact,
+  retrieveDocumentContext,
   retrievePassages,
   saveTextArtifact,
   saveNormalizedChunks,

@@ -8,25 +8,43 @@ orders, notifications, and schemes.
 
 A document can be compared only when it has a valid title and public source,
 an accessible PDF/text/HTML resource, successful extraction, stored chunks,
-successful embeddings, no processing error, and successful retrieval
-verification. Both `documents.research_ready` and
-`documents.comparison_ready` must be true. Source-only PolicyEdge records do
-not become comparable until their article text has been fetched, chunked,
-embedded, stored, and verified.
+no processing error, and a verified retrieval path. The preferred retrieval
+path is vector search. When the embedding/vector provider is unavailable but
+PostgreSQL has normalized text chunks, the comparison engine uses the local
+text chunk fallback and marks the document as `retrieval_mode = local_text` or
+`hybrid`. Both `documents.research_ready` and `documents.comparison_ready`
+must be true. Source-only PolicyEdge records do not become comparable until
+their article text has been fetched, chunked, persisted, and verified.
 
 The API returns specific `422` errors for unavailable PDFs, pending extraction,
 failed processing, missing extractable text, or an unavailable research
 workspace. It never falls back to title-only generation.
 
-As of 9 July 2026, the comparison readiness check intentionally rejects
-records that are marked ready in metadata but lack normalized processing
-evidence in `document_processing_state`, `document_text_chunks`, and vector
-references. This fixed the previous failure mode where policy records could
-show Compare actions before retrievable grounded content existed.
+As of 9 July 2026, the comparison readiness check is canonicalized through
+`getDocumentReadiness(documentId)`. It rejects records that are marked ready in
+metadata but lack normalized processing evidence in
+`document_processing_state` and `document_text_chunks`. It accepts either:
+
+- complete vector readiness: stored chunks, vector references, embeddings, and
+  retrieval verification; or
+- fallback readiness: stored chunks with original text plus verified local
+  PostgreSQL retrieval when the vector provider is unavailable.
+
+This fixed two previous failure modes:
+
+- policy records could show Compare actions before retrievable grounded
+  content existed; and
+- vector/provider failures could make a ready document compare as
+  `No extractable text` even though PostgreSQL chunks were present.
 
 The engine retrieves passages independently per document, labels them as
 `D1-C1`, `D2-C1`, and so on, generates structured analysis using only those
 passages, attaches source snippets, and persists the result.
+
+If the generation provider fails after grounded passages have been retrieved,
+the engine persists an `extractive_fallback` comparison assembled from the
+retrieved snippets. The fallback includes citations and retrieval metadata so
+the UI still receives a grounded, saved comparison instead of a broken request.
 
 ## API
 
@@ -47,6 +65,8 @@ accepted.
 
 Additional endpoints:
 
+- `GET /api/documents/:id/readiness`
+- `POST /api/documents/:id/prepare`
 - `POST /api/documents/recommend-for-comparison`
 - `GET /api/documents/compare/:comparisonId`
 - `DELETE /api/documents/compare/:comparisonId`
@@ -65,3 +85,8 @@ Recommendation payloads include the readiness class, processing status,
 extraction status, embedding status, chunk count, embedding count, and disabled
 reason so the frontend can show Prepare for Research / View Source rather than
 a broken Compare button.
+
+The document explorer uses the same canonical prepare endpoint for all
+document types. When a selected document is processable but not yet comparison
+ready, the action becomes `Prepare & compare`; after preparation it refreshes
+the readiness state before adding the document to the comparison tray.

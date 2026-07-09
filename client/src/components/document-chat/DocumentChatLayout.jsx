@@ -86,7 +86,11 @@ export function DocumentChatLayout({
   } = usePinnedChatScroll(messages);
 
   const prepareDocument = useCallback(async (canonicalDocument) => {
-    if (!canonicalDocument?.pdfUrl && canonicalDocument?.type !== "policy") return null;
+    if (
+      !canonicalDocument?.pdfUrl &&
+      !canonicalDocument?.sourceUrl &&
+      canonicalDocument?.type !== "policy"
+    ) return null;
     setProcessing(true);
     setProcessingError("");
     try {
@@ -94,6 +98,7 @@ export function DocumentChatLayout({
         documentType,
         documentId,
       );
+      const readiness = result.readiness || {};
       const generatedSummary = result.summary || "";
       if (result.textArtifact) {
         setDocument((current) => ({
@@ -102,18 +107,35 @@ export function DocumentChatLayout({
         }));
       }
       setSummary(generatedSummary);
-      setResearchReady(Boolean(result.researchReady));
+      setResearchReady(Boolean(readiness.researchReady ?? result.researchReady));
       setDocument((current) => ({
         ...current,
-        researchReady: Boolean(result.researchReady),
-        comparisonReady: Boolean(result.comparisonReady),
-        readiness: result.researchReady ? "research_ready" : current.readiness,
-        readinessClass: result.comparisonReady
+        researchReady: Boolean(readiness.researchReady ?? result.researchReady),
+        comparisonReady: Boolean(
+          readiness.comparisonReady ?? result.comparisonReady,
+        ),
+        readiness: readiness.researchReady || result.researchReady
+          ? "research_ready"
+          : current.readiness,
+        readinessClass: readiness.comparisonReady || result.comparisonReady
           ? "comparison_ready"
-          : result.researchReady
+          : readiness.researchReady || result.researchReady
             ? "research_ready"
-            : current.readinessClass,
-        processingStatus: result.researchReady ? "ready" : current.processingStatus,
+            : readiness.readinessClass || current.readinessClass,
+        readinessReason: readiness.reason || readiness.readinessReason || null,
+        processingStatus:
+          readiness.status === "ready" || result.researchReady
+            ? "ready"
+            : current.processingStatus,
+        extractionStatus: readiness.requirements?.hasExtractedText
+          ? "ready"
+          : current.extractionStatus,
+        embeddingStatus:
+          readiness.embeddingStatus || current.embeddingStatus,
+        chunksCount: readiness.counts?.chunks ?? current.chunksCount,
+        embeddingsCount:
+          readiness.counts?.embeddings ?? current.embeddingsCount,
+        retrievalMode: readiness.retrievalMode || current.retrievalMode,
       }));
       return result;
     } catch (processingFailure) {

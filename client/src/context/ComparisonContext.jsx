@@ -1,12 +1,14 @@
 "use client";
 
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
+import { getDocumentReadiness, prepareDocumentForComparison } from "@/lib/api";
 
 const STORAGE_KEY = "rashtram-comparison-documents";
 const ComparisonContext = createContext(null);
 
 export const comparisonDisabledReason = (document) => {
   if (!document?.id || !document?.title) return "Research workspace unavailable";
+  if (document.comparisonReady) return "";
   if (
     document.processingStatus === "failed" ||
     document.extractionStatus === "failed" ||
@@ -81,11 +83,8 @@ export function ComparisonProvider({ children }) {
   }, [documents, hydrated]);
 
   const value = useMemo(
-    () => ({
-      documents,
-      isSelected: (id) =>
-        documents.some((document) => String(document.id) === String(id)),
-      addDocument: (document) => {
+    () => {
+      const addPreparedDocument = (document) => {
         const reason = comparisonDisabledReason(document);
         if (reason) return { ok: false, reason };
         if (documents.some((item) => String(item.id) === String(document.id))) {
@@ -118,13 +117,53 @@ export function ComparisonProvider({ children }) {
           },
         ]);
         return { ok: true };
-      },
-      removeDocument: (id) =>
-        setDocuments((current) =>
-          current.filter((document) => String(document.id) !== String(id)),
-        ),
-      clear: () => setDocuments([]),
-    }),
+      };
+      return {
+        documents,
+        isSelected: (id) =>
+          documents.some((document) => String(document.id) === String(id)),
+        addDocument: addPreparedDocument,
+        prepareAndAddDocument: async (document) => {
+          if (!document?.id) {
+            return { ok: false, reason: "Document not found." };
+          }
+          const prepared = await prepareDocumentForComparison(document.id);
+          const readiness =
+            prepared.readiness || await getDocumentReadiness(document.id);
+          if (!readiness?.comparisonReady) {
+            return {
+              ok: false,
+              reason:
+                readiness?.reason ||
+                readiness?.readinessReason ||
+                "Document could not be prepared for comparison.",
+              readiness,
+            };
+          }
+          return addPreparedDocument({
+            ...document,
+            researchReady: true,
+            comparisonReady: true,
+            processingStatus: "ready",
+            extractionStatus: "ready",
+            embeddingStatus:
+              readiness.embeddingStatus || document.embeddingStatus,
+            chunksCount: readiness.counts?.chunks || document.chunksCount,
+            embeddingsCount:
+              readiness.counts?.embeddings || document.embeddingsCount,
+            retrievalMode: readiness.retrievalMode,
+            hasAccessibleResource:
+              readiness.requirements?.hasAccessibleResource ??
+              document.hasAccessibleResource,
+          });
+        },
+        removeDocument: (id) =>
+          setDocuments((current) =>
+            current.filter((document) => String(document.id) !== String(id)),
+          ),
+        clear: () => setDocuments([]),
+      };
+    },
     [documents],
   );
 

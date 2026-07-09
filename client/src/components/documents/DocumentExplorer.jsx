@@ -108,9 +108,11 @@ export function DocumentExplorer({
   const [sortDirection, setSortDirection] = useState("desc");
   const {
     addDocument,
+    prepareAndAddDocument,
     removeDocument,
     isSelected,
   } = useComparison();
+  const [preparingCompareId, setPreparingCompareId] = useState(null);
 
   const requestFilters = useMemo(
     () => ({
@@ -258,6 +260,7 @@ export function DocumentExplorer({
               const canPrepare =
                 document.researchReady || canPrepareForResearch(document);
               const compareDisabled = comparisonDisabledReason(document);
+              const canPrepareCompare = Boolean(compareDisabled && canPrepare);
               return (
                 <article
                   key={document.id}
@@ -325,17 +328,46 @@ export function DocumentExplorer({
                   <div className="flex flex-wrap items-start gap-2 md:justify-end">
                     <button
                       type="button"
-                      disabled={Boolean(compareDisabled)}
-                      title={compareDisabled || undefined}
-                      onClick={() =>
-                        selected
-                          ? removeDocument(document.id)
-                          : addDocument(document)
+                      disabled={
+                        (Boolean(compareDisabled) && !canPrepareCompare) ||
+                        preparingCompareId === document.id
                       }
+                      title={compareDisabled || undefined}
+                      onClick={async () => {
+                        if (selected) {
+                          removeDocument(document.id);
+                          return;
+                        }
+                        if (compareDisabled && canPrepareCompare) {
+                          setPreparingCompareId(document.id);
+                          try {
+                            const result = await prepareAndAddDocument(document);
+                            if (!result.ok) setError(result.reason);
+                          } catch (prepareError) {
+                            setError(
+                              prepareError.message ||
+                                "Document could not be prepared for comparison.",
+                            );
+                          } finally {
+                            setPreparingCompareId(null);
+                          }
+                          return;
+                        }
+                        const result = addDocument(document);
+                        if (!result.ok) setError(result.reason);
+                      }}
                       className="inline-flex items-center gap-1.5 rounded-xl border border-[#8f1d2c]/10 bg-white px-3 py-2 text-[10px] font-semibold text-[#8f1d2c] disabled:cursor-not-allowed disabled:bg-[#ddd5ca] disabled:text-[#81796e]"
                     >
-                      <GitCompareArrows className="h-3.5 w-3.5" />
-                      {selected ? "Remove compare" : "Add to compare"}
+                      {preparingCompareId === document.id ? (
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      ) : (
+                        <GitCompareArrows className="h-3.5 w-3.5" />
+                      )}
+                      {selected
+                        ? "Remove compare"
+                        : compareDisabled && canPrepareCompare
+                          ? "Prepare & compare"
+                          : "Add to compare"}
                     </button>
                     {canPrepare ? (
                       <Link

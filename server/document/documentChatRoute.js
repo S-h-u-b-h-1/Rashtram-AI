@@ -11,6 +11,7 @@ const {
 const {
   prepareDocument,
 } = require("./readinessService");
+const { getDocumentReadiness } = require("./readinessContract");
 const DocumentRepository = require("./DocumentRepository");
 const {
   completeSSE,
@@ -95,7 +96,17 @@ router.post("/process", async (req, res) => {
       languageCode: result.textArtifact?.languageCode || null,
       ocrUsed: result.textArtifact?.ocrUsed || false,
     });
-    return res.json({ success: true, ...result });
+    const readiness = await getDocumentReadiness(documentId);
+    const { document: _document, ...readinessPayload } = readiness || {};
+    return res.json({
+      success: Boolean(readiness?.comparisonReady || result.researchReady),
+      ...result,
+      readiness: readinessPayload,
+      researchReady: Boolean(readiness?.researchReady || result.researchReady),
+      comparisonReady: Boolean(
+        readiness?.comparisonReady || result.comparisonReady,
+      ),
+    });
   } catch (error) {
     console.error("[document-process] failed", {
       message: error.message,
