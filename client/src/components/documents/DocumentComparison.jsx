@@ -13,6 +13,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import {
   createDocumentComparison,
   getDocumentComparison,
+  getDocumentReadiness,
   recommendDocumentsForComparison,
   trackActivity,
 } from "@/lib/api";
@@ -93,12 +94,46 @@ export function DocumentComparison() {
   const [comparison, setComparison] = useState(null);
   const [selectionRecommendations, setSelectionRecommendations] = useState([]);
   const [recommendationsLoading, setRecommendationsLoading] = useState(false);
+  const [selectionReadiness, setSelectionReadiness] = useState({});
+  const [readinessLoading, setReadinessLoading] = useState(false);
   const [loading, setLoading] = useState(Boolean(comparisonId));
   const [error, setError] = useState("");
   const initialRequest = useRef("");
 
+  const readinessKey = ids.join(",");
+  const selectionReadinessList = useMemo(
+    () => ids.map((id) => selectionReadiness[id]).filter(Boolean),
+    [ids, selectionReadiness],
+  );
+  const blockingReadiness = selectionReadinessList.find(
+    (readiness) => !readiness.comparisonReady,
+  );
+  const selectionNotReadyMessage = blockingReadiness
+    ? `Document ${blockingReadiness.documentId} is not comparison-ready: ${
+        blockingReadiness.reason ||
+        blockingReadiness.readinessReason ||
+        "retrieval is unavailable"
+      }.`
+    : "";
+  const readinessComplete =
+    !ids.length || selectionReadinessList.length === ids.length;
+  const canRunComparison =
+    ids.length >= 2 &&
+    !loading &&
+    !readinessLoading &&
+    readinessComplete &&
+    !blockingReadiness;
+
   const runComparison = async () => {
-    if (ids.length < 2 || loading) return;
+    if (ids.length < 2 || loading || readinessLoading) return;
+    if (!readinessComplete) {
+      setError("Checking selected documents before comparison.");
+      return;
+    }
+    if (blockingReadiness) {
+      setError(selectionNotReadyMessage);
+      return;
+    }
     setLoading(true);
     setError("");
     try {
@@ -165,6 +200,43 @@ export function DocumentComparison() {
   }, [comparisonId]);
 
   useEffect(() => {
+    if (!ids.length || comparisonId) {
+      setSelectionReadiness({});
+      setReadinessLoading(false);
+      return;
+    }
+    let active = true;
+    setReadinessLoading(true);
+    setError("");
+    Promise.all(
+      ids.map((id) =>
+        getDocumentReadiness(id)
+          .then((readiness) => [id, readiness])
+          .catch((requestError) => [
+            id,
+            {
+              documentId: id,
+              comparisonReady: false,
+              reason:
+                requestError.message ||
+                "Could not verify this document's readiness.",
+            },
+          ]),
+      ),
+    )
+      .then((entries) => {
+        if (!active) return;
+        setSelectionReadiness(Object.fromEntries(entries));
+      })
+      .finally(() => {
+        if (active) setReadinessLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [comparisonId, readinessKey]);
+
+  useEffect(() => {
     if (!ids.length) {
       setSelectionRecommendations([]);
       return;
@@ -192,12 +264,31 @@ export function DocumentComparison() {
 
   useEffect(() => {
     const key = ids.join(",");
-    if (comparisonId || ids.length < 2 || initialRequest.current === key) return;
+    if (
+      comparisonId ||
+      ids.length < 2 ||
+      readinessLoading ||
+      !readinessComplete ||
+      initialRequest.current === key
+    ) {
+      return;
+    }
     initialRequest.current = key;
+    if (blockingReadiness) {
+      setError(selectionNotReadyMessage);
+      return;
+    }
     runComparison();
   // The initial comparison is intentionally tied to the URL selection only.
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [comparisonId, ids]);
+  }, [
+    blockingReadiness,
+    comparisonId,
+    ids,
+    readinessComplete,
+    readinessLoading,
+    selectionNotReadyMessage,
+  ]);
 
   const result = comparison?.result;
   const citationMap = useMemo(
@@ -207,9 +298,11 @@ export function DocumentComparison() {
       ),
     [result?.citations],
   );
-  const chatIds = (result?.documents || selectedDocuments)
-    .map((document) => document.id)
-    .join(",");
+  const chatIds = result?.documents?.length
+    ? result.documents.map((document) => document.id).join(",")
+    : ids.length
+      ? ids.join(",")
+      : selectedDocuments.map((document) => document.id).join(",");
   const chatHref = `/app/multi-document-chat?ids=${chatIds}${
     comparison?.id ? `&comparison=${comparison.id}` : ""
   }`;
@@ -244,7 +337,10 @@ export function DocumentComparison() {
             Grounded document comparison
           </p>
           <h2 className="mt-2 font-serif text-3xl">
-            {comparison?.title || "Preparing comparison"}
+            {comparison?.title ||
+              (readinessLoading
+                ? "Checking selected documents"
+                : "Preparing comparison")}
           </h2>
           <div className="mt-5 flex flex-wrap gap-3">
             <label className="text-xs">
@@ -280,11 +376,15 @@ export function DocumentComparison() {
             {ids.length >= 2 && (
               <button
                 type="button"
-                disabled={loading}
+                disabled={!canRunComparison}
                 onClick={runComparison}
                 className="rounded-xl bg-[#fffaf0] px-4 py-2 text-xs font-semibold text-[#8f1d2c] disabled:opacity-50"
               >
-                {loading ? "Comparing…" : "Run with these settings"}
+                {loading
+                  ? "Comparing…"
+                  : readinessLoading
+                    ? "Checking readiness…"
+                    : "Run with these settings"}
               </button>
             )}
             {chatIds && (
@@ -315,6 +415,11 @@ export function DocumentComparison() {
         {error && (
           <p role="alert" className="bg-[#f4dfdc] px-5 py-3 text-sm text-[#85434a]">
             {error}
+          </p>
+        )}
+        {!error && selectionNotReadyMessage && (
+          <p role="alert" className="bg-[#f4dfdc] px-5 py-3 text-sm text-[#85434a]">
+            {selectionNotReadyMessage}
           </p>
         )}
       </section>

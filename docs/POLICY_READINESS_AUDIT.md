@@ -63,8 +63,8 @@ After `npm run process:audit --prefix server`, whole-corpus readiness was:
 | Metric | Count |
 | --- | ---: |
 | Total documents | 19,216 |
-| Research-ready documents | 501 |
-| Comparison-ready documents | 501 |
+| Research-ready documents | 550 |
+| Comparison-ready documents | 550 |
 | Stored chunks | 7,174 |
 | Stored embeddings | 7,174 |
 

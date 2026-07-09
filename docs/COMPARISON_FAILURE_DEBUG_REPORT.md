@@ -57,6 +57,20 @@ There was also a persistence ordering risk: processing stored normalized chunks
 after vector storage in some paths. A vector-store failure could therefore
 prevent the local fallback corpus from being persisted.
 
+A second production browser check found a frontend-only failure after the
+backend fix: the comparison tray could contain stale `localStorage` selections
+that had been marked "Research ready" by older client state. Opening
+`/app/compare?ids=20572,980` auto-ran comparison even though canonical
+readiness for both IDs was false:
+
+| Document | Canonical status | Reason | Chunks | Embeddings | Vector refs |
+| --- | --- | --- | ---: | ---: | ---: |
+| `20572` | `not_ready` | No extracted text chunks are available. | 0 | 1 | 0 |
+| `980` | `not_ready` | No extracted text chunks are available. | 0 | 1 | 0 |
+
+The backend correctly rejected the comparison, but the frontend trusted stale
+client state and presented those entries as ready.
+
 ## Fix
 
 The system now uses one canonical readiness contract:
@@ -82,6 +96,12 @@ provider fails after passages are retrieved, the service persists an
 `extractive_fallback` comparison with citations instead of returning an
 unusable error.
 
+The frontend now refreshes canonical readiness for hydrated comparison-tray
+items and validates every `/app/compare?ids=...` selection before auto-running
+or enabling "Run with these settings." If any selected document is not
+comparison-ready, the page shows the canonical reason and disables the run
+button.
+
 ## Verification
 
 Local verification completed:
@@ -98,7 +118,8 @@ npm run build --prefix client
 Observed results:
 
 - database verification passed;
-- processing audit classified 501 documents as `comparison_ready`;
+- processing audit classified 550 documents as `comparison_ready` after the
+  production smoke preparations;
 - server tests passed: 116 tests, 115 passed, 1 skipped;
 - frontend lint passed;
 - frontend production build passed;
@@ -132,3 +153,43 @@ Comparison:
 
 Post-deploy Vercel error-log checks for both backend and frontend returned no
 errors in the verification window.
+
+## Full production prepare and compare smoke
+
+An authenticated production smoke then prepared one processable document from
+each required category:
+
+| Flow | Document | Before | Prepare result | Retrieval mode | Chunks | Embeddings | Vector refs |
+| --- | --- | --- | --- | --- | ---: | ---: | ---: |
+| Bill | `926` | `pdf_available_not_processed` | comparison-ready | `hybrid` | 124 | 124 | 124 |
+| State Bill | `2350` | `pdf_available_not_processed` | comparison-ready | `hybrid` | 2 | 2 | 2 |
+| Act | `10217` | `pdf_available_not_processed` | comparison-ready | `hybrid` | 1 | 1 | 1 |
+| PolicyEdge source HTML | `21146` | `source_extractable_not_processed` | comparison-ready | `hybrid` | 1 | 1 | 1 |
+| Gazette | `20425` | `pdf_available_not_processed` | comparison-ready | `hybrid` | 617 | 617 | 617 |
+
+The same logged-in production session then compared `926` and `2350`:
+
+| Check | Result |
+| --- | --- |
+| Endpoint | `POST /api/documents/compare` |
+| Documents | `["926", "2350"]` |
+| Status | `201` |
+| Saved comparison id | `13` |
+| Generation mode | `extractive_fallback` |
+| Citations | `12` |
+| Retrieval | `926`: 10 passages, `2350`: 2 passages |
+| Saved history | `GET /api/profile/comparisons` contained comparison `13` |
+
+## Browser production smoke
+
+The browser was signed in with a disposable production account and verified:
+
+- `/app` loaded as the signed-in user with no console warnings/errors.
+- `/app/compare?ids=20572,980` now shows:
+  `Document 20572 is not comparison-ready: No extracted text chunks are available.`
+- The stale invalid selection no longer auto-runs comparison.
+- "Run with these settings" is disabled for that invalid selection.
+- `/app/compare?ids=926,2350` produced comparison id `14`.
+- The valid browser comparison showed an executive summary and original source
+  snippets.
+- Browser console logs for both stale and valid comparison checks were clean.

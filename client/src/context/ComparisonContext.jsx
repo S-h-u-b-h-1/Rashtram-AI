@@ -1,6 +1,13 @@
 "use client";
 
-import { createContext, useContext, useEffect, useMemo, useState } from "react";
+import {
+  createContext,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { getDocumentReadiness, prepareDocumentForComparison } from "@/lib/api";
 
 const STORAGE_KEY = "rashtram-comparison-documents";
@@ -65,6 +72,7 @@ export const canPrepareForResearch = (document) => {
 export function ComparisonProvider({ children }) {
   const [documents, setDocuments] = useState([]);
   const [hydrated, setHydrated] = useState(false);
+  const storageValidated = useRef(false);
 
   useEffect(() => {
     try {
@@ -80,6 +88,44 @@ export function ComparisonProvider({ children }) {
     if (hydrated) {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(documents));
     }
+  }, [documents, hydrated]);
+
+  useEffect(() => {
+    if (!hydrated || storageValidated.current || documents.length === 0) return;
+    storageValidated.current = true;
+    let active = true;
+    Promise.all(
+      documents.map(async (document) => {
+        try {
+          const readiness = await getDocumentReadiness(document.id);
+          if (!readiness?.comparisonReady) return null;
+          return {
+            ...document,
+            researchReady: true,
+            comparisonReady: true,
+            processingStatus: "ready",
+            extractionStatus: "ready",
+            embeddingStatus:
+              readiness.embeddingStatus || document.embeddingStatus,
+            chunksCount: readiness.counts?.chunks || document.chunksCount,
+            embeddingsCount:
+              readiness.counts?.embeddings || document.embeddingsCount,
+            retrievalMode: readiness.retrievalMode || document.retrievalMode,
+            hasAccessibleResource:
+              readiness.requirements?.hasAccessibleResource ??
+              document.hasAccessibleResource,
+          };
+        } catch {
+          return document.comparisonReady ? document : null;
+        }
+      }),
+    ).then((validated) => {
+      if (!active) return;
+      setDocuments(validated.filter(Boolean).slice(0, 5));
+    });
+    return () => {
+      active = false;
+    };
   }, [documents, hydrated]);
 
   const value = useMemo(

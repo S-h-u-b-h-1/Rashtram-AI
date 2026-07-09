@@ -90,3 +90,10 @@ The document explorer uses the same canonical prepare endpoint for all
 document types. When a selected document is processable but not yet comparison
 ready, the action becomes `Prepare & compare`; after preparation it refreshes
 the readiness state before adding the document to the comparison tray.
+
+The comparison tray and `/app/compare?ids=...` route must not trust persisted
+client state. Hydrated tray selections are refreshed through
+`GET /api/documents/:id/readiness`, and URL-selected comparisons validate
+canonical readiness before auto-running or enabling "Run with these settings."
+If any selected document lacks chunks or verified retrieval, the page shows the
+canonical reason and blocks comparison instead of sending a doomed request.
