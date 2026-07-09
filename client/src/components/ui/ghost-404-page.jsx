@@ -103,7 +103,7 @@ const ghostVariants = {
 export function NotFound() {
   return (
     <div
-      className="min-h-screen flex flex-col items-center justify-center bg-white px-4">
+      className="flex min-h-dvh flex-col items-center justify-center bg-white px-4">
       <AnimatePresence mode="wait">
         <motion.div
           className="text-center"

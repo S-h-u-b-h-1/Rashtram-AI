@@ -165,7 +165,7 @@ export function MultiDocumentChat({ documentIds, comparisonId = null }) {
   }
 
   return (
-    <section className="surface-card flex min-h-[calc(100vh-10rem)] flex-col overflow-hidden">
+    <section className="surface-card flex h-[calc(100dvh-10rem)] min-h-[420px] min-w-0 flex-col overflow-hidden">
       <header className="border-b border-[#8f1d2c]/8 bg-[#f7f2eb] p-5">
         <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-[#874047]">
           Cross-document research

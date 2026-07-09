@@ -22,6 +22,7 @@ import { useAuth } from "@/context/AuthContext";
 import { cn } from "@/lib/utils";
 import { GlobalCommandPalette } from "@/components/documents/GlobalCommandPalette";
 import { ComparisonTray } from "@/components/documents/ComparisonTray";
+import { useComparison } from "@/context/ComparisonContext";
 
 const NAVIGATION = [
   {
@@ -104,7 +105,9 @@ export function WorkspaceShell({ activeKey, title, children }) {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false);
   const { logout, user } = useAuth();
+  const { documents: comparisonDocuments } = useComparison();
   const userName = user?.name || "Researcher";
+  const hasComparisonTray = comparisonDocuments.length > 0;
 
   useEffect(() => {
     const openPalette = (event) => {
@@ -118,7 +121,7 @@ export function WorkspaceShell({ activeKey, title, children }) {
   }, []);
 
   return (
-    <div className="flex h-screen overflow-hidden bg-[#e9e3da]">
+    <div className="flex h-dvh min-h-dvh w-full overflow-hidden bg-[#e9e3da]">
       {isMobileMenuOpen && (
         <button
           type="button"
@@ -131,6 +134,7 @@ export function WorkspaceShell({ activeKey, title, children }) {
       <aside
         className={cn(
           "fixed inset-y-0 left-0 z-50 flex w-[280px] flex-col border-r border-white/8 bg-[#8f1d2c] text-white transition-transform duration-300 md:static md:translate-x-0",
+          "h-dvh overflow-y-auto overscroll-contain app-scrollbar md:shrink-0",
           isMobileMenuOpen ? "translate-x-0" : "-translate-x-full",
         )}
       >
@@ -268,7 +272,7 @@ export function WorkspaceShell({ activeKey, title, children }) {
         </div>
       </aside>
 
-      <div className="flex min-w-0 flex-1 flex-col">
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col">
         <header className="flex h-20 shrink-0 items-center justify-between border-b border-[#8f1d2c]/9 bg-[#f1ece3]/85 px-5 backdrop-blur-xl md:px-8">
           <div className="flex items-center gap-3">
             <BrandMark compact className="md:hidden" />
@@ -309,8 +313,15 @@ export function WorkspaceShell({ activeKey, title, children }) {
           </div>
         </header>
 
-        <main className="app-scrollbar flex-1 overflow-y-auto p-4 sm:p-6 md:p-8">
-          <div className="mx-auto min-h-full max-w-[1440px]">{children}</div>
+        <main
+          className={cn(
+            "app-scrollbar min-h-0 flex-1 overflow-y-auto overflow-x-hidden p-4 sm:p-6 md:p-8",
+            hasComparisonTray ? "pb-28 md:pb-32" : "pb-5 sm:pb-6 md:pb-8",
+          )}
+        >
+          <div className="mx-auto min-h-full w-full min-w-0 max-w-[1440px]">
+            {children}
+          </div>
         </main>
       </div>
       <GlobalCommandPalette

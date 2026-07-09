@@ -130,7 +130,7 @@ export default function ContactPage() {
   const isSubmitting = status === "submitting";
 
   return (
-    <main className="min-h-screen bg-[#eee8df] px-5 py-16 sm:py-24">
+    <main className="min-h-dvh bg-[#eee8df] px-5 py-12 sm:py-16 lg:py-20">
       <section className="mx-auto max-w-2xl rounded-[2rem] border border-[#8f1d2c]/9 bg-[#f8f4ed] p-6 shadow-sm sm:p-10">
         <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#874047]">
           Contact Rashtram AI

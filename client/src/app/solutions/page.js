@@ -52,7 +52,7 @@ const USE_CASES = [
 
 export default function SolutionsPage() {
   return (
-    <main className="min-h-screen bg-[#eee8df] px-5 py-20 sm:py-28">
+    <main className="min-h-dvh bg-[#eee8df] px-5 py-16 sm:py-20">
       <section className="mx-auto max-w-6xl">
         <div className="max-w-3xl">
           <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#874047]">

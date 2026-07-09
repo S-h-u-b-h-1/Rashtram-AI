@@ -121,7 +121,7 @@ function ProductPage() {
   ];
 
   return (
-    <div className="min-h-screen bg-[#FAFAFA] font-sans overflow-x-hidden selection:bg-[#9b2638] selection:text-white">
+    <div className="min-h-dvh overflow-x-hidden bg-[#FAFAFA] font-sans selection:bg-[#9b2638] selection:text-white">
       <div className="fixed inset-0 pointer-events-none z-0">
         <div className="absolute left-0 top-0 h-[50vh] w-[50vw] -translate-x-1/2 -translate-y-1/2 rounded-full bg-[#eee0dc]/45 blur-[120px]"></div>
         <div className="absolute bottom-0 right-0 w-[40vw] h-[40vh] bg-blue-50/40 rounded-full blur-[100px] translate-x-1/3 translate-y-1/3"></div>

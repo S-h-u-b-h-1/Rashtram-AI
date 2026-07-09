@@ -33,7 +33,7 @@ export function DocumentChatRoute({
   }
   if (!resolvedId) {
     return (
-      <div className="grid h-screen place-items-center bg-[#e9e3da] text-center">
+      <div className="grid h-dvh place-items-center bg-[#e9e3da] text-center">
         <p className="font-serif text-2xl text-[#8f1d2c]">
           No document was selected.
         </p>

@@ -10,7 +10,7 @@ export function ComparisonTray() {
 
   return (
     <aside
-      className="fixed inset-x-3 bottom-3 z-40 rounded-2xl border border-white/15 bg-[#671723]/95 p-3 text-white shadow-2xl backdrop-blur-xl md:left-[300px] md:right-6"
+      className="app-scrollbar fixed inset-x-3 bottom-3 z-40 max-h-[45dvh] overflow-y-auto rounded-2xl border border-white/15 bg-[#671723]/95 p-3 text-white shadow-2xl backdrop-blur-xl md:left-[300px] md:right-6 md:max-h-[calc(100dvh-2rem)]"
       aria-label="Documents selected for comparison"
     >
       <div className="flex flex-col gap-3 lg:flex-row lg:items-center">

@@ -3,7 +3,7 @@ import {NotFound} from '@/components/ui/ghost-404-page'
 
 const notFound = () => {
   return (
-    <div className="min-h-screen w-full bg-white">
+    <div className="min-h-dvh w-full bg-white">
       <NotFound />
     </div>
   )

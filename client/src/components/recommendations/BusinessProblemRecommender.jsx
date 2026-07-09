@@ -73,7 +73,7 @@ export function BusinessProblemRecommender() {
   };
 
   return (
-    <div className="space-y-5 pb-24">
+    <div className="min-w-0 space-y-5 pb-5">
       <section className="surface-card overflow-hidden">
         <div className="bg-[#8f1d2c] p-6 text-white sm:p-8">
           <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-white/55">

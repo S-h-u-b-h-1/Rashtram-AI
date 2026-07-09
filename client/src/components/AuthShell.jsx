@@ -10,8 +10,8 @@ const assurances = [
 
 export function AuthShell({ eyebrow, title, description, children }) {
   return (
-    <main className="min-h-screen bg-[#f0ebe3] lg:grid lg:grid-cols-[0.9fr_1.1fr]">
-      <section className="relative hidden min-h-screen overflow-hidden bg-[#8f1d2c] p-10 text-white lg:flex lg:flex-col xl:p-14">
+    <main className="min-h-dvh bg-[#f0ebe3] lg:grid lg:grid-cols-[0.9fr_1.1fr]">
+      <section className="relative hidden min-h-dvh overflow-hidden bg-[#8f1d2c] p-10 text-white lg:flex lg:flex-col xl:p-14">
         <div className="policy-grid absolute inset-0 opacity-20" />
         <div className="absolute -left-28 top-1/3 h-80 w-80 rounded-full bg-[#3e786b]/25 blur-3xl" />
         <div className="absolute -right-24 bottom-0 h-80 w-80 rounded-full bg-[#a85a52]/20 blur-3xl" />
@@ -49,7 +49,7 @@ export function AuthShell({ eyebrow, title, description, children }) {
         </div>
       </section>
 
-      <section className="relative flex min-h-screen items-center justify-center px-5 py-8 sm:px-8 lg:px-12">
+      <section className="relative flex min-h-dvh items-center justify-center px-5 py-8 sm:px-8 lg:px-12">
         <Link
           href="/"
           className="absolute left-5 top-5 inline-flex items-center gap-2 rounded-full px-3 py-2 text-sm text-[#5f5a52] transition hover:bg-white/60 hover:text-[#8f1d2c] sm:left-8 sm:top-7"

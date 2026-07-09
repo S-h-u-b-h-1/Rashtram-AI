@@ -39,7 +39,7 @@ export default function SettingsPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="flex min-h-dvh items-center justify-center bg-gray-50">
         <Loader2 className="w-8 h-8 text-[#9b2638] animate-spin" />
       </div>
     );
@@ -168,7 +168,7 @@ export default function SettingsPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50/50">
+    <div className="min-h-dvh bg-gray-50/50">
       <div className="max-w-7xl mx-auto p-6 md:p-12">
         <h1 className="text-4xl font-bold mb-10 text-gray-900 tracking-tight">Settings</h1>
 

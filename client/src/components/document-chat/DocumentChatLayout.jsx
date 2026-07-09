@@ -408,7 +408,7 @@ export function DocumentChatLayout({
 
   if (loading) {
     return (
-      <div className="grid h-screen place-items-center bg-[#e9e3da]">
+      <div className="grid h-dvh place-items-center bg-[#e9e3da]">
         <div className="text-center">
           <Loader2 className="mx-auto h-9 w-9 animate-spin text-[#8f1d2c]" />
           <p className="mt-4 text-sm text-[#706a61]">
@@ -423,7 +423,7 @@ export function DocumentChatLayout({
 
   if (!document) {
     return (
-      <div className="grid h-screen place-items-center bg-[#e9e3da] p-6 text-center">
+      <div className="grid h-dvh place-items-center bg-[#e9e3da] p-6 text-center">
         <div>
           <p className="font-serif text-2xl text-[#8f1d2c]">
             Research workspace unavailable
@@ -440,7 +440,7 @@ export function DocumentChatLayout({
       : QUESTIONS[documentType] || QUESTIONS.default;
 
   return (
-    <div className="flex h-screen flex-col overflow-hidden bg-[#e9e3da]">
+    <div className="flex h-dvh flex-col overflow-hidden bg-[#e9e3da]">
       <ChatHeader
         document={document}
         isPinned={isPinned}

@@ -25,14 +25,14 @@ export function UniversalDocumentRoute({ documentId }) {
 
   if (error) {
     return (
-      <div className="grid h-screen place-items-center bg-[#e9e3da] p-6 text-center text-sm text-[#85434a]">
+      <div className="grid h-dvh place-items-center bg-[#e9e3da] p-6 text-center text-sm text-[#85434a]">
         {error}
       </div>
     );
   }
   if (!document) {
     return (
-      <div className="grid h-screen place-items-center bg-[#e9e3da]">
+      <div className="grid h-dvh place-items-center bg-[#e9e3da]">
         <Loader2 className="h-8 w-8 animate-spin text-[#8f1d2c]" />
       </div>
     );
