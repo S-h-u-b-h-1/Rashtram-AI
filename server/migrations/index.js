@@ -27,4 +27,8 @@ module.exports = [
     name: "007_mass_processing_infrastructure.js",
     migration: require("./007_mass_processing_infrastructure"),
   },
+  {
+    name: "008_source_html_extraction.js",
+    migration: require("./008_source_html_extraction"),
+  },
 ];

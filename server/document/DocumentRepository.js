@@ -31,11 +31,7 @@ const mapDocument = (row) => {
     row.has_accessible_resource == null
       ? Boolean(row.pdf_url)
       : Boolean(row.has_accessible_resource);
-  // Policy-type docs (e.g. PolicyEdge) are HTML-based and have no PDF,
-  // but can still be research_ready via Pinecone embeddings.
-  const isPolicyWithEmbeddings =
-    row.document_type === "policy" && Boolean(row.research_ready);
-  const readiness = (!hasAccessibleResource && !isPolicyWithEmbeddings)
+  const readiness = !hasAccessibleResource
     ? (sourceUrl ? "source_only" : "missing_pdf")
     : processingStatus === "failed" ||
         row.extraction_status === "failed" ||

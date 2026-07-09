@@ -31,6 +31,9 @@ const {
   retrievalFamilyForType,
 } = require("./documentTypes");
 const DocumentRepository = require("./DocumentRepository");
+const {
+  fetchArticle,
+} = require("../lib/ingestion/connectors/policyedgeConnector");
 
 const TYPE_CONFIG = {
   bill: {
@@ -83,6 +86,28 @@ const typeConfig = (documentType) => {
     );
   }
   return config;
+};
+
+const isExtractableSourceDocument = (document) =>
+  document?.type === "policy" &&
+  document.sourceUrl &&
+  [
+    document.source,
+    document.sourceName,
+    document.metadata?.source,
+    document.metadata?.sourceClassification,
+  ]
+    .filter(Boolean)
+    .some((value) => String(value).toLowerCase().includes("policyedge"));
+
+const sourceSlug = (document) => {
+  const explicit = document?.metadata?.slug || document?.canonicalId;
+  if (explicit) return String(explicit).trim();
+  const sourceUrl = String(document?.sourceUrl || "");
+  if (sourceUrl.includes("/p/")) {
+    return sourceUrl.split("/p/").pop()?.split(/[?#]/)[0] || "";
+  }
+  return "";
 };
 
 const getTextArtifact = async (documentId) => {
@@ -341,6 +366,198 @@ const saveNormalizedChunks = async (documentId, chunks, languageCode) => {
   }
 };
 
+const processExtractableSourceDocument = async (
+  document,
+  config,
+  {
+    totalStartedAt,
+    indexCheckMs,
+  } = {},
+) => {
+  const slug = sourceSlug(document);
+  if (!slug) {
+    const error = new Error(
+      "This source-only policy does not expose an extractable article slug.",
+    );
+    error.status = 422;
+    throw error;
+  }
+
+  const downloadStartedAt = Date.now();
+  const article = await fetchArticle(slug);
+  const downloadMs = Date.now() - downloadStartedAt;
+  await query(
+    `INSERT INTO legislative_document_resources (
+       document_id, label, resource_type, category, url, metadata
+     )
+     VALUES ($1, $2, 'html', $3, $4, $5::jsonb)
+     ON CONFLICT (document_id, url)
+     DO UPDATE SET
+       label = EXCLUDED.label,
+       resource_type = EXCLUDED.resource_type,
+       category = COALESCE(EXCLUDED.category, legislative_document_resources.category),
+       metadata = legislative_document_resources.metadata || EXCLUDED.metadata,
+       last_seen_at = NOW(),
+       updated_at = NOW()`,
+    [
+      document.id,
+      "PolicyEdge article",
+      article.category || document.category || "Reports/Data Releases",
+      article.url || document.sourceUrl,
+      JSON.stringify({
+        source: "policyedge",
+        slug,
+        mimeType: "text/html",
+        extractable: true,
+      }),
+    ],
+  );
+  const rawText = [
+    article.title || document.title,
+    article.description,
+    article.bodyText,
+  ]
+    .filter(Boolean)
+    .join("\n\n");
+  const detectedLanguage = pdfProcessor.detectLanguage(rawText);
+  const originalText = pdfProcessor.cleanText(
+    rawText,
+    detectedLanguage.languageCode,
+  );
+  if (!pdfProcessor.hasUsableText(originalText, 1)) {
+    const error = new Error("No usable text was extracted from this source page.");
+    error.status = 422;
+    throw error;
+  }
+
+  const rawChunks = pdfProcessor.chunkText(
+    originalText,
+    pdfProcessor.chunkSize,
+    pdfProcessor.overlap,
+    detectedLanguage.languageCode,
+  );
+  let cursor = 0;
+  const sourceChunks = rawChunks.map((content, index) => {
+    const metadata = pdfProcessor.structuralChunkMetadata(
+      content,
+      originalText,
+      cursor,
+      1,
+    );
+    cursor = metadata.end;
+    return {
+      id: `policy-${document.id}-chunk-${index}`,
+      [config.idField]: String(document.id),
+      policyId: String(document.id),
+      title: article.title || document.title,
+      content,
+      embeddingText: content,
+      chunkIndex: index,
+      totalChunks: rawChunks.length,
+      metadata: {
+        ...metadata,
+        documentType: "policy",
+        source: "PolicyEdge",
+        sourceUrl: article.url || document.sourceUrl,
+        category: article.category || document.category,
+        extractionMethod: "source_html",
+        languageCode: detectedLanguage.languageCode,
+        script: detectedLanguage.script,
+        originalLanguage: detectedLanguage.languageCode,
+      },
+    };
+  });
+
+  const summaryContext = sourceChunks
+    .slice(0, 6)
+    .map((chunk) => chunk.content)
+    .join("\n\n");
+  const summaryStartedAt = Date.now();
+  const summary = await generateDocumentSummary("policy", summaryContext, {
+    sourceLanguage: detectedLanguage.languageCode,
+  });
+  const summarySections = parseSummarySections(summary);
+  const suggestedQuestions =
+    questionsFromSummary(summarySections).length > 0
+      ? questionsFromSummary(summarySections)
+      : await generateSuggestedQuestions("policy", summary);
+  const summaryMs = Date.now() - summaryStartedAt;
+
+  await saveTextArtifact(document.id, {
+    language: detectedLanguage,
+    originalText,
+    englishSummary: summary,
+    extractionMethod: "source_html",
+    ocrUsed: false,
+    ocrRequired: false,
+    summaryJson: {
+      ...summarySections,
+      suggestedQuestions,
+    },
+    pdfQuality: {
+      qualityClass: "source_html",
+      sourceUrl: article.url || document.sourceUrl,
+    },
+    metadata: {
+      source: "policyedge",
+      slug,
+      chunks: sourceChunks.length,
+      suggestedQuestions,
+    },
+  });
+
+  const stored = await config.store(
+    sourceChunks.map((chunk) => ({
+      ...chunk,
+      metadata: {
+        ...chunk.metadata,
+        summary,
+      },
+    })),
+  );
+  const chunkPersistenceStartedAt = Date.now();
+  await saveNormalizedChunks(
+    document.id,
+    sourceChunks,
+    detectedLanguage.languageCode,
+  );
+  const chunkPersistenceMs = Date.now() - chunkPersistenceStartedAt;
+  const embeddingInputTokens = sourceChunks.reduce(
+    (sum, chunk) => sum + Math.ceil(String(chunk.content || "").length / 4),
+    0,
+  );
+
+  return {
+    alreadyProcessed: false,
+    summary,
+    chunksStored: stored.chunksStored,
+    totalChunks: sourceChunks.length,
+    document,
+    textArtifact: await getTextArtifact(document.id),
+    textLength: originalText.length,
+    language: detectedLanguage,
+    ocrUsed: false,
+    ocrRequired: false,
+    pdfQuality: { qualityClass: "source_html" },
+    stageMetrics: {
+      indexCheckMs: Number(indexCheckMs || 0),
+      downloadMs,
+      summaryMs,
+      embeddingsMs: Number(stored.metrics?.embeddingsMs || 0),
+      pineconeMs: Number(stored.metrics?.pineconeMs || 0),
+      chunkPersistenceMs,
+      totalMs: Date.now() - Number(totalStartedAt || Date.now()),
+    },
+    usage: {
+      estimated: true,
+      generationInputTokens: Math.ceil(summaryContext.length / 4),
+      generationOutputTokens: Math.ceil(summary.length / 4),
+      embeddingInputTokens,
+      ocrUsed: false,
+    },
+  };
+};
+
 const processDocument = async (documentType, documentId) => {
   const totalStartedAt = Date.now();
   const document = await getDocument(documentType, documentId);
@@ -435,6 +652,13 @@ const processDocument = async (documentType, documentId) => {
         },
       };
     }
+  }
+
+  if (!document.pdfUrl && isExtractableSourceDocument(document)) {
+    return processExtractableSourceDocument(document, config, {
+      totalStartedAt,
+      indexCheckMs,
+    });
   }
 
   if (!document.pdfUrl) {
@@ -632,6 +856,7 @@ module.exports = {
   TYPE_CONFIG,
   getDocument,
   getDocumentContext,
+  isExtractableSourceDocument,
   processDocument,
   getTextArtifact,
   retrievePassages,

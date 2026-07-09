@@ -127,15 +127,31 @@ const upsertPolicy = async (article) => {
   const docId = result.rows[0]?.id;
 
   if (docId) {
-    // Mark as research_ready so the Research button is enabled in the UI.
-    // PolicyEdge articles are HTML-based (no PDF), so readiness is driven by embeddings.
     await query(
-      `UPDATE documents
-       SET research_ready = TRUE,
-           comparison_ready = TRUE,
-           updated_at = NOW()
-       WHERE id = $1`,
-      [docId],
+      `INSERT INTO legislative_document_resources (
+         document_id, label, resource_type, category, url, metadata
+       )
+       VALUES ($1, $2, 'html', $3, $4, $5::jsonb)
+       ON CONFLICT (document_id, url)
+       DO UPDATE SET
+         label = EXCLUDED.label,
+         resource_type = EXCLUDED.resource_type,
+         category = COALESCE(EXCLUDED.category, legislative_document_resources.category),
+         metadata = legislative_document_resources.metadata || EXCLUDED.metadata,
+         last_seen_at = NOW(),
+         updated_at = NOW()`,
+      [
+        docId,
+        "PolicyEdge article",
+        article.category || "Reports/Data Releases",
+        article.url,
+        JSON.stringify({
+          source: "policyedge",
+          slug,
+          mimeType: "text/html",
+          extractable: true,
+        }),
+      ],
     );
   }
 
@@ -220,7 +236,7 @@ const run = async () => {
       const policyId = await upsertPolicy(article);
       if (policyId) {
         inserted += 1;
-        console.log(`    ✓ Upserted as doc id ${policyId} (research_ready=true)`);
+        console.log(`    ✓ Upserted as doc id ${policyId} (research readiness pending processing)`);
       } else {
         updated += 1;
       }

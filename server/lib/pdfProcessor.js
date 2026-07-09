@@ -324,9 +324,19 @@ class PDFProcessor {
       throw error;
     }
     if (!this.openAIClientPromise) {
+      const configuredBaseUrl = process.env.OPENAI_BASE_URL || "";
+      const useConfiguredBaseUrl = !(
+        configuredBaseUrl.includes("generativelanguage.googleapis.com") &&
+        String(process.env.OPENAI_API_KEY || "").startsWith("sk-")
+      );
       this.openAIClientPromise = import("openai").then(
         ({ default: OpenAI }) =>
-          new OpenAI({ apiKey: process.env.OPENAI_API_KEY }),
+          new OpenAI({
+            apiKey: process.env.OPENAI_API_KEY,
+            baseURL: useConfiguredBaseUrl
+              ? configuredBaseUrl || undefined
+              : undefined,
+          }),
       );
     }
     return this.openAIClientPromise;

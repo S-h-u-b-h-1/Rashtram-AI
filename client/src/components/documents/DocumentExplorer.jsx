@@ -19,6 +19,7 @@ import {
 import { formatDate, humanize } from "@/lib/document-links";
 import { DocumentFilters } from "./DocumentFilters";
 import {
+  canPrepareForResearch,
   comparisonDisabledReason,
   useComparison,
 } from "@/context/ComparisonContext";
@@ -51,6 +52,7 @@ const READINESS_LABELS = {
   missing_pdf: "Missing PDF",
   processing_pending: "Processing Pending",
   processing_failed_retriable: "Retry Available",
+  source_extractable_not_processed: "Source Available",
   processing_failed_permanent: "Processing Unavailable",
   ocr_required: "OCR Required",
   unsupported_file_type: "Unsupported File",
@@ -254,10 +256,7 @@ export function DocumentExplorer({
                 document.readiness ||
                 (document.pdfUrl || document.type === "policy" ? "pdf_available" : "source_only");
               const canPrepare =
-                ["comparison_ready", "research_ready", "pdf_available",
-                  "pdf_available_not_processed",
-                  "processing_failed_retriable",
-                  "ocr_required"].includes(readiness);
+                document.researchReady || canPrepareForResearch(document);
               const compareDisabled = comparisonDisabledReason(document);
               return (
                 <article

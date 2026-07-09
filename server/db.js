@@ -441,7 +441,7 @@ const initializeSchema = async () => {
       is_bilingual BOOLEAN NOT NULL DEFAULT FALSE,
       english_summary TEXT,
       extraction_method TEXT NOT NULL CHECK (
-        extraction_method IN ('pdf_text', 'gemini_ocr', 'openai_ocr')
+        extraction_method IN ('pdf_text', 'gemini_ocr', 'openai_ocr', 'source_html')
       ),
       ocr_used BOOLEAN NOT NULL DEFAULT FALSE,
       ocr_required BOOLEAN NOT NULL DEFAULT FALSE,
@@ -462,7 +462,7 @@ const initializeSchema = async () => {
     ALTER TABLE document_text_artifacts
       ADD CONSTRAINT document_text_artifacts_extraction_method_check
       CHECK (
-        extraction_method IN ('pdf_text', 'gemini_ocr', 'openai_ocr')
+        extraction_method IN ('pdf_text', 'gemini_ocr', 'openai_ocr', 'source_html')
       );
 
     CREATE TABLE IF NOT EXISTS source_collection_snapshots (

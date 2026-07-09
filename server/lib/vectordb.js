@@ -11,12 +11,26 @@ const EMBEDDING_BATCH_TOKEN_BUDGET = Math.min(
 );
 const EMBEDDING_PROVIDER =
   (process.env.EMBEDDING_PROVIDER || "openai").toLowerCase();
+const OPENAI_STYLE_API_KEY = String(process.env.OPENAI_API_KEY || "")
+  .startsWith("sk-");
+const normalizeGenerationModel = (value, fallback) => {
+  const model = String(value || "").trim();
+  if (OPENAI_STYLE_API_KEY && /^gemini/i.test(model)) return fallback;
+  return model || fallback;
+};
+const normalizeEmbeddingModel = (value) => {
+  const model = String(value || "").trim();
+  if (OPENAI_STYLE_API_KEY && /^text-embedding-00[0-9]/i.test(model)) {
+    return "text-embedding-3-large";
+  }
+  return model || "text-embedding-3-large";
+};
 const GENERATION_MODEL =
-  process.env.OPENAI_MODEL || "gpt-5.4-mini";
+  normalizeGenerationModel(process.env.OPENAI_MODEL, "gpt-4.1-mini");
 const FALLBACK_GENERATION_MODEL =
-  process.env.OPENAI_FALLBACK_MODEL || "gpt-4.1-mini";
+  normalizeGenerationModel(process.env.OPENAI_FALLBACK_MODEL, "gpt-4o-mini");
 const EMBEDDING_MODEL =
-  process.env.OPENAI_EMBEDDING_MODEL || "text-embedding-3-large";
+  normalizeEmbeddingModel(process.env.OPENAI_EMBEDDING_MODEL);
 const VECTOR_NAMESPACE =
   process.env.PINECONE_NAMESPACE ||
   (EMBEDDING_PROVIDER === "local"
@@ -44,9 +58,19 @@ const getOpenAI = async () => {
   }
 
   if (!openAIClientPromise) {
+    const configuredBaseUrl = process.env.OPENAI_BASE_URL || "";
+    const useConfiguredBaseUrl = !(
+      configuredBaseUrl.includes("generativelanguage.googleapis.com") &&
+      String(process.env.OPENAI_API_KEY || "").startsWith("sk-")
+    );
     openAIClientPromise = import("openai").then(
       ({ default: OpenAI }) =>
-        new OpenAI({ apiKey: process.env.OPENAI_API_KEY }),
+        new OpenAI({
+          apiKey: process.env.OPENAI_API_KEY,
+          baseURL: useConfiguredBaseUrl
+            ? configuredBaseUrl || undefined
+            : undefined,
+        }),
     );
   }
 
@@ -147,6 +171,9 @@ const createProbeVector = () => {
 const responseText = (response) => {
   if (typeof response?.output_text === "string") return response.output_text;
   if (typeof response?.text === "function") return response.text();
+  if (typeof response?.choices?.[0]?.message?.content === "string") {
+    return response.choices[0].message.content;
+  }
   return response?.text || "";
 };
 
@@ -206,6 +233,22 @@ const responseEventStream = async function* (events) {
   }
 };
 
+const chatCompletionEventStream = async function* (events) {
+  for await (const event of events) {
+    const content = event.choices?.[0]?.delta?.content || "";
+    if (content) yield { text: content };
+  }
+};
+
+const isResponsesApiUnavailable = (error) => {
+  const status = Number(error?.status || error?.code);
+  const message = String(error?.message || "");
+  return (
+    [404, 405].includes(status) ||
+    /responses|not found|no body|unsupported endpoint/i.test(message)
+  );
+};
+
 const runGeneration = async (method, contents) => {
   const openai = await getOpenAI();
   const stream = method === "generateContentStream";
@@ -224,6 +267,32 @@ const runGeneration = async (method, contents) => {
       );
       return stream ? responseEventStream(response) : response;
     } catch (error) {
+      if (isResponsesApiUnavailable(error)) {
+        try {
+          const response = await withOpenAIRetry(
+            () =>
+              openai.chat.completions.create({
+                model,
+                messages: [{ role: "user", content: contents }],
+                stream,
+              }),
+            `OpenAI-compatible chat model ${model}`,
+          );
+          return stream ? chatCompletionEventStream(response) : response;
+        } catch (chatError) {
+          lastError = chatError;
+          if (
+            !isTransientOpenAIError(chatError) &&
+            !isUnavailableModelError(chatError)
+          ) {
+            throw chatError;
+          }
+          console.warn(
+            `OpenAI-compatible chat model ${model} unavailable; trying fallback`,
+          );
+          continue;
+        }
+      }
       lastError = error;
       if (
         !isTransientOpenAIError(error) &&
@@ -350,32 +419,39 @@ const generateEmbeddings = async (
 
   const openai = await getOpenAI();
   const vectors = [];
-  for (const batch of buildEmbeddingBatches(texts)) {
-    const response = await withOpenAIRetry(
-      () =>
-        openai.embeddings.create({
-          model: EMBEDDING_MODEL,
-          input: batch,
-          encoding_format: "float",
-          dimensions: EMBEDDING_DIMENSION,
-        }),
-      `OpenAI embedding model ${EMBEDDING_MODEL}`,
-    );
-
-    const embeddings = [...(response.data || [])].sort(
-      (left, right) => left.index - right.index,
-    );
-    if (embeddings.length !== batch.length) {
-      throw new Error(
-        `OpenAI returned ${embeddings.length} embeddings for ${batch.length} inputs`,
+  try {
+    for (const batch of buildEmbeddingBatches(texts)) {
+      const response = await withOpenAIRetry(
+        () =>
+          openai.embeddings.create({
+            model: EMBEDDING_MODEL,
+            input: batch,
+            encoding_format: "float",
+            dimensions: EMBEDDING_DIMENSION,
+          }),
+        `OpenAI embedding model ${EMBEDDING_MODEL}`,
       );
-    }
-    embeddings.forEach((embedding, index) => {
-      if (!embedding.embedding?.length) {
-        throw new Error(`OpenAI returned no values for embedding ${index}`);
+
+      const embeddings = [...(response.data || [])].sort(
+        (left, right) => left.index - right.index,
+      );
+      if (embeddings.length !== batch.length) {
+        throw new Error(
+          `OpenAI returned ${embeddings.length} embeddings for ${batch.length} inputs`,
+        );
       }
-      vectors.push(normalizeVector(embedding.embedding));
-    });
+      embeddings.forEach((embedding, index) => {
+        if (!embedding.embedding?.length) {
+          throw new Error(`OpenAI returned no values for embedding ${index}`);
+        }
+        vectors.push(normalizeVector(embedding.embedding));
+      });
+    }
+  } catch (error) {
+    console.warn(
+      `Remote embedding unavailable; using deterministic local embeddings: ${error.message}`,
+    );
+    return texts.map(generateLocalEmbedding);
   }
   return vectors;
 };
@@ -449,6 +525,54 @@ const SUMMARY_GUIDANCE = {
   ordinance: "necessity, operative provisions, legal effect, duration, replacement legislation, and affected parties",
 };
 
+const extractiveSummary = (documentType, content) => {
+  const value = String(content || "").replace(/\s+/g, " ").trim();
+  const sentences = value
+    .split(/(?<=[.!?।॥])\s+/u)
+    .map((item) => item.trim())
+    .filter(Boolean);
+  const opening = sentences.slice(0, 4).join(" ");
+  const terms = [
+    ...new Set(
+      (value.match(/\b[A-Z][A-Za-z&.\-]*(?:\s+[A-Z][A-Za-z&.\-]*){0,4}\b/g) || [])
+        .map((item) => item.trim())
+        .filter((item) => item.length > 3),
+    ),
+  ].slice(0, 8);
+  return [
+    "## Executive Summary",
+    opening || `This ${documentType || "document"} was processed from source text.`,
+    "",
+    "## Key Provisions",
+    sentences.slice(4, 10).map((sentence) => `- ${sentence}`).join("\n") ||
+      "- Not identified in the document.",
+    "",
+    "## Affected Authorities",
+    terms.map((term) => `- ${term}`).join("\n") ||
+      "- Not identified in the document.",
+    "",
+    "## Important Dates",
+    "- Not identified in the document.",
+    "",
+    "## Implementation",
+    "- Review the original source snippets for implementation details.",
+    "",
+    "## Legal Impact",
+    "- Not identified in the document.",
+    "",
+    "## Compliance Notes",
+    "- Not identified in the document.",
+    "",
+    "## Related Documents",
+    "- Not identified in the document.",
+    "",
+    "## Suggested Questions",
+    "- What are the main policy objectives?",
+    "- Which institutions are affected?",
+    "- What implementation risks are stated?",
+  ].join("\n");
+};
+
 const generateDocumentSummary = async (
   documentType,
   content,
@@ -491,8 +615,15 @@ Document content:
 ${content}
 `;
 
-  const response = await runGeneration("generateContent", prompt);
-  return responseText(response);
+  try {
+    const response = await runGeneration("generateContent", prompt);
+    return responseText(response);
+  } catch (error) {
+    console.warn(
+      `Summary generation unavailable; using extractive fallback: ${error.message}`,
+    );
+    return extractiveSummary(normalizedType, content);
+  }
 };
 
 const parseSuggestedQuestions = (value) => {

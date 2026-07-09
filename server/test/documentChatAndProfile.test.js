@@ -54,15 +54,20 @@ test("unified document chat supports current and future research types", () => {
   assert.throws(() => normalizeType("password"), /Unsupported document type/);
 });
 
-test("RAG adapters share one contract for Bills, Acts, and Gazettes", () => {
-  assert.deepEqual(Object.keys(TYPE_CONFIG), ["bill", "act", "gazette"]);
+test("RAG adapters share one contract for Bills, Acts, Gazettes, and Policies", () => {
+  assert.deepEqual(Object.keys(TYPE_CONFIG), [
+    "bill",
+    "act",
+    "gazette",
+    "policy",
+  ]);
   for (const config of Object.values(TYPE_CONFIG)) {
     assert.equal(typeof config.index, "function");
     assert.equal(typeof config.check, "function");
     assert.equal(typeof config.generateSummary, "function");
     assert.equal(typeof config.search, "function");
     assert.equal(typeof config.store, "function");
-    assert.match(config.idField, /^(bill|act|gazette)Id$/);
+    assert.match(config.idField, /^(bill|act|gazette|policy)Id$/);
   }
 });
 
@@ -105,7 +110,7 @@ test("universal document types use aliases and one retrieval mapping", () => {
   ]);
   assert.equal(retrievalFamilyForType("bill"), "bill");
   assert.equal(retrievalFamilyForType("act"), "act");
-  assert.equal(retrievalFamilyForType("policy"), "gazette");
+  assert.equal(retrievalFamilyForType("policy"), "policy");
 });
 
 test("universal repository filters remain parameterized across all fields", () => {

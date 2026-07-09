@@ -207,6 +207,14 @@ const shapeRecommendation = (row, signals) => {
     pdfUrl: row.pdf_url,
     researchReady: Boolean(row.research_ready),
     comparisonReady: Boolean(row.comparison_ready),
+    hasAccessibleResource: Boolean(row.has_accessible_resource),
+    processingStatus: row.processing_status || null,
+    extractionStatus: row.extraction_status || null,
+    embeddingStatus: row.embedding_status || null,
+    chunksCount: Number(row.chunks_count || 0),
+    embeddingsCount: Number(row.embeddings_count || 0),
+    readinessClass: row.readiness_class || null,
+    readinessReason: row.readiness_reason || null,
     readiness: row.research_ready ? "research_ready" : "pdf_available",
     qualityScore: Number(row.quality_score || 0),
     score,
@@ -314,6 +322,15 @@ const getDocumentRecommendations = async (
        candidate.research_ready, candidate.quality_score,
        candidate.comparison_ready,
        candidate.visibility_status, candidate.metadata_json,
+       state.processing_status, state.extraction_status,
+       state.embedding_status, state.chunks_count, state.embeddings_count,
+       state.readiness_class, state.readiness_reason,
+       EXISTS (
+         SELECT 1 FROM document_resources resource
+         WHERE resource.document_id = candidate.id
+           AND resource.resource_type IN ('pdf', 'text', 'html')
+           AND resource.is_accessible
+       ) AS has_accessible_resource,
        (candidate.ministry IS NOT NULL
          AND candidate.ministry = current.ministry) AS same_ministry,
        (candidate.authority IS NOT NULL
@@ -387,6 +404,7 @@ const getDocumentRecommendations = async (
        ) AS relationship_explanation
      FROM documents candidate
      JOIN legislative_documents legacy ON legacy.id = candidate.id
+     LEFT JOIN document_processing_state state ON state.document_id = candidate.id
      CROSS JOIN current_document current
      WHERE candidate.id <> current.id
        AND candidate.visibility_status = 'public'
@@ -729,10 +747,20 @@ const getRecentRecommendations = async (userId, limit = 12) => {
        ranked.recommended_at, legacy.*, document.state AS schema_state,
        document.research_ready, document.quality_score,
        document.comparison_ready,
-       document.visibility_status, document.metadata_json
+       document.visibility_status, document.metadata_json,
+       state.processing_status, state.extraction_status,
+       state.embedding_status, state.chunks_count, state.embeddings_count,
+       state.readiness_class, state.readiness_reason,
+       EXISTS (
+         SELECT 1 FROM document_resources resource
+         WHERE resource.document_id = document.id
+           AND resource.resource_type IN ('pdf', 'text', 'html')
+           AND resource.is_accessible
+       ) AS has_accessible_resource
      FROM ranked
      JOIN documents document ON document.id = ranked.document_id
      JOIN legislative_documents legacy ON legacy.id = document.id
+     LEFT JOIN document_processing_state state ON state.document_id = document.id
      WHERE ranked.recommendation_rank = 1
        AND document.visibility_status = 'public'
        AND document.research_ready
@@ -759,6 +787,14 @@ const getRecentRecommendations = async (userId, limit = 12) => {
       pdfUrl: row.pdf_url,
       researchReady: true,
       comparisonReady: Boolean(row.comparison_ready),
+      hasAccessibleResource: Boolean(row.has_accessible_resource),
+      processingStatus: row.processing_status || null,
+      extractionStatus: row.extraction_status || null,
+      embeddingStatus: row.embedding_status || null,
+      chunksCount: Number(row.chunks_count || 0),
+      embeddingsCount: Number(row.embeddings_count || 0),
+      readinessClass: row.readiness_class || null,
+      readinessReason: row.readiness_reason || null,
       readiness: "research_ready",
       qualityScore: Number(row.quality_score || 0),
       score: Number(row.score || 0),

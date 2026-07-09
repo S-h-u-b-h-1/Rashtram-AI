@@ -1,6 +1,6 @@
 # Processing Performance Report
 
-Report date: 3 July 2026
+Report date: 9 July 2026
 
 ## Profiled path
 
@@ -46,6 +46,14 @@ increase corpus breadth first without excluding large documents.
 5. Summary and suggested questions required two serial model calls. Suggested
    questions are now generated in the structured summary, with the second call
    retained only as a fallback.
+6. A large multilingual document exceeded OpenAI's 300,000-token aggregate
+   embedding request limit. Embedding requests are now split by both input
+   count and a conservative token estimate. The failed document was resumed
+   from the durable queue and completed with 76 chunks in 91.2 seconds.
+7. Hindi chunks appended the same generated English summary to every embedding
+   input. The multilingual embedding model now receives the original source
+   chunk directly; original text and translated summary remain separate cached
+   artifacts.
 
 ## Measurement notes
 
@@ -57,3 +65,23 @@ explicit. Provider invoices remain the authoritative cost record.
 Throughput and completion estimates are based on the currently observed
 window and stabilize as more attempts finish. Early estimates should not be
 used for capacity commitments.
+
+## 9 July 2026 policy-source profile
+
+The PolicyEdge HTML-source path was verified with a bounded 25-document policy
+batch:
+
+| Metric | Observed value |
+| --- | ---: |
+| Selected policy records | 25 |
+| Ready policy records | 25 |
+| Failed policy records | 0 |
+| Stored chunks per policy | 1-3 |
+| Corpus research/comparison-ready after audit | 499 |
+| Total stored chunks/embeddings after audit | 7,174 / 7,174 |
+
+The current local provider configuration returns 404 for the configured Gemini
+generation/embedding models. The processor therefore used the explicit
+extractive-summary and deterministic-local-embedding fallback path during this
+profile. That kept readiness honest because promotion still required persisted
+chunks, vector references, and retrieval verification.

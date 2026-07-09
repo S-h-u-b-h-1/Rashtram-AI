@@ -27,7 +27,7 @@ back to catalogue metadata or a title-only model response.
 4. Use OCR when native text is insufficient and OCR is supported.
 5. Preserve original Hindi/English text and detect language/script.
 6. Normalize and chunk with Hindi-aware sentence boundaries.
-7. Generate multilingual embeddings.
+7. Generate multilingual embeddings in count- and token-bounded batches.
 8. Store vectors in Pinecone and normalized chunks/vector references in
    PostgreSQL.
 9. Generate and store an English summary separately from original text.
@@ -56,6 +56,11 @@ The canonical state is stored in `document_processing_state`; the strict
 product gates are mirrored to `documents.research_ready` and
 `documents.comparison_ready`.
 
+PolicyEdge policy records are a supported HTML-source path. They start as
+`source_extractable_not_processed`, are fetched through the PolicyEdge
+connector, are stored as `source_html` text artifacts, and are promoted only
+after chunk/vector persistence and retrieval verification succeed.
+
 ## Queue and operational commands
 
 Processing requests are recorded in `document_processing_jobs`. Active jobs
@@ -73,12 +78,18 @@ npm run process:documents --prefix server -- --type=state_bill --limit=100
 npm run process:documents --prefix server -- --type=act --limit=100
 npm run process:documents --prefix server -- --retry-failed
 npm run process:documents --prefix server -- --limit=500 --resume --concurrency=3
+npm run process:policies --prefix server -- --limit=25
 ```
 
 The batch order prioritizes interacted-with documents, comparison selections,
 recommendations, graph degree, policies, Bills, Acts, Gazette records, recency,
 quality, and PDF-size cost efficiency. Use small batches first after any
 provider or pipeline change.
+
+Use `process:policies` for bounded PolicyEdge readiness batches. It selects
+policy records with `source_extractable_not_processed` or retriable processing
+failure states and calls the same Prepare for Research service used by the
+application.
 
 Chunks retain estimated page range, structural type, section/article/rule ID,
 section title, clause ID, source URL, original language, extraction method, and
@@ -90,6 +101,7 @@ PDF quality class. Citations expose those fields in chat and comparison.
 - `OPENAI_API_KEY`
 - `OPENAI_MODEL`
 - `OPENAI_EMBEDDING_MODEL`
+- `EMBEDDING_BATCH_TOKEN_BUDGET` (defaults to a conservative 240,000)
 - `OPENAI_OCR_MODEL`
 - `PINECONE_API_KEY`
 - `PINECONE_INDEX_NAME`
@@ -100,10 +112,16 @@ Secrets belong in ignored local env files and encrypted deployment variables.
 Empty provider variables are configuration failures and must not trigger
 readiness promotion.
 
+If a remote generation or embedding provider is temporarily unavailable, the
+processor may use deterministic local fallbacks for summaries/embeddings so
+source extraction and persistence can continue. These fallbacks are explicitly
+logged. They are an operational resilience path, not a substitute for fixing
+production AI provider configuration.
+
 ## Known operational limitation
 
 The user-triggered Prepare for Research endpoint records a queue job but
 currently performs that job within the request. Large/OCR-heavy PDFs can exceed
-serverless request duration. The CLI is the reliable bounded backfill path;
-moving queue consumption to a durable background worker is recommended before
-running large unattended production batches.
+serverless request duration. The durable PostgreSQL queue is consumed by the
+bounded CLI worker pool and scheduled GitHub Actions workflow for unattended
+backfills; the request path should remain limited to individual documents.

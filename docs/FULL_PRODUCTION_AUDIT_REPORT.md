@@ -1,6 +1,6 @@
 # Full Production Audit Report
 
-Audit date: 3 July 2026
+Audit date: 9 July 2026
 
 ## Scope
 
@@ -12,6 +12,24 @@ dashboard intelligence, profile data, contact/feedback infrastructure,
 scheduled ingestion, source health, and Vercel configuration.
 
 ## Defects found and fixed
+
+### Comparison and policy readiness stabilization
+
+- Removed the PolicyEdge/policy shortcut that could mark policy records
+  research/comparison-ready without normalized processing evidence.
+- Tightened comparison readiness so every document must have public validity,
+  title, usable source, successful processing state, chunks, embeddings, no
+  failure, and `research_ready`/`comparison_ready` flags.
+- Updated the frontend comparison/action gates so source-extractable policies
+  show Prepare for Research instead of broken Research/Compare controls.
+- Added PolicyEdge HTML-source processing through the same research pipeline:
+  safe source fetch, cleanup/language detection, Hindi-aware chunking,
+  summary artifact, embeddings, chunk persistence, vector references, and
+  retrieval-based promotion.
+- Reworked the policy processing route to delegate to the canonical
+  `prepareDocument` service rather than setting readiness directly.
+- Added a policy-specific bounded processor so policy batches do not get
+  starved by older global queue jobs.
 
 ### Data and infrastructure
 
@@ -51,16 +69,21 @@ scheduled ingestion, source health, and Vercel configuration.
 
 ## Verification completed
 
-- Database migration 006 applied successfully.
-- Full readiness audit completed for all 17,744 documents.
-- Safe backfill processed 10/10 retried documents, added 131 chunks, and
-  increased research/comparison-ready totals from 6 to 16.
-- Final readiness state contains 137 chunks and 137 embeddings.
-- Server tests: 112 passed, 1 integration fixture intentionally skipped.
-- Client lint passed.
-- Next.js production build passed with all 21 routes generated.
-- Initial backfill failed closed on an empty Pinecone secret and recorded the
-  failures without false readiness promotion.
+- Database migrations through 008 applied successfully.
+- Full readiness audit completed for all 19,216 documents.
+- PolicyEdge bounded batch processed 25/25 selected policy records
+  successfully.
+- Corpus readiness increased from 465 to 499 research/comparison-ready records
+  after policy processing and audit reconciliation.
+- Final readiness state contains 7,174 chunks and 7,174 embeddings.
+- `npm run catalog:duplicates --prefix server` completed. The first 100
+  duplicate candidate groups contain 370 candidate documents and remain review
+  candidates, not automatic deletions.
+- The local AI provider configuration still returns 404 for the configured
+  Gemini generation/embedding models. Processing failed closed before this
+  sprint; it now logs the provider failure and uses explicit extractive/local
+  fallbacks while still requiring chunk/vector/retrieval evidence before
+  readiness promotion.
 
 ## Production verification
 
@@ -96,6 +119,9 @@ features; authenticated manual smoke testing remains recommended.
   catalogue coverage) and research-ready coverage; metadata fallback remains
   active and reasons remain explicit.
 - Provider credentials previously shared in chat should be rotated.
+- Production AI provider variables should be corrected so generation and
+  embedding use supported model/base URL combinations instead of relying on
+  fallback summaries/embeddings.
 
 ## Duplicate audit
 

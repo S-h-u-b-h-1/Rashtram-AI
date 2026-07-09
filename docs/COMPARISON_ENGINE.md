@@ -7,14 +7,22 @@ orders, notifications, and schemes.
 ## Readiness and retrieval
 
 A document can be compared only when it has a valid title and public source,
-an accessible PDF/text resource, successful extraction, stored chunks,
-successful embeddings, no processing error, and
-successful retrieval verification. Both `documents.research_ready` and
-`documents.comparison_ready` must be true.
+an accessible PDF/text/HTML resource, successful extraction, stored chunks,
+successful embeddings, no processing error, and successful retrieval
+verification. Both `documents.research_ready` and
+`documents.comparison_ready` must be true. Source-only PolicyEdge records do
+not become comparable until their article text has been fetched, chunked,
+embedded, stored, and verified.
 
 The API returns specific `422` errors for unavailable PDFs, pending extraction,
 failed processing, missing extractable text, or an unavailable research
 workspace. It never falls back to title-only generation.
+
+As of 9 July 2026, the comparison readiness check intentionally rejects
+records that are marked ready in metadata but lack normalized processing
+evidence in `document_processing_state`, `document_text_chunks`, and vector
+references. This fixed the previous failure mode where policy records could
+show Compare actions before retrievable grounded content existed.
 
 The engine retrieves passages independently per document, labels them as
 `D1-C1`, `D2-C1`, and so on, generates structured analysis using only those
@@ -52,3 +60,8 @@ one selection it finds similar, same-ministry/state, graph-connected, and
 semantically related documents. With multiple selections it also ranks
 documents that bridge the selection. Recommendation cards expose confidence,
 reason, readiness, and Add to Compare only for comparison-ready records.
+
+Recommendation payloads include the readiness class, processing status,
+extraction status, embedding status, chunk count, embedding count, and disabled
+reason so the frontend can show Prepare for Research / View Source rather than
+a broken Compare button.

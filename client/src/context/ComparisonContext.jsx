@@ -14,20 +14,21 @@ export const comparisonDisabledReason = (document) => {
   ) {
     return document.readinessReason || document.failureReason || "Processing failed";
   }
-  const isPolicyWithEmbeddings =
-    (document.type === "policy" || document.documentType === "policy") &&
-    document.researchReady;
-
-  if (!document.hasAccessibleResource && !document?.pdfUrl && !isPolicyWithEmbeddings) {
+  if (
+    document.readinessClass === "source_extractable_not_processed" ||
+    document.readiness === "source_extractable_not_processed"
+  ) {
+    return "Prepare for Research before comparing";
+  }
+  if (!document.hasAccessibleResource && !document?.pdfUrl) {
     return "PDF unavailable";
   }
-  if (document.extractionStatus && document.extractionStatus !== "ready" && !isPolicyWithEmbeddings) {
+  if (document.extractionStatus && document.extractionStatus !== "ready") {
     return "Text extraction pending";
   }
   if (
     document.extractionStatus === "ready" &&
-    Number(document.chunksCount || 0) <= 0 &&
-    !isPolicyWithEmbeddings
+    Number(document.chunksCount || 0) <= 0
   ) {
     return "No extractable text found";
   }
@@ -36,6 +37,27 @@ export const comparisonDisabledReason = (document) => {
     return document.readinessReason || "Comparison retrieval is unavailable";
   }
   return "";
+};
+
+export const canPrepareForResearch = (document) => {
+  if (!document || document.researchReady) return false;
+  const readiness = document.readinessClass || document.readiness || "";
+  if (
+    [
+      "pdf_available",
+      "pdf_available_not_processed",
+      "source_extractable_not_processed",
+      "processing_failed_retriable",
+      "ocr_required",
+    ].includes(readiness)
+  ) {
+    return true;
+  }
+  return Boolean(document.pdfUrl) || (
+    (document.type === "policy" || document.documentType === "policy") &&
+    String(document.sourceName || document.source || "").toLowerCase().includes("policyedge") &&
+    Boolean(document.sourceUrl)
+  );
 };
 
 export function ComparisonProvider({ children }) {

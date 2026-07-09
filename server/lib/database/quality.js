@@ -76,17 +76,20 @@ const refreshDataQuality = async () => {
           (CASE WHEN dedupe.has_warning THEN 20 ELSE 0 END)
         )
         END::NUMERIC(5, 2) AS score,
-        (
-          d.metadata_json ->> 'qualityDisposition' IS DISTINCT FROM
-            'invalid_navigation'
-          AND
-          d.canonical_url IS NOT NULL
-          AND COALESCE(resources.has_accessible, FALSE)
-          AND ps.processing_status = 'ready'
-          AND ps.extraction_status = 'ready'
-          AND ps.embedding_status = 'ready'
-          AND ps.chunks_count > 0
-          AND ps.error_message IS NULL
+        COALESCE(
+          (
+            d.metadata_json ->> 'qualityDisposition' IS DISTINCT FROM
+              'invalid_navigation'
+            AND
+            d.canonical_url IS NOT NULL
+            AND COALESCE(resources.has_accessible, FALSE)
+            AND ps.processing_status = 'ready'
+            AND ps.extraction_status = 'ready'
+            AND ps.embedding_status = 'ready'
+            AND ps.chunks_count > 0
+            AND ps.error_message IS NULL
+          ),
+          FALSE
         ) AS ready
       FROM documents d
       LEFT JOIN document_processing_state ps ON ps.document_id = d.id

@@ -63,7 +63,7 @@ test("comparison readiness exposes specific disabled reasons", () => {
   );
   assert.equal(
     readinessReason({ processingStatus: null, pdfUrl: null }),
-    "PDF unavailable",
+    "Research workspace unavailable",
   );
   assert.equal(
     readinessReason({
@@ -80,9 +80,12 @@ test("comparison readiness exposes specific disabled reasons", () => {
       title: "Bill",
       pdfUrl: "https://example.test/a.pdf",
       researchReady: true,
+      comparisonReady: true,
+      processingStatus: "ready",
       extractionStatus: "ready",
       embeddingStatus: "ready",
       chunksCount: 3,
+      embeddingsCount: 3,
     }),
     null,
   );
@@ -94,9 +97,11 @@ test("comparison readiness exposes specific disabled reasons", () => {
       researchReady: true,
       comparisonReady: false,
       readinessReason: "Retrieval verification is pending.",
+      processingStatus: "ready",
       extractionStatus: "ready",
       embeddingStatus: "ready",
       chunksCount: 3,
+      embeddingsCount: 3,
     }),
     "Retrieval verification is pending.",
   );
@@ -132,6 +137,7 @@ test("comparison readiness distinguishes pending and unusable text", () => {
       id: "1",
       title: "Policy",
       pdfUrl: "https://example.test/policy.pdf",
+      processingStatus: "ready",
       extractionStatus: "pending",
     }),
     "Text extraction pending",
@@ -141,6 +147,7 @@ test("comparison readiness distinguishes pending and unusable text", () => {
       id: "1",
       title: "Policy",
       pdfUrl: "https://example.test/policy.pdf",
+      processingStatus: "ready",
       extractionStatus: "ready",
       chunksCount: 0,
     }),

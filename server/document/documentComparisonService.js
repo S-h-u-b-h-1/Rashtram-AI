@@ -66,17 +66,23 @@ const normalizeRequest = (payload = {}) => {
 
 const readinessReason = (document) => {
   if (!document) return "Document not found";
+  if (document.visibilityStatus === "hidden_invalid") {
+    return "Invalid or quarantined catalogue record";
+  }
   if (
     document.processingStatus === "failed" ||
     document.extractionStatus === "failed" ||
     document.embeddingStatus === "failed"
   ) {
-    return "Processing failed";
-  }
-  if (!document.hasAccessibleResource && !document.pdfUrl) {
-    return "PDF unavailable";
+    return document.failureReason || document.readinessReason || "Processing failed";
   }
   if (!document.title || !document.id) return "Research workspace unavailable";
+  if (!document.hasAccessibleResource && !document.pdfUrl) {
+    return "No accessible PDF or extractable source is available";
+  }
+  if (document.processingStatus && document.processingStatus !== "ready") {
+    return document.readinessReason || "Document processing is not complete";
+  }
   if (document.extractionStatus && document.extractionStatus !== "ready") {
     return "Text extraction pending";
   }
@@ -92,8 +98,14 @@ const readinessReason = (document) => {
   ) {
     return "Research workspace unavailable";
   }
+  if (
+    document.embeddingStatus === "ready" &&
+    Number(document.embeddingsCount || 0) < Number(document.chunksCount || 0)
+  ) {
+    return "Embeddings are incomplete";
+  }
   if (!document.researchReady) return "Research workspace unavailable";
-  if (document.comparisonReady === false) {
+  if (!document.comparisonReady) {
     return document.readinessReason || "Comparison retrieval is unavailable";
   }
   return null;

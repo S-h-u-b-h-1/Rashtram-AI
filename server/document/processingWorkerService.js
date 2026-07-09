@@ -175,7 +175,14 @@ const enqueueCandidateBatch = async (options = {}) => {
           OR relationship.to_document_id = document.id
      ) graph ON TRUE
      WHERE document.visibility_status = 'public'
-       AND legacy.pdf_url IS NOT NULL
+       AND (
+         legacy.pdf_url IS NOT NULL
+         OR (
+           document.document_type = 'policy'
+           AND COALESCE(legacy.canonical_source, legacy.source_name) = 'policyedge'
+           AND legacy.canonical_url IS NOT NULL
+         )
+       )
        AND ($1::TEXT IS NULL OR document.document_type = $1)
        AND (NOT $2::BOOLEAN OR document.jurisdiction_level = 'state')
        AND (
@@ -233,7 +240,6 @@ const workerLoop = async ({
   sourceConcurrency,
 }) => {
   const results = [];
-  let emptyPolls = 0;
   await updateWorker(workerId, {
     status: "starting",
     concurrency,
@@ -247,12 +253,10 @@ const workerLoop = async ({
          FROM document_processing_jobs
          WHERE status = 'queued' AND next_attempt_at <= NOW()`,
       );
-      if (Number(queued.rows[0]?.jobs || 0) <= 0 || emptyPolls >= 120) break;
-      emptyPolls += 1;
+      if (Number(queued.rows[0]?.jobs || 0) <= 0) break;
       await new Promise((resolve) => setTimeout(resolve, 1_000));
       continue;
     }
-    emptyPolls = 0;
     await updateWorker(workerId, {
       status: "running",
       concurrency,

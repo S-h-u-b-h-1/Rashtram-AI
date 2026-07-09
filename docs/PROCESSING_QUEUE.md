@@ -72,6 +72,16 @@ npm run process:documents --prefix server -- \
   --type=bill --limit=100 --concurrency=3
 ```
 
+Process PolicyEdge-backed policy source articles directly:
+
+```bash
+npm run process:policies --prefix server -- --limit=25
+```
+
+Use the policy-specific command when the goal is policy readiness. The generic
+queue can resume older queued jobs first, even when a type filter is supplied
+for enqueue selection.
+
 Inspect state and performance:
 
 ```bash
@@ -111,3 +121,7 @@ GitHub Actions concurrency prevents overlapping corpus runs. The workflow can
 also be dispatched manually with batch size, worker concurrency, and
 resume-only controls. It requires repository secrets for `DATABASE_URL`,
 `OPENAI_API_KEY`, and `PINECONE_API_KEY`.
+
+GitHub evaluates scheduled workflows only from the repository's default
+branch. The schedule becomes active after the processing workflow is merged
+to `main`; pushes to a feature branch do not activate the cron trigger.

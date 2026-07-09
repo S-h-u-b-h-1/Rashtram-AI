@@ -77,7 +77,8 @@ const enqueueProcessing = async (
      VALUES (
        $1, $2, $3, $4::jsonb,
        NULLIF(LOWER(SUBSTRING((
-         SELECT pdf_url FROM legislative_documents WHERE id = $1
+         SELECT COALESCE(pdf_url, canonical_url, source_url)
+         FROM legislative_documents WHERE id = $1
        ) FROM '^[a-z]+://([^/:]+)')), ''),
        $5
      )
@@ -156,7 +157,8 @@ const prepareDocument = async (
     error.status = 422;
     throw error;
   }
-  if (!document.pdfUrl) {
+  const { isExtractableSourceDocument } = require("./documentResearchService");
+  if (!document.pdfUrl && !isExtractableSourceDocument(document)) {
     const error = new Error(
       document.sourceUrl
         ? "Only a source page is available; no verified PDF can be processed."
@@ -495,77 +497,144 @@ const runReadinessAudit = async () => {
     RETURNING document_id
   `);
   const result = await query(`
+    WITH computed AS (
+      SELECT
+        document.id,
+        document.visibility_status,
+        document.title,
+        document.canonical_url,
+        document.document_type,
+        COALESCE(legacy.canonical_source, legacy.source_name) AS source_name,
+        legacy.pdf_url,
+        legacy.mime_type,
+        state.processing_status,
+        state.extraction_status,
+        state.chunking_status,
+        state.embedding_status,
+        state.summary_status,
+        state.ocr_status,
+        state.error_message,
+        state.failure_reason,
+        state.chunks_count,
+        state.embeddings_count,
+        EXISTS (
+          SELECT 1 FROM document_resources resource
+          WHERE resource.document_id = document.id
+            AND resource.resource_type IN ('pdf', 'text', 'html')
+            AND resource.is_accessible
+        ) AS has_accessible_resource,
+        EXISTS (
+          SELECT 1 FROM document_resources resource
+          WHERE resource.document_id = document.id
+            AND resource.resource_type IN ('text', 'html')
+            AND resource.is_accessible
+        ) AS has_extractable_source_resource
+      FROM document_processing_state state
+      JOIN documents document ON document.id = state.document_id
+      JOIN legislative_documents legacy ON legacy.id = document.id
+    ),
+    readiness AS (
+      SELECT
+        *,
+        (
+          visibility_status = 'public'
+          AND NULLIF(TRIM(title), '') IS NOT NULL
+          AND has_accessible_resource
+          AND processing_status = 'ready'
+          AND extraction_status = 'ready'
+          AND chunking_status = 'ready'
+          AND embedding_status = 'ready'
+          AND chunks_count > 0
+          AND embeddings_count >= chunks_count
+          AND error_message IS NULL
+        ) AS genuinely_ready,
+        (
+          document_type = 'policy'
+          AND source_name = 'policyedge'
+          AND canonical_url IS NOT NULL
+        ) AS extractable_policy_source
+      FROM computed
+    )
     UPDATE document_processing_state state
     SET pdf_status = CASE
-          WHEN legacy.pdf_url IS NOT NULL THEN
+          WHEN readiness.pdf_url IS NOT NULL THEN
             CASE
-              WHEN legacy.mime_type IS NOT NULL
-                AND legacy.mime_type NOT ILIKE '%pdf%'
+              WHEN readiness.mime_type IS NOT NULL
+                AND readiness.mime_type NOT ILIKE '%pdf%'
                 THEN 'unsupported'
               ELSE COALESCE(NULLIF(state.pdf_status, 'unknown'), 'available')
             END
-          WHEN EXISTS (
-            SELECT 1 FROM document_resources resource
-            WHERE resource.document_id = document.id
-              AND resource.resource_type IN ('text', 'html')
-              AND resource.is_accessible
-          ) THEN 'not_required'
+          WHEN readiness.has_extractable_source_resource THEN 'not_required'
           ELSE 'missing'
         END,
-        research_ready = document.research_ready,
-        comparison_ready = document.comparison_ready,
+        research_ready = readiness.genuinely_ready,
+        comparison_ready = readiness.genuinely_ready,
         readiness_class = CASE
-          WHEN document.visibility_status = 'hidden_invalid'
+          WHEN readiness.visibility_status = 'hidden_invalid'
             THEN 'invalid_or_quarantined'
-          WHEN document.comparison_ready THEN 'comparison_ready'
-          WHEN document.research_ready THEN 'research_ready'
-          WHEN legacy.mime_type IS NOT NULL
-            AND legacy.mime_type NOT ILIKE '%pdf%'
-            AND legacy.pdf_url IS NOT NULL
+          WHEN readiness.genuinely_ready THEN 'comparison_ready'
+          WHEN readiness.mime_type IS NOT NULL
+            AND readiness.mime_type NOT ILIKE '%pdf%'
+            AND readiness.pdf_url IS NOT NULL
             THEN 'unsupported_file_type'
-          WHEN state.ocr_status = 'pending' THEN 'ocr_required'
-          WHEN state.processing_status IN ('queued', 'processing')
+          WHEN readiness.ocr_status = 'pending' THEN 'ocr_required'
+          WHEN readiness.processing_status IN ('queued', 'processing')
             THEN 'processing_pending'
-          WHEN state.processing_status = 'failed'
-            AND COALESCE(state.failure_reason, state.error_message, '') ~*
+          WHEN readiness.processing_status = 'failed'
+            AND COALESCE(readiness.failure_reason, readiness.error_message, '') ~*
               '(401|403|404|410|forbidden|not found|invalid pdf|unsupported|no usable text|too large)'
             THEN 'processing_failed_permanent'
-          WHEN state.processing_status = 'failed'
+          WHEN readiness.processing_status = 'failed'
             THEN 'processing_failed_retriable'
-          WHEN legacy.pdf_url IS NOT NULL
+          WHEN readiness.pdf_url IS NOT NULL
             THEN 'pdf_available_not_processed'
-          WHEN document.canonical_url IS NOT NULL THEN 'source_only'
+          WHEN readiness.extractable_policy_source
+            THEN 'source_extractable_not_processed'
+          WHEN readiness.canonical_url IS NOT NULL THEN 'source_only'
           ELSE 'missing_pdf'
         END,
         readiness_reason = CASE
-          WHEN document.visibility_status = 'hidden_invalid'
+          WHEN readiness.visibility_status = 'hidden_invalid'
             THEN 'Invalid or quarantined catalogue record.'
-          WHEN document.research_ready THEN NULL
-          WHEN legacy.mime_type IS NOT NULL
-            AND legacy.mime_type NOT ILIKE '%pdf%'
-            AND legacy.pdf_url IS NOT NULL
+          WHEN readiness.genuinely_ready THEN NULL
+          WHEN readiness.mime_type IS NOT NULL
+            AND readiness.mime_type NOT ILIKE '%pdf%'
+            AND readiness.pdf_url IS NOT NULL
             THEN 'The linked file type is not supported for PDF processing.'
-          WHEN state.ocr_status = 'pending'
+          WHEN readiness.ocr_status = 'pending'
             THEN 'The PDF requires OCR before research passages can be created.'
-          WHEN state.processing_status IN ('queued', 'processing')
+          WHEN readiness.processing_status IN ('queued', 'processing')
             THEN 'Document processing is pending.'
-          WHEN state.processing_status = 'failed'
+          WHEN readiness.processing_status = 'failed'
             THEN COALESCE(
-              state.failure_reason,
-              state.error_message,
+              readiness.failure_reason,
+              readiness.error_message,
               'Document processing failed.'
             )
-          WHEN legacy.pdf_url IS NOT NULL
+          WHEN readiness.pdf_url IS NOT NULL
             THEN 'A PDF is available but has not been processed.'
-          WHEN document.canonical_url IS NOT NULL
+          WHEN readiness.extractable_policy_source
+            THEN 'An extractable source page is available but has not been processed.'
+          WHEN readiness.canonical_url IS NOT NULL
             THEN 'Only a source page is currently available.'
           ELSE 'No accessible PDF or extractable source is available.'
         END,
         updated_at = NOW()
-    FROM documents document
-    JOIN legislative_documents legacy ON legacy.id = document.id
-    WHERE state.document_id = document.id
+    FROM readiness
+    WHERE state.document_id = readiness.id
     RETURNING state.readiness_class
+  `);
+  await query(`
+    UPDATE documents document
+    SET research_ready = state.research_ready,
+        comparison_ready = state.comparison_ready,
+        updated_at = NOW()
+    FROM document_processing_state state
+    WHERE state.document_id = document.id
+      AND (
+        document.research_ready IS DISTINCT FROM state.research_ready
+        OR document.comparison_ready IS DISTINCT FROM state.comparison_ready
+      )
   `);
   const counts = result.rows.reduce((summary, row) => {
     summary[row.readiness_class] =
@@ -606,6 +675,7 @@ const getProcessingStatus = async () => {
         COUNT(*) FILTER (
           WHERE readiness_class IN (
             'pdf_available_not_processed',
+            'source_extractable_not_processed',
             'processing_pending',
             'processing_failed_retriable',
             'ocr_required'
