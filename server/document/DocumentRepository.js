@@ -4,6 +4,7 @@ const {
   isGazetteScope,
   normalizeTypeList,
 } = require("./documentTypes");
+const { sanitizeProviderError } = require("../lib/providerErrorSanitizer");
 
 const clampInteger = (value, fallback, minimum, maximum) => {
   const parsed = Number.parseInt(value, 10);
@@ -612,7 +613,7 @@ const updateProcessingStatus = async (
   error = null,
   details = {},
 ) => {
-  const errorMessage = error ? String(error).slice(0, 1_000) : null;
+  const errorMessage = error ? sanitizeProviderError(error) : null;
   const existingResult = await query(
     `SELECT * FROM document_processing_state WHERE document_id = $1`,
     [id],

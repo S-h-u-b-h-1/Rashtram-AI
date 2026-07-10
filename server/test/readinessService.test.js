@@ -43,6 +43,17 @@ test("PDF failures are classified by permanent and retriable cause", () => {
   assert.equal(timeout.failureStage, "embedding");
   assert.equal(timeout.retriable, true);
   assert.equal(timeout.readinessClass, "processing_failed_retriable");
+
+  const providerBilling = classifyProcessingFailure({
+    message: "429 Your account is not active, please check billing details.",
+    response: { status: 429 },
+  });
+  assert.equal(providerBilling.retriable, true);
+  assert.equal(providerBilling.readinessClass, "processing_failed_retriable");
+  assert.equal(
+    providerBilling.failureReason,
+    "AI generation provider unavailable.",
+  );
 });
 
 test("batch processing recognizes state document aliases", () => {
@@ -190,4 +201,6 @@ test("typed processing batches only claim jobs selected for that batch", () => {
   assert.match(workerSource, /queued\.document_id = ANY\(\$3::BIGINT\[\]\)/);
   assert.match(workerSource, /document_id = ANY\(\$1::BIGINT\[\]\)/);
   assert.match(workerSource, /enqueued\.jobs\.map/);
+  assert.match(workerSource, /isTransientDatabaseError/);
+  assert.match(workerSource, /transient claim failure/);
 });

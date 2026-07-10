@@ -14,6 +14,12 @@ const clamp = (value, fallback, minimum, maximum) => {
     : fallback;
 };
 
+const isTransientDatabaseError = (error) =>
+  /connection terminated|timeout|econnreset|enotfound|terminating connection|connection refused|socket hang up/i
+    .test(String(error?.message || error || ""));
+
+const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
 const workerIdentifier = (index = 0) =>
   `${os.hostname()}:${process.pid}:${index}:${crypto
     .randomBytes(4)
@@ -260,26 +266,60 @@ const workerLoop = async ({
     concurrency,
     metadata: { pid: process.pid, hostname: os.hostname() },
   });
+  let claimFailures = 0;
   while (results.length < jobLimit) {
-    const job = await claimNextJob(
-      workerId,
-      sourceConcurrency,
-      allowedDocumentIds,
-    );
-    if (!job) {
-      const queued = await query(
-        `SELECT COUNT(*)::INTEGER AS jobs
-         FROM document_processing_jobs
-         WHERE status = 'queued'
-           AND next_attempt_at <= NOW()
-           AND (
-             $1::BIGINT[] IS NULL
-             OR document_id = ANY($1::BIGINT[])
-           )`,
-        [allowedDocumentIds],
+    let job;
+    try {
+      job = await claimNextJob(
+        workerId,
+        sourceConcurrency,
+        allowedDocumentIds,
       );
+      claimFailures = 0;
+    } catch (error) {
+      if (!isTransientDatabaseError(error) || claimFailures >= 3) {
+        console.warn(
+          `Worker ${workerId} stopped after job claim failure: ${error.message}`,
+        );
+        break;
+      }
+      claimFailures += 1;
+      console.warn(
+        `Worker ${workerId} transient claim failure ${claimFailures}/3: ${error.message}`,
+      );
+      await wait(1_000 * claimFailures);
+      continue;
+    }
+    if (!job) {
+      let queued;
+      try {
+        queued = await query(
+          `SELECT COUNT(*)::INTEGER AS jobs
+           FROM document_processing_jobs
+           WHERE status = 'queued'
+             AND next_attempt_at <= NOW()
+             AND (
+               $1::BIGINT[] IS NULL
+               OR document_id = ANY($1::BIGINT[])
+             )`,
+          [allowedDocumentIds],
+        );
+      } catch (error) {
+        if (!isTransientDatabaseError(error) || claimFailures >= 3) {
+          console.warn(
+            `Worker ${workerId} stopped after queue count failure: ${error.message}`,
+          );
+          break;
+        }
+        claimFailures += 1;
+        console.warn(
+          `Worker ${workerId} transient queue count failure ${claimFailures}/3: ${error.message}`,
+        );
+        await wait(1_000 * claimFailures);
+        continue;
+      }
       if (Number(queued.rows[0]?.jobs || 0) <= 0) break;
-      await new Promise((resolve) => setTimeout(resolve, 1_000));
+      await wait(1_000);
       continue;
     }
     await updateWorker(workerId, {

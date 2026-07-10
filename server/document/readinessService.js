@@ -1,5 +1,6 @@
 const { query } = require("../db");
 const DocumentRepository = require("./DocumentRepository");
+const { sanitizeProviderError } = require("../lib/providerErrorSanitizer");
 
 const RETRIABLE_FAILURE_PATTERN =
   /timeout|timed out|429|rate limit|temporar|network|econn|reset|503|502|504|unavailable|dns|enotfound/i;
@@ -7,33 +8,34 @@ const PERMANENT_FAILURE_PATTERN =
   /404|410|not found|invalid pdf|corrupted pdf|encrypted pdf|unsupported file|no usable text|insufficient to create|too large for inline ocr/i;
 
 const classifyProcessingFailure = (error, fallbackStage = "processing") => {
-  const message = String(error?.message || error || "Document processing failed.")
+  const rawMessage = String(error?.message || error || "Document processing failed.")
     .normalize("NFKC")
     .slice(0, 2_000);
+  const message = sanitizeProviderError(error);
   const status = Number(error?.response?.status || error?.status || 0);
   let failureStage = fallbackStage;
   if (
     [401, 403, 404, 410, 415].includes(status) ||
-    /pdf|download|401|403|404|410|forbidden|content[- ]type/i.test(message)
+    /pdf|download|401|403|404|410|forbidden|content[- ]type/i.test(rawMessage)
   ) {
     failureStage = "pdf";
-  } else if (/ocr|scanned/i.test(message)) {
+  } else if (/ocr|scanned/i.test(rawMessage)) {
     failureStage = "ocr";
-  } else if (/extract|usable text/i.test(message)) {
+  } else if (/extract|usable text/i.test(rawMessage)) {
     failureStage = "extraction";
-  } else if (/chunk|passage/i.test(message)) {
+  } else if (/chunk|passage/i.test(rawMessage)) {
     failureStage = "chunking";
-  } else if (/embed|pinecone|vector/i.test(message)) {
+  } else if (/embed|pinecone|vector/i.test(rawMessage)) {
     failureStage = "embedding";
-  } else if (/summary|model|openai/i.test(message)) {
+  } else if (/summary|model|openai/i.test(rawMessage)) {
     failureStage = "summary";
   }
   const permanent =
     [401, 403, 404, 410, 415].includes(status) ||
-    PERMANENT_FAILURE_PATTERN.test(message);
+    PERMANENT_FAILURE_PATTERN.test(rawMessage);
   const retriable = !permanent && (
     !status ||
-    RETRIABLE_FAILURE_PATTERN.test(message) ||
+    RETRIABLE_FAILURE_PATTERN.test(rawMessage) ||
     status >= 500
   );
   return {
@@ -673,6 +675,44 @@ const runReadinessAudit = async () => {
         OR document.comparison_ready IS DISTINCT FROM state.comparison_ready
       )
   `);
+  const sanitizedFailures = await query(`
+    WITH unsafe AS (
+      SELECT state.document_id
+      FROM document_processing_state state
+      WHERE COALESCE(
+        state.error_message,
+        state.failure_reason,
+        state.readiness_reason,
+        ''
+      ) ~* '(api[ -]?key|credential|secret|token|authorization|authentication|billing|quota|AQ\\.|sk-)'
+    )
+    UPDATE document_processing_state state
+    SET error_message = CASE
+          WHEN state.error_message IS NULL THEN NULL
+          ELSE 'AI generation provider unavailable.'
+        END,
+        failure_reason = CASE
+          WHEN state.failure_reason IS NULL THEN NULL
+          ELSE 'AI generation provider unavailable.'
+        END,
+        readiness_reason = CASE
+          WHEN state.readiness_reason IS NULL THEN NULL
+          ELSE 'AI generation provider unavailable.'
+        END,
+        updated_at = NOW()
+    FROM unsafe
+    WHERE state.document_id = unsafe.document_id
+    RETURNING state.document_id
+  `);
+  await query(`
+    UPDATE legislative_documents legacy
+    SET processing_error = 'AI generation provider unavailable.',
+        updated_at = NOW()
+    FROM document_processing_state state
+    WHERE state.document_id = legacy.id
+      AND legacy.processing_error ~*
+        '(api[ -]?key|credential|secret|token|authorization|authentication|billing|quota|AQ\\.|sk-)'
+  `);
   const counts = result.rows.reduce((summary, row) => {
     summary[row.readiness_class] =
       (summary[row.readiness_class] || 0) + 1;
@@ -692,6 +732,7 @@ const runReadinessAudit = async () => {
     audited: result.rows.length,
     createdStates: inserted.rows.length,
     reconciledDeadLetters: reconciled.rows.length,
+    sanitizedFailures: sanitizedFailures.rows.length,
     counts,
   };
 };
