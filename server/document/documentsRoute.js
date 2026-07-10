@@ -40,6 +40,28 @@ const selectionKey = (ids) =>
     left.localeCompare(right, undefined, { numeric: true }),
   ).join(":");
 
+const buildExtractiveMultiDocumentFallback = (message, sources) => {
+  const lines = sources
+    .slice(0, 6)
+    .map((source) => {
+      const snippet = String(source.content || "")
+        .normalize("NFKC")
+        .replace(/\s+/g, " ")
+        .trim()
+        .slice(0, 480);
+      return `- ${source.documentTitle || `Document ${source.documentId}`} [Passage ${source.passage}]: ${snippet}`;
+    })
+    .filter((line) => line.length > 16);
+  return [
+    "AI generation is temporarily unavailable, so Rashtram AI is answering from retrieved comparison passages only.",
+    "",
+    `Question: ${message}`,
+    "",
+    "Grounded extractive answer:",
+    lines.length ? lines.join("\n") : "- No suitable passage excerpt was available.",
+  ].join("\n");
+};
+
 const sendError = (res, error, context) => {
   const status = error.status || 500;
   if (status >= 500) console.error(`${context}:`, error);
@@ -254,18 +276,37 @@ router.post("/chat", async (req, res) => {
       },
     });
     const responseLanguage = req.body.responseLanguage || "Auto";
-    const stream = await generateResponse(message, context, {
-      responseLanguage,
-    });
     let fullResponse = "";
-    for await (const chunk of stream) {
-      if (res.destroyed || res.writableEnded) break;
-      const content =
-        typeof chunk.text === "function" ? chunk.text() : chunk.text || "";
-      if (content) {
-        fullResponse += content;
-        sendSSE(res, { type: "content", content });
+    let generationMode = "ai";
+    let providerError = null;
+    try {
+      const stream = await generateResponse(message, context, {
+        responseLanguage,
+      });
+      for await (const chunk of stream) {
+        if (res.destroyed || res.writableEnded) break;
+        const content =
+          typeof chunk.text === "function" ? chunk.text() : chunk.text || "";
+        if (content) {
+          fullResponse += content;
+          sendSSE(res, { type: "content", content });
+        }
       }
+    } catch (generationError) {
+      console.warn(
+        `Cross-document chat generation unavailable; using extractive fallback: ${generationError.message}`,
+      );
+      fullResponse = buildExtractiveMultiDocumentFallback(message, sources);
+      generationMode = "extractive_fallback";
+      providerError = generationError.message;
+      sendSSE(res, { type: "content", content: fullResponse });
+      sendSSE(res, {
+        type: "meta",
+        metadata: {
+          generationMode,
+          providerError,
+        },
+      });
     }
     if (res.destroyed || res.writableEnded) return undefined;
     const now = new Date().toISOString();
@@ -287,6 +328,8 @@ router.post("/chat", async (req, res) => {
           grounded: true,
           documentIds: ids,
           responseLanguage,
+          generationMode,
+          providerError,
         },
       },
     ];

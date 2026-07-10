@@ -22,6 +22,34 @@ const {
 
 const router = express.Router();
 
+const buildExtractiveChatFallback = (message, passages, relationshipSources = []) => {
+  const sourceLines = passages
+    .slice(0, 4)
+    .map((passage, index) => {
+      const snippet = String(passage.content || "")
+        .normalize("NFKC")
+        .replace(/\s+/g, " ")
+        .trim()
+        .slice(0, 520);
+      return `- Source ${index + 1}: ${snippet}`;
+    })
+    .filter((line) => line.length > 12);
+  const relationshipLine = relationshipSources.length
+    ? `\n\nKnowledge graph context was also available from ${relationshipSources.length} relationship source(s).`
+    : "";
+  return [
+    "AI generation is temporarily unavailable, so Rashtram AI is answering from retrieved source passages only.",
+    "",
+    `Question: ${message}`,
+    "",
+    "Grounded extractive answer:",
+    sourceLines.length
+      ? sourceLines.join("\n")
+      : "- No suitable passage excerpt was available.",
+    relationshipLine,
+  ].join("\n");
+};
+
 const identity = (req) => {
   const body = req.body || {};
   const requestQuery = req.query || {};
@@ -393,16 +421,37 @@ router.post("/", async (req, res) => {
       return undefined;
     }
     const responseLanguage = req.body.responseLanguage || "Auto";
-    const stream = await generateResponse(message, context, {
-      responseLanguage,
-    });
-    for await (const chunk of stream) {
-      if (res.destroyed || res.writableEnded) break;
-      const content =
-        typeof chunk.text === "function" ? chunk.text() : chunk.text || "";
-      if (content) {
-        sendSSE(res, { type: "content", content });
+    try {
+      const stream = await generateResponse(message, context, {
+        responseLanguage,
+      });
+      for await (const chunk of stream) {
+        if (res.destroyed || res.writableEnded) break;
+        const content =
+          typeof chunk.text === "function" ? chunk.text() : chunk.text || "";
+        if (content) {
+          sendSSE(res, { type: "content", content });
+        }
       }
+    } catch (generationError) {
+      console.warn(
+        `Unified document chat generation unavailable; using extractive fallback: ${generationError.message}`,
+      );
+      sendSSE(res, {
+        type: "content",
+        content: buildExtractiveChatFallback(
+          message,
+          passages,
+          relationshipContext.sources,
+        ),
+      });
+      sendSSE(res, {
+        type: "meta",
+        metadata: {
+          generationMode: "extractive_fallback",
+          providerError: generationError.message,
+        },
+      });
     }
     if (!res.destroyed && !res.writableEnded) completeSSE(res);
     return undefined;

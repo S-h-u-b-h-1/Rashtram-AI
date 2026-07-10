@@ -913,10 +913,29 @@ const getProcessingStatus = async () => {
 
 const normalizeBatchType = (value) => {
   const type = String(value || "").trim().toLowerCase().replace(/-/g, "_");
-  if (!type) return { type: null, stateOnly: false };
-  if (type === "state_bill") return { type: "bill", stateOnly: true };
-  if (type === "state_act") return { type: "act", stateOnly: true };
-  return { type, stateOnly: false };
+  if (!type) return { type: null, types: null, stateOnly: false };
+  if (type === "state_bill") {
+    return { type: "bill", types: ["bill"], stateOnly: true };
+  }
+  if (type === "state_act") {
+    return { type: "act", types: ["act"], stateOnly: true };
+  }
+  if (type === "gazette") {
+    return {
+      type: "gazette",
+      types: [
+        "gazette",
+        "notification",
+        "rule",
+        "regulation",
+        "order",
+        "circular",
+        "ordinance",
+      ],
+      stateOnly: false,
+    };
+  }
+  return { type, types: [type], stateOnly: false };
 };
 
 const processDocumentBatch = async (options = {}) => {

@@ -97,3 +97,12 @@ client state. Hydrated tray selections are refreshed through
 canonical readiness before auto-running or enabling "Run with these settings."
 If any selected document lacks chunks or verified retrieval, the page shows the
 canonical reason and blocks comparison instead of sending a doomed request.
+# 2026-07-10 Recovery Update
+
+Comparison remains gated by canonical backend readiness. The processing fixes
+increase the set of legitimately comparison-ready documents without faking
+readiness: extracted chunks and verified retrieval are still required.
+
+Processing batches used to be able to process unrelated queued documents, which
+made type-specific comparison backfills unreliable. Worker claiming is now
+scoped to selected batch document IDs.

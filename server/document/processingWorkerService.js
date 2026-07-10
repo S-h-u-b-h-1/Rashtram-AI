@@ -42,7 +42,14 @@ const recoverStaleJobs = async (staleMinutes = 15) => {
   return result.rows.length;
 };
 
-const claimNextJob = async (workerId, sourceConcurrency = 2) => {
+const claimNextJob = async (
+  workerId,
+  sourceConcurrency = 2,
+  allowedDocumentIds = null,
+) => {
+  if (Array.isArray(allowedDocumentIds) && allowedDocumentIds.length === 0) {
+    return null;
+  }
   const result = await query(
     `UPDATE document_processing_jobs job
      SET status = 'running',
@@ -58,6 +65,10 @@ const claimNextJob = async (workerId, sourceConcurrency = 2) => {
        WHERE queued.status = 'queued'
          AND queued.next_attempt_at <= NOW()
          AND (
+           $3::BIGINT[] IS NULL
+           OR queued.document_id = ANY($3::BIGINT[])
+         )
+         AND (
            SELECT COUNT(*)
            FROM document_processing_jobs active
            WHERE active.status = 'running'
@@ -68,7 +79,7 @@ const claimNextJob = async (workerId, sourceConcurrency = 2) => {
        LIMIT 1
      )
      RETURNING job.*`,
-    [workerId, clamp(sourceConcurrency, 2, 1, 4)],
+    [workerId, clamp(sourceConcurrency, 2, 1, 4), allowedDocumentIds],
   );
   return result.rows[0] || null;
 };
@@ -183,7 +194,10 @@ const enqueueCandidateBatch = async (options = {}) => {
            AND legacy.canonical_url IS NOT NULL
          )
        )
-       AND ($1::TEXT IS NULL OR document.document_type = $1)
+       AND (
+         $1::TEXT[] IS NULL
+         OR document.document_type = ANY($1::TEXT[])
+       )
        AND (NOT $2::BOOLEAN OR document.jurisdiction_level = 'state')
        AND (
          ($3::BOOLEAN AND state.readiness_class = 'processing_failed_retriable')
@@ -209,7 +223,7 @@ const enqueueCandidateBatch = async (options = {}) => {
        document.id
      LIMIT $5`,
     [
-      requestedType.type,
+      requestedType.types,
       requestedType.stateOnly,
       retryFailed,
       onlyUnprocessed,
@@ -238,6 +252,7 @@ const workerLoop = async ({
   jobLimit,
   discoverGraph,
   sourceConcurrency,
+  allowedDocumentIds = null,
 }) => {
   const results = [];
   await updateWorker(workerId, {
@@ -246,12 +261,22 @@ const workerLoop = async ({
     metadata: { pid: process.pid, hostname: os.hostname() },
   });
   while (results.length < jobLimit) {
-    const job = await claimNextJob(workerId, sourceConcurrency);
+    const job = await claimNextJob(
+      workerId,
+      sourceConcurrency,
+      allowedDocumentIds,
+    );
     if (!job) {
       const queued = await query(
         `SELECT COUNT(*)::INTEGER AS jobs
          FROM document_processing_jobs
-         WHERE status = 'queued' AND next_attempt_at <= NOW()`,
+         WHERE status = 'queued'
+           AND next_attempt_at <= NOW()
+           AND (
+             $1::BIGINT[] IS NULL
+             OR document_id = ANY($1::BIGINT[])
+           )`,
+        [allowedDocumentIds],
       );
       if (Number(queued.rows[0]?.jobs || 0) <= 0) break;
       await new Promise((resolve) => setTimeout(resolve, 1_000));
@@ -347,6 +372,7 @@ const runWorkerPool = async (options = {}) => {
         concurrency,
         jobLimit,
         discoverGraph: options.discoverGraph !== false,
+        allowedDocumentIds: options.allowedDocumentIds || null,
         sourceConcurrency: clamp(
           options.sourceConcurrency,
           Number(process.env.PROCESSING_SOURCE_CONCURRENCY) || 2,
@@ -372,6 +398,9 @@ const runProcessingBatch = async (options = {}) => {
   const enqueued = options.resume
     ? { selected: 0, jobs: [] }
     : await enqueueCandidateBatch({ ...options, limit: maxJobs });
+  const allowedDocumentIds = options.resume
+    ? null
+    : enqueued.jobs.map((job) => Number(job.document_id)).filter(Boolean);
   if (options.enqueueOnly) {
     return {
       requested: maxJobs,
@@ -385,6 +414,7 @@ const runProcessingBatch = async (options = {}) => {
   const processed = await runWorkerPool({
     ...options,
     maxJobs,
+    allowedDocumentIds,
   });
   return {
     requested: maxJobs,

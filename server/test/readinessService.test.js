@@ -1,5 +1,7 @@
 const assert = require("node:assert/strict");
 const test = require("node:test");
+const fs = require("node:fs");
+const path = require("node:path");
 const {
   classifyProcessingFailure,
   normalizeBatchType,
@@ -10,6 +12,7 @@ const {
 } = require("../document/DocumentRepository");
 const { PDFProcessor } = require("../lib/pdfProcessor");
 const {
+  buildExtractiveSummary,
   parseSummarySections,
 } = require("../document/documentResearchService");
 
@@ -42,10 +45,25 @@ test("PDF failures are classified by permanent and retriable cause", () => {
 test("batch processing recognizes state document aliases", () => {
   assert.deepEqual(normalizeBatchType("state_bill"), {
     type: "bill",
+    types: ["bill"],
     stateOnly: true,
   });
   assert.deepEqual(normalizeBatchType("act"), {
     type: "act",
+    types: ["act"],
+    stateOnly: false,
+  });
+  assert.deepEqual(normalizeBatchType("gazette"), {
+    type: "gazette",
+    types: [
+      "gazette",
+      "notification",
+      "rule",
+      "regulation",
+      "order",
+      "circular",
+      "ordinance",
+    ],
     stateOnly: false,
   });
 });
@@ -127,4 +145,37 @@ test("cached research summaries preserve structured sections", () => {
       key_provisions: "- Duty",
     },
   );
+});
+
+test("extractive fallback summary preserves processing readiness when AI is unavailable", () => {
+  const summary = buildExtractiveSummary(
+    "bill",
+    [
+      "This Bill establishes a statutory authority for implementation and monitoring of the scheme across affected districts.",
+      "The authority shall publish rules, maintain records, and submit annual compliance reports to the State Government.",
+      "Penalties apply where regulated entities fail to provide information required under the prescribed process.",
+    ].join("\n\n"),
+    {
+      sourceLanguage: "en",
+      generationError: new Error("429 billing inactive"),
+    },
+  );
+  const sections = parseSummarySections(summary);
+  assert.match(summary, /extractive fallback/);
+  assert.match(summary, /429 billing inactive/);
+  assert.ok(sections.executive_summary);
+  assert.ok(sections.key_source_excerpts);
+  assert.ok(sections.suggested_questions);
+});
+
+test("typed processing batches only claim jobs selected for that batch", () => {
+  const workerSource = fs.readFileSync(
+    path.join(__dirname, "..", "document", "processingWorkerService.js"),
+    "utf8",
+  );
+  assert.match(workerSource, /allowedDocumentIds/);
+  assert.match(workerSource, /document\.document_type = ANY\(\$1::TEXT\[\]\)/);
+  assert.match(workerSource, /queued\.document_id = ANY\(\$3::BIGINT\[\]\)/);
+  assert.match(workerSource, /document_id = ANY\(\$1::BIGINT\[\]\)/);
+  assert.match(workerSource, /enqueued\.jobs\.map/);
 });

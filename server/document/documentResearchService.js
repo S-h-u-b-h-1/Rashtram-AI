@@ -252,6 +252,101 @@ const questionsFromSummary = (summarySections) =>
     .filter(Boolean)
     .slice(0, 4);
 
+const cleanExcerptLine = (value, maxLength = 420) =>
+  String(value || "")
+    .normalize("NFKC")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, maxLength);
+
+const buildExtractiveSummary = (
+  documentType,
+  sourceText,
+  {
+    sourceLanguage = "und",
+    generationError = null,
+  } = {},
+) => {
+  const excerpts = String(sourceText || "")
+    .split(/\n{2,}|(?<=[।.!?])\s+/u)
+    .map((line) => cleanExcerptLine(line))
+    .filter((line) => line.length >= 80)
+    .slice(0, 6);
+  const fallbackReason = cleanExcerptLine(
+    generationError?.message || generationError || "AI summary unavailable",
+    220,
+  );
+  const excerptLines = excerpts.length
+    ? excerpts.map((excerpt) => `- ${excerpt}`).join("\n")
+    : "- The document text was extracted, but no concise passage could be selected for summary.";
+  return [
+    "## Executive Summary",
+    `Rashtram AI prepared this ${documentType} with an extractive fallback because AI summary generation was unavailable. The research workspace remains grounded in extracted source text.`,
+    "",
+    "## Key Source Excerpts",
+    excerptLines,
+    "",
+    "## Processing Note",
+    `Fallback mode: extractive. Source language: ${sourceLanguage || "und"}. Provider error: ${fallbackReason}.`,
+    "",
+    "## Suggested Questions",
+    "- What are the main obligations or policy changes in this document?",
+    "- Which authorities, institutions, or stakeholders are affected?",
+    "- What dates, deadlines, penalties, or compliance steps are stated?",
+    "- Which source passages support the answer?",
+  ].join("\n");
+};
+
+const safeGenerateSummary = async (documentType, sourceText, options = {}) => {
+  try {
+    const summary = await generateDocumentSummary(documentType, sourceText, options);
+    const usedBuiltInFallback =
+      /\bwas processed from source text\b/i.test(summary) ||
+      /Review the original source snippets/i.test(summary);
+    return {
+      summary,
+      fallback: usedBuiltInFallback,
+      error: usedBuiltInFallback
+        ? new Error("AI summary unavailable; built-in extractive fallback used")
+        : null,
+    };
+  } catch (error) {
+    console.warn(
+      `AI summary unavailable for ${documentType}; using extractive fallback: ${error.message}`,
+    );
+    return {
+      summary: buildExtractiveSummary(documentType, sourceText, {
+        sourceLanguage: options.sourceLanguage,
+        generationError: error,
+      }),
+      fallback: true,
+      error,
+    };
+  }
+};
+
+const safeSuggestedQuestions = async (
+  documentType,
+  summary,
+  summarySections,
+) => {
+  const fromSummary = questionsFromSummary(summarySections);
+  if (fromSummary.length > 0) return fromSummary;
+  try {
+    return await generateSuggestedQuestions(documentType, summary);
+  } catch (error) {
+    console.warn(
+      `Suggested question generation unavailable for ${documentType}; using defaults: ${error.message}`,
+    );
+    return [
+      "What are the main obligations or policy changes?",
+      "Who is affected by this document?",
+      "What dates or compliance steps matter?",
+      "Which source passages support this answer?",
+    ];
+  }
+};
+
 const getDocument = async (documentType, documentId) => {
   const requestedType = normalizeDocumentType(documentType);
   const document = await DocumentRepository.getById(documentId);
@@ -473,14 +568,16 @@ const processExtractableSourceDocument = async (
     .map((chunk) => chunk.content)
     .join("\n\n");
   const summaryStartedAt = Date.now();
-  const summary = await generateDocumentSummary("policy", summaryContext, {
+  const summaryResult = await safeGenerateSummary("policy", summaryContext, {
     sourceLanguage: detectedLanguage.languageCode,
   });
+  const { summary } = summaryResult;
   const summarySections = parseSummarySections(summary);
-  const suggestedQuestions =
-    questionsFromSummary(summarySections).length > 0
-      ? questionsFromSummary(summarySections)
-      : await generateSuggestedQuestions("policy", summary);
+  const suggestedQuestions = await safeSuggestedQuestions(
+    "policy",
+    summary,
+    summarySections,
+  );
   const summaryMs = Date.now() - summaryStartedAt;
 
   await saveTextArtifact(document.id, {
@@ -503,6 +600,8 @@ const processExtractableSourceDocument = async (
       slug,
       chunks: sourceChunks.length,
       suggestedQuestions,
+      summaryFallback: summaryResult.fallback,
+      summaryFallbackReason: summaryResult.error?.message || null,
     },
   });
 
@@ -570,6 +669,7 @@ const processExtractableSourceDocument = async (
       embeddingInputTokens,
       ocrUsed: false,
       retrievalMode: vectorStorageError ? "local_text" : "hybrid",
+      summaryFallback: summaryResult.fallback,
     },
   };
 };
@@ -597,17 +697,22 @@ const processDocument = async (documentType, documentId) => {
       .join("\n\n");
     if (context) {
       const language = pdfProcessor.detectLanguage(context);
-      const summary =
-        storedArtifact?.englishSummary ||
-        existence.summary ||
-        await generateDocumentSummary(documentType, context, {
-          sourceLanguage: language.languageCode,
-        });
+      const summaryResult = storedArtifact?.englishSummary || existence.summary
+        ? {
+            summary: storedArtifact?.englishSummary || existence.summary,
+            fallback: false,
+            error: null,
+          }
+        : await safeGenerateSummary(documentType, context, {
+            sourceLanguage: language.languageCode,
+          });
+      const { summary } = summaryResult;
       const summarySections = parseSummarySections(summary);
-      const suggestedQuestions =
-        questionsFromSummary(summarySections).length > 0
-          ? questionsFromSummary(summarySections)
-          : await generateSuggestedQuestions(documentType, summary);
+      const suggestedQuestions = await safeSuggestedQuestions(
+        documentType,
+        summary,
+        summarySections,
+      );
       await saveTextArtifact(documentId, {
         language,
         originalText: context,
@@ -627,16 +732,24 @@ const processDocument = async (documentType, documentId) => {
           reconstructedFromIndexedChunks: true,
           chunks: matches.length,
           suggestedQuestions,
+          summaryFallback: summaryResult.fallback,
+          summaryFallbackReason: summaryResult.error?.message || null,
         },
       });
-      await Promise.all(
-        matches.map((match) =>
-          config.index().update({
-            id: match.id,
-            metadata: { ...match.metadata, summary },
-          }),
-        ),
-      );
+      try {
+        await Promise.all(
+          matches.map((match) =>
+            config.index().update({
+              id: match.id,
+              metadata: { ...match.metadata, summary },
+            }),
+          ),
+        );
+      } catch (error) {
+        console.warn(
+          `Vector metadata update unavailable for document ${documentId}; preserving local text artifact: ${error.message}`,
+        );
+      }
       await saveNormalizedChunks(
         documentId,
         matches.map((match) => ({
@@ -665,6 +778,7 @@ const processDocument = async (documentType, documentId) => {
           generationOutputTokens: Math.ceil(summary.length / 4),
           embeddingInputTokens: 0,
           ocrUsed: Boolean(matches[0]?.metadata?.ocrUsed),
+          summaryFallback: summaryResult.fallback,
         },
       };
     }
@@ -715,16 +829,18 @@ const processDocument = async (documentType, documentId) => {
     .map((chunk) => chunk.content)
     .join("\n\n");
   const summaryStartedAt = Date.now();
-  const summary = await generateDocumentSummary(
+  const summaryResult = await safeGenerateSummary(
     documentType,
     summaryContext,
     { sourceLanguage: processed.language.languageCode },
   );
+  const { summary } = summaryResult;
   const summarySections = parseSummarySections(summary);
-  const suggestedQuestions =
-    questionsFromSummary(summarySections).length > 0
-      ? questionsFromSummary(summarySections)
-      : await generateSuggestedQuestions(documentType, summary);
+  const suggestedQuestions = await safeSuggestedQuestions(
+    documentType,
+    summary,
+    summarySections,
+  );
   const summaryMs = Date.now() - summaryStartedAt;
   await saveTextArtifact(documentId, {
     language: processed.language,
@@ -741,6 +857,8 @@ const processDocument = async (documentType, documentId) => {
     metadata: {
       ...processed.pdfMetadata,
       suggestedQuestions,
+      summaryFallback: summaryResult.fallback,
+      summaryFallbackReason: summaryResult.error?.message || null,
     },
   });
   const chunks = processed.chunks.map((chunk, index) => ({
@@ -817,6 +935,7 @@ const processDocument = async (documentType, documentId) => {
       embeddingInputTokens,
       ocrUsed: processed.ocrUsed,
       retrievalMode: vectorStorageError ? "local_text" : "hybrid",
+      summaryFallback: summaryResult.fallback,
     },
   };
 };
@@ -1045,6 +1164,7 @@ module.exports = {
   retrievePassages,
   saveTextArtifact,
   saveNormalizedChunks,
+  buildExtractiveSummary,
   parseSummarySections,
   searchAcrossIndexedDocuments,
 };

@@ -48,3 +48,10 @@ Comparison recommendations accept one to five selected IDs. Candidates that
 match more than one selected document receive a bounded bridge boost; verified
 graph links receive a separate bounded boost. Only `comparison_ready`
 candidates can be added.
+# 2026-07-10 Recovery Update
+
+Recommendation quality depends on readiness and valid source coverage. This
+sprint fixed readiness promotion for documents whose extraction succeeds but
+AI-provider summary/question generation fails. As more documents are processed
+through the fallback-safe pipeline, recommendations can include more genuinely
+research-ready and comparison-ready candidates.

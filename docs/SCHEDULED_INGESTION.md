@@ -70,3 +70,17 @@ error diagnostics. Deduplication remains active for every scheduled record.
 - Treat `completed_with_errors` as degraded, not as a silent success.
 - Alert from GitHub workflow failures and inspect `source_health` for
   consecutive failures.
+# 2026-07-10 Recovery Update
+
+Focused PRS health passed: the connector is reachable, parser shape is valid,
+and the latest successful ingestion was fresh at audit time. A focused live PRS
+refresh updated 10 records and found 12 PDF URLs with zero errors. Daily dry-run
+completed across 11 sources with no failed or partial-failed sources.
+
+The all-source health command can run for several minutes because it checks
+every connector with retries and delay. For production triage, prefer focused
+checks such as:
+
+```bash
+npm run ingest:health --prefix server -- --sources=prs-india --timeout-ms=8000 --retries=0 --limit=2 --max-pages=1 --delay-ms=0
+```

@@ -152,3 +152,15 @@ currently performs that job within the request. Large/OCR-heavy PDFs can exceed
 serverless request duration. The durable PostgreSQL queue is consumed by the
 bounded CLI worker pool and scheduled GitHub Actions workflow for unattended
 backfills; the request path should remain limited to individual documents.
+# 2026-07-10 Recovery Update
+
+The processing pipeline now treats AI summary/question generation as
+non-critical. If provider generation fails after text extraction, Rashtram AI
+creates an extractive summary from source text, stores original chunks, and
+allows local text retrieval fallback. This prevents provider billing/model
+errors from blocking research readiness for otherwise valid documents.
+
+Typed processing batches are scoped to the jobs selected by that batch unless
+`--resume` is explicitly used. `--type=gazette` now covers the full Gazette
+family: `gazette`, `notification`, `rule`, `regulation`, `order`, `circular`,
+and `ordinance`.
