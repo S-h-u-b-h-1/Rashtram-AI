@@ -5,6 +5,7 @@ const {
   retrievePassages,
 } = require("./documentResearchService");
 const { generateResponse } = require("../lib/vectordb");
+const { sanitizeProviderError } = require("../lib/providerErrorSanitizer");
 const {
   getRelationshipContext,
 } = require("../graph/knowledgeGraphService");
@@ -434,8 +435,9 @@ router.post("/", async (req, res) => {
         }
       }
     } catch (generationError) {
+      const providerError = sanitizeProviderError(generationError);
       console.warn(
-        `Unified document chat generation unavailable; using extractive fallback: ${generationError.message}`,
+        `Unified document chat generation unavailable; using extractive fallback: ${providerError}`,
       );
       sendSSE(res, {
         type: "content",
@@ -449,7 +451,7 @@ router.post("/", async (req, res) => {
         type: "meta",
         metadata: {
           generationMode: "extractive_fallback",
-          providerError: generationError.message,
+          providerError,
         },
       });
     }

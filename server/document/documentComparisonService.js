@@ -11,6 +11,7 @@ const {
   getComparisonGraphOverlap,
 } = require("../graph/knowledgeGraphService");
 const { generateDocumentComparison } = require("../lib/vectordb");
+const { sanitizeProviderError } = require("../lib/providerErrorSanitizer");
 
 const MODES = new Set([
   "summary",
@@ -197,8 +198,7 @@ const extractiveComparisonFallback = ({
   }));
   return {
     generationMode: "extractive_fallback",
-    generationError: String(generationError?.message || generationError || "")
-      .slice(0, 500),
+    generationError: sanitizeProviderError(generationError),
     language,
     executiveSummary,
     similarities,

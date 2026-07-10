@@ -12,6 +12,9 @@ const {
 } = require("../document/DocumentRepository");
 const { PDFProcessor } = require("../lib/pdfProcessor");
 const {
+  sanitizeProviderError,
+} = require("../lib/providerErrorSanitizer");
+const {
   buildExtractiveSummary,
   parseSummarySections,
 } = require("../document/documentResearchService");
@@ -162,10 +165,19 @@ test("extractive fallback summary preserves processing readiness when AI is unav
   );
   const sections = parseSummarySections(summary);
   assert.match(summary, /extractive fallback/);
-  assert.match(summary, /429 billing inactive/);
+  assert.match(summary, /AI generation provider unavailable/);
+  assert.doesNotMatch(summary, /429 billing inactive/);
   assert.ok(sections.executive_summary);
   assert.ok(sections.key_source_excerpts);
   assert.ok(sections.suggested_questions);
+});
+
+test("provider fallback metadata never exposes raw credentials", () => {
+  const sanitized = sanitizeProviderError(
+    "401 Incorrect API key provided: credential-value-redacted",
+  );
+  assert.equal(sanitized, "AI generation provider unavailable.");
+  assert.doesNotMatch(sanitized, /AQ\.|key|401/i);
 });
 
 test("typed processing batches only claim jobs selected for that batch", () => {

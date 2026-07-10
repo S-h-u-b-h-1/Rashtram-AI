@@ -26,6 +26,7 @@ const {
   storeBillContentInChunks,
   storeEGazetteContentInChunks,
 } = require("../lib/vectordb");
+const { sanitizeProviderError } = require("../lib/providerErrorSanitizer");
 const {
   normalizeDocumentType,
   retrievalFamilyForType,
@@ -273,7 +274,7 @@ const buildExtractiveSummary = (
     .filter((line) => line.length >= 80)
     .slice(0, 6);
   const fallbackReason = cleanExcerptLine(
-    generationError?.message || generationError || "AI summary unavailable",
+    sanitizeProviderError(generationError),
     220,
   );
   const excerptLines = excerpts.length
@@ -311,8 +312,9 @@ const safeGenerateSummary = async (documentType, sourceText, options = {}) => {
         : null,
     };
   } catch (error) {
+    const providerError = sanitizeProviderError(error);
     console.warn(
-      `AI summary unavailable for ${documentType}; using extractive fallback: ${error.message}`,
+      `AI summary unavailable for ${documentType}; using extractive fallback: ${providerError}`,
     );
     return {
       summary: buildExtractiveSummary(documentType, sourceText, {
@@ -320,7 +322,7 @@ const safeGenerateSummary = async (documentType, sourceText, options = {}) => {
         generationError: error,
       }),
       fallback: true,
-      error,
+      error: new Error(providerError),
     };
   }
 };
@@ -335,8 +337,9 @@ const safeSuggestedQuestions = async (
   try {
     return await generateSuggestedQuestions(documentType, summary);
   } catch (error) {
+    const providerError = sanitizeProviderError(error);
     console.warn(
-      `Suggested question generation unavailable for ${documentType}; using defaults: ${error.message}`,
+      `Suggested question generation unavailable for ${documentType}; using defaults: ${providerError}`,
     );
     return [
       "What are the main obligations or policy changes?",

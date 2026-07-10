@@ -7,6 +7,7 @@ const {
   retrievePassages,
 } = require("./documentResearchService");
 const { generateResponse } = require("../lib/vectordb");
+const { sanitizeProviderError } = require("../lib/providerErrorSanitizer");
 const {
   completeSSE,
   errorSSE,
@@ -293,12 +294,12 @@ router.post("/chat", async (req, res) => {
         }
       }
     } catch (generationError) {
+      providerError = sanitizeProviderError(generationError);
       console.warn(
-        `Cross-document chat generation unavailable; using extractive fallback: ${generationError.message}`,
+        `Cross-document chat generation unavailable; using extractive fallback: ${providerError}`,
       );
       fullResponse = buildExtractiveMultiDocumentFallback(message, sources);
       generationMode = "extractive_fallback";
-      providerError = generationError.message;
       sendSSE(res, { type: "content", content: fullResponse });
       sendSSE(res, {
         type: "meta",
