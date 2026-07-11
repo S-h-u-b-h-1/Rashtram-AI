@@ -10,16 +10,6 @@ const EMBEDDING_BATCH_TOKEN_BUDGET = Math.min(
     Number(process.env.EMBEDDING_BATCH_TOKEN_BUDGET || 240_000),
   ),
 );
-const EMBEDDING_PROVIDER =
-  (process.env.EMBEDDING_PROVIDER || "openai").toLowerCase();
-const AI_PROVIDER = String(process.env.AI_PROVIDER || "openai")
-  .trim()
-  .toLowerCase();
-const API_KEY = process.env.OPENAI_API_KEY || process.env.GEMINI_API_KEY;
-const OPENAI_STYLE_API_KEY = String(API_KEY || "")
-  .startsWith("sk-");
-const GEMINI_STYLE_API_KEY = String(API_KEY || "")
-  .startsWith("AIza") || String(API_KEY || "").startsWith("AQ.");
 const normaliseProvider = (value) =>
   String(value || "").trim().toLowerCase().replace(/^google-/, "");
 const isGeminiBaseUrl = (value) =>
@@ -61,14 +51,6 @@ const normalizeEmbeddingModel = (value, provider = EMBEDDING_PROVIDER) => {
   return model || (provider === "gemini" ? "gemini-embedding-001" : "text-embedding-3-large");
 };
 const GENERATION_MODEL =
-  normalizeGenerationModel(
-    process.env.OPENAI_CHAT_MODEL || process.env.OPENAI_MODEL || process.env.GEMINI_MODEL,
-    "gpt-4o-mini",
-  );
-const FALLBACK_GENERATION_MODEL =
-  normalizeGenerationModel(process.env.OPENAI_FALLBACK_MODEL || process.env.GEMINI_FALLBACK_MODEL, "gpt-4o-mini");
-const EMBEDDING_MODEL =
-  normalizeEmbeddingModel(process.env.OPENAI_EMBEDDING_MODEL || process.env.GEMINI_EMBEDDING_MODEL);
   AI_PROVIDER === "gemini"
     ? normalizeGenerationModel(
         process.env.GEMINI_MODEL || process.env.GEMINI_CHAT_MODEL,
@@ -119,27 +101,24 @@ const getPinecone = () => {
 };
 
 const getOpenAI = async () => {
-  if (!API_KEY) {
+  const apiKey = OPENAI_API_KEY || GEMINI_API_KEY;
+  if (!apiKey) {
     throw new Error("OPENAI_API_KEY or GEMINI_API_KEY is required");
-  if (!OPENAI_API_KEY) {
-    throw new Error("OPENAI_API_KEY is required");
   }
 
   if (!openAIClientPromise) {
     let configuredBaseUrl = String(process.env.OPENAI_BASE_URL || "").trim();
-    if (GEMINI_STYLE_API_KEY && !configuredBaseUrl) {
+    if (GEMINI_API_KEY && !configuredBaseUrl) {
       configuredBaseUrl = "https://generativelanguage.googleapis.com/v1beta/openai/";
     }
     const useConfiguredBaseUrl = Boolean(configuredBaseUrl) && !(
       isGeminiBaseUrl(configuredBaseUrl) &&
-      String(API_KEY || "").startsWith("sk-")
-      OPENAI_API_KEY.startsWith("sk-")
+      String(OPENAI_API_KEY || "").startsWith("sk-")
     );
     openAIClientPromise = import("openai").then(
       ({ default: OpenAI }) =>
         new OpenAI({
-          apiKey: API_KEY,
-          apiKey: OPENAI_API_KEY,
+          apiKey: apiKey,
           baseURL: useConfiguredBaseUrl
             ? configuredBaseUrl || undefined
             : undefined,

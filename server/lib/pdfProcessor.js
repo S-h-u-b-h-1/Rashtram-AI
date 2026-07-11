@@ -318,6 +318,12 @@ class PDFProcessor {
   async getOpenAI() {
     const apiKey = process.env.OPENAI_API_KEY || process.env.GEMINI_API_KEY;
     if (!apiKey) {
+      const error = new Error(
+        "OCR is unavailable because OPENAI_API_KEY or GEMINI_API_KEY is not configured.",
+      );
+      error.status = 422;
+      throw error;
+    }
     if (String(process.env.AI_PROVIDER || "").toLowerCase() !== "openai") {
       const error = new Error(
         "OpenAI OCR is disabled because Gemini is the configured AI provider.",
