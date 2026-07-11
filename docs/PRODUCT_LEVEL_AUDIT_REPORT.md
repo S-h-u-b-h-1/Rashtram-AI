@@ -6,9 +6,13 @@ Branch: `main`
 
 ## Executive status
 
+Update, 2026-07-11: production backend is now deployed with Gemini as the active runtime provider. Production health verifies Gemini generation, streaming, and embeddings with `gemini-2.5-flash` and `gemini-embedding-001`. The earlier provider-configuration blocker is therefore resolved for runtime health and SSE streaming.
+
+The remaining rollout risk is corpus processing coverage: the first bounded Gemini smoke processed two bills successfully but selected large/scanned records for other categories. A replacement five-type smoke and a controlled 25-50 document backfill are still required before the full-corpus readiness claim can be expanded.
+
 Rashtram AI is usable for early pilot workflows when users stay within research-ready documents. The product now has a verified fallback path for provider failures, safer processing workers, source health visibility, and a materially larger ready corpus.
 
-The main remaining production risk is AI provider configuration. Summary/chat/comparison generation currently falls back to extractive grounded mode because the configured provider/model calls are failing. This preserves product usability and source grounding, but it is not the intended premium AI experience.
+The main remaining production risk is no longer provider configuration; it is safe scale-out of processing across all document families.
 
 ## Production corpus baseline and final state
 
@@ -212,7 +216,7 @@ Known limitation:
 
 ## Known limitations before pilots
 
-1. Provider/model configuration must be corrected.
+1. Five-type Gemini processing smoke must be completed with successful Parliament Bill, State Bill, Act, Policy, and Gazette-family records.
 2. Processing throughput is still low for the full backlog.
 3. Source blocks are real external constraints and need alternate official mirrors/manual ingestion paths.
 4. Duplicate catalogue groups need a controlled merge/review workflow, not automated destructive merging.
