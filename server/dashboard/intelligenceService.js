@@ -402,6 +402,7 @@ const getGreeting = (name) => {
 };
 
 const getGroundedOverview = async (evidence, fallback) => {
+  if (!process.env.OPENAI_API_KEY && !process.env.GEMINI_API_KEY) return fallback;
   if (!providerConfig().credentialsConfigured) return fallback;
   const key = JSON.stringify(evidence);
   if (

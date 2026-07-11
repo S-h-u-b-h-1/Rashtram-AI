@@ -271,7 +271,7 @@ const prepareDocument = async (
         chunkingStatus: "ready",
         embeddingStatus:
           retrieval.retrievalMode === "local_text" ? "fallback" : "ready",
-        summaryStatus: result.summary ? "ready" : "not_started",
+        summaryStatus: "deferred",
         chunksCount,
         embeddingsCount:
           retrieval.retrievalMode === "local_text" ? 0 : chunksCount,
