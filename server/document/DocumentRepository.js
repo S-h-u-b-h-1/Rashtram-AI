@@ -818,8 +818,12 @@ const updateProcessingStatus = async (
       ocrStatus,
       errorMessage,
       chunksCount,
-      details.embeddingProvider || process.env.OPENAI_EMBEDDING_MODEL || "openai",
-      details.aiProvider || "openai",
+      details.embeddingProvider ||
+        process.env.EMBEDDING_PROVIDER ||
+        process.env.GEMINI_EMBEDDING_MODEL ||
+        process.env.OPENAI_EMBEDDING_MODEL ||
+        "gemini",
+      details.aiProvider || process.env.AI_PROVIDER || "gemini",
       existing.last_processed_at || null,
       pdfStatus,
       chunkingStatus,

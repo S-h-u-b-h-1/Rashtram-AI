@@ -1,5 +1,8 @@
 const { query } = require("../db");
-const { verifyDocumentRelationship } = require("../lib/vectordb");
+const {
+  providerConfig,
+  verifyDocumentRelationship,
+} = require("../lib/vectordb");
 
 const RELATIONSHIP_TYPES = new Set([
   "AMENDS",
@@ -475,7 +478,7 @@ const discoverRelationshipsForDocument = async (
     let relationshipSource = "metadata_heuristic";
     if (
       verifyWithAI &&
-      process.env.OPENAI_API_KEY &&
+      providerConfig().credentialsConfigured &&
       relationship.confidence < 0.9
     ) {
       try {

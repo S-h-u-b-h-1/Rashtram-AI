@@ -64,7 +64,7 @@ test("scanned PDFs use OCR only when native text is insufficient", async () => {
 
   const result = await processor.processPDFByPages("https://example.gov.in/a.pdf");
   assert.equal(result.ocrUsed, true);
-  assert.equal(result.extractionMethod, "openai_ocr");
+  assert.equal(result.extractionMethod, "gemini_ocr");
   assert.equal(result.language.languageCode, "hi");
   assert.match(result.originalText, /मूल हिन्दी पाठ/);
 });

@@ -1,6 +1,9 @@
 const { query } = require("../db");
 const { getActivityInsights } = require("../activity/activityService");
-const { generateDashboardOverview } = require("../lib/vectordb");
+const {
+  generateDashboardOverview,
+  providerConfig,
+} = require("../lib/vectordb");
 const {
   getGraphProfileInsights,
   getKnowledgeGraphMetrics,
@@ -399,7 +402,7 @@ const getGreeting = (name) => {
 };
 
 const getGroundedOverview = async (evidence, fallback) => {
-  if (!process.env.OPENAI_API_KEY) return fallback;
+  if (!providerConfig().credentialsConfigured) return fallback;
   const key = JSON.stringify(evidence);
   if (
     overviewCache.key === key &&

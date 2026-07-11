@@ -283,8 +283,11 @@ const prepareDocument = async (
           artifact.isBilingual || result.language?.isBilingual,
         ),
         embeddingProvider:
-          process.env.OPENAI_EMBEDDING_MODEL || "text-embedding-3-large",
-        aiProvider: "openai",
+          process.env.EMBEDDING_PROVIDER ||
+          process.env.GEMINI_EMBEDDING_MODEL ||
+          process.env.OPENAI_EMBEDDING_MODEL ||
+          "gemini",
+        aiProvider: process.env.AI_PROVIDER || "gemini",
         retrievalVerified: true,
         retrievalMode: retrieval.retrievalMode,
         readinessClass: "comparison_ready",

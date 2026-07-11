@@ -23,7 +23,10 @@ const {
   getComparisonRecommendations,
   getDocumentRecommendations,
 } = require("./recommendationService");
-const { prepareDocument } = require("./readinessService");
+const {
+  enqueueProcessing,
+  prepareDocument,
+} = require("./readinessService");
 const { getDocumentReadiness } = require("./readinessContract");
 
 const router = express.Router();
@@ -508,6 +511,29 @@ router.get("/:id", async (req, res) => {
     if (!document || !readiness) {
       return res.status(404).json({ error: "Document not found." });
     }
+    let backgroundPreparation = null;
+    if (readiness.canPrepare && !readiness.comparisonReady) {
+      try {
+        const job = await enqueueProcessing(req.params.id, req.user.id, {
+          priority: 90,
+          reason: "auto_open_document_detail",
+        });
+        backgroundPreparation = {
+          queued: true,
+          jobId: job?.id || null,
+          status: job?.status || "queued",
+        };
+      } catch (enqueueError) {
+        console.warn(
+          "Automatic document detail preparation enqueue failed:",
+          sanitizeProviderError(enqueueError),
+        );
+        backgroundPreparation = {
+          queued: false,
+          error: "Document preparation could not be queued automatically.",
+        };
+      }
+    }
     const {
       sources = [],
       resources = [],
@@ -525,6 +551,7 @@ router.get("/:id", async (req, res) => {
         relationships,
         recommendations,
         readiness: readinessPayload,
+        backgroundPreparation,
         warnings,
       },
       sources,
@@ -532,6 +559,7 @@ router.get("/:id", async (req, res) => {
       relationships,
       recommendations,
       readiness: readinessPayload,
+      backgroundPreparation,
       warnings,
     });
   } catch (error) {

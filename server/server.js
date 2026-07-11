@@ -120,13 +120,20 @@ app.get("/health", async (req, res) => {
       status: "OK",
       database: "connected",
       aiProvider: aiHealth.aiProvider,
+      embeddingProvider: aiHealth.embeddingProvider,
+      chatModel: aiHealth.chatModel,
+      embeddingModel: aiHealth.embeddingModel,
       chatModelConfigured: aiHealth.chatModelConfigured,
       embeddingModelConfigured: aiHealth.embeddingModelConfigured,
       generationAvailable: aiHealth.generationAvailable,
       embeddingAvailable: aiHealth.embeddingAvailable,
+      streamingAvailable: aiHealth.streamingAvailable,
+      providerLatencyMs: aiHealth.latencyMs,
       aiCheckedAt: aiHealth.checkedAt,
       aiErrors:
-        aiHealth.generationAvailable && aiHealth.embeddingAvailable
+        aiHealth.generationAvailable &&
+        aiHealth.embeddingAvailable &&
+        aiHealth.streamingAvailable
           ? undefined
           : aiHealth.errors,
       timestamp: new Date().toISOString(),

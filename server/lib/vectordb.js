@@ -10,42 +10,67 @@ const EMBEDDING_BATCH_TOKEN_BUDGET = Math.min(
     Number(process.env.EMBEDDING_BATCH_TOKEN_BUDGET || 240_000),
   ),
 );
-const EMBEDDING_PROVIDER =
-  (process.env.EMBEDDING_PROVIDER || "openai").toLowerCase();
-const AI_PROVIDER = String(process.env.AI_PROVIDER || "openai")
-  .trim()
-  .toLowerCase();
-const OPENAI_STYLE_API_KEY = String(process.env.OPENAI_API_KEY || "")
-  .startsWith("sk-");
-const GEMINI_STYLE_API_KEY = String(process.env.OPENAI_API_KEY || "")
-  .startsWith("AQ.");
+const normaliseProvider = (value) =>
+  String(value || "").trim().toLowerCase().replace(/^google-/, "");
 const isGeminiBaseUrl = (value) =>
   String(value || "").includes("generativelanguage.googleapis.com");
-const normalizeGenerationModel = (value, fallback) => {
+const GEMINI_API_KEY = String(process.env.GEMINI_API_KEY || "").trim();
+const OPENAI_API_KEY = String(process.env.OPENAI_API_KEY || "").trim();
+const AI_PROVIDER = normaliseProvider(
+  process.env.AI_PROVIDER || (GEMINI_API_KEY ? "gemini" : "openai"),
+);
+const requestedEmbeddingProvider = normaliseProvider(
+  process.env.EMBEDDING_PROVIDER || AI_PROVIDER,
+);
+const EMBEDDING_PROVIDER =
+  AI_PROVIDER === "gemini" && requestedEmbeddingProvider !== "local"
+    ? "gemini"
+    : requestedEmbeddingProvider;
+const normalizeGenerationModel = (value, fallback, provider = AI_PROVIDER) => {
   const model = String(value || "").trim();
-  if (OPENAI_STYLE_API_KEY && /^gemini/i.test(model)) return fallback;
-  if (GEMINI_STYLE_API_KEY && /^gpt-/i.test(model)) return "gemini-1.5-flash";
+  if (provider === "openai" && /^gemini/i.test(model)) return fallback;
+  if (provider === "gemini" && /^gpt-/i.test(model)) {
+    return process.env.GEMINI_MODEL || "gemini-2.5-flash";
+  }
+  if (provider === "gemini" && /^gemini-1\.5-/i.test(model)) {
+    return "gemini-2.5-flash";
+  }
   return model || fallback;
 };
-const normalizeEmbeddingModel = (value) => {
+const normalizeEmbeddingModel = (value, provider = EMBEDDING_PROVIDER) => {
   const model = String(value || "").trim();
-  if (OPENAI_STYLE_API_KEY && /^text-embedding-00[0-9]/i.test(model)) {
+  if (provider === "openai" && /^text-embedding-00[0-9]/i.test(model)) {
     return "text-embedding-3-large";
   }
-  if (GEMINI_STYLE_API_KEY && /^text-embedding-3/i.test(model)) {
+  if (provider === "gemini" && /^text-embedding-3/i.test(model)) {
     return "text-embedding-004";
   }
-  return model || "text-embedding-3-large";
+  return model || (provider === "gemini" ? "text-embedding-004" : "text-embedding-3-large");
 };
 const GENERATION_MODEL =
-  normalizeGenerationModel(
-    process.env.OPENAI_CHAT_MODEL || process.env.OPENAI_MODEL,
-    "gpt-4.1-mini",
-  );
+  AI_PROVIDER === "gemini"
+    ? normalizeGenerationModel(
+        process.env.GEMINI_MODEL || process.env.GEMINI_CHAT_MODEL,
+        "gemini-2.5-flash",
+        "gemini",
+      )
+    : normalizeGenerationModel(
+        process.env.OPENAI_CHAT_MODEL || process.env.OPENAI_MODEL,
+        "gpt-4.1-mini",
+        "openai",
+      );
 const FALLBACK_GENERATION_MODEL =
-  normalizeGenerationModel(process.env.OPENAI_FALLBACK_MODEL, "gpt-4o-mini");
+  AI_PROVIDER === "gemini"
+    ? normalizeGenerationModel(
+        process.env.GEMINI_FALLBACK_MODEL,
+        "gemini-2.5-flash",
+        "gemini",
+      )
+    : normalizeGenerationModel(process.env.OPENAI_FALLBACK_MODEL, "gpt-4o-mini", "openai");
 const EMBEDDING_MODEL =
-  normalizeEmbeddingModel(process.env.OPENAI_EMBEDDING_MODEL);
+  EMBEDDING_PROVIDER === "gemini"
+    ? normalizeEmbeddingModel(process.env.GEMINI_EMBEDDING_MODEL, "gemini")
+    : normalizeEmbeddingModel(process.env.OPENAI_EMBEDDING_MODEL, "openai");
 const VECTOR_NAMESPACE =
   process.env.PINECONE_NAMESPACE ||
   (EMBEDDING_PROVIDER === "local"
@@ -73,7 +98,7 @@ const getPinecone = () => {
 };
 
 const getOpenAI = async () => {
-  if (!process.env.OPENAI_API_KEY) {
+  if (!OPENAI_API_KEY) {
     throw new Error("OPENAI_API_KEY is required");
   }
 
@@ -81,12 +106,12 @@ const getOpenAI = async () => {
     const configuredBaseUrl = String(process.env.OPENAI_BASE_URL || "").trim();
     const useConfiguredBaseUrl = Boolean(configuredBaseUrl) && !(
       isGeminiBaseUrl(configuredBaseUrl) &&
-      String(process.env.OPENAI_API_KEY || "").startsWith("sk-")
+      OPENAI_API_KEY.startsWith("sk-")
     );
     openAIClientPromise = import("openai").then(
       ({ default: OpenAI }) =>
         new OpenAI({
-          apiKey: process.env.OPENAI_API_KEY,
+          apiKey: OPENAI_API_KEY,
           baseURL: useConfiguredBaseUrl
             ? configuredBaseUrl || undefined
             : undefined,
@@ -95,6 +120,56 @@ const getOpenAI = async () => {
   }
 
   return openAIClientPromise;
+};
+
+const geminiModelPath = (model) => {
+  const value = String(model || "").trim();
+  return value.startsWith("models/") ? value : `models/${value}`;
+};
+
+const geminiEndpoint = (model, action, { stream = false } = {}) => {
+  const baseUrl = String(
+    process.env.GEMINI_BASE_URL ||
+      "https://generativelanguage.googleapis.com/v1beta",
+  ).replace(/\/+$/, "");
+  const params = new URLSearchParams({ key: GEMINI_API_KEY });
+  if (stream) params.set("alt", "sse");
+  return `${baseUrl}/${geminiModelPath(model)}:${action}?${params.toString()}`;
+};
+
+const geminiFetch = async (model, action, body, options = {}) => {
+  if (!GEMINI_API_KEY) {
+    const error = new Error("GEMINI_API_KEY is required");
+    error.status = 503;
+    throw error;
+  }
+  const timeoutMs = Number(options.timeoutMs || process.env.AI_REQUEST_TIMEOUT_MS || 60_000);
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const response = await fetch(
+      geminiEndpoint(model, action, { stream: options.stream }),
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+        signal: controller.signal,
+      },
+    );
+    if (!response.ok) {
+      const payload = await response.json().catch(() => ({}));
+      const error = new Error(
+        payload.error?.message ||
+          `Gemini ${action} request failed with status ${response.status}`,
+      );
+      error.status = response.status;
+      error.provider = "gemini";
+      throw error;
+    }
+    return options.stream ? response : response.json();
+  } finally {
+    clearTimeout(timeout);
+  }
 };
 
 const normalizeVector = (values) => {
@@ -194,6 +269,10 @@ const responseText = (response) => {
   if (typeof response?.choices?.[0]?.message?.content === "string") {
     return response.choices[0].message.content;
   }
+  const geminiParts = response?.candidates?.[0]?.content?.parts;
+  if (Array.isArray(geminiParts)) {
+    return geminiParts.map((part) => part.text || "").join("");
+  }
   return response?.text || "";
 };
 
@@ -239,8 +318,19 @@ const withOpenAIRetry = async (operation, label, attempts = 3) => {
 const generationModels = () =>
   [...new Set([GENERATION_MODEL, FALLBACK_GENERATION_MODEL])].filter(Boolean);
 
+const providerCredentialsConfigured = () =>
+  AI_PROVIDER === "gemini" ? Boolean(GEMINI_API_KEY) : Boolean(OPENAI_API_KEY);
+
+const embeddingCredentialsConfigured = () => {
+  if (EMBEDDING_PROVIDER === "local") return true;
+  return EMBEDDING_PROVIDER === "gemini"
+    ? Boolean(GEMINI_API_KEY)
+    : Boolean(OPENAI_API_KEY);
+};
+
 const providerConfig = () => ({
   aiProvider: AI_PROVIDER,
+  embeddingProvider: EMBEDDING_PROVIDER,
   openaiBaseUrlConfigured: Boolean(String(process.env.OPENAI_BASE_URL || "").trim()),
   usingGeminiCompatibleEndpoint: isGeminiBaseUrl(process.env.OPENAI_BASE_URL),
   chatModel: GENERATION_MODEL,
@@ -249,7 +339,8 @@ const providerConfig = () => ({
   embeddingDimension: EMBEDDING_DIMENSION,
   chatModelConfigured: Boolean(GENERATION_MODEL),
   embeddingModelConfigured: Boolean(EMBEDDING_MODEL),
-  credentialsConfigured: Boolean(process.env.OPENAI_API_KEY),
+  credentialsConfigured: providerCredentialsConfigured(),
+  embeddingCredentialsConfigured: embeddingCredentialsConfigured(),
 });
 
 const validateAIProvider = async ({ force = false } = {}) => {
@@ -265,51 +356,78 @@ const validateAIProvider = async ({ force = false } = {}) => {
   const config = providerConfig();
   const health = {
     aiProvider: config.aiProvider,
+    embeddingProvider: config.embeddingProvider,
+    chatModel: config.chatModel,
+    embeddingModel: config.embeddingModel,
     chatModelConfigured: config.chatModelConfigured,
     embeddingModelConfigured: config.embeddingModelConfigured,
     generationAvailable: false,
     embeddingAvailable: false,
+    streamingAvailable: false,
+    latencyMs: {},
     checkedAt: new Date().toISOString(),
     errors: {},
   };
 
   if (!config.credentialsConfigured) {
-    health.errors.generation = "OPENAI_API_KEY is not configured.";
-    health.errors.embedding = "OPENAI_API_KEY is not configured.";
+    health.errors.generation = `${AI_PROVIDER.toUpperCase()} credentials are not configured.`;
+  }
+  if (!config.embeddingCredentialsConfigured) {
+    health.errors.embedding = `${EMBEDDING_PROVIDER.toUpperCase()} embedding credentials are not configured.`;
+  }
+  if (!config.credentialsConfigured || !config.embeddingCredentialsConfigured) {
     aiHealthCache = { ...aiHealthCache, checkedAt: now, result: health };
     return health;
   }
 
   try {
+    const started = Date.now();
     const response = await runGeneration(
       "generateContent",
       "Reply with exactly: OK",
     );
     health.generationAvailable = Boolean(responseText(response).trim());
+    health.latencyMs.generation = Date.now() - started;
   } catch (error) {
     health.errors.generation = sanitizeProviderError(error);
   }
 
   try {
-    const openai = await getOpenAI();
-    const response = await withOpenAIRetry(
-      () =>
-        openai.embeddings.create({
-          model: EMBEDDING_MODEL,
-          input: ["Rashtram AI provider health check"],
-          encoding_format: "float",
-          dimensions: EMBEDDING_DIMENSION,
-        }),
-      `OpenAI embedding model ${EMBEDDING_MODEL}`,
-      1,
-    );
-    const vector = response.data?.[0]?.embedding || [];
+    const started = Date.now();
+    const vector = (
+      await generateEmbeddings(
+        ["Rashtram AI provider health check"],
+        "RETRIEVAL_QUERY",
+        { allowLocalFallback: false },
+      )
+    )[0] || [];
     health.embeddingAvailable = vector.length === EMBEDDING_DIMENSION;
+    health.latencyMs.embedding = Date.now() - started;
     if (!health.embeddingAvailable) {
       health.errors.embedding = `Embedding dimension mismatch: ${vector.length || 0}`;
     }
   } catch (error) {
     health.errors.embedding = sanitizeProviderError(error);
+  }
+
+  try {
+    const started = Date.now();
+    const stream = await runGeneration(
+      "generateContentStream",
+      "Reply with exactly: OK",
+    );
+    for await (const chunk of stream) {
+      if (chunk.text) {
+        health.streamingAvailable = true;
+        break;
+      }
+    }
+    health.latencyMs.streaming = Date.now() - started;
+    if (!health.streamingAvailable) {
+      health.errors.streaming = "Streaming response returned no text.";
+    }
+  } catch (error) {
+    health.errors.streaming = sanitizeProviderError(error);
   }
 
   aiHealthCache = { ...aiHealthCache, checkedAt: now, result: health };
@@ -337,6 +455,42 @@ const chatCompletionEventStream = async function* (events) {
   }
 };
 
+const geminiEventStream = async function* (response) {
+  const reader = response.body?.getReader?.();
+  if (!reader) throw new Error("Gemini streaming response body is unavailable.");
+  const decoder = new TextDecoder();
+  let buffer = "";
+
+  while (true) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    const lines = buffer.split(/\r?\n/);
+    buffer = lines.pop() || "";
+
+    for (const line of lines) {
+      if (!line.startsWith("data:")) continue;
+      const raw = line.slice(5).trim();
+      if (!raw || raw === "[DONE]") continue;
+      const event = JSON.parse(raw);
+      const parts = event.candidates?.[0]?.content?.parts || [];
+      const text = parts.map((part) => part.text || "").join("");
+      if (text) yield { text };
+    }
+  }
+
+  const tail = buffer.trim();
+  if (tail.startsWith("data:")) {
+    const raw = tail.slice(5).trim();
+    if (raw && raw !== "[DONE]") {
+      const event = JSON.parse(raw);
+      const parts = event.candidates?.[0]?.content?.parts || [];
+      const text = parts.map((part) => part.text || "").join("");
+      if (text) yield { text };
+    }
+  }
+};
+
 const isResponsesApiUnavailable = (error) => {
   const status = Number(error?.status || error?.code);
   const message = String(error?.message || "");
@@ -347,6 +501,43 @@ const isResponsesApiUnavailable = (error) => {
 };
 
 const runGeneration = async (method, contents) => {
+  if (AI_PROVIDER === "gemini") {
+    const stream = method === "generateContentStream";
+    let lastError;
+    for (const model of generationModels()) {
+      try {
+        const response = await withOpenAIRetry(
+          () =>
+            geminiFetch(
+              model,
+              stream ? "streamGenerateContent" : "generateContent",
+              {
+                contents: [
+                  {
+                    role: "user",
+                    parts: [{ text: String(contents || "") }],
+                  },
+                ],
+              },
+              { stream },
+            ),
+          `Gemini model ${model}`,
+        );
+        return stream ? geminiEventStream(response) : response;
+      } catch (error) {
+        lastError = error;
+        if (
+          !isTransientOpenAIError(error) &&
+          !isUnavailableModelError(error)
+        ) {
+          throw error;
+        }
+        console.warn(`Gemini model ${model} unavailable; trying fallback`);
+      }
+    }
+    throw lastError;
+  }
+
   const openai = await getOpenAI();
   const stream = method === "generateContentStream";
   let lastError;
@@ -503,20 +694,52 @@ const checkPolicyExists = async (policyId) => {
 const generateEmbeddings = async (
   texts,
   taskType = "RETRIEVAL_DOCUMENT",
+  { allowLocalFallback = true } = {},
 ) => {
   if (!Array.isArray(texts) || texts.length === 0) return [];
   if (EMBEDDING_PROVIDER === "local") {
     return texts.map(generateLocalEmbedding);
   }
-  if (EMBEDDING_PROVIDER !== "openai") {
+  if (!["openai", "gemini"].includes(EMBEDDING_PROVIDER)) {
     throw new Error(
       `Unsupported EMBEDDING_PROVIDER: ${EMBEDDING_PROVIDER}`,
     );
   }
 
-  const openai = await getOpenAI();
   const vectors = [];
   try {
+    if (EMBEDDING_PROVIDER === "gemini") {
+      for (const batch of buildEmbeddingBatches(texts, { maxInputs: 100 })) {
+        const response = await withOpenAIRetry(
+          () =>
+            geminiFetch(EMBEDDING_MODEL, "batchEmbedContents", {
+              requests: batch.map((text) => ({
+                model: geminiModelPath(EMBEDDING_MODEL),
+                content: { parts: [{ text: String(text || "") }] },
+                taskType,
+                outputDimensionality: EMBEDDING_DIMENSION,
+              })),
+            }),
+          `Gemini embedding model ${EMBEDDING_MODEL}`,
+        );
+
+        const embeddings = response.embeddings || [];
+        if (embeddings.length !== batch.length) {
+          throw new Error(
+            `Gemini returned ${embeddings.length} embeddings for ${batch.length} inputs`,
+          );
+        }
+        embeddings.forEach((embedding, index) => {
+          if (!embedding.values?.length) {
+            throw new Error(`Gemini returned no values for embedding ${index}`);
+          }
+          vectors.push(normalizeVector(embedding.values));
+        });
+      }
+      return vectors;
+    }
+
+    const openai = await getOpenAI();
     for (const batch of buildEmbeddingBatches(texts)) {
       const response = await withOpenAIRetry(
         () =>
@@ -545,8 +768,9 @@ const generateEmbeddings = async (
       });
     }
   } catch (error) {
+    if (!allowLocalFallback) throw error;
     console.warn(
-      `Remote embedding unavailable; using deterministic local embeddings: ${error.message}`,
+      `Remote ${EMBEDDING_PROVIDER} embedding unavailable; using deterministic local embeddings: ${error.message}`,
     );
     return texts.map(generateLocalEmbedding);
   }
