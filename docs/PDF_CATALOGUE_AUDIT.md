@@ -59,3 +59,10 @@ Date: 2026-07-10
 - Repair or replace known 404 source URLs where official alternate URLs exist.
 - Run resource validation reports after larger processing batches.
 - Keep permanent failures blocked until resource status is corrected.
+# 2026-07-11 recovery update
+
+The full catalogue audit classified stored resource and chunk evidence for 19,237 rows and synchronized stale ready flags back to the canonical `documents` table.
+
+Document `186` has four accessible PDF resources but zero text chunks, so it is now classified as `processable_unprocessed` with `reasonCode=no_chunks`. It is not comparison-ready until preparation creates chunks and verifies retrieval.
+
+The audit does not claim a PDF is valid unless the stored resource catalogue marks it accessible. Future PDF validation should continue in bounded worker batches, not in public request handlers.

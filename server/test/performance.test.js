@@ -7,6 +7,7 @@ const {
   buildEmbeddingBatches,
   estimateEmbeddingTokens,
   generateLocalEmbedding,
+  providerConfig,
 } = require("../lib/vectordb");
 
 test("catalogue filter construction remains bounded under repeated requests", () => {
@@ -47,4 +48,14 @@ test("embedding batches stay below the configured token budget", () => {
   assert.deepEqual(batches.map((batch) => batch.length), [1, 1, 1]);
   assert.equal(estimateEmbeddingTokens(texts[0]), 4_000);
   assert.equal(estimateEmbeddingTokens(texts[1]), 6_000);
+});
+
+test("AI provider config reports model readiness without exposing secrets", () => {
+  const config = providerConfig();
+  assert.equal(typeof config.aiProvider, "string");
+  assert.equal(typeof config.chatModelConfigured, "boolean");
+  assert.equal(typeof config.embeddingModelConfigured, "boolean");
+  assert.ok(!Object.keys(config).some((key) => /api.*key|secret|token/i.test(key)));
+  assert.ok(!JSON.stringify(config).includes("sk-"));
+  assert.ok(!JSON.stringify(config).includes("AQ."));
 });

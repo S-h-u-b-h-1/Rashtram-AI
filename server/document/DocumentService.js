@@ -54,43 +54,110 @@ const getFilterOptions = async (options = {}) => {
   return value;
 };
 
+const optionalDetail = async (label, warnings, loader, fallback) => {
+  try {
+    const value = await loader();
+    return value ?? fallback;
+  } catch (error) {
+    const warning = {
+      code: `${label}_unavailable`,
+      message: `${label.replace(/_/g, " ")} could not be loaded.`,
+    };
+    warnings.push(warning);
+    console.warn(`Document detail optional segment failed (${label}):`, {
+      message: error.message,
+      code: error.code || null,
+    });
+    return fallback;
+  }
+};
+
 const getById = async (id, userId = null) => {
   const document = await DocumentRepository.getById(id);
   if (!document) return null;
-  const [resources, relationships, recommendations, relatedChats, summary] =
+  const warnings = [];
+  const [sources, resources, relationships, recommendations, relatedChats, summary] =
     await Promise.all([
-      DocumentRepository.getResources(document.id),
-      DocumentRepository.getRelated(document.id),
-      DocumentRepository.getRecommendations(
-        document.id,
-        userId,
-        8,
-        document.type === "bill" ? { type: "bill" } : {},
+      optionalDetail(
+        "sources",
+        warnings,
+        () => DocumentRepository.getSources(document.id),
+        [],
       ),
-      DocumentRepository.getRelatedChats(document.id, userId),
-      DocumentRepository.getSummary(document.id, userId),
+      optionalDetail(
+        "resources",
+        warnings,
+        () => DocumentRepository.getResources(document.id),
+        [],
+      ),
+      optionalDetail(
+        "relationships",
+        warnings,
+        async () =>
+          (await DocumentRepository.getRelated(document.id))
+            .map(DocumentRepository.mapRelationshipSafely),
+        [],
+      ),
+      optionalDetail(
+        "recommendations",
+        warnings,
+        () =>
+          DocumentRepository.getRecommendations(
+            document.id,
+            userId,
+            8,
+            document.type === "bill" ? { type: "bill" } : {},
+          ),
+        [],
+      ),
+      optionalDetail(
+        "related_chats",
+        warnings,
+        () => DocumentRepository.getRelatedChats(document.id, userId),
+        [],
+      ),
+      optionalDetail(
+        "summary",
+        warnings,
+        () => DocumentRepository.getSummary(document.id, userId),
+        null,
+      ),
     ]);
   const [timeline, graph] = await Promise.all([
-    DocumentRepository.getTimeline(
-      document.id,
-      document,
-      relationships,
+    optionalDetail(
+      "timeline",
+      warnings,
+      () =>
+        DocumentRepository.getTimeline(
+          document.id,
+          document,
+          relationships,
+        ),
+      [],
     ),
-    DocumentRepository.getGraph(
-      document.id,
-      document,
-      relationships,
+    optionalDetail(
+      "graph",
+      warnings,
+      () =>
+        DocumentRepository.getGraph(
+          document.id,
+          document,
+          relationships,
+        ),
+      { nodes: [], edges: [] },
     ),
   ]);
   return {
     ...document,
     summary,
+    sources,
     resources,
     relationships,
     recommendations,
     relatedChats,
     timeline,
     graph,
+    warnings,
   };
 };
 

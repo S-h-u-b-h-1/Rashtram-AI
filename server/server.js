@@ -31,6 +31,7 @@ const internalCronRouter = require("./internal/cronRoute");
 const recommendationsRouter = require("./recommendation/recommendationsRoute");
 const graphRouter = require("./graph/route");
 const { connectDB } = require("./db");
+const { validateAIProvider } = require("./lib/vectordb");
 const cors = require("cors");
 const {
   generalLimiter,
@@ -109,11 +110,25 @@ app.get("/", (req, res) => {
 
 app.get("/health", async (req, res) => {
   try {
-    await connectDB();
+    const [, aiHealth] = await Promise.all([
+      connectDB(),
+      validateAIProvider({
+        force: String(req.query?.forceAiCheck || "") === "1",
+      }),
+    ]);
     res.status(200).json({
       status: "OK",
       database: "connected",
-      aiProvider: "openai",
+      aiProvider: aiHealth.aiProvider,
+      chatModelConfigured: aiHealth.chatModelConfigured,
+      embeddingModelConfigured: aiHealth.embeddingModelConfigured,
+      generationAvailable: aiHealth.generationAvailable,
+      embeddingAvailable: aiHealth.embeddingAvailable,
+      aiCheckedAt: aiHealth.checkedAt,
+      aiErrors:
+        aiHealth.generationAvailable && aiHealth.embeddingAvailable
+          ? undefined
+          : aiHealth.errors,
       timestamp: new Date().toISOString(),
     });
   } catch (error) {

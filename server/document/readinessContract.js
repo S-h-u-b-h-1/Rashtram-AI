@@ -21,6 +21,7 @@ const getDocumentReadiness = async (documentId) => {
   );
   const resourceResult = await query(
     `SELECT
+       COUNT(*)::INTEGER AS resources,
        BOOL_OR(resource_type IN ('pdf', 'text', 'html') AND is_accessible)
          AS has_accessible_resource,
        BOOL_OR(resource_type = 'pdf' AND is_accessible) AS has_pdf,
@@ -35,6 +36,7 @@ const getDocumentReadiness = async (documentId) => {
   const chunkCount = Number(counts.chunks || 0);
   const textChunkCount = Number(counts.text_chunks || 0);
   const vectorRefs = Number(counts.vector_refs || 0);
+  const resourceCount = Number(resources.resources || 0);
   const embeddings = Number(document.embeddingsCount || 0);
   const hasChunks = chunkCount > 0 && textChunkCount > 0;
   const hasVectorRetrieval =
@@ -70,16 +72,20 @@ const getDocumentReadiness = async (documentId) => {
 
   let status = "not_ready";
   let reason = null;
+  let reasonCode = null;
   if (genuinelyReady) {
     status = "ready";
   } else if (document.visibilityStatus === "hidden_invalid") {
-    status = "failed";
+    status = "quarantined";
+    reasonCode = "invalid_or_quarantined";
     reason = "Invalid or quarantined catalogue record.";
   } else if (processing) {
     status = "processing";
+    reasonCode = "processing";
     reason = "Document processing is in progress.";
   } else if (failed) {
     status = "failed";
+    reasonCode = document.failureStage || "processing_failed";
     reason =
       document.failureReason ||
       document.readinessReason ||
@@ -87,18 +93,23 @@ const getDocumentReadiness = async (documentId) => {
       "Document processing failed.";
   } else if (!processableBySource) {
     status = document.sourceUrl ? "source_only" : "not_ready";
+    reasonCode = document.sourceUrl ? "source_only" : "no_source";
     reason = document.sourceUrl
       ? "Only a source page is currently available."
       : "No accessible PDF, text, or extractable source is available.";
   } else if (!processingReady) {
+    reasonCode = "not_processed";
     reason =
       document.readinessReason ||
       "This document can be prepared for research and comparison.";
   } else if (!extractionReady) {
+    reasonCode = "extraction_not_ready";
     reason = "Text extraction has not completed.";
   } else if (!hasChunks) {
+    reasonCode = "no_chunks";
     reason = "No extracted text chunks are available.";
   } else if (!hasRetrieval) {
+    reasonCode = "retrieval_unavailable";
     reason = "No retrieval path is available for this document.";
   }
 
@@ -106,28 +117,37 @@ const getDocumentReadiness = async (documentId) => {
     ? (hasLocalTextRetrieval ? "hybrid" : "vector")
     : hasLocalTextRetrieval
       ? "local_text"
-      : document.retrievalMode || "unknown";
+      : null;
   const canPrepare = !genuinelyReady && processableBySource && !processing;
 
   return {
     documentId: document.id,
+    status,
     researchReady: genuinelyReady,
     comparisonReady: genuinelyReady,
     canPrepare,
-    status,
+    reasonCode,
     reason,
     requirements: {
-      hasValidSource: Boolean(document.title && document.visibilityStatus !== "hidden_invalid"),
-      hasAccessibleResource: processableBySource,
+      publicValid: document.visibilityStatus !== "hidden_invalid",
+      hasSource: Boolean(document.sourceUrl || document.pdfUrl),
+      hasAccessibleResource: Boolean(
+        resources.has_accessible_resource ||
+        document.pdfUrl ||
+        isExtractableSourceDocument(document),
+      ),
       hasExtractedText: extractionReady && hasChunks,
       hasChunks,
-      hasEmbeddingsOrFallbackRetrieval: hasRetrieval,
-      retrievalVerified: Boolean(document.retrievalVerified || hasLocalTextRetrieval),
+      hasRetrieval,
+      retrievalVerified: Boolean(hasRetrieval && (
+        document.retrievalVerified || hasLocalTextRetrieval
+      )),
     },
     counts: {
+      resources: resourceCount,
       chunks: chunkCount,
       embeddings,
-      vectorRefs,
+      vectorReferences: vectorRefs,
     },
     retrievalMode,
     embeddingStatus: hasVectorRetrieval
@@ -136,6 +156,7 @@ const getDocumentReadiness = async (documentId) => {
         ? "fallback"
         : document.embeddingStatus || "not_started",
     lastProcessedAt: document.processedAt || null,
+    lastAttemptedAt: document.lastAttemptedAt || null,
     failureStage: document.failureStage,
     failureReason: document.failureReason,
     readinessClass: document.readinessClass,

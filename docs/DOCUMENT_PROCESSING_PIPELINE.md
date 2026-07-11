@@ -164,3 +164,23 @@ Typed processing batches are scoped to the jobs selected by that batch unless
 `--resume` is explicitly used. `--type=gazette` now covers the full Gazette
 family: `gazette`, `notification`, `rule`, `regulation`, `order`, `circular`,
 and `ordinance`.
+# 2026-07-11 recovery update
+
+The processing pipeline now treats chunk creation and local retrieval as independent from external AI/provider success.
+
+Required order:
+
+```text
+Document validation
+→ select best source/resource
+→ extract PDF text or source HTML
+→ OCR when available/required
+→ normalize and detect language
+→ persist original chunks
+→ attempt vector embeddings
+→ fall back to local_text retrieval when vectors fail
+→ verify retrieval
+→ update canonical readiness
+```
+
+Provider failures must not delete extracted text or chunks. Documents with chunks and verified local retrieval may be research-ready even if vector storage is temporarily unavailable.

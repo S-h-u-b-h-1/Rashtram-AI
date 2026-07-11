@@ -464,6 +464,40 @@ const saveNormalizedChunks = async (documentId, chunks, languageCode) => {
   }
 };
 
+const loadLocalChunks = async (documentId, limit = 500) => {
+  const result = await query(
+    `SELECT
+       chunk_index, original_text, translated_text, language,
+       vector_reference, metadata_json
+     FROM document_text_chunks
+     WHERE document_id = $1
+     ORDER BY chunk_index ASC
+     LIMIT $2`,
+    [documentId, Math.max(1, Number(limit) || 500)],
+  );
+  return result.rows
+    .map((row, index) => {
+      const metadata = row.metadata_json || {};
+      const content = String(row.original_text || row.translated_text || "")
+        .trim();
+      if (!content) return null;
+      return {
+        id: row.vector_reference || `${documentId}-chunk-${index}`,
+        content,
+        translatedText: row.translated_text || null,
+        chunkIndex: Number(row.chunk_index ?? index),
+        totalChunks: result.rows.length,
+        metadata: {
+          ...metadata,
+          chunkIndex: Number(row.chunk_index ?? index),
+          totalChunks: metadata.totalChunks || result.rows.length,
+          languageCode: metadata.languageCode || row.language || "und",
+        },
+      };
+    })
+    .filter(Boolean);
+};
+
 const processExtractableSourceDocument = async (
   document,
   config,
@@ -687,7 +721,16 @@ const processDocument = async (documentType, documentId) => {
   }
   const config = typeConfig(documentType);
   const indexCheckStartedAt = Date.now();
-  const existence = await config.check(documentId);
+  let existence = { exists: false };
+  let indexCheckError = null;
+  try {
+    existence = await config.check(documentId);
+  } catch (error) {
+    indexCheckError = error;
+    console.warn(
+      `Vector existence check unavailable for document ${documentId}; continuing with local/PDF processing: ${sanitizeProviderError(error)}`,
+    );
+  }
   const indexCheckMs = Date.now() - indexCheckStartedAt;
   if (existence.exists) {
     const storedArtifact = await getTextArtifact(documentId);
@@ -787,6 +830,76 @@ const processDocument = async (documentType, documentId) => {
     }
   }
 
+  const localChunks = await loadLocalChunks(documentId);
+  if (localChunks.length > 0) {
+    const storedArtifact = await getTextArtifact(documentId);
+    const context = localChunks.map((chunk) => chunk.content).join("\n\n");
+    const language = pdfProcessor.detectLanguage(context);
+    const summaryResult = storedArtifact?.englishSummary
+      ? {
+          summary: storedArtifact.englishSummary,
+          fallback: false,
+          error: null,
+        }
+      : await safeGenerateSummary(documentType, context.slice(0, 24_000), {
+          sourceLanguage: language.languageCode,
+        });
+    const summarySections = parseSummarySections(summaryResult.summary);
+    const suggestedQuestions = await safeSuggestedQuestions(
+      documentType,
+      summaryResult.summary,
+      summarySections,
+    );
+    if (!storedArtifact) {
+      await saveTextArtifact(documentId, {
+        language,
+        originalText: context,
+        englishSummary: summaryResult.summary,
+        extractionMethod: "local_text_chunks",
+        ocrUsed: false,
+        ocrRequired: false,
+        summaryJson: {
+          ...summarySections,
+          suggestedQuestions,
+        },
+        metadata: {
+          reconstructedFromLocalChunks: true,
+          chunks: localChunks.length,
+          suggestedQuestions,
+          summaryFallback: summaryResult.fallback,
+          summaryFallbackReason: summaryResult.error?.message || null,
+        },
+      });
+    }
+    return {
+      alreadyProcessed: true,
+      summary: summaryResult.summary,
+      chunksStored: localChunks.length,
+      totalChunks: localChunks.length,
+      document,
+      textArtifact: await getTextArtifact(documentId),
+      textLength: context.length,
+      language,
+      ocrUsed: Boolean(storedArtifact?.ocrUsed),
+      ocrRequired: Boolean(storedArtifact?.ocrRequired),
+      stageMetrics: {
+        indexCheckMs,
+        vectorCheckFailed: Boolean(indexCheckError),
+        localChunkCount: localChunks.length,
+        totalMs: Date.now() - totalStartedAt,
+      },
+      usage: {
+        estimated: true,
+        generationInputTokens: Math.ceil(context.length / 4),
+        generationOutputTokens: Math.ceil(summaryResult.summary.length / 4),
+        embeddingInputTokens: 0,
+        ocrUsed: Boolean(storedArtifact?.ocrUsed),
+        retrievalMode: "local_text",
+        summaryFallback: summaryResult.fallback,
+      },
+    };
+  }
+
   if (!document.pdfUrl && isExtractableSourceDocument(document)) {
     return processExtractableSourceDocument(document, config, {
       totalStartedAt,
@@ -831,6 +944,13 @@ const processDocument = async (documentType, documentId) => {
     .slice(0, 6)
     .map((chunk) => chunk.content)
     .join("\n\n");
+  if (!summaryContext.trim()) {
+    const error = new Error(
+      "PDF extraction completed but no usable chunks were produced.",
+    );
+    error.status = 422;
+    throw error;
+  }
   const summaryStartedAt = Date.now();
   const summaryResult = await safeGenerateSummary(
     documentType,

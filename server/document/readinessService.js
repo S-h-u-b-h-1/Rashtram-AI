@@ -752,6 +752,8 @@ const getProcessingStatus = async () => {
         COUNT(*) FILTER (WHERE comparison_ready)::INTEGER AS comparison_ready,
         COUNT(*) FILTER (
           WHERE readiness_class IN (
+            'processable_unprocessed',
+            'retriable_failure',
             'pdf_available_not_processed',
             'source_extractable_not_processed',
             'processing_pending',

@@ -65,10 +65,17 @@ const buildExtractiveMultiDocumentFallback = (message, sources) => {
 
 const sendError = (res, error, context) => {
   const status = error.status || 500;
-  if (status >= 500) console.error(`${context}:`, error);
+  const requestId = crypto.randomUUID();
+  if (status >= 500) {
+    console.error(`${context} [${requestId}]:`, error);
+  }
   return res.status(status).json({
-    error: error.message,
-    ...(error.details ? { details: error.details } : {}),
+    error:
+      status >= 500
+        ? "Internal document service error."
+        : error.message,
+    ...(status >= 500 ? { requestId } : {}),
+    ...(status < 500 && error.details ? { details: error.details } : {}),
   });
 };
 
@@ -494,11 +501,39 @@ router.get("/:id/graph", async (req, res) => {
 
 router.get("/:id", async (req, res) => {
   try {
-    const document = await DocumentService.getById(req.params.id, req.user.id);
-    if (!document) {
+    const [document, readiness] = await Promise.all([
+      DocumentService.getById(req.params.id, req.user.id),
+      getDocumentReadiness(req.params.id),
+    ]);
+    if (!document || !readiness) {
       return res.status(404).json({ error: "Document not found." });
     }
-    return res.json({ document });
+    const {
+      sources = [],
+      resources = [],
+      relationships = [],
+      recommendations = [],
+      warnings = [],
+      ...documentPayload
+    } = document;
+    const { document: _readinessDocument, ...readinessPayload } = readiness;
+    return res.json({
+      document: {
+        ...documentPayload,
+        sources,
+        resources,
+        relationships,
+        recommendations,
+        readiness: readinessPayload,
+        warnings,
+      },
+      sources,
+      resources,
+      relationships,
+      recommendations,
+      readiness: readinessPayload,
+      warnings,
+    });
   } catch (error) {
     return sendError(res, error, "Universal document lookup failed");
   }

@@ -8,6 +8,8 @@ const {
 } = require("../document/readinessService");
 const {
   buildFilters,
+  mapDocumentResourceSafely,
+  mapDocumentSourceSafely,
   mapDocument,
 } = require("../document/DocumentRepository");
 const { PDFProcessor } = require("../lib/pdfProcessor");
@@ -106,6 +108,59 @@ test("document mapping never infers comparison readiness", () => {
   assert.equal(mapped.researchReady, true);
   assert.equal(mapped.comparisonReady, false);
   assert.equal(mapped.readinessReason, "Retrieval verification is pending.");
+});
+
+test("document mapping tolerates malformed JSON and optional child rows", () => {
+  const mapped = mapDocument({
+    id: 10,
+    title: "Malformed metadata record",
+    document_type: "gazette",
+    source_metadata: "{not json",
+    metadata_json: null,
+    failure_details_json: "[]",
+    publication_date: "not-a-date",
+  });
+  assert.deepEqual(mapped.metadata, {});
+  assert.deepEqual(mapped.failureDetails, {});
+  assert.equal(mapped.publicationDate, null);
+  assert.equal(mapped.title, "Malformed metadata record");
+
+  assert.deepEqual(
+    mapDocumentResourceSafely({
+      id: 7,
+      label: null,
+      resource_type: null,
+      url: " https://example.test/file.pdf ",
+      metadata_json: "{bad",
+      is_accessible: true,
+    }),
+    {
+      id: "7",
+      label: "Document resource",
+      resourceType: "link",
+      category: null,
+      url: "https://example.test/file.pdf",
+      mimeType: null,
+      fileExtension: null,
+      fileSize: null,
+      language: null,
+      isPrimary: false,
+      isAccessible: true,
+      lastCheckedAt: null,
+      metadata: {},
+    },
+  );
+
+  const source = mapDocumentSourceSafely({
+    id: 8,
+    source_name: "egazette",
+    source_priority: "x",
+    raw_metadata_json: "{\"ok\":true}",
+  });
+  assert.equal(source.id, "8");
+  assert.equal(source.sourceName, "egazette");
+  assert.equal(source.sourcePriority, 100);
+  assert.deepEqual(source.metadata, { ok: true });
 });
 
 test("PDF processing rejects unsupported and private URLs before download", async () => {

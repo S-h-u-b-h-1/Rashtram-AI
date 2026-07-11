@@ -1,4 +1,5 @@
 const { Pinecone } = require("@pinecone-database/pinecone");
+const { sanitizeProviderError } = require("./providerErrorSanitizer");
 
 const EMBEDDING_DIMENSION = 768;
 const EMBEDDING_BATCH_SIZE = 50;
@@ -11,11 +12,19 @@ const EMBEDDING_BATCH_TOKEN_BUDGET = Math.min(
 );
 const EMBEDDING_PROVIDER =
   (process.env.EMBEDDING_PROVIDER || "openai").toLowerCase();
+const AI_PROVIDER = String(process.env.AI_PROVIDER || "openai")
+  .trim()
+  .toLowerCase();
 const OPENAI_STYLE_API_KEY = String(process.env.OPENAI_API_KEY || "")
   .startsWith("sk-");
+const GEMINI_STYLE_API_KEY = String(process.env.OPENAI_API_KEY || "")
+  .startsWith("AQ.");
+const isGeminiBaseUrl = (value) =>
+  String(value || "").includes("generativelanguage.googleapis.com");
 const normalizeGenerationModel = (value, fallback) => {
   const model = String(value || "").trim();
   if (OPENAI_STYLE_API_KEY && /^gemini/i.test(model)) return fallback;
+  if (GEMINI_STYLE_API_KEY && /^gpt-/i.test(model)) return "gemini-1.5-flash";
   return model || fallback;
 };
 const normalizeEmbeddingModel = (value) => {
@@ -23,10 +32,16 @@ const normalizeEmbeddingModel = (value) => {
   if (OPENAI_STYLE_API_KEY && /^text-embedding-00[0-9]/i.test(model)) {
     return "text-embedding-3-large";
   }
+  if (GEMINI_STYLE_API_KEY && /^text-embedding-3/i.test(model)) {
+    return "text-embedding-004";
+  }
   return model || "text-embedding-3-large";
 };
 const GENERATION_MODEL =
-  normalizeGenerationModel(process.env.OPENAI_MODEL, "gpt-4.1-mini");
+  normalizeGenerationModel(
+    process.env.OPENAI_CHAT_MODEL || process.env.OPENAI_MODEL,
+    "gpt-4.1-mini",
+  );
 const FALLBACK_GENERATION_MODEL =
   normalizeGenerationModel(process.env.OPENAI_FALLBACK_MODEL, "gpt-4o-mini");
 const EMBEDDING_MODEL =
@@ -39,6 +54,11 @@ const VECTOR_NAMESPACE =
 
 let pineconeClient;
 let openAIClientPromise;
+let aiHealthCache = {
+  checkedAt: 0,
+  ttlMs: Number(process.env.AI_HEALTH_CACHE_MS || 300_000),
+  result: null,
+};
 
 const getPinecone = () => {
   if (!process.env.PINECONE_API_KEY) {
@@ -58,9 +78,9 @@ const getOpenAI = async () => {
   }
 
   if (!openAIClientPromise) {
-    const configuredBaseUrl = process.env.OPENAI_BASE_URL || "";
-    const useConfiguredBaseUrl = !(
-      configuredBaseUrl.includes("generativelanguage.googleapis.com") &&
+    const configuredBaseUrl = String(process.env.OPENAI_BASE_URL || "").trim();
+    const useConfiguredBaseUrl = Boolean(configuredBaseUrl) && !(
+      isGeminiBaseUrl(configuredBaseUrl) &&
       String(process.env.OPENAI_API_KEY || "").startsWith("sk-")
     );
     openAIClientPromise = import("openai").then(
@@ -218,6 +238,83 @@ const withOpenAIRetry = async (operation, label, attempts = 3) => {
 
 const generationModels = () =>
   [...new Set([GENERATION_MODEL, FALLBACK_GENERATION_MODEL])].filter(Boolean);
+
+const providerConfig = () => ({
+  aiProvider: AI_PROVIDER,
+  openaiBaseUrlConfigured: Boolean(String(process.env.OPENAI_BASE_URL || "").trim()),
+  usingGeminiCompatibleEndpoint: isGeminiBaseUrl(process.env.OPENAI_BASE_URL),
+  chatModel: GENERATION_MODEL,
+  fallbackChatModel: FALLBACK_GENERATION_MODEL,
+  embeddingModel: EMBEDDING_MODEL,
+  embeddingDimension: EMBEDDING_DIMENSION,
+  chatModelConfigured: Boolean(GENERATION_MODEL),
+  embeddingModelConfigured: Boolean(EMBEDDING_MODEL),
+  credentialsConfigured: Boolean(process.env.OPENAI_API_KEY),
+});
+
+const validateAIProvider = async ({ force = false } = {}) => {
+  const now = Date.now();
+  if (
+    !force &&
+    aiHealthCache.result &&
+    now - aiHealthCache.checkedAt < aiHealthCache.ttlMs
+  ) {
+    return aiHealthCache.result;
+  }
+
+  const config = providerConfig();
+  const health = {
+    aiProvider: config.aiProvider,
+    chatModelConfigured: config.chatModelConfigured,
+    embeddingModelConfigured: config.embeddingModelConfigured,
+    generationAvailable: false,
+    embeddingAvailable: false,
+    checkedAt: new Date().toISOString(),
+    errors: {},
+  };
+
+  if (!config.credentialsConfigured) {
+    health.errors.generation = "OPENAI_API_KEY is not configured.";
+    health.errors.embedding = "OPENAI_API_KEY is not configured.";
+    aiHealthCache = { ...aiHealthCache, checkedAt: now, result: health };
+    return health;
+  }
+
+  try {
+    const response = await runGeneration(
+      "generateContent",
+      "Reply with exactly: OK",
+    );
+    health.generationAvailable = Boolean(responseText(response).trim());
+  } catch (error) {
+    health.errors.generation = sanitizeProviderError(error);
+  }
+
+  try {
+    const openai = await getOpenAI();
+    const response = await withOpenAIRetry(
+      () =>
+        openai.embeddings.create({
+          model: EMBEDDING_MODEL,
+          input: ["Rashtram AI provider health check"],
+          encoding_format: "float",
+          dimensions: EMBEDDING_DIMENSION,
+        }),
+      `OpenAI embedding model ${EMBEDDING_MODEL}`,
+      1,
+    );
+    const vector = response.data?.[0]?.embedding || [];
+    health.embeddingAvailable = vector.length === EMBEDDING_DIMENSION;
+    if (!health.embeddingAvailable) {
+      health.errors.embedding = `Embedding dimension mismatch: ${vector.length || 0}`;
+    }
+  } catch (error) {
+    health.errors.embedding = sanitizeProviderError(error);
+  }
+
+  aiHealthCache = { ...aiHealthCache, checkedAt: now, result: health };
+  return health;
+};
 
 const responseEventStream = async function* (events) {
   for await (const event of events) {
@@ -1073,6 +1170,7 @@ module.exports = {
   getPolicyIndex,
   normalizeResponseLanguage,
   parseSuggestedQuestions,
+  providerConfig,
   searchSimilarContent,
   searchSimilarContentForAct,
   searchSimilarContentForEGazette,
@@ -1084,4 +1182,5 @@ module.exports = {
   storeBillContentInChunks,
   storeEGazetteContentInChunks,
   storePolicyContentInChunks,
+  validateAIProvider,
 };

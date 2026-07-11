@@ -106,3 +106,15 @@ readiness: extracted chunks and verified retrieval are still required.
 Processing batches used to be able to process unrelated queued documents, which
 made type-specific comparison backfills unreliable. Worker claiming is now
 scoped to selected batch document IDs.
+# 2026-07-11 recovery update
+
+Comparison readiness is now governed by the canonical readiness contract.
+
+Invariant:
+
+```text
+comparisonReady = true
+ONLY IF chunk_count > 0 AND retrieval_verified = true
+```
+
+Comparison must never use metadata-only content. If a selected document is not ready, the API must return the exact readiness reason and whether the document can be prepared.

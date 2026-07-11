@@ -5,6 +5,13 @@ const {
   normalizeTypeList,
 } = require("./documentTypes");
 const { sanitizeProviderError } = require("../lib/providerErrorSanitizer");
+const {
+  normalizeNullableString,
+  safeDate,
+  safeInteger,
+  safeNumber,
+  safeObject,
+} = require("../lib/safeData");
 
 const clampInteger = (value, fallback, minimum, maximum) => {
   const parsed = Number.parseInt(value, 10);
@@ -12,19 +19,90 @@ const clampInteger = (value, fallback, minimum, maximum) => {
   return Math.min(Math.max(parsed, minimum), maximum);
 };
 
-const toIso = (value) => {
-  if (!value) return null;
-  const date = value instanceof Date ? value : new Date(value);
-  return Number.isNaN(date.getTime()) ? null : date.toISOString();
+const toIso = safeDate;
+const sanitizeNullableError = (value) =>
+  value == null || String(value).trim() === ""
+    ? null
+    : sanitizeProviderError(value);
+
+const mapDocumentResourceSafely = (row = {}) => ({
+  id: row.id == null ? null : String(row.id),
+  label: normalizeNullableString(row.label) || "Document resource",
+  resourceType: normalizeNullableString(row.resource_type) || "link",
+  category: normalizeNullableString(row.category),
+  url: normalizeNullableString(row.url),
+  mimeType: normalizeNullableString(row.mime_type),
+  fileExtension: normalizeNullableString(row.file_extension),
+  fileSize:
+    row.file_size == null && row.file_size_bytes == null
+      ? null
+      : safeNumber(row.file_size ?? row.file_size_bytes, null),
+  language: normalizeNullableString(row.language),
+  isPrimary: Boolean(row.is_primary),
+  isAccessible: Boolean(row.is_accessible),
+  lastCheckedAt: toIso(row.last_checked_at),
+  metadata: safeObject(row.metadata_json ?? row.metadata),
+});
+
+const mapDocumentSourceSafely = (row = {}) => ({
+  id: row.id == null ? null : String(row.id),
+  sourceName: normalizeNullableString(row.source_name),
+  normalizedSourceName: normalizeNullableString(row.normalized_source_name),
+  sourceType: normalizeNullableString(row.source_type),
+  sourceRecordId: normalizeNullableString(row.source_record_id),
+  title:
+    normalizeNullableString(row.raw_title) ||
+    normalizeNullableString(row.source_title),
+  status:
+    normalizeNullableString(row.raw_status) ||
+    normalizeNullableString(row.source_status),
+  sourceUrl: normalizeNullableString(row.source_url),
+  detailUrl: normalizeNullableString(row.detail_url),
+  canonicalUrl: normalizeNullableString(row.canonical_url),
+  sourcePriority: safeInteger(row.source_priority, 100),
+  collectedAt: toIso(row.collected_at),
+  lastSeenAt: toIso(row.last_seen_at),
+  metadata: safeObject(row.raw_metadata_json ?? row.metadata_json ?? row.metadata),
+});
+
+const mapRelationshipSafely = (relationship = {}) => {
+  const relatedDocument = safeObject(relationship.document, {});
+  return {
+    ...relationship,
+    id: relationship.id == null ? null : String(relationship.id),
+    document: {
+      ...relatedDocument,
+      id:
+        relatedDocument.id == null
+          ? null
+          : String(relatedDocument.id),
+      title:
+        normalizeNullableString(relatedDocument.title) ||
+        "Related document",
+      publicationDate: toIso(relatedDocument.publicationDate),
+      enactedDate: toIso(relatedDocument.enactedDate),
+      introducedDate: toIso(relatedDocument.introducedDate),
+    },
+    relationshipType:
+      normalizeNullableString(
+        relationship.relationshipType || relationship.type,
+      ) || "related",
+    sourceUrl: normalizeNullableString(relationship.sourceUrl),
+  };
 };
 
 const mapDocument = (row) => {
   if (!row) return null;
-  const source = row.canonical_source || row.source_name;
-  const sourceUrl = row.canonical_url || row.detail_url || row.source_url;
+  const source =
+    normalizeNullableString(row.canonical_source) ||
+    normalizeNullableString(row.source_name);
+  const sourceUrl =
+    normalizeNullableString(row.canonical_url) ||
+    normalizeNullableString(row.detail_url) ||
+    normalizeNullableString(row.source_url);
   const metadata = {
-    ...(row.source_metadata || {}),
-    ...(row.metadata_json || {}),
+    ...safeObject(row.source_metadata),
+    ...safeObject(row.metadata_json),
   };
   const processingStatus =
     row.schema_processing_status || row.processing_status || null;
@@ -44,16 +122,16 @@ const mapDocument = (row) => {
   return {
     id: String(row.id),
     documentId: String(row.id),
-    canonicalId: row.canonical_id,
-    title: row.title,
-    type: row.document_type,
-    documentType: row.document_type,
-    subtype: row.category,
-    authority: row.authority,
-    jurisdiction: row.jurisdiction,
-    jurisdictionLevel: row.jurisdiction_level,
-    ministry: row.ministry,
-    department: row.department,
+    canonicalId: normalizeNullableString(row.canonical_id),
+    title: normalizeNullableString(row.title) || "Untitled document",
+    type: normalizeNullableString(row.document_type) || "document",
+    documentType: normalizeNullableString(row.document_type) || "document",
+    subtype: normalizeNullableString(row.category),
+    authority: normalizeNullableString(row.authority),
+    jurisdiction: normalizeNullableString(row.jurisdiction),
+    jurisdictionLevel: normalizeNullableString(row.jurisdiction_level),
+    ministry: normalizeNullableString(row.ministry),
+    department: normalizeNullableString(row.department),
     publicationDate: toIso(row.publication_date),
     introducedDate: toIso(row.introduced_date),
     passedDate: toIso(row.passed_date),
@@ -62,30 +140,31 @@ const mapDocument = (row) => {
     effectiveDate: toIso(row.effective_date),
     commencementDate: toIso(row.commencement_date),
     year: row.year,
-    status: row.status || null,
+    status: normalizeNullableString(row.status),
     source,
     sourceName: source,
     sourceUrl,
-    pdfUrl: row.pdf_url,
+    pdfUrl: normalizeNullableString(row.pdf_url),
     processingStatus,
-    processingError: row.processing_error || null,
+    processingError: sanitizeNullableError(row.processing_error),
     extractionStatus: row.extraction_status || null,
     embeddingStatus: row.embedding_status || null,
     summaryStatus: row.summary_status || null,
     pdfStatus: row.pdf_status || null,
     ocrStatus: row.ocr_status || null,
     chunkingStatus: row.chunking_status || null,
-    chunksCount: Number(row.chunks_count || 0),
-    embeddingsCount: Number(row.embeddings_count || 0),
+    chunksCount: safeInteger(row.chunks_count, 0),
+    embeddingsCount: safeInteger(row.embeddings_count, 0),
     retrievalMode: row.retrieval_mode || "unknown",
     retrievalVerified: Boolean(row.retrieval_verified),
     retrievalVerifiedAt: toIso(row.retrieval_verified_at),
-    textLength: Number(row.text_length || 0),
-    retryCount: Number(row.retry_count || 0),
+    textLength: safeInteger(row.text_length, 0),
+    retryCount: safeInteger(row.retry_count, 0),
     failureStage: row.failure_stage || null,
-    failureReason:
+    failureReason: sanitizeNullableError(
       row.failure_reason || row.processing_error || null,
-    failureDetails: row.failure_details_json || {},
+    ),
+    failureDetails: safeObject(row.failure_details_json),
     readinessClass: row.readiness_class || readiness,
     readinessReason: row.readiness_reason || null,
     lastAttemptedAt: toIso(row.last_attempted_at),
@@ -97,13 +176,11 @@ const mapDocument = (row) => {
       row.comparison_ready &&
       readiness === "research_ready",
     ),
-    qualityScore:
-      row.quality_score == null ? null : Number(row.quality_score),
+    qualityScore: safeNumber(row.quality_score, null),
     visibilityStatus: row.visibility_status || "public",
     fileHash: row.file_hash || null,
     mimeType: row.mime_type || null,
-    fileSizeBytes:
-      row.file_size_bytes == null ? null : Number(row.file_size_bytes),
+    fileSizeBytes: safeNumber(row.file_size_bytes, null),
     number:
       row.bill_number ||
       row.act_number ||
@@ -113,17 +190,17 @@ const mapDocument = (row) => {
     billNumber: row.bill_number,
     actNumber: row.act_number,
     gazetteNumber: row.gazette_identifier || row.gazette_id,
-    category: row.category,
+    category: normalizeNullableString(row.category),
     metadata,
     sourceType: metadata.sourceClassification || null,
     language: metadata.language || null,
     state: metadata.state || null,
     country: metadata.country || "India",
-    summary: row.summary || null,
+    summary: normalizeNullableString(row.summary),
     recommendationScore:
       row.recommendation_score == null
         ? null
-        : Number(row.recommendation_score),
+        : safeNumber(row.recommendation_score, null),
     relationships: [],
     firstSeenAt: toIso(row.first_seen_at),
     updatedAt: toIso(row.updated_at),
@@ -851,20 +928,30 @@ const updateProcessingStatus = async (
 
 const getResources = async (id) => {
   const result = await query(
-    `SELECT label, resource_type, NULL::TEXT AS category, url,
-       metadata_json AS metadata
+    `SELECT id, label, resource_type, NULL::TEXT AS category, url,
+       mime_type, file_extension, file_size, language, is_primary,
+       is_accessible, last_checked_at, metadata_json
      FROM document_resources
      WHERE document_id = $1
      ORDER BY is_primary DESC, resource_type, label, id`,
     [id],
   );
-  return result.rows.map((row) => ({
-    label: row.label,
-    resourceType: row.resource_type,
-    category: row.category,
-    url: row.url,
-    metadata: row.metadata || {},
-  }));
+  return result.rows.map(mapDocumentResourceSafely);
+};
+
+const getSources = async (id) => {
+  const result = await query(
+    `SELECT id, source_name, normalized_source_name, source_type,
+       source_record_id, source_url, detail_url, canonical_url,
+       raw_title, raw_status, source_title, source_status,
+       source_priority, raw_metadata_json,
+       collected_at, last_seen_at
+     FROM document_sources
+     WHERE document_id = $1
+     ORDER BY source_priority ASC NULLS LAST, id ASC`,
+    [id],
+  );
+  return result.rows.map(mapDocumentSourceSafely);
 };
 
 const getRelated = async (id) => {
@@ -1121,9 +1208,13 @@ module.exports = {
   getRelatedChats,
   getRelated,
   getResources,
+  getSources,
   getSummary,
   getTimeline,
   isGazetteScope,
+  mapDocumentResourceSafely,
+  mapDocumentSourceSafely,
+  mapRelationshipSafely,
   mapDocument,
   search,
   updatePDF,
