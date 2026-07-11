@@ -20,12 +20,18 @@ const createPool = () => {
     throw new Error("DATABASE_URL is required");
   }
 
-  return new Pool({
+  const pool = new Pool({
     connectionString: normalizeConnectionString(process.env.DATABASE_URL),
     max: 5,
     idleTimeoutMillis: 30_000,
     connectionTimeoutMillis: 10_000,
   });
+
+  pool.on("error", (err) => {
+    console.error("Unexpected error on idle PostgreSQL client:", err.message);
+  });
+
+  return pool;
 };
 
 const getPool = () => {

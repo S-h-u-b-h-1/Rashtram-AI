@@ -475,7 +475,7 @@ const discoverRelationshipsForDocument = async (
     let relationshipSource = "metadata_heuristic";
     if (
       verifyWithAI &&
-      process.env.OPENAI_API_KEY &&
+      (process.env.OPENAI_API_KEY || process.env.GEMINI_API_KEY) &&
       relationship.confidence < 0.9
     ) {
       try {
