@@ -50,11 +50,16 @@ app.use(
   cors({
     origin(origin, callback) {
       const allowedOrigins = new Set([
-        process.env.CLIENT_URL || "http://localhost:3000",
+        process.env.CLIENT_URL,
         "http://localhost:3000",
-      ]);
+        "https://rashtram-ai.vercel.app",
+      ].filter(Boolean));
 
-      if (!origin || allowedOrigins.has(origin)) {
+      const isVercelPreview = origin && (
+        origin.startsWith("https://rashtram-ai-") && origin.endsWith(".vercel.app")
+      );
+
+      if (!origin || allowedOrigins.has(origin) || isVercelPreview) {
         return callback(null, true);
       }
 
