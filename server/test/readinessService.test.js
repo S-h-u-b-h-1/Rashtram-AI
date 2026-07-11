@@ -8,6 +8,7 @@ const {
 } = require("../document/readinessService");
 const {
   buildFilters,
+  mapRelationshipSafely,
   mapDocumentResourceSafely,
   mapDocumentSourceSafely,
   mapDocument,
@@ -161,6 +162,20 @@ test("document mapping tolerates malformed JSON and optional child rows", () => 
   assert.equal(source.sourceName, "egazette");
   assert.equal(source.sourcePriority, 100);
   assert.deepEqual(source.metadata, { ok: true });
+
+  const relationship = mapRelationshipSafely({
+    id: 9,
+    relationshipType: null,
+    document: {
+      id: 11,
+      title: null,
+      publicationDate: "not-a-date",
+    },
+  });
+  assert.equal(relationship.relationshipType, "related");
+  assert.equal(relationship.document.id, "11");
+  assert.equal(relationship.document.title, "Related document");
+  assert.equal(relationship.document.publicationDate, null);
 });
 
 test("PDF processing rejects unsupported and private URLs before download", async () => {
