@@ -3,6 +3,7 @@ const DocumentChat = require("../models/DocumentChat");
 const {
   getDocumentContext,
   retrievePassages,
+  ensureSummary,
 } = require("./documentResearchService");
 const { generateResponse } = require("../lib/vectordb");
 const { sanitizeProviderError } = require("../lib/providerErrorSanitizer");
@@ -98,6 +99,25 @@ router.get("/document/:documentType/:documentId", async (req, res) => {
     if (!document) {
       return res.status(404).json({ error: "Document not found." });
     }
+    // Lazy-load the summary on first access.
+    if (document.researchReady && !document.summary) {
+      try {
+        const result = await ensureSummary(documentType, documentId);
+        if (result.summary) {
+          document.summary = result.summary;
+          if (document.textArtifact) {
+            document.textArtifact.englishSummary = result.summary;
+            document.textArtifact.summarySections = result.summarySections;
+          }
+        }
+      } catch (summaryError) {
+        console.warn(
+          "[lazy-summary] Could not generate summary on access:",
+          summaryError.message,
+        );
+      }
+    }
+    return res.json({ document });
     let backgroundPreparation = null;
     if (readiness?.canPrepare && !readiness?.comparisonReady) {
       try {

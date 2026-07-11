@@ -743,22 +743,25 @@ const processDocument = async (documentType, documentId) => {
       .join("\n\n");
     if (context) {
       const language = pdfProcessor.detectLanguage(context);
-      const summaryResult = storedArtifact?.englishSummary || existence.summary
-        ? {
-            summary: storedArtifact?.englishSummary || existence.summary,
-            fallback: false,
-            error: null,
-          }
-        : await safeGenerateSummary(documentType, context, {
-            sourceLanguage: language.languageCode,
-          });
-      const { summary } = summaryResult;
-      const summarySections = parseSummarySections(summary);
-      const suggestedQuestions = await safeSuggestedQuestions(
-        documentType,
-        summary,
-        summarySections,
-      );
+      // Lazy-load: reuse any existing cached summary but do NOT call
+      // safeGenerateSummary / safeSuggestedQuestions eagerly.
+      const cachedSummary =
+        storedArtifact?.englishSummary || existence.summary || null;
+      const cachedSections = cachedSummary
+        ? parseSummarySections(cachedSummary)
+        : {};
+      const cachedQuestions = cachedSummary
+        ? await safeSuggestedQuestions(
+            documentType,
+            cachedSummary,
+            cachedSections,
+          )
+        : [];
+      
+      const summaryResult = { summary: cachedSummary, fallback: false, error: null };
+      const summary = cachedSummary;
+      const summarySections = cachedSections;
+      const suggestedQuestions = cachedQuestions;
       await saveTextArtifact(documentId, {
         language,
         originalText: context,
@@ -835,21 +838,23 @@ const processDocument = async (documentType, documentId) => {
     const storedArtifact = await getTextArtifact(documentId);
     const context = localChunks.map((chunk) => chunk.content).join("\n\n");
     const language = pdfProcessor.detectLanguage(context);
-    const summaryResult = storedArtifact?.englishSummary
-      ? {
-          summary: storedArtifact.englishSummary,
-          fallback: false,
-          error: null,
-        }
-      : await safeGenerateSummary(documentType, context.slice(0, 24_000), {
-          sourceLanguage: language.languageCode,
-        });
-    const summarySections = parseSummarySections(summaryResult.summary);
-    const suggestedQuestions = await safeSuggestedQuestions(
-      documentType,
-      summaryResult.summary,
-      summarySections,
-    );
+    // Lazy-load: reuse any existing cached summary but do NOT call
+    // safeGenerateSummary / safeSuggestedQuestions eagerly.
+    const cachedSummary = storedArtifact?.englishSummary || null;
+    const cachedSections = cachedSummary
+      ? parseSummarySections(cachedSummary)
+      : {};
+    const cachedQuestions = cachedSummary
+      ? await safeSuggestedQuestions(
+          documentType,
+          cachedSummary,
+          cachedSections,
+        )
+      : [];
+
+    const summaryResult = { summary: cachedSummary, fallback: false, error: null };
+    const summarySections = cachedSections;
+    const suggestedQuestions = cachedQuestions;
     if (!storedArtifact) {
       await saveTextArtifact(documentId, {
         language,
@@ -951,19 +956,13 @@ const processDocument = async (documentType, documentId) => {
     error.status = 422;
     throw error;
   }
+  // Lazy-load: skip summary & suggested-questions generation during
+  // processing. They will be generated on-demand via ensureSummary().
   const summaryStartedAt = Date.now();
-  const summaryResult = await safeGenerateSummary(
-    documentType,
-    summaryContext,
-    { sourceLanguage: processed.language.languageCode },
-  );
-  const { summary } = summaryResult;
-  const summarySections = parseSummarySections(summary);
-  const suggestedQuestions = await safeSuggestedQuestions(
-    documentType,
-    summary,
-    summarySections,
-  );
+  const summaryResult = { summary: null, fallback: false, error: null };
+  const summary = null;
+  const summarySections = {};
+  const suggestedQuestions = [];
   const summaryMs = Date.now() - summaryStartedAt;
   await saveTextArtifact(documentId, {
     language: processed.language,
@@ -1276,6 +1275,107 @@ const searchAcrossIndexedDocuments = async (searchQuery, topK = 40) => {
   ].slice(0, topK);
 };
 
+/**
+ * Lazy-load a document's summary and suggested questions.
+ * Returns the cached summary if it exists; otherwise generates it via the
+ * LLM, persists it to document_text_artifacts, and returns it.
+ */
+const ensureSummary = async (documentType, documentId) => {
+  const artifact = await getTextArtifact(documentId);
+  if (artifact?.englishSummary) {
+    const sections = artifact.summarySections || parseSummarySections(artifact.englishSummary);
+    const cachedQuestions = await safeSuggestedQuestions(documentType, artifact.englishSummary, sections);
+    return {
+      summary: artifact.englishSummary,
+      summarySections: sections,
+      suggestedQuestions:
+        artifact.metadata?.suggestedQuestions || cachedQuestions || [],
+      cached: true,
+    };
+  }
+
+  // No cached summary — generate one now.
+  const config = typeConfig(documentType);
+  const matches = await loadIndexedChunks(config, documentId);
+  let context = matches
+    .map((match) => match.metadata?.content || "")
+    .filter(Boolean)
+    .join("\n\n");
+
+  // Fall back to stored original text if Pinecone has no chunks.
+  if (!context && artifact?.metadata?.originalText) {
+    context = artifact.metadata.originalText;
+  }
+  if (!context) {
+    // Try the raw original_text column.
+    const rawResult = await query(
+      `SELECT original_text FROM document_text_artifacts
+       WHERE document_id = $1 LIMIT 1`,
+      [documentId],
+    );
+    context = rawResult.rows[0]?.original_text || "";
+  }
+  if (!context) {
+    return {
+      summary: "",
+      summarySections: {},
+      suggestedQuestions: [],
+      cached: false,
+    };
+  }
+
+  // Truncate to first ~6 chunks worth of text for the summary prompt.
+  const truncated = context.slice(0, 24_000);
+  const language = pdfProcessor.detectLanguage(truncated);
+  const summaryResult = await safeGenerateSummary(documentType, truncated, {
+    sourceLanguage: language.languageCode,
+  });
+  const summary = summaryResult.summary;
+  const summarySections = parseSummarySections(summary);
+  const suggestedQuestions = await safeSuggestedQuestions(
+    documentType,
+    summary,
+    summarySections,
+  );
+
+  // Persist so subsequent requests get a cache hit.
+  await query(
+    `UPDATE document_text_artifacts
+     SET english_summary = $2,
+         summary_json = $3::jsonb,
+         metadata_json = metadata_json || $4::jsonb,
+         updated_at = NOW()
+     WHERE document_id = $1`,
+    [
+      documentId,
+      summary,
+      JSON.stringify({ ...summarySections, suggestedQuestions }),
+      JSON.stringify({ suggestedQuestions, summaryFallback: summaryResult.fallback, summaryFallbackReason: summaryResult.error?.message || null }),
+    ],
+  );
+
+  // Also propagate the summary into the Pinecone metadata.
+  if (matches.length > 0) {
+    await Promise.all(
+      matches.map((match) =>
+        config.index().update({
+          id: match.id,
+          metadata: { ...match.metadata, summary },
+        }),
+      ),
+    ).catch((error) =>
+      console.warn("[ensureSummary] Pinecone metadata update failed:", error.message),
+    );
+  }
+
+  return {
+    summary,
+    summarySections: { ...summarySections, suggestedQuestions },
+    suggestedQuestions,
+    cached: false,
+  };
+};
+
 module.exports = {
   TYPE_CONFIG,
   getDocument,
@@ -1290,4 +1390,5 @@ module.exports = {
   buildExtractiveSummary,
   parseSummarySections,
   searchAcrossIndexedDocuments,
+  ensureSummary,
 };

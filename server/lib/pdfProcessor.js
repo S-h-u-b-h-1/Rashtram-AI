@@ -316,6 +316,8 @@ class PDFProcessor {
   }
 
   async getOpenAI() {
+    const apiKey = process.env.OPENAI_API_KEY || process.env.GEMINI_API_KEY;
+    if (!apiKey) {
     if (String(process.env.AI_PROVIDER || "").toLowerCase() !== "openai") {
       const error = new Error(
         "OpenAI OCR is disabled because Gemini is the configured AI provider.",
@@ -325,21 +327,24 @@ class PDFProcessor {
     }
     if (!process.env.OPENAI_API_KEY) {
       const error = new Error(
-        "OCR is unavailable because OPENAI_API_KEY is not configured.",
+        "OCR is unavailable because OPENAI_API_KEY or GEMINI_API_KEY is not configured.",
       );
       error.status = 422;
       throw error;
     }
     if (!this.openAIClientPromise) {
-      const configuredBaseUrl = process.env.OPENAI_BASE_URL || "";
-      const useConfiguredBaseUrl = !(
+      let configuredBaseUrl = (process.env.OPENAI_BASE_URL || "").trim();
+      if (String(apiKey || "").startsWith("AIza") && !configuredBaseUrl) {
+        configuredBaseUrl = "https://generativelanguage.googleapis.com/v1beta/openai/";
+      }
+      const useConfiguredBaseUrl = Boolean(configuredBaseUrl) && !(
         configuredBaseUrl.includes("generativelanguage.googleapis.com") &&
-        String(process.env.OPENAI_API_KEY || "").startsWith("sk-")
+        String(apiKey || "").startsWith("sk-")
       );
       this.openAIClientPromise = import("openai").then(
         ({ default: OpenAI }) =>
           new OpenAI({
-            apiKey: process.env.OPENAI_API_KEY,
+            apiKey: apiKey,
             baseURL: useConfiguredBaseUrl
               ? configuredBaseUrl || undefined
               : undefined,

@@ -49,13 +49,13 @@ export function RelatedDocuments({
         </p>
       )}
       <div className="mt-3 space-y-2">
-        {items.map((item) => (
+        {items.map((item, index) => (
           <article
-            key={`${item.verified}-${item.relation}-${item.id}`}
+            key={`${item.verified}-${item.relation || "rel"}-${item.id || "id"}-${index}`}
             className="rounded-xl border border-[#8f1d2c]/8 bg-white p-3"
           >
             <p className="text-[9px] font-semibold uppercase tracking-[0.1em] text-[#874047]">
-              Verified · {humanize(item.relation)}
+              Verified · {humanize(item.relation || "related")}
               {item.confidence != null
                 ? ` · ${Math.round(item.confidence * 100)}%`
                 : ""}
