@@ -957,7 +957,7 @@ const getSources = async (id) => {
 const getRelated = async (id) => {
   const { getRelationships } = require("../graph/knowledgeGraphService");
   const result = await getRelationships(id, { limit: 50 });
-  return result.relationships;
+  return (result.relationships || []).map(mapRelationshipSafely);
 };
 
 const getSummary = async (id, userId = null) => {
@@ -1112,20 +1112,22 @@ const getTimeline = async (
     ...relationships
       .filter(
         (relationship) =>
-          relationship.document.publicationDate ||
-          relationship.document.enactedDate ||
-          relationship.document.introducedDate,
+          relationship?.document?.publicationDate ||
+          relationship?.document?.enactedDate ||
+          relationship?.document?.introducedDate,
       )
       .map((relationship) => ({
-        type: relationship.relationshipType,
-        label: `${relationship.relationshipType.replace(/_/g, " ")}: ${
-          relationship.document.title
+        type: relationship.relationshipType || "related",
+        label: `${String(
+          relationship.relationshipType || "related",
+        ).replace(/_/g, " ")}: ${
+          relationship.document?.title || "Related document"
         }`,
         date:
-          relationship.document.publicationDate ||
-          relationship.document.enactedDate ||
-          relationship.document.introducedDate,
-        documentId: relationship.document.id,
+          relationship.document?.publicationDate ||
+          relationship.document?.enactedDate ||
+          relationship.document?.introducedDate,
+        documentId: relationship.document?.id || null,
         sourceUrl: relationship.sourceUrl,
       })),
   );
