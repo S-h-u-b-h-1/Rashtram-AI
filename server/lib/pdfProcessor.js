@@ -318,6 +318,14 @@ class PDFProcessor {
   async getOpenAI() {
     const apiKey = process.env.OPENAI_API_KEY || process.env.GEMINI_API_KEY;
     if (!apiKey) {
+    if (String(process.env.AI_PROVIDER || "").toLowerCase() !== "openai") {
+      const error = new Error(
+        "OpenAI OCR is disabled because Gemini is the configured AI provider.",
+      );
+      error.status = 422;
+      throw error;
+    }
+    if (!process.env.OPENAI_API_KEY) {
       const error = new Error(
         "OCR is unavailable because OPENAI_API_KEY or GEMINI_API_KEY is not configured.",
       );
@@ -346,6 +354,71 @@ class PDFProcessor {
     return this.openAIClientPromise;
   }
 
+  async extractTextWithGeminiOcr(buffer) {
+    const apiKey = String(process.env.GEMINI_API_KEY || "").trim();
+    if (!apiKey) {
+      const error = new Error(
+        "OCR is unavailable because GEMINI_API_KEY is not configured.",
+      );
+      error.status = 422;
+      throw error;
+    }
+    const model = String(
+      process.env.GEMINI_OCR_MODEL ||
+        process.env.GEMINI_MODEL ||
+        "gemini-2.5-flash",
+    ).trim();
+    const baseUrl = String(
+      process.env.GEMINI_BASE_URL ||
+        "https://generativelanguage.googleapis.com/v1beta",
+    ).replace(/\/+$/, "");
+    const modelPath = model.startsWith("models/") ? model : `models/${model}`;
+    const response = await fetch(
+      `${baseUrl}/${modelPath}:generateContent?key=${encodeURIComponent(apiKey)}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          contents: [
+            {
+              role: "user",
+              parts: [
+                {
+                  inline_data: {
+                    mime_type: "application/pdf",
+                    data: buffer.toString("base64"),
+                  },
+                },
+                {
+                  text: [
+                    "Transcribe this scanned Indian government document exactly.",
+                    "Preserve the original language, Devanagari text, numbers,",
+                    "headings, paragraph order, and page breaks. Do not translate,",
+                    "summarize, explain, or invent missing text. Return only the",
+                    "transcription in plain text.",
+                  ].join(" "),
+                },
+              ],
+            },
+          ],
+        }),
+      },
+    );
+    if (!response.ok) {
+      const payload = await response.json().catch(() => ({}));
+      const error = new Error(
+        payload.error?.message ||
+          `Gemini OCR failed with status ${response.status}`,
+      );
+      error.status = response.status;
+      throw error;
+    }
+    const payload = await response.json();
+    return (payload.candidates?.[0]?.content?.parts || [])
+      .map((part) => part.text || "")
+      .join("");
+  }
+
   async extractTextWithOcr(buffer) {
     if (this.ocrExtractor) return this.ocrExtractor(buffer);
     if (buffer.length > MAX_INLINE_OCR_BYTES) {
@@ -354,6 +427,12 @@ class PDFProcessor {
       );
       error.status = 422;
       throw error;
+    }
+    if (
+      String(process.env.AI_PROVIDER || "gemini").toLowerCase() !== "openai" &&
+      process.env.GEMINI_API_KEY
+    ) {
+      return this.extractTextWithGeminiOcr(buffer);
     }
     const openai = await this.getOpenAI();
     const response = await openai.responses.create({
@@ -423,7 +502,10 @@ class PDFProcessor {
       const ocrStartedAt = Date.now();
       fullText = await this.extractTextWithOcr(buffer);
       ocrMs = Date.now() - ocrStartedAt;
-      extractionMethod = "openai_ocr";
+      extractionMethod =
+        String(process.env.AI_PROVIDER || "gemini").toLowerCase() === "openai"
+          ? "openai_ocr"
+          : "gemini_ocr";
       ocrUsed = true;
     }
     if (!this.hasUsableText(fullText, native.numPages)) {

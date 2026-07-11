@@ -11,6 +11,7 @@ const {
   getRelationshipContext,
 } = require("../graph/knowledgeGraphService");
 const {
+  enqueueProcessing,
   prepareDocument,
 } = require("./readinessService");
 const { getDocumentReadiness } = require("./readinessContract");
@@ -91,7 +92,10 @@ const respondWithError = (res, error, context) => {
 router.get("/document/:documentType/:documentId", async (req, res) => {
   try {
     const { documentType, documentId } = identity(req);
-    const document = await getDocumentContext(documentType, documentId);
+    const [document, readiness] = await Promise.all([
+      getDocumentContext(documentType, documentId),
+      getDocumentReadiness(documentId),
+    ]);
     if (!document) {
       return res.status(404).json({ error: "Document not found." });
     }
@@ -114,6 +118,35 @@ router.get("/document/:documentType/:documentId", async (req, res) => {
       }
     }
     return res.json({ document });
+    let backgroundPreparation = null;
+    if (readiness?.canPrepare && !readiness?.comparisonReady) {
+      try {
+        const job = await enqueueProcessing(documentId, req.user.id, {
+          priority: 90,
+          reason: "auto_open_document",
+        });
+        backgroundPreparation = {
+          queued: true,
+          jobId: job?.id || null,
+          status: job?.status || "queued",
+        };
+      } catch (enqueueError) {
+        console.warn(
+          "Automatic document preparation enqueue failed:",
+          sanitizeProviderError(enqueueError),
+        );
+        backgroundPreparation = {
+          queued: false,
+          error: "Document preparation could not be queued automatically.",
+        };
+      }
+    }
+    const { document: _readinessDocument, ...readinessPayload } = readiness || {};
+    return res.json({
+      document,
+      readiness: readinessPayload,
+      backgroundPreparation,
+    });
   } catch (error) {
     return respondWithError(res, error, "Unified document context failed");
   }

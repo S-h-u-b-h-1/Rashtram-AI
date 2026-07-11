@@ -37,6 +37,47 @@ npm run process:status --prefix server
 - Preserve chunks and extracted text if later embedding or summary generation fails.
 - Treat local PostgreSQL text chunks as a valid retrieval fallback when vector storage is unavailable.
 - Clear stale ready flags when canonical retrieval evidence fails.
+- Keep Gemini vectors in a versioned namespace: `gemini-embedding-001-768-v1`.
+- Do not mix OpenAI/local fallback vectors and Gemini vectors in the same Pinecone namespace.
+- Do not start the 25-50 document controlled backfill until five-type smoke processing succeeds.
+- Stop a batch early if failures are dominated by large scanned PDFs, oversized downloads, provider errors, or repeated database connectivity errors.
+
+## Gemini production processing status
+
+Production is configured for Gemini generation, streaming, OCR, and embeddings.
+
+Current production vector configuration:
+
+| Setting | Value |
+| --- | --- |
+| Embedding provider | `gemini` |
+| Embedding model | `gemini-embedding-001` |
+| Embedding dimension | 768 |
+| Pinecone bill index | `rashtram-bills` |
+| Pinecone act index | `rashtram-acts` |
+| Pinecone metric | cosine |
+| Namespace | `gemini-embedding-001-768-v1` |
+
+`text-embedding-004` was not usable through the production Gemini embedding endpoint, so the runtime now normalizes Gemini embeddings to `gemini-embedding-001`.
+
+### Bounded smoke result
+
+The first bounded smoke processed two bill records successfully:
+
+| Document ID | Type | Result | Chunks | Embeddings | Retrieval |
+| --- | --- | --- | ---: | ---: | --- |
+| `243` | bill | completed | 2 | 2 | verified |
+| `1642` | bill | completed | 2 | 2 | verified |
+
+The same smoke also found real corpus limits:
+
+| Document ID | Type | Result | Reason |
+| --- | --- | --- | --- |
+| `20437` | act | failed permanent | scanned PDF too large for inline OCR |
+| `20575` | report | failed retriable | content length exceeded configured download limit |
+| `23272` | regulation | queued at last check | not processed before access was blocked |
+
+Do not treat this as a completed five-type smoke. Select smaller replacement records and complete the five required types before backfill.
 
 ## Recovery pattern
 
