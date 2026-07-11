@@ -27,10 +27,10 @@ GEMINI_API_KEY=<secret>
 GEMINI_MODEL=gemini-2.5-flash
 GEMINI_FALLBACK_MODEL=gemini-2.5-flash
 GEMINI_OCR_MODEL=gemini-2.5-flash
-GEMINI_EMBEDDING_MODEL=text-embedding-004
+GEMINI_EMBEDDING_MODEL=gemini-embedding-001
 PINECONE_INDEX_NAME=rashtram-bills
 PINECONE_ACT_INDEX_NAME=rashtram-acts
-PINECONE_NAMESPACE=text-embedding-004-768-v1
+PINECONE_NAMESPACE=gemini-embedding-001-768-v1
 ```
 
 Do not place the Gemini key in `OPENAI_API_KEY`.
@@ -72,6 +72,6 @@ Safe provider configuration inspection resolves to:
 - `aiProvider: gemini`
 - `embeddingProvider: gemini`
 - `chatModel: gemini-2.5-flash`
-- `embeddingModel: text-embedding-004`
+- `embeddingModel: gemini-embedding-001`
 
 Direct live Gemini health and Vercel production verification were blocked by the current tool approval/network usage limit and must be rerun after approvals are available.

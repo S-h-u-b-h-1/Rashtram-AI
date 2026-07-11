@@ -41,3 +41,5 @@ Direct Vercel env updates, backend deployment, and production `/health` smoke te
 ## Deployment requirement
 
 After setting Gemini production env variables, redeploy the backend. Vercel env updates are not applied to existing deployments.
+
+Embedding rollout note: production health showed `text-embedding-004` was not available for the current Gemini API `embedContent` path. Use `gemini-embedding-001` with namespace `gemini-embedding-001-768-v1` to avoid mixing old vectors with new Gemini embeddings.

@@ -43,9 +43,12 @@ const normalizeEmbeddingModel = (value, provider = EMBEDDING_PROVIDER) => {
     return "text-embedding-3-large";
   }
   if (provider === "gemini" && /^text-embedding-3/i.test(model)) {
-    return "text-embedding-004";
+    return "gemini-embedding-001";
   }
-  return model || (provider === "gemini" ? "text-embedding-004" : "text-embedding-3-large");
+  if (provider === "gemini" && model === "text-embedding-004") {
+    return "gemini-embedding-001";
+  }
+  return model || (provider === "gemini" ? "gemini-embedding-001" : "text-embedding-3-large");
 };
 const GENERATION_MODEL =
   AI_PROVIDER === "gemini"
