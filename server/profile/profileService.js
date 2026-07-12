@@ -43,6 +43,9 @@ const mapProfile = (row) => ({
   preferredDocumentTypes: row.preferred_document_types || [],
   preferredSources: row.preferred_sources || [],
   dashboardWidgets: row.dashboard_widgets || [],
+  onboardingCompleted: Boolean(row.onboarding_completed),
+  onboardingSkipped: Boolean(row.onboarding_skipped),
+  onboardingCompletedAt: row.onboarding_completed_at || null,
   hasPassword: Boolean(row.password),
 });
 
@@ -342,12 +345,14 @@ const updateProfile = async (userId, payload) => {
        timezone, language_preference, theme_preference, research_visibility,
        notification_preferences, research_interests, preferred_ministries,
        preferred_policy_areas, preferred_jurisdictions,
-       preferred_document_types, preferred_sources, dashboard_widgets
+       preferred_document_types, preferred_sources, dashboard_widgets,
+       onboarding_completed, onboarding_skipped, onboarding_completed_at
      )
      VALUES (
        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11,
        $12::jsonb, $13::jsonb, $14::jsonb, $15::jsonb, $16::jsonb,
-       $17::jsonb, $18::jsonb, $19::jsonb
+       $17::jsonb, $18::jsonb, $19::jsonb, $20, $21,
+       CASE WHEN $20 OR $21 THEN NOW() ELSE NULL END
      )
      ON CONFLICT (user_id) DO UPDATE SET
        username = EXCLUDED.username,
@@ -368,6 +373,19 @@ const updateProfile = async (userId, payload) => {
        preferred_document_types = EXCLUDED.preferred_document_types,
        preferred_sources = EXCLUDED.preferred_sources,
        dashboard_widgets = EXCLUDED.dashboard_widgets,
+       onboarding_completed = CASE
+         WHEN $22 THEN EXCLUDED.onboarding_completed
+         ELSE user_profiles.onboarding_completed
+       END,
+       onboarding_skipped = CASE
+         WHEN $22 THEN EXCLUDED.onboarding_skipped
+         ELSE user_profiles.onboarding_skipped
+       END,
+       onboarding_completed_at = CASE
+         WHEN $22 AND (EXCLUDED.onboarding_completed OR EXCLUDED.onboarding_skipped)
+           THEN COALESCE(user_profiles.onboarding_completed_at, NOW())
+         ELSE user_profiles.onboarding_completed_at
+       END,
        updated_at = NOW()
      RETURNING *`,
     [
@@ -390,6 +408,10 @@ const updateProfile = async (userId, payload) => {
       JSON.stringify(list(payload.preferredDocumentTypes)),
       JSON.stringify(list(payload.preferredSources)),
       JSON.stringify(list(payload.dashboardWidgets)),
+      Boolean(payload.onboardingCompleted),
+      Boolean(payload.onboardingSkipped),
+      Object.prototype.hasOwnProperty.call(payload, "onboardingCompleted") ||
+        Object.prototype.hasOwnProperty.call(payload, "onboardingSkipped"),
     ],
   );
   const user = await query("SELECT * FROM users WHERE id = $1", [userId]);

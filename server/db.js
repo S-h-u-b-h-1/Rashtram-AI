@@ -280,8 +280,18 @@ const initializeSchema = async () => {
       preferred_document_types JSONB NOT NULL DEFAULT '[]'::jsonb,
       preferred_sources JSONB NOT NULL DEFAULT '[]'::jsonb,
       dashboard_widgets JSONB NOT NULL DEFAULT '[]'::jsonb,
+      onboarding_completed BOOLEAN NOT NULL DEFAULT FALSE,
+      onboarding_skipped BOOLEAN NOT NULL DEFAULT FALSE,
+      onboarding_completed_at TIMESTAMPTZ,
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
+
+    ALTER TABLE user_profiles
+      ADD COLUMN IF NOT EXISTS onboarding_completed BOOLEAN NOT NULL DEFAULT FALSE;
+    ALTER TABLE user_profiles
+      ADD COLUMN IF NOT EXISTS onboarding_skipped BOOLEAN NOT NULL DEFAULT FALSE;
+    ALTER TABLE user_profiles
+      ADD COLUMN IF NOT EXISTS onboarding_completed_at TIMESTAMPTZ;
 
     CREATE TABLE IF NOT EXISTS saved_content (
       id BIGSERIAL PRIMARY KEY,

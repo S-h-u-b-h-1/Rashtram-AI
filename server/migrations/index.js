@@ -35,4 +35,8 @@ module.exports = [
     name: "009_retrieval_fallback_readiness.js",
     migration: require("./009_retrieval_fallback_readiness"),
   },
+  {
+    name: "010_profile_onboarding.js",
+    migration: require("./010_profile_onboarding"),
+  },
 ];

@@ -12,6 +12,11 @@ const mapUser = (row, includePassword = true) => {
     avatar: row.avatar,
     isAdmin: row.is_admin,
     date: row.created_at,
+    onboardingCompleted: Boolean(row.onboarding_completed),
+    onboardingSkipped: Boolean(row.onboarding_skipped),
+    onboardingRequired: Boolean(row.profile_user_id) && !Boolean(
+      row.onboarding_completed || row.onboarding_skipped,
+    ),
   };
 
   if (includePassword) {
@@ -30,7 +35,15 @@ const findByEmail = async (email) => {
 };
 
 const findById = async (id, { includePassword = false } = {}) => {
-  const result = await query("SELECT * FROM users WHERE id = $1 LIMIT 1", [id]);
+  const result = await query(
+    `SELECT u.*, p.user_id AS profile_user_id,
+       p.onboarding_completed, p.onboarding_skipped
+     FROM users u
+     LEFT JOIN user_profiles p ON p.user_id = u.id
+     WHERE u.id = $1
+     LIMIT 1`,
+    [id],
+  );
   return mapUser(result.rows[0], includePassword);
 };
 

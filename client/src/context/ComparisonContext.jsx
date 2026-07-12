@@ -9,8 +9,11 @@ import {
   useState,
 } from "react";
 import { getDocumentReadiness, prepareDocumentForComparison } from "@/lib/api";
+import { useAuth } from "@/context/AuthContext";
 
-const STORAGE_KEY = "rashtram-comparison-documents";
+const LEGACY_STORAGE_KEY = "rashtram-comparison-documents";
+const storageKeyForUser = (userId) =>
+  userId ? `rashtram-comparison-documents:${userId}` : null;
 const ComparisonContext = createContext(null);
 
 export const comparisonDisabledReason = (document) => {
@@ -70,25 +73,39 @@ export const canPrepareForResearch = (document) => {
 };
 
 export function ComparisonProvider({ children }) {
+  const { user, isAuthenticated } = useAuth();
   const [documents, setDocuments] = useState([]);
   const [hydrated, setHydrated] = useState(false);
   const storageValidated = useRef(false);
+  const loadedStorageKey = useRef(null);
+  const storageKey = storageKeyForUser(user?.id || user?._id);
 
   useEffect(() => {
+    storageValidated.current = false;
+    loadedStorageKey.current = null;
+    setHydrated(false);
+    if (!isAuthenticated || !storageKey) {
+      setDocuments([]);
+      setHydrated(true);
+      return;
+    }
     try {
-      const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]");
+      const saved = JSON.parse(localStorage.getItem(storageKey) || "[]");
       if (Array.isArray(saved)) setDocuments(saved.slice(0, 5));
+      localStorage.removeItem(LEGACY_STORAGE_KEY);
     } catch {
-      localStorage.removeItem(STORAGE_KEY);
+      localStorage.removeItem(storageKey);
+      setDocuments([]);
     }
+    loadedStorageKey.current = storageKey;
     setHydrated(true);
-  }, []);
+  }, [isAuthenticated, storageKey]);
 
   useEffect(() => {
-    if (hydrated) {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(documents));
+    if (hydrated && storageKey && loadedStorageKey.current === storageKey) {
+      localStorage.setItem(storageKey, JSON.stringify(documents));
     }
-  }, [documents, hydrated]);
+  }, [documents, hydrated, storageKey]);
 
   useEffect(() => {
     if (!hydrated || storageValidated.current || documents.length === 0) return;

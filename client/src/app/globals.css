@@ -97,16 +97,48 @@ canvas {
 button,
 a,
 input,
-textarea {
+textarea,
+select {
   -webkit-tap-highlight-color: transparent;
 }
 
 button:focus-visible,
 a:focus-visible,
 input:focus-visible,
-textarea:focus-visible {
+textarea:focus-visible,
+select:focus-visible {
   outline: 2px solid #a85a52;
   outline-offset: 2px;
+}
+
+.auth-input {
+  height: 3rem;
+  width: 100%;
+  border-radius: 0.75rem;
+  border: 1px solid rgba(143, 29, 44, 0.12);
+  background: #ffffff;
+  padding-left: 1rem;
+  padding-right: 1rem;
+  font-size: 0.875rem;
+  color: #352723;
+  transition:
+    border-color 160ms ease,
+    box-shadow 160ms ease,
+    opacity 160ms ease;
+}
+
+.auth-input::placeholder {
+  color: #9c9589;
+}
+
+.auth-input:focus {
+  border-color: #a85a52;
+  outline: none;
+  box-shadow: 0 0 0 4px rgba(168, 90, 82, 0.1);
+}
+
+.auth-input:disabled {
+  opacity: 0.6;
 }
 
 .font-serif {

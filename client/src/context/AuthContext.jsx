@@ -136,7 +136,12 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  const register = async (name, email, password) => {
+  const register = async (
+    name,
+    email,
+    password,
+    { redirectTo = "/app/onboarding", persistent = true, hydrate = true } = {},
+  ) => {
     try {
       setLoading(true);
       const response = await fetch(`${API_BASE_URL}/register`, {
@@ -151,14 +156,14 @@ export const AuthProvider = ({ children }) => {
 
       if (response.ok) {
 
-        storeAuthToken(data.authToken, { persistent: true });
+        storeAuthToken(data.authToken, { persistent });
 
 
-        await checkAuthStatus();
+        if (hydrate) await checkAuthStatus();
 
 
-        router.push('/app');
-        return { success: true };
+        if (redirectTo) router.push(redirectTo);
+        return { success: true, user: data.user };
       } else {
         return {
           success: false,
