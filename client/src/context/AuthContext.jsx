@@ -4,12 +4,22 @@ import React, { createContext, useState, useContext, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   clearAuthTokens,
+  deleteAccount as deleteAccountRequest,
   getAuthToken,
   storeAuthToken,
   trackActivity,
 } from "@/lib/api";
 
 const AuthContext = createContext();
+
+const clearLocalAccountState = (userId = null) => {
+  if (typeof window === "undefined") return;
+  if (userId) {
+    localStorage.removeItem(`rashtram-comparison-documents:${userId}`);
+  }
+  localStorage.removeItem("rashtram-comparison-documents");
+  sessionStorage.removeItem("rashtram-activity-session");
+};
 
 export const useAuth = () => {
   const context = useContext(AuthContext);
@@ -198,6 +208,16 @@ export const AuthProvider = ({ children }) => {
     router.push('/');
   };
 
+  const deleteAccount = async ({ confirmation, password } = {}) => {
+    const result = await deleteAccountRequest({ confirmation, password });
+    clearLocalAccountState(user?.id || user?._id);
+    clearAuthTokens();
+    setUser(null);
+    setIsAuthenticated(false);
+    router.push("/");
+    return result;
+  };
+
   const value = {
     user,
     loading,
@@ -206,6 +226,7 @@ export const AuthProvider = ({ children }) => {
     register,
     googleLogin,
     logout,
+    deleteAccount,
     checkAuthStatus,
   };
 

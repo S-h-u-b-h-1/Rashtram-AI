@@ -9,6 +9,7 @@ const {
   addSavedSearch,
   changePassword,
   createCollection,
+  deleteAccount,
   getAccountData,
   removeSavedContent,
   revokeSession,
@@ -91,6 +92,20 @@ router.patch("/password", fetchuser, async (req, res) => {
     });
   } catch (error) {
     return res.status(error.status || 400).json({ error: error.message });
+  }
+});
+
+router.delete("/", fetchuser, async (req, res) => {
+  try {
+    const result = await deleteAccount(req.user.id, req.body);
+    return res.json({
+      success: true,
+      deleted: result.deleted,
+    });
+  } catch (error) {
+    return res.status(error.status || 500).json({
+      error: error.message || "Unable to delete account.",
+    });
   }
 });
 

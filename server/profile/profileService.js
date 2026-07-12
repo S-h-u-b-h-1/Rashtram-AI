@@ -1,5 +1,5 @@
 const bcrypt = require("bcryptjs");
-const { query } = require("../db");
+const { connectDB, getPool, query } = require("../db");
 
 const text = (value, max = 500) => {
   const normalized = String(value ?? "").trim();
@@ -543,12 +543,135 @@ const revokeSession = async (userId, sessionId) => {
   return Boolean(result.rows[0]);
 };
 
+const deleteAccount = async (userId, payload = {}) => {
+  const confirmation = String(payload.confirmation || "").trim();
+  if (confirmation !== "DELETE") {
+    const error = new Error("Type DELETE to confirm account deletion.");
+    error.status = 400;
+    throw error;
+  }
+
+  await connectDB();
+  const client = await getPool().connect();
+  try {
+    await client.query("BEGIN");
+    const userResult = await client.query(
+      `SELECT id, email, password
+       FROM users
+       WHERE id = $1
+       FOR UPDATE`,
+      [userId],
+    );
+    const user = userResult.rows[0];
+    if (!user) {
+      const error = new Error("User not found.");
+      error.status = 404;
+      throw error;
+    }
+
+    if (user.password) {
+      const passwordOk = await bcrypt.compare(
+        String(payload.password || ""),
+        user.password,
+      );
+      if (!passwordOk) {
+        const error = new Error("Current password is required to delete this account.");
+        error.status = 403;
+        throw error;
+      }
+    }
+
+    const deletions = {};
+    const deleteOwned = async (table, condition = "user_id = $1") => {
+      const result = await client.query(
+        `DELETE FROM ${table} WHERE ${condition}`,
+        [userId],
+      );
+      deletions[table] = result.rowCount;
+    };
+
+    await deleteOwned("research_collection_items", `collection_id IN (
+      SELECT id FROM research_collections WHERE user_id = $1
+    )`);
+    await deleteOwned("multi_document_chats");
+    await deleteOwned("document_comparisons");
+    await deleteOwned("document_chat_feedback");
+    await deleteOwned("research_notes");
+    await deleteOwned("saved_content");
+    await deleteOwned("saved_searches");
+    await deleteOwned("research_collections");
+    await deleteOwned("saved_graph_paths");
+    await deleteOwned("user_document_interactions");
+    await deleteOwned("user_research_preferences");
+    await deleteOwned("user_activity_events");
+    await deleteOwned("user_sessions");
+    await deleteOwned("document_chats");
+    await deleteOwned("policy_chats");
+    await deleteOwned("egazette_chats");
+    await deleteOwned("act_chats");
+    await deleteOwned("bill_chats");
+    await deleteOwned("user_profiles");
+    await deleteOwned("research_chats");
+    await deleteOwned("user_preferences");
+    await client.query(
+      `UPDATE recommendations
+       SET user_id = NULL
+       WHERE user_id = $1`,
+      [userId],
+    );
+    await client.query(
+      `UPDATE document_processing_jobs
+       SET requested_by = NULL
+       WHERE requested_by = $1`,
+      [userId],
+    );
+    await client.query(
+      `UPDATE feedback_submissions
+       SET user_id = NULL
+       WHERE user_id = $1`,
+      [userId],
+    );
+    await client.query(
+      `UPDATE bug_reports
+       SET user_id = NULL
+       WHERE user_id = $1`,
+      [userId],
+    );
+    await client.query(
+      `UPDATE audit_logs
+       SET user_id = NULL
+       WHERE user_id = $1`,
+      [userId],
+    );
+
+    const deleted = await client.query(
+      `DELETE FROM users
+       WHERE id = $1
+       RETURNING id, email`,
+      [userId],
+    );
+    await client.query("COMMIT");
+    return {
+      deleted: Boolean(deleted.rows[0]),
+      userId: String(userId),
+      email: user.email,
+      deletions,
+    };
+  } catch (error) {
+    await client.query("ROLLBACK").catch(() => undefined);
+    throw error;
+  } finally {
+    client.release();
+  }
+};
+
 module.exports = {
   addCollectionItem,
   addSavedContent,
   addSavedSearch,
   changePassword,
   createCollection,
+  deleteAccount,
   getAccountData,
   removeSavedContent,
   revokeSession,

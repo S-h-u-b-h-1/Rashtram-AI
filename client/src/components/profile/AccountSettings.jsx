@@ -6,15 +6,18 @@ import {
   FolderPlus,
   KeyRound,
   Laptop,
+  Loader2,
   Save,
   Trash2,
   UserRound,
   GitCompareArrows,
+  AlertTriangle,
 } from "lucide-react";
 import { useMemo, useState } from "react";
 import * as api from "@/lib/api";
 import { formatDate, humanize } from "@/lib/document-links";
 import { useComparison } from "@/context/ComparisonContext";
+import { useAuth } from "@/context/AuthContext";
 
 const join = (items) => (Array.isArray(items) ? items.join(", ") : "");
 const split = (value) =>
@@ -25,6 +28,7 @@ const split = (value) =>
 
 export function AccountSettings({ account, onUpdate }) {
   const { addDocument, removeDocument, isSelected } = useComparison();
+  const { deleteAccount } = useAuth();
   const initial = account?.profile || {};
   const [form, setForm] = useState({
     ...initial,
@@ -42,6 +46,12 @@ export function AccountSettings({ account, onUpdate }) {
   const [collectionName, setCollectionName] = useState("");
   const [saving, setSaving] = useState(false);
   const [notice, setNotice] = useState("");
+  const [deleteForm, setDeleteForm] = useState({
+    confirmation: "",
+    password: "",
+  });
+  const [deletingAccount, setDeletingAccount] = useState(false);
+  const [deleteNotice, setDeleteNotice] = useState("");
 
   const savedByType = useMemo(() => {
     const values = { bookmarks: [], pinned: [] };
@@ -125,6 +135,22 @@ export function AccountSettings({ account, onUpdate }) {
         (item) => item.id !== id,
       ),
     });
+  };
+
+  const canDelete =
+    deleteForm.confirmation === "DELETE" &&
+    (!initial.hasPassword || deleteForm.password.length > 0);
+
+  const submitDeleteAccount = async () => {
+    if (!canDelete || deletingAccount) return;
+    setDeletingAccount(true);
+    setDeleteNotice("");
+    try {
+      await deleteAccount(deleteForm);
+    } catch (error) {
+      setDeleteNotice(error.message || "Account deletion failed.");
+      setDeletingAccount(false);
+    }
   };
 
   return (
@@ -570,6 +596,97 @@ export function AccountSettings({ account, onUpdate }) {
           <Download className="h-4 w-4" />
           Export profile and research history
         </button>
+      </div>
+
+      <div className="border-t border-[#8f1d2c]/10 bg-[#fff7f4] p-5 sm:p-6">
+        <div className="rounded-2xl border border-[#914148]/20 bg-white p-4 shadow-sm">
+          <div className="flex items-start gap-3">
+            <div className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-[#914148]/10 text-[#914148]">
+              <AlertTriangle className="h-5 w-5" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <h3 className="text-sm font-semibold text-[#29312d]">
+                Delete account
+              </h3>
+              <p className="mt-1 text-xs leading-5 text-[#706a61]">
+                This permanently deletes your Rashtram AI account and directly
+                removes user-owned database records including profile details,
+                sessions, saved content, research collections, notes, chats,
+                comparison history, activity events, and personalization
+                preferences. Catalogue documents and public source data remain
+                intact.
+              </p>
+
+              <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                {initial.hasPassword && (
+                  <label className="space-y-1.5">
+                    <span className="text-[10px] font-semibold uppercase tracking-[0.1em] text-[#81796e]">
+                      Current password
+                    </span>
+                    <input
+                      type="password"
+                      value={deleteForm.password}
+                      onChange={(event) =>
+                        setDeleteForm((current) => ({
+                          ...current,
+                          password: event.target.value,
+                        }))
+                      }
+                      disabled={deletingAccount}
+                      className="h-11 w-full rounded-xl border border-[#914148]/15 bg-white px-3 text-sm outline-none focus:border-[#914148]"
+                    />
+                  </label>
+                )}
+                <label
+                  className={`space-y-1.5 ${
+                    initial.hasPassword ? "" : "sm:col-span-2"
+                  }`}
+                >
+                  <span className="text-[10px] font-semibold uppercase tracking-[0.1em] text-[#81796e]">
+                    Type DELETE to confirm
+                  </span>
+                  <input
+                    value={deleteForm.confirmation}
+                    onChange={(event) =>
+                      setDeleteForm((current) => ({
+                        ...current,
+                        confirmation: event.target.value,
+                      }))
+                    }
+                    disabled={deletingAccount}
+                    className="h-11 w-full rounded-xl border border-[#914148]/15 bg-white px-3 text-sm outline-none focus:border-[#914148]"
+                  />
+                </label>
+              </div>
+
+              {deleteNotice && (
+                <p role="alert" className="mt-3 text-xs text-[#914148]">
+                  {deleteNotice}
+                </p>
+              )}
+
+              <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
+                <p className="text-[11px] leading-5 text-[#81796e]">
+                  Export your profile first if you need a copy. This action
+                  cannot be undone.
+                </p>
+                <button
+                  type="button"
+                  onClick={submitDeleteAccount}
+                  disabled={!canDelete || deletingAccount}
+                  className="inline-flex items-center gap-2 rounded-full bg-[#914148] px-4 py-2.5 text-xs font-semibold text-white shadow-sm transition hover:bg-[#7d3037] disabled:cursor-not-allowed disabled:opacity-45"
+                >
+                  {deletingAccount ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <Trash2 className="h-3.5 w-3.5" />
+                  )}
+                  {deletingAccount ? "Deleting account…" : "Delete account"}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
     </section>
   );

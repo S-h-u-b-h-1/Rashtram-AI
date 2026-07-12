@@ -526,6 +526,13 @@ export const changePassword = async (currentPassword, newPassword) => {
   });
 };
 
+export const deleteAccount = async ({ confirmation, password } = {}) => {
+  return apiRequest("/profile", {
+    method: "DELETE",
+    body: JSON.stringify({ confirmation, password }),
+  });
+};
+
 export const saveContent = async (item) => {
   return apiRequest("/profile/saved", {
     method: "POST",
