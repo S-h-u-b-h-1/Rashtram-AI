@@ -519,6 +519,35 @@ export const updateProfile = async (profile) => {
   });
 };
 
+export const getAuthState = async () => {
+  return apiRequest("/auth/me");
+};
+
+export const getOnboarding = async () => {
+  return apiRequest("/onboarding");
+};
+
+export const saveOnboarding = async (payload) => {
+  return apiRequest("/onboarding", {
+    method: "PUT",
+    body: JSON.stringify(payload),
+  });
+};
+
+export const completeOnboarding = async (payload) => {
+  return apiRequest("/onboarding/complete", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+};
+
+export const skipOnboarding = async () => {
+  return apiRequest("/onboarding/skip", {
+    method: "POST",
+    body: JSON.stringify({}),
+  });
+};
+
 export const changePassword = async (currentPassword, newPassword) => {
   return apiRequest("/profile/password", {
     method: "PATCH",
@@ -672,9 +701,7 @@ export const updateActivityPreferences = async (preferences) => {
 
 export const getUser = async () => {
   try {
-    const data = await apiRequest('/auth/getuser', {
-      method: 'POST',
-    });
+    const data = await getAuthState();
     return data;
   } catch (error) {
     console.error('Error fetching user details:', error);

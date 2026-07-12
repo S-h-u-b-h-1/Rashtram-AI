@@ -32,6 +32,21 @@ export function DashboardHero({ data, onSearch }) {
             <p className="mt-4 max-w-2xl text-sm leading-6 text-white/62 sm:text-base">
               {data.briefSummary}
             </p>
+            {data.personalization?.enabled ? (
+              <p className="mt-3 max-w-2xl text-xs leading-5 text-white/50">
+                Personalized for {data.personalization.role?.replaceAll("_", " ") || "your role"}
+                {data.personalization.topics?.length
+                  ? ` · ${data.personalization.topics.slice(0, 3).join(", ")}`
+                  : ""}
+              </p>
+            ) : (
+              <Link
+                href="/app/onboarding"
+                className="mt-3 inline-flex rounded-full border border-white/12 bg-white/[0.06] px-3 py-1.5 text-xs font-semibold text-white/72 transition hover:bg-white/12 hover:text-white"
+              >
+                Personalize this dashboard
+              </Link>
+            )}
             <form
               className="mt-6 flex max-w-2xl gap-2 rounded-2xl border border-white/12 bg-white/[0.07] p-2"
               onSubmit={(event) => {

@@ -2,6 +2,7 @@ const User = require("../models/User");
 const bcrypt = require("bcryptjs");
 const { validationResult } = require("express-validator");
 const { createSessionToken } = require("./sessionService");
+const { getAuthState } = require("../onboarding/onboardingService");
 require('dotenv').config();
 
 const LoginController = async (req, res) => {
@@ -104,4 +105,15 @@ const getUserController = async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 };
-module.exports = { LoginController, RegisterController, getUserController };
+const meController = async (req, res) => {
+  try {
+    const state = await getAuthState(req.user.id);
+    if (!state) {
+      return res.status(404).json({ error: "User not found" });
+    }
+    return res.status(200).json(state);
+  } catch (error) {
+    return res.status(500).json({ error: error.message });
+  }
+};
+module.exports = { LoginController, RegisterController, getUserController, meController };

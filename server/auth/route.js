@@ -1,6 +1,6 @@
 const express = require("express");
 const router = express.Router();
-const { LoginController, RegisterController, getUserController } = require("./controller");
+const { LoginController, RegisterController, getUserController, meController } = require("./controller");
 const { body } = require("express-validator");
 const fetchuser = require("../middleware/fetchuser");
 const {googleLoginController} = require("./googleController");
@@ -46,6 +46,7 @@ router.post(
 );
 
 router.post('/getuser', fetchuser, getUserController);
+router.get('/me', fetchuser, meController);
 const googleConfigured = Boolean(
   process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET,
 );

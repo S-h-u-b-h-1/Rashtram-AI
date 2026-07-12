@@ -1,18 +1,28 @@
 "use client";
 
 import { useAuth } from '@/context/AuthContext';
-import { useRouter } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { useEffect } from 'react';
 
 const ProtectedRoute = ({ children }) => {
-  const { isAuthenticated, loading } = useAuth();
+  const { isAuthenticated, loading, onboarding } = useAuth();
   const router = useRouter();
+  const pathname = usePathname();
 
   useEffect(() => {
     if (!loading && !isAuthenticated) {
       router.push('/login');
+      return;
     }
-  }, [isAuthenticated, loading, router]);
+    if (
+      !loading &&
+      isAuthenticated &&
+      onboarding?.required &&
+      pathname !== "/app/onboarding"
+    ) {
+      router.push("/app/onboarding");
+    }
+  }, [isAuthenticated, loading, onboarding?.required, pathname, router]);
 
   if (loading) {
     return (
@@ -23,6 +33,10 @@ const ProtectedRoute = ({ children }) => {
   }
 
   if (!isAuthenticated) {
+    return null;
+  }
+
+  if (onboarding?.required && pathname !== "/app/onboarding") {
     return null;
   }
 

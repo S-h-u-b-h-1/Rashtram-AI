@@ -265,6 +265,7 @@ const initializeSchema = async () => {
       username TEXT UNIQUE,
       bio TEXT,
       organization TEXT,
+      role TEXT,
       designation TEXT,
       location TEXT,
       phone TEXT,
@@ -292,6 +293,8 @@ const initializeSchema = async () => {
       ADD COLUMN IF NOT EXISTS onboarding_skipped BOOLEAN NOT NULL DEFAULT FALSE;
     ALTER TABLE user_profiles
       ADD COLUMN IF NOT EXISTS onboarding_completed_at TIMESTAMPTZ;
+    ALTER TABLE user_profiles
+      ADD COLUMN IF NOT EXISTS role TEXT;
 
     CREATE TABLE IF NOT EXISTS saved_content (
       id BIGSERIAL PRIMARY KEY,

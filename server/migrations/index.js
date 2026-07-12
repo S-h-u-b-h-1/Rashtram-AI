@@ -39,4 +39,8 @@ module.exports = [
     name: "010_profile_onboarding.js",
     migration: require("./010_profile_onboarding"),
   },
+  {
+    name: "011_profile_role_and_preference_sync.js",
+    migration: require("./011_profile_role_and_preference_sync"),
+  },
 ];

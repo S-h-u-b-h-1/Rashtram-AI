@@ -24,6 +24,7 @@ const documentChatRouter = require("./document/documentChatRoute");
 const documentsRouter = require("./document/documentsRoute");
 const dashboardRouter = require("./dashboard/route");
 const profileRouter = require("./profile/route");
+const onboardingRouter = require("./onboarding/route");
 const catalogIngestionRouter = require("./catalog/ingestionRoute");
 const activityRouter = require("./activity/route");
 const contactRouter = require("./contact/route");
@@ -102,6 +103,7 @@ app.use("/api/recommendations", fetchUser, recommendationsRouter);
 app.use("/api/graph", graphRouter);
 app.use("/api/dashboard", dashboardRouter);
 app.use("/api/profile", profileRouter);
+app.use("/api/onboarding", onboardingRouter);
 app.use("/api/catalog-operations", catalogIngestionRouter);
 app.use("/api/activity", activityRouter);
 

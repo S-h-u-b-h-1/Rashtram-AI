@@ -1,4 +1,5 @@
 const { query } = require("../db");
+const { ensureDefaultAccountState } = require("../onboarding/onboardingService");
 
 const mapUser = (row, includePassword = true) => {
   if (!row) return null;
@@ -54,7 +55,9 @@ const create = async ({ name, email, password }) => {
      RETURNING *`,
     [name, email, password],
   );
-  return mapUser(result.rows[0]);
+  const user = mapUser(result.rows[0]);
+  await ensureDefaultAccountState(user.id);
+  return user;
 };
 
 const findOrCreateGoogleUser = async ({ googleId, name, email, avatar }) => {
@@ -87,7 +90,9 @@ const findOrCreateGoogleUser = async ({ googleId, name, email, avatar }) => {
      RETURNING *`,
     [googleId, name, email, avatar],
   );
-  return mapUser(created.rows[0]);
+  const user = mapUser(created.rows[0]);
+  await ensureDefaultAccountState(user.id);
+  return user;
 };
 
 module.exports = {

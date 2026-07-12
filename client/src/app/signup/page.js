@@ -35,6 +35,13 @@ const policyAreas = [
 ];
 
 const documentTypes = ["Bills", "Acts", "Policies", "Gazette", "State laws"];
+const documentTypeValue = {
+  Bills: "bill",
+  Acts: "act",
+  Policies: "policy",
+  Gazette: "gazette",
+  "State laws": "state_bill",
+};
 
 const jurisdictions = ["Union", "State", "Both"];
 
@@ -125,24 +132,37 @@ export default function Signup() {
     }
     setSavingProfile(true);
     try {
-      await api.updateProfile({
-        name: form.name,
-        organization: skipped ? "" : form.organization,
-        designation: skipped ? "" : form.designation,
-        location: skipped ? "" : form.location,
-        languagePreference: form.languagePreference,
-        preferredPolicyAreas: skipped ? [] : form.preferredPolicyAreas,
-        preferredDocumentTypes: skipped ? [] : form.preferredDocumentTypes,
-        preferredJurisdictions: skipped ? [] : form.preferredJurisdictions,
-        researchInterests: skipped
-          ? []
-          : [
+      if (skipped) {
+        await api.skipOnboarding();
+      } else {
+        const preferredDocumentTypes = form.preferredDocumentTypes
+          .map((type) => documentTypeValue[type] || type)
+          .filter(Boolean);
+        await api.completeOnboarding({
+          profile: {
+            name: form.name,
+            organization: form.organization,
+            role: "student",
+            designation: form.designation,
+            location: form.location,
+            timezone: "Asia/Kolkata",
+          },
+          preferences: {
+            preferredLanguage: form.languagePreference,
+            preferredTopics: form.preferredPolicyAreas,
+            preferredDocumentTypes,
+            preferredJurisdictions: form.preferredJurisdictions,
+            researchInterests: [
               ...form.preferredPolicyAreas,
-              ...form.preferredDocumentTypes,
+              ...preferredDocumentTypes,
             ],
-        onboardingCompleted: !skipped,
-        onboardingSkipped: skipped,
-      });
+            notificationPreferences: {
+              emailDigest: true,
+              productUpdates: true,
+            },
+          },
+        });
+      }
       await checkAuthStatus();
       router.push("/app");
     } catch (requestError) {

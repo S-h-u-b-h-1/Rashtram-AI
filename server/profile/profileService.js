@@ -1,5 +1,6 @@
 const bcrypt = require("bcryptjs");
 const { connectDB, getPool, query } = require("../db");
+const { normalizePayload } = require("../onboarding/onboardingService");
 
 const text = (value, max = 500) => {
   const normalized = String(value ?? "").trim();
@@ -28,6 +29,7 @@ const mapProfile = (row) => ({
   username: row.username,
   bio: row.bio,
   organization: row.organization,
+  role: row.role,
   designation: row.designation,
   location: row.location,
   phone: row.phone,
@@ -341,7 +343,7 @@ const updateProfile = async (userId, payload) => {
   );
   const result = await query(
     `INSERT INTO user_profiles (
-       user_id, username, bio, organization, designation, location, phone,
+       user_id, username, bio, organization, role, designation, location, phone,
        timezone, language_preference, theme_preference, research_visibility,
        notification_preferences, research_interests, preferred_ministries,
        preferred_policy_areas, preferred_jurisdictions,
@@ -350,14 +352,15 @@ const updateProfile = async (userId, payload) => {
      )
      VALUES (
        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11,
-       $12::jsonb, $13::jsonb, $14::jsonb, $15::jsonb, $16::jsonb,
-       $17::jsonb, $18::jsonb, $19::jsonb, $20, $21,
-       CASE WHEN $20 OR $21 THEN NOW() ELSE NULL END
+       $12, $13::jsonb, $14::jsonb, $15::jsonb, $16::jsonb, $17::jsonb,
+       $18::jsonb, $19::jsonb, $20::jsonb, $21, $22,
+       CASE WHEN $21 OR $22 THEN NOW() ELSE NULL END
      )
      ON CONFLICT (user_id) DO UPDATE SET
        username = EXCLUDED.username,
        bio = EXCLUDED.bio,
        organization = EXCLUDED.organization,
+       role = EXCLUDED.role,
        designation = EXCLUDED.designation,
        location = EXCLUDED.location,
        phone = EXCLUDED.phone,
@@ -374,15 +377,15 @@ const updateProfile = async (userId, payload) => {
        preferred_sources = EXCLUDED.preferred_sources,
        dashboard_widgets = EXCLUDED.dashboard_widgets,
        onboarding_completed = CASE
-         WHEN $22 THEN EXCLUDED.onboarding_completed
+         WHEN $23 THEN EXCLUDED.onboarding_completed
          ELSE user_profiles.onboarding_completed
        END,
        onboarding_skipped = CASE
-         WHEN $22 THEN EXCLUDED.onboarding_skipped
+         WHEN $23 THEN EXCLUDED.onboarding_skipped
          ELSE user_profiles.onboarding_skipped
        END,
        onboarding_completed_at = CASE
-         WHEN $22 AND (EXCLUDED.onboarding_completed OR EXCLUDED.onboarding_skipped)
+         WHEN $23 AND (EXCLUDED.onboarding_completed OR EXCLUDED.onboarding_skipped)
            THEN COALESCE(user_profiles.onboarding_completed_at, NOW())
          ELSE user_profiles.onboarding_completed_at
        END,
@@ -393,6 +396,7 @@ const updateProfile = async (userId, payload) => {
       username,
       text(payload.bio, 1_500),
       text(payload.organization, 160),
+      text(payload.role, 80),
       text(payload.designation, 160),
       text(payload.location, 160),
       text(payload.phone, 40),
@@ -412,6 +416,77 @@ const updateProfile = async (userId, payload) => {
       Boolean(payload.onboardingSkipped),
       Object.prototype.hasOwnProperty.call(payload, "onboardingCompleted") ||
         Object.prototype.hasOwnProperty.call(payload, "onboardingSkipped"),
+    ],
+  );
+  const normalized = normalizePayload({
+    profile: {
+      timezone: payload.timezone,
+    },
+    preferences: {
+      preferredLanguage: payload.languagePreference,
+      researchInterests: list(payload.researchInterests),
+      preferredTopics: list(payload.preferredPolicyAreas),
+      preferredDocumentTypes: list(payload.preferredDocumentTypes),
+      preferredJurisdictions: list(payload.preferredJurisdictions),
+      preferredStates: list(payload.preferredStates),
+      preferredMinistries: list(payload.preferredMinistries),
+      notificationPreferences: object(payload.notificationPreferences),
+    },
+  });
+  await query(
+    `INSERT INTO user_preferences (
+       user_id, language, theme, timezone, notification_preferences,
+       research_preferences, personalization_enabled, updated_at
+     )
+     VALUES ($1, $2, $3, $4, $5::jsonb, $6::jsonb, TRUE, NOW())
+     ON CONFLICT (user_id) DO UPDATE SET
+       language = EXCLUDED.language,
+       theme = EXCLUDED.theme,
+       timezone = EXCLUDED.timezone,
+       notification_preferences = EXCLUDED.notification_preferences,
+       research_preferences = EXCLUDED.research_preferences,
+       personalization_enabled = TRUE,
+       updated_at = NOW()`,
+    [
+      userId,
+      normalized.preferences.preferredLanguage,
+      text(payload.themePreference, 20) || "system",
+      text(payload.timezone, 80) || "Asia/Kolkata",
+      JSON.stringify(object(payload.notificationPreferences)),
+      JSON.stringify({
+        interests: list(payload.researchInterests),
+        preferredTopics: list(payload.preferredPolicyAreas),
+        topics: list(payload.preferredPolicyAreas),
+        documentTypes: normalized.preferences.preferredDocumentTypes,
+        jurisdictions: list(payload.preferredJurisdictions),
+        states: list(payload.preferredStates),
+        ministries: list(payload.preferredMinistries),
+      }),
+    ],
+  );
+  await query(
+    `INSERT INTO user_research_preferences (
+       user_id, preferred_topics_json, preferred_jurisdictions_json,
+       preferred_document_types_json, frequently_viewed_ministries_json,
+       personalization_enabled, updated_at
+     )
+     VALUES ($1, $2::jsonb, $3::jsonb, $4::jsonb, $5::jsonb, TRUE, NOW())
+     ON CONFLICT (user_id) DO UPDATE SET
+       preferred_topics_json = EXCLUDED.preferred_topics_json,
+       preferred_jurisdictions_json = EXCLUDED.preferred_jurisdictions_json,
+       preferred_document_types_json = EXCLUDED.preferred_document_types_json,
+       frequently_viewed_ministries_json = EXCLUDED.frequently_viewed_ministries_json,
+       personalization_enabled = TRUE,
+       updated_at = NOW()`,
+    [
+      userId,
+      JSON.stringify(list(payload.preferredPolicyAreas)),
+      JSON.stringify([
+        ...list(payload.preferredJurisdictions),
+        ...list(payload.preferredStates),
+      ]),
+      JSON.stringify(normalized.preferences.preferredDocumentTypes),
+      JSON.stringify(list(payload.preferredMinistries)),
     ],
   );
   const user = await query("SELECT * FROM users WHERE id = $1", [userId]);

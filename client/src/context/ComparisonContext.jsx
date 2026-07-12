@@ -12,8 +12,9 @@ import { getDocumentReadiness, prepareDocumentForComparison } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 
 const LEGACY_STORAGE_KEY = "rashtram-comparison-documents";
+const PREVIOUS_USER_SCOPED_PREFIX = "rashtram-comparison-documents:";
 const storageKeyForUser = (userId) =>
-  userId ? `rashtram-comparison-documents:${userId}` : null;
+  userId ? `rashtram:comparison-selection:${userId}` : null;
 const ComparisonContext = createContext(null);
 
 export const comparisonDisabledReason = (document) => {
@@ -90,9 +91,15 @@ export function ComparisonProvider({ children }) {
       return;
     }
     try {
-      const saved = JSON.parse(localStorage.getItem(storageKey) || "[]");
+      const previousKey = `${PREVIOUS_USER_SCOPED_PREFIX}${user?.id || user?._id}`;
+      const saved = JSON.parse(
+        localStorage.getItem(storageKey) ||
+          localStorage.getItem(previousKey) ||
+          "[]",
+      );
       if (Array.isArray(saved)) setDocuments(saved.slice(0, 5));
       localStorage.removeItem(LEGACY_STORAGE_KEY);
+      localStorage.removeItem(previousKey);
     } catch {
       localStorage.removeItem(storageKey);
       setDocuments([]);

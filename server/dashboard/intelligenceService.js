@@ -449,9 +449,25 @@ const getDashboardIntelligence = async (userId) => {
     recentUserChats,
   ] = await Promise.all([
     query(
-      `SELECT id, name, email, avatar, created_at
-       FROM users
-       WHERE id = $1
+      `SELECT
+         u.id,
+         u.name,
+         u.email,
+         u.avatar,
+         u.created_at,
+         p.organization,
+         p.role,
+         p.designation,
+         p.language_preference,
+         p.preferred_ministries,
+         p.preferred_policy_areas,
+         p.preferred_jurisdictions,
+         p.preferred_document_types,
+         p.onboarding_completed,
+         p.onboarding_skipped
+       FROM users u
+       LEFT JOIN user_profiles p ON p.user_id = u.id
+       WHERE u.id = $1
        LIMIT 1`,
       [userId],
     ),
@@ -821,6 +837,23 @@ const getDashboardIntelligence = async (userId) => {
 
   return {
     userGreeting: getGreeting(userRow?.name),
+    personalization: {
+      enabled: Boolean(
+        userRow?.onboarding_completed && !userRow?.onboarding_skipped,
+      ),
+      organization: userRow?.organization || null,
+      role: userRow?.role || null,
+      designation: userRow?.designation || null,
+      language: userRow?.language_preference || "english",
+      ministries: userRow?.preferred_ministries || [],
+      topics: userRow?.preferred_policy_areas || [],
+      jurisdictions: userRow?.preferred_jurisdictions || [],
+      documentTypes: userRow?.preferred_document_types || [],
+    },
+    onboarding: {
+      completed: Boolean(userRow?.onboarding_completed),
+      skipped: Boolean(userRow?.onboarding_skipped),
+    },
     currentDate: new Date().toISOString(),
     lastRefresh: toIso(refreshResult.rows[0]?.completed_at),
     freshnessStatus: {

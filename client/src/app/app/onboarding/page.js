@@ -1,12 +1,38 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AnimatePresence, motion } from "framer-motion";
 import { ArrowLeft, ArrowRight, Loader2, Sparkles } from "lucide-react";
 import * as api from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 import ProtectedRoute from "@/components/ProtectedRoute";
+
+const roleOptions = [
+  ["Student", "student"],
+  ["Researcher", "researcher"],
+  ["Policy professional", "policy_professional"],
+  ["Lawyer", "lawyer"],
+  ["Chartered accountant", "chartered_accountant"],
+  ["Company secretary", "company_secretary"],
+  ["Business owner", "business_owner"],
+  ["Compliance professional", "compliance_professional"],
+  ["Journalist", "journalist"],
+  ["Government professional", "government_professional"],
+  ["Faculty", "faculty"],
+  ["Other", "other"],
+];
+
+const primaryUseOptions = [
+  ["Academic research", "academic_research"],
+  ["Legal research", "legal_research"],
+  ["Compliance monitoring", "compliance_monitoring"],
+  ["Business policy intelligence", "business_policy_intelligence"],
+  ["Civil services preparation", "civil_services_preparation"],
+  ["Journalism", "journalism"],
+  ["Government research", "government_research"],
+  ["Other", "other"],
+];
 
 const policyAreas = [
   "Constitutional law",
@@ -17,9 +43,51 @@ const policyAreas = [
   "Environment",
   "Governance",
   "Foreign policy",
+  "Taxation",
+  "Corporate law",
+  "Labour",
+  "Infrastructure",
 ];
-const documentTypes = ["Bills", "Acts", "Policies", "Gazette", "State laws"];
-const jurisdictions = ["Union", "State", "Both"];
+
+const documentTypes = [
+  ["Bills", "bill"],
+  ["State Bills", "state_bill"],
+  ["Acts", "act"],
+  ["Policies", "policy"],
+  ["Gazette", "gazette"],
+  ["Rules", "rule"],
+  ["Circulars", "circular"],
+  ["Reports", "report"],
+];
+
+const states = [
+  "Andhra Pradesh",
+  "Delhi",
+  "Gujarat",
+  "Haryana",
+  "Karnataka",
+  "Maharashtra",
+  "Tamil Nadu",
+  "Uttar Pradesh",
+  "West Bengal",
+];
+
+const ministries = [
+  "Finance",
+  "Education",
+  "Health and Family Welfare",
+  "Corporate Affairs",
+  "Law and Justice",
+  "Environment",
+  "Electronics and IT",
+  "Commerce and Industry",
+];
+
+const languageOptions = [
+  ["English", "english"],
+  ["Hindi", "hindi"],
+  ["Bilingual", "bilingual"],
+];
 
 const toggle = (items, value) =>
   items.includes(value)
@@ -36,45 +104,96 @@ export default function OnboardingPage() {
 
 function OnboardingContent() {
   const router = useRouter();
-  const { user, checkAuthStatus } = useAuth();
+  const { user, profile, preferences, checkAuthStatus } = useAuth();
   const [step, setStep] = useState(0);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
-  const [form, setForm] = useState({
+  const [form, setForm] = useState(() => ({
     name: user?.name || "",
-    organization: "",
-    designation: "",
-    location: "",
-    languagePreference: "English",
-    preferredPolicyAreas: [],
-    preferredDocumentTypes: [],
-    preferredJurisdictions: ["Union"],
-  });
+    organization: profile?.organization || "",
+    role: profile?.role || "student",
+    designation: profile?.designation || "",
+    location: profile?.location || "",
+    timezone: profile?.timezone || "Asia/Kolkata",
+    preferredLanguage: preferences?.preferredLanguage || "english",
+    primaryUse: preferences?.primaryUse || "academic_research",
+    preferredTopics: preferences?.preferredTopics || [],
+    preferredDocumentTypes: preferences?.preferredDocumentTypes || ["bill", "act"],
+    preferredJurisdictions: preferences?.preferredJurisdictions || ["Union"],
+    preferredStates: preferences?.preferredStates || [],
+    preferredMinistries: preferences?.preferredMinistries || [],
+    industries: preferences?.industries || [],
+    researchDescription: preferences?.researchDescription || "",
+    notificationPreferences: preferences?.notificationPreferences || {
+      emailDigest: true,
+      productUpdates: true,
+    },
+  }));
+
+  const progress = useMemo(() => ((step + 1) / 3) * 100, [step]);
 
   const update = (key, value) =>
     setForm((current) => ({ ...current, [key]: value }));
 
+  const payload = (skipped = false) => ({
+    profile: {
+      name: form.name,
+      organization: skipped ? "" : form.organization,
+      role: skipped ? "" : form.role,
+      designation: skipped ? "" : form.designation,
+      location: skipped ? "" : form.location,
+      timezone: form.timezone,
+    },
+    preferences: {
+      preferredLanguage: form.preferredLanguage,
+      primaryUse: skipped ? "" : form.primaryUse,
+      preferredTopics: skipped ? [] : form.preferredTopics,
+      researchInterests: skipped
+        ? []
+        : [...form.preferredTopics, ...form.preferredDocumentTypes],
+      preferredDocumentTypes: skipped ? [] : form.preferredDocumentTypes,
+      preferredJurisdictions: skipped ? [] : form.preferredJurisdictions,
+      preferredStates: skipped ? [] : form.preferredStates,
+      preferredMinistries: skipped ? [] : form.preferredMinistries,
+      industries: skipped ? [] : form.industries,
+      researchDescription: skipped ? "" : form.researchDescription,
+      notificationPreferences: form.notificationPreferences,
+    },
+  });
+
+  const validateStep = () => {
+    if (step === 0 && !form.name.trim()) return "Please enter your name.";
+    if (step === 0 && !form.role) return "Please select your role.";
+    if (step === 1 && form.preferredDocumentTypes.length === 0) {
+      return "Select at least one document type.";
+    }
+    return "";
+  };
+
+  const goNext = async () => {
+    const validation = validateStep();
+    if (validation) {
+      setError(validation);
+      return;
+    }
+    setError("");
+    if (step < 2) {
+      setStep((current) => current + 1);
+      return;
+    }
+    await finish({ skipped: false });
+  };
+
   const finish = async ({ skipped = false } = {}) => {
+    if (saving) return;
     setSaving(true);
     setError("");
     try {
-      await api.updateProfile({
-        ...form,
-        organization: skipped ? "" : form.organization,
-        designation: skipped ? "" : form.designation,
-        location: skipped ? "" : form.location,
-        preferredPolicyAreas: skipped ? [] : form.preferredPolicyAreas,
-        preferredDocumentTypes: skipped ? [] : form.preferredDocumentTypes,
-        preferredJurisdictions: skipped ? [] : form.preferredJurisdictions,
-        researchInterests: skipped
-          ? []
-          : [
-              ...form.preferredPolicyAreas,
-              ...form.preferredDocumentTypes,
-            ],
-        onboardingCompleted: !skipped,
-        onboardingSkipped: skipped,
-      });
+      if (skipped) {
+        await api.skipOnboarding();
+      } else {
+        await api.completeOnboarding(payload(false));
+      }
       await checkAuthStatus();
       router.push("/app");
     } catch (requestError) {
@@ -86,7 +205,7 @@ function OnboardingContent() {
 
   return (
     <main className="min-h-dvh bg-[#f5efe5] px-4 py-8 text-[#2f2723]">
-      <div className="mx-auto flex min-h-[calc(100dvh-4rem)] max-w-4xl items-center justify-center">
+      <div className="mx-auto flex min-h-[calc(100dvh-4rem)] max-w-5xl items-center justify-center">
         <section className="relative w-full overflow-hidden rounded-[2rem] border border-[#8f1d2c]/10 bg-white/82 p-6 shadow-[0_30px_80px_rgba(50,34,27,0.12)] backdrop-blur md:p-10">
           <button
             type="button"
@@ -105,20 +224,17 @@ function OnboardingContent() {
               Personalize your Rashtram AI workspace.
             </h1>
             <p className="mt-3 text-sm leading-6 text-[#746a60]">
-              This helps rank documents, recommendations, and research shortcuts
-              around your work. You can change it later in profile settings.
+              These choices are stored with your account and used to rank the
+              dashboard, recommendations, and research shortcuts. You can edit
+              them later from profile settings.
             </p>
           </div>
 
-          <div className="mb-7 grid grid-cols-3 gap-2">
-            {[0, 1, 2].map((item) => (
-              <div
-                key={item}
-                className={`h-1.5 rounded-full transition ${
-                  item <= step ? "bg-[#8f1d2c]" : "bg-[#8f1d2c]/10"
-                }`}
-              />
-            ))}
+          <div className="mb-7 overflow-hidden rounded-full bg-[#8f1d2c]/10">
+            <div
+              className="h-1.5 rounded-full bg-[#8f1d2c] transition-all duration-300"
+              style={{ width: `${progress}%` }}
+            />
           </div>
 
           {error && (
@@ -132,14 +248,7 @@ function OnboardingContent() {
 
           <AnimatePresence mode="wait">
             {step === 0 && (
-              <motion.div
-                key="identity"
-                initial={{ opacity: 0, y: 12 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -12 }}
-                transition={{ duration: 0.22 }}
-                className="grid gap-4"
-              >
+              <motion.div {...stepMotion("identity")} className="grid gap-4">
                 <div className="flex items-center gap-2 text-sm font-semibold">
                   <Sparkles className="h-4 w-4 text-[#8f1d2c]" />
                   Your research context
@@ -155,72 +264,59 @@ function OnboardingContent() {
                     value={form.organization}
                     onChange={(value) => update("organization", value)}
                   />
-                  <Input
-                    label="Role / designation"
-                    value={form.designation}
-                    onChange={(value) => update("designation", value)}
+                  <Select
+                    label="Role"
+                    value={form.role}
+                    onChange={(value) => update("role", value)}
+                    options={roleOptions}
                   />
                 </div>
                 <div className="grid gap-4 md:grid-cols-2">
+                  <Input
+                    label="Designation"
+                    value={form.designation}
+                    onChange={(value) => update("designation", value)}
+                  />
                   <Input
                     label="Location"
                     value={form.location}
                     onChange={(value) => update("location", value)}
                   />
+                </div>
+                <div className="grid gap-4 md:grid-cols-2">
+                  <Input
+                    label="Timezone"
+                    value={form.timezone}
+                    onChange={(value) => update("timezone", value)}
+                  />
                   <Select
-                    label="Preferred language"
-                    value={form.languagePreference}
-                    onChange={(value) => update("languagePreference", value)}
-                    options={["English", "Hindi", "Bilingual"]}
+                    label="Preferred response language"
+                    value={form.preferredLanguage}
+                    onChange={(value) => update("preferredLanguage", value)}
+                    options={languageOptions}
                   />
                 </div>
               </motion.div>
             )}
 
             {step === 1 && (
-              <motion.div
-                key="interests"
-                initial={{ opacity: 0, y: 12 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -12 }}
-                transition={{ duration: 0.22 }}
-                className="space-y-5"
-              >
+              <motion.div {...stepMotion("preferences")} className="space-y-5">
+                <Select
+                  label="Primary use"
+                  value={form.primaryUse}
+                  onChange={(value) => update("primaryUse", value)}
+                  options={primaryUseOptions}
+                />
                 <ChoiceGroup
                   title="Policy areas"
                   options={policyAreas}
-                  selected={form.preferredPolicyAreas}
+                  selected={form.preferredTopics}
                   onToggle={(value) =>
-                    update(
-                      "preferredPolicyAreas",
-                      toggle(form.preferredPolicyAreas, value),
-                    )
+                    update("preferredTopics", toggle(form.preferredTopics, value))
                   }
                 />
                 <ChoiceGroup
-                  title="Jurisdiction focus"
-                  options={jurisdictions}
-                  selected={form.preferredJurisdictions}
-                  onToggle={(value) =>
-                    update(
-                      "preferredJurisdictions",
-                      toggle(form.preferredJurisdictions, value),
-                    )
-                  }
-                />
-              </motion.div>
-            )}
-
-            {step === 2 && (
-              <motion.div
-                key="documents"
-                initial={{ opacity: 0, y: 12 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -12 }}
-                transition={{ duration: 0.22 }}
-              >
-                <ChoiceGroup
-                  title="Preferred document types"
+                  title="Document types"
                   options={documentTypes}
                   selected={form.preferredDocumentTypes}
                   onToggle={(value) =>
@@ -230,6 +326,55 @@ function OnboardingContent() {
                     )
                   }
                 />
+              </motion.div>
+            )}
+
+            {step === 2 && (
+              <motion.div {...stepMotion("scope")} className="space-y-5">
+                <ChoiceGroup
+                  title="Preferred jurisdictions"
+                  options={["Union", "State", "Both"]}
+                  selected={form.preferredJurisdictions}
+                  onToggle={(value) =>
+                    update(
+                      "preferredJurisdictions",
+                      toggle(form.preferredJurisdictions, value),
+                    )
+                  }
+                />
+                <ChoiceGroup
+                  title="States to watch"
+                  options={states}
+                  selected={form.preferredStates}
+                  onToggle={(value) =>
+                    update("preferredStates", toggle(form.preferredStates, value))
+                  }
+                />
+                <ChoiceGroup
+                  title="Ministries to watch"
+                  options={ministries}
+                  selected={form.preferredMinistries}
+                  onToggle={(value) =>
+                    update(
+                      "preferredMinistries",
+                      toggle(form.preferredMinistries, value),
+                    )
+                  }
+                />
+                <label className="block">
+                  <span className="mb-2 block text-sm font-medium text-[#323a36]">
+                    Research goals
+                  </span>
+                  <textarea
+                    value={form.researchDescription}
+                    onChange={(event) =>
+                      update("researchDescription", event.target.value)
+                    }
+                    rows={4}
+                    className="w-full rounded-xl border border-[#8f1d2c]/12 bg-white px-4 py-3 text-sm placeholder:text-[#9c9589] focus:border-[#a85a52] focus:outline-none focus:ring-4 focus:ring-[#a85a52]/10"
+                    placeholder="Example: monitor education bills, compliance obligations, and fiscal policy changes."
+                  />
+                </label>
               </motion.div>
             )}
           </AnimatePresence>
@@ -246,11 +391,7 @@ function OnboardingContent() {
             </button>
             <button
               type="button"
-              onClick={() =>
-                step < 2
-                  ? setStep((current) => current + 1)
-                  : finish({ skipped: false })
-              }
+              onClick={goNext}
               disabled={saving}
               className="flex h-12 flex-[2] items-center justify-center gap-2 rounded-xl bg-[#8f1d2c] text-sm font-semibold text-[#fffaf0] shadow-[0_12px_28px_rgba(143,29,44,0.16)] transition hover:-translate-y-0.5 hover:bg-[#2d3934] disabled:cursor-not-allowed disabled:translate-y-0 disabled:opacity-60"
             >
@@ -264,6 +405,14 @@ function OnboardingContent() {
     </main>
   );
 }
+
+const stepMotion = (key) => ({
+  key,
+  initial: { opacity: 0, y: 12, filter: "blur(4px)" },
+  animate: { opacity: 1, y: 0, filter: "blur(0px)" },
+  exit: { opacity: 0, y: -12, filter: "blur(4px)" },
+  transition: { duration: 0.22, ease: "easeOut" },
+});
 
 function Input({ label, value, onChange }) {
   return (
@@ -291,9 +440,16 @@ function Select({ label, value, onChange, options }) {
         onChange={(event) => onChange(event.target.value)}
         className="h-12 w-full rounded-xl border border-[#8f1d2c]/12 bg-white px-4 text-sm focus:border-[#a85a52] focus:outline-none focus:ring-4 focus:ring-[#a85a52]/10"
       >
-        {options.map((option) => (
-          <option key={option}>{option}</option>
-        ))}
+        {options.map((option) => {
+          const [labelText, optionValue] = Array.isArray(option)
+            ? option
+            : [option, option];
+          return (
+            <option key={optionValue} value={optionValue}>
+              {labelText}
+            </option>
+          );
+        })}
       </select>
     </label>
   );
@@ -305,19 +461,20 @@ function ChoiceGroup({ title, options, selected, onToggle }) {
       <h2 className="text-sm font-semibold text-[#352723]">{title}</h2>
       <div className="mt-4 flex flex-wrap gap-2">
         {options.map((option) => {
-          const active = selected.includes(option);
+          const [label, value] = Array.isArray(option) ? option : [option, option];
+          const active = selected.includes(value);
           return (
             <button
               type="button"
-              key={option}
-              onClick={() => onToggle(option)}
+              key={value}
+              onClick={() => onToggle(value)}
               className={`rounded-full border px-3 py-2 text-xs font-semibold transition ${
                 active
                   ? "border-[#8f1d2c] bg-[#8f1d2c] text-[#fffaf0] shadow-sm"
                   : "border-[#8f1d2c]/12 bg-white text-[#62544d] hover:border-[#8f1d2c]/35"
               }`}
             >
-              {option}
+              {label}
             </button>
           );
         })}

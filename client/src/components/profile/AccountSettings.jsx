@@ -195,6 +195,7 @@ export function AccountSettings({ account, onUpdate }) {
               ["name", "Name"],
               ["username", "Username"],
               ["organization", "Organization"],
+              ["role", "Role"],
               ["designation", "Designation"],
               ["location", "Location"],
               ["phone", "Phone"],

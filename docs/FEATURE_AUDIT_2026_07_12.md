@@ -78,3 +78,14 @@ Normal profile edits do not reset these flags unless onboarding fields are expli
 - This was a code/build/database audit, not a full manual browser QA session.
 - Google sign-up lands on the app through the existing OAuth callback. The dedicated `/app/onboarding` page exists for setup, but Google callback routing was not changed in this pass.
 - Production deployment still needs to be initiated after merging/pushing if Vercel does not auto-deploy `main`.
+# 2026-07-12 completion update
+
+- Added canonical authenticated account-state endpoint: `GET /api/auth/me`.
+- Added dedicated onboarding API routes under `/api/onboarding`.
+- Added database migration `011_profile_role_and_preference_sync.js`.
+- Updated signup and `/app/onboarding` to persist profile/preferences through onboarding APIs.
+- Added route guards for required onboarding.
+- Scoped comparison selection to `rashtram:comparison-selection:<userId>`.
+- Exposed dashboard personalization metadata.
+- Confirmed account deletion remains a direct transactional database operation through `DELETE /api/profile`.
+- Documented onboarding, personalization, account deletion, and summary caching architecture.

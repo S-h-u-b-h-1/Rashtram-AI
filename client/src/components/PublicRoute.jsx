@@ -5,14 +5,14 @@ import { useRouter } from 'next/navigation';
 import { useEffect } from 'react';
 
 const PublicRoute = ({ children }) => {
-  const { isAuthenticated, loading } = useAuth();
+  const { isAuthenticated, loading, onboarding } = useAuth();
   const router = useRouter();
 
   useEffect(() => {
     if (!loading && isAuthenticated) {
-      router.push('/app');
+      router.push(onboarding?.required ? "/app/onboarding" : "/app");
     }
-  }, [isAuthenticated, loading, router]);
+  }, [isAuthenticated, loading, onboarding?.required, router]);
 
   if (loading) {
     return (
