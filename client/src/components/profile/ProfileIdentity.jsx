@@ -1,7 +1,14 @@
-import { CalendarDays, KeyRound, Mail, ShieldCheck } from "lucide-react";
+import {
+  CalendarDays,
+  KeyRound,
+  LogOut,
+  Mail,
+  PencilLine,
+  ShieldCheck,
+} from "lucide-react";
 import { formatDate } from "@/lib/document-links";
 
-export function ProfileIdentity({ user }) {
+export function ProfileIdentity({ user, role, onSignOut }) {
   return (
     <section className="relative overflow-hidden rounded-[1.8rem] bg-[#8f1d2c] p-6 text-white sm:p-8">
       <div className="policy-grid absolute inset-0 opacity-20" />
@@ -17,7 +24,7 @@ export function ProfileIdentity({ user }) {
         >
           {!user.avatar && user.initials}
         </div>
-        <div className="min-w-0">
+        <div className="min-w-0 flex-1">
           <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[#c1a06f]">
             Research profile
           </p>
@@ -31,7 +38,7 @@ export function ProfileIdentity({ user }) {
             </span>
             <span className="inline-flex items-center gap-1.5">
               <ShieldCheck className="h-3.5 w-3.5" />
-              {user.accountType}
+              {role || user.accountType}
             </span>
             <span className="inline-flex items-center gap-1.5">
               <KeyRound className="h-3.5 w-3.5" />
@@ -42,6 +49,23 @@ export function ProfileIdentity({ user }) {
               Joined {formatDate(user.joinedAt)}
             </span>
           </div>
+        </div>
+        <div className="flex flex-wrap gap-2 sm:self-start">
+          <a
+            href="#account-settings"
+            className="inline-flex h-10 items-center gap-2 rounded-full border border-white/15 bg-white/10 px-4 text-xs font-semibold text-white transition hover:bg-white/15"
+          >
+            <PencilLine className="h-3.5 w-3.5" />
+            Edit profile
+          </a>
+          <button
+            type="button"
+            onClick={onSignOut}
+            className="inline-flex h-10 items-center gap-2 rounded-full border border-white/15 px-4 text-xs font-semibold text-white/75 transition hover:bg-white/10 hover:text-white"
+          >
+            <LogOut className="h-3.5 w-3.5" />
+            Sign out
+          </button>
         </div>
       </div>
     </section>

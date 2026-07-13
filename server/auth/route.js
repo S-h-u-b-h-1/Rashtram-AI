@@ -55,6 +55,17 @@ const googleUnavailable = (_req, res) =>
     error: "Google sign-in is temporarily unavailable.",
   });
 
+router.get('/capabilities', (_req, res) =>
+  res.json({
+    google: {
+      enabled: googleConfigured,
+      message: googleConfigured
+        ? null
+        : "Google sign-in requires GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET.",
+    },
+  }),
+);
+
 router.get(
   '/google',
   googleConfigured

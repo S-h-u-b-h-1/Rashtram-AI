@@ -4,6 +4,14 @@ import { consumeSSEStream } from "@/lib/chat-stream";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5001/api';
 
+export const getAuthCapabilities = async ({ signal } = {}) => {
+  const response = await fetch(`${API_BASE_URL}/auth/capabilities`, { signal });
+  if (!response.ok) {
+    throw new Error("Authentication capabilities are unavailable.");
+  }
+  return response.json();
+};
+
 
 export const getAuthToken = () => {
   if (typeof window === 'undefined') return null;

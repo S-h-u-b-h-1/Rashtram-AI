@@ -59,8 +59,16 @@ app.use(
       const isVercelPreview = origin && (
         origin.startsWith("https://rashtram-ai-") && origin.endsWith(".vercel.app")
       );
+      const isLocalDevelopmentOrigin =
+        process.env.NODE_ENV !== "production" &&
+        /^http:\/\/(localhost|127\.0\.0\.1):\d+$/.test(origin || "");
 
-      if (!origin || allowedOrigins.has(origin) || isVercelPreview) {
+      if (
+        !origin ||
+        allowedOrigins.has(origin) ||
+        isVercelPreview ||
+        isLocalDevelopmentOrigin
+      ) {
         return callback(null, true);
       }
 

@@ -1,60 +1,60 @@
 import {
   BookOpenText,
   FileCheck2,
-  FolderOpen,
-  History,
-  ScrollText,
-  Newspaper,
+  GitCompareArrows,
+  MessageSquareText,
+  NotebookPen,
+  PanelsTopLeft,
   Bookmark,
-  MapPinned,
+  TimerReset,
 } from "lucide-react";
 
 export function ResearchActivity({ stats }) {
   const items = [
     {
-      label: "State Bill conversations",
-      value: stats.stateBillChats,
-      icon: MapPinned,
-    },
-    {
-      label: "Bill conversations",
-      value: stats.billChats,
-      icon: ScrollText,
-    },
-    {
-      label: "Act conversations",
-      value: stats.actChats,
+      label: "Documents opened",
+      value: stats.documentsOpened,
       icon: BookOpenText,
     },
     {
-      label: "Policy conversations",
-      value: stats.policyChats,
+      label: "Policies opened",
+      value: stats.policiesOpened,
       icon: FileCheck2,
     },
     {
-      label: "Gazette conversations",
-      value: stats.gazetteChats,
-      icon: Newspaper,
+      label: "Research sessions",
+      value: stats.researchSessions,
+      icon: TimerReset,
+    },
+    {
+      label: "Research notes",
+      value: stats.notesCreated,
+      icon: NotebookPen,
+    },
+    {
+      label: "Comparisons",
+      value: stats.comparisonsCreated,
+      icon: GitCompareArrows,
     },
     {
       label: "Saved documents",
       value: stats.savedDocuments,
-      icon: History,
-    },
-    {
-      label: "Bookmarks",
-      value: stats.bookmarks,
       icon: Bookmark,
     },
     {
-      label: "Reading history",
-      value: stats.readingHistory,
-      icon: FolderOpen,
+      label: "Research chats",
+      value: stats.chatsCreated || stats.researchHistoryCount,
+      icon: PanelsTopLeft,
+    },
+    {
+      label: "Messages exchanged",
+      value: stats.messagesExchanged || stats.totalMessages,
+      icon: MessageSquareText,
     },
   ];
 
   return (
-    <section className="surface-card p-5 sm:p-6">
+    <section id="research-activity" className="surface-card scroll-mt-24 p-5 sm:p-6">
       <div>
         <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#874047]">
           Personal activity
@@ -63,7 +63,8 @@ export function ResearchActivity({ stats }) {
           Your research activity
         </h2>
         <p className="mt-2 text-sm text-[#777066]">
-          These numbers reflect only your own saved research.
+          Counts come from your authenticated activity history and saved
+          workspace data. Activity that was not tracked is not estimated.
         </p>
       </div>
 

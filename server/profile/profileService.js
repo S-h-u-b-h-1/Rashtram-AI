@@ -22,6 +22,26 @@ const list = (value, limit = 30) =>
 const object = (value) =>
   value && typeof value === "object" && !Array.isArray(value) ? value : {};
 
+const validateAccountDeletionRequest = (payload = {}, hasPassword = false) => {
+  const confirmation = String(payload.confirmation || "").trim();
+  if (confirmation !== "DELETE") {
+    const error = new Error("Type DELETE to confirm account deletion.");
+    error.status = 400;
+    throw error;
+  }
+  if (hasPassword && !String(payload.password || "")) {
+    const error = new Error(
+      "Current password is required to delete this account.",
+    );
+    error.status = 403;
+    throw error;
+  }
+  return {
+    confirmation,
+    password: String(payload.password || ""),
+  };
+};
+
 const mapProfile = (row) => ({
   name: row.name,
   email: row.email,
@@ -138,8 +158,23 @@ const getAccountData = async (userId) => {
          (
            SELECT COUNT(DISTINCT document_id)::INTEGER
            FROM user_activity_events
-           WHERE user_id = $1 AND document_id IS NOT NULL
+           WHERE user_id = $1
+             AND document_id IS NOT NULL
+             AND event_type IN ('document_opened', 'bill_opened', 'act_opened')
          ) AS documents_opened,
+         (
+           SELECT COUNT(DISTINCT e.document_id)::INTEGER
+           FROM user_activity_events e
+           JOIN legislative_documents d ON d.id = e.document_id
+           WHERE e.user_id = $1
+             AND e.event_type IN ('document_opened', 'bill_opened', 'act_opened')
+             AND d.document_type IN (
+               'policy', 'scheme', 'guideline', 'consultation_paper',
+               'strategy_paper', 'white_paper', 'discussion_paper',
+               'recommendation', 'report', 'government_resolution',
+               'cabinet_decision'
+             )
+         ) AS policies_opened,
          (
            SELECT COUNT(DISTINCT session_id)::INTEGER
            FROM user_activity_events
@@ -209,6 +244,16 @@ const getAccountData = async (userId) => {
              AND summary IS NOT NULL
              AND summary <> ''
          ) AS summaries_generated,
+         (
+           SELECT COUNT(*)::INTEGER
+           FROM document_comparisons
+           WHERE user_id = $1
+         ) AS comparisons_created,
+         (
+           SELECT COUNT(*)::INTEGER
+           FROM research_notes
+           WHERE user_id = $1
+         ) AS notes_created,
          (
            SELECT COALESCE(
              JSON_AGG(day ORDER BY day DESC),
@@ -291,6 +336,7 @@ const getAccountData = async (userId) => {
     })),
     analytics: {
       documentsOpened: analyticsRow.documents_opened || 0,
+      policiesOpened: analyticsRow.policies_opened || 0,
       savedDocuments: saved.rows.filter(
         (row) => row.item_type !== "bookmark",
       ).length,
@@ -306,6 +352,8 @@ const getAccountData = async (userId) => {
       monthlyActivity: analyticsRow.monthly_activity || 0,
       researchStreak,
       summariesGenerated: analyticsRow.summaries_generated || 0,
+      comparisonsCreated: analyticsRow.comparisons_created || 0,
+      notesCreated: analyticsRow.notes_created || 0,
       chatsCreated: analyticsRow.chats_created || 0,
       messagesExchanged: analyticsRow.messages_exchanged || 0,
     },
@@ -619,13 +667,6 @@ const revokeSession = async (userId, sessionId) => {
 };
 
 const deleteAccount = async (userId, payload = {}) => {
-  const confirmation = String(payload.confirmation || "").trim();
-  if (confirmation !== "DELETE") {
-    const error = new Error("Type DELETE to confirm account deletion.");
-    error.status = 400;
-    throw error;
-  }
-
   await connectDB();
   const client = await getPool().connect();
   try {
@@ -644,9 +685,14 @@ const deleteAccount = async (userId, payload = {}) => {
       throw error;
     }
 
+    const validated = validateAccountDeletionRequest(
+      payload,
+      Boolean(user.password),
+    );
+
     if (user.password) {
       const passwordOk = await bcrypt.compare(
-        String(payload.password || ""),
+        validated.password,
         user.password,
       );
       if (!passwordOk) {
@@ -769,4 +815,5 @@ module.exports = {
   sanitizeObject: object,
   sanitizeText: text,
   updateProfile,
+  validateAccountDeletionRequest,
 };

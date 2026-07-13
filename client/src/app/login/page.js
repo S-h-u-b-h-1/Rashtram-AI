@@ -2,15 +2,14 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { Chrome, Eye, EyeOff, Loader2 } from "lucide-react";
+import { Eye, EyeOff, Loader2 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import PublicRoute from "@/components/PublicRoute";
 import { AuthShell } from "@/components/AuthShell";
 import { Checkbox } from "@/components/ui/checkbox";
+import { GoogleSignInButton } from "@/components/auth/GoogleSignInButton";
 
 export default function Login() {
-  const googleAuthEnabled =
-    process.env.NEXT_PUBLIC_GOOGLE_AUTH_ENABLED === "true";
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [rememberMe, setRememberMe] = useState(false);
@@ -38,23 +37,15 @@ export default function Login() {
         title="Continue your research."
         description="Sign in to return to saved documents, conversations, notes, and collections."
       >
-        {googleAuthEnabled && <button
-          type="button"
-          onClick={googleLogin}
-          disabled={loading}
-          className="flex h-12 w-full items-center justify-center gap-3 rounded-xl border border-[#8f1d2c]/12 bg-white text-sm font-semibold text-[#26302c] shadow-sm transition hover:border-[#8f1d2c]/22 hover:bg-[#f6f2eb] disabled:cursor-not-allowed disabled:opacity-60"
-        >
-          <Chrome className="h-4 w-4" />
-          Continue with Google
-        </button>}
+        <GoogleSignInButton onSignIn={googleLogin} disabled={loading} />
 
-        {googleAuthEnabled && <div className="my-6 flex items-center gap-3">
+        <div className="my-6 flex items-center gap-3">
           <div className="h-px flex-1 bg-[#8f1d2c]/10" />
           <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[#898176]">
             or use email
           </span>
           <div className="h-px flex-1 bg-[#8f1d2c]/10" />
-        </div>}
+        </div>
 
         <form onSubmit={handleLogin} className="space-y-5">
           {error && (
