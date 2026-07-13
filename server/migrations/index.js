@@ -71,4 +71,8 @@ module.exports = [
     name: "018_source_aware_retry_controls.js",
     migration: require("./018_source_aware_retry_controls"),
   },
+  {
+    name: "019_research_retrieval_indexes.js",
+    migration: require("./019_research_retrieval_indexes"),
+  },
 ];

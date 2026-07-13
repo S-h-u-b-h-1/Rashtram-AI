@@ -71,9 +71,21 @@ const FALLBACK_GENERATION_MODEL =
       )
     : normalizeGenerationModel(process.env.OPENAI_FALLBACK_MODEL, "gpt-4o-mini", "openai");
 const EMBEDDING_MODEL =
-  EMBEDDING_PROVIDER === "gemini"
+  EMBEDDING_PROVIDER === "local"
+    ? "local-hash-v1"
+    : EMBEDDING_PROVIDER === "gemini"
     ? normalizeEmbeddingModel(process.env.GEMINI_EMBEDDING_MODEL, "gemini")
     : normalizeEmbeddingModel(process.env.OPENAI_EMBEDDING_MODEL, "openai");
+const EMBEDDING_FALLBACK_PROVIDER = normaliseProvider(
+  process.env.EMBEDDING_FALLBACK_PROVIDER ||
+    (["1", "true", "yes", "on"].includes(
+      String(process.env.EMBEDDING_ALLOW_LOCAL_FALLBACK || "")
+        .trim()
+        .toLowerCase(),
+    )
+      ? "local"
+      : "none"),
+);
 const VECTOR_NAMESPACE =
   process.env.PINECONE_NAMESPACE ||
   (EMBEDDING_PROVIDER === "local"
@@ -343,6 +355,7 @@ const providerConfig = () => ({
   chatModel: GENERATION_MODEL,
   fallbackChatModel: FALLBACK_GENERATION_MODEL,
   embeddingModel: EMBEDDING_MODEL,
+  embeddingFallbackProvider: EMBEDDING_FALLBACK_PROVIDER,
   embeddingDimension: EMBEDDING_DIMENSION,
   chatModelConfigured: Boolean(GENERATION_MODEL),
   embeddingModelConfigured: Boolean(EMBEDDING_MODEL),
@@ -701,33 +714,42 @@ const checkPolicyExists = async (policyId) => {
 const generateEmbeddings = async (
   texts,
   taskType = "RETRIEVAL_DOCUMENT",
-  { allowLocalFallback = true } = {},
+  { allowLocalFallback = true, provider = EMBEDDING_PROVIDER } = {},
 ) => {
   if (!Array.isArray(texts) || texts.length === 0) return [];
-  if (EMBEDDING_PROVIDER === "local") {
+  const selectedProvider = normaliseProvider(provider || EMBEDDING_PROVIDER);
+  const selectedModel = selectedProvider === EMBEDDING_PROVIDER
+    ? EMBEDDING_MODEL
+    : normalizeEmbeddingModel(
+        selectedProvider === "gemini"
+          ? process.env.GEMINI_EMBEDDING_MODEL
+          : process.env.OPENAI_EMBEDDING_MODEL,
+        selectedProvider,
+      );
+  if (selectedProvider === "local") {
     return texts.map(generateLocalEmbedding);
   }
-  if (!["openai", "gemini"].includes(EMBEDDING_PROVIDER)) {
+  if (!["openai", "gemini"].includes(selectedProvider)) {
     throw new Error(
-      `Unsupported EMBEDDING_PROVIDER: ${EMBEDDING_PROVIDER}`,
+      `Unsupported EMBEDDING_PROVIDER: ${selectedProvider}`,
     );
   }
 
   const vectors = [];
   try {
-    if (EMBEDDING_PROVIDER === "gemini") {
+    if (selectedProvider === "gemini") {
       for (const batch of buildEmbeddingBatches(texts, { maxInputs: 100 })) {
         const response = await withOpenAIRetry(
           () =>
-            geminiFetch(EMBEDDING_MODEL, "batchEmbedContents", {
+            geminiFetch(selectedModel, "batchEmbedContents", {
               requests: batch.map((text) => ({
-                model: geminiModelPath(EMBEDDING_MODEL),
+                model: geminiModelPath(selectedModel),
                 content: { parts: [{ text: String(text || "") }] },
                 taskType,
                 outputDimensionality: EMBEDDING_DIMENSION,
               })),
             }),
-          `Gemini embedding model ${EMBEDDING_MODEL}`,
+          `Gemini embedding model ${selectedModel}`,
         );
 
         const embeddings = response.embeddings || [];
@@ -751,12 +773,12 @@ const generateEmbeddings = async (
       const response = await withOpenAIRetry(
         () =>
           openai.embeddings.create({
-            model: EMBEDDING_MODEL,
+            model: selectedModel,
             input: batch,
             encoding_format: "float",
             dimensions: EMBEDDING_DIMENSION,
           }),
-        `OpenAI embedding model ${EMBEDDING_MODEL}`,
+        `OpenAI embedding model ${selectedModel}`,
       );
 
       const embeddings = [...(response.data || [])].sort(
@@ -775,9 +797,14 @@ const generateEmbeddings = async (
       });
     }
   } catch (error) {
-    if (!allowLocalFallback) throw error;
+    if (
+      !allowLocalFallback ||
+      !["local", "local-hash-v1"].includes(EMBEDDING_FALLBACK_PROVIDER)
+    ) {
+      throw error;
+    }
     console.warn(
-      `Remote ${EMBEDDING_PROVIDER} embedding unavailable; using deterministic local embeddings: ${error.message}`,
+      `Remote ${selectedProvider} embedding unavailable; using explicitly configured deterministic local embeddings: ${error.message}`,
     );
     return texts.map(generateLocalEmbedding);
   }
@@ -1249,6 +1276,9 @@ const storeContentInChunks = async ({
         totalChunks: chunk.totalChunks,
         timestamp: new Date().toISOString(),
         embeddingProvider: EMBEDDING_PROVIDER,
+        embeddingModel: EMBEDDING_MODEL,
+        embeddingDimension: EMBEDDING_DIMENSION,
+        vectorNamespace: VECTOR_NAMESPACE,
         ...chunk.metadata,
       };
       return {
@@ -1391,6 +1421,7 @@ module.exports = {
   generateEmbedding,
   generateEmbeddings,
   generateLocalEmbedding,
+  runGeneration,
   estimateEmbeddingTokens,
   generateResponse,
   generateSuggestedQuestions,
@@ -1402,6 +1433,7 @@ module.exports = {
   normalizeResponseLanguage,
   parseSuggestedQuestions,
   providerConfig,
+  responseText,
   searchSimilarContent,
   searchSimilarContentForAct,
   searchSimilarContentForEGazette,

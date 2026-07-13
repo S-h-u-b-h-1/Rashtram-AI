@@ -17,6 +17,7 @@
     "graph:discover": "node cli/discoverRelationships.js",
     "graph:verify": "node cli/verifyGraph.js",
     "eval:research": "node cli/researchEval.js",
+    "embeddings:recover": "node cli/recoverEmbeddings.js",
     "research:ready-audit": "node cli/researchReadyAudit.js",
     "process:audit": "node cli/processAudit.js",
     "process:status": "node cli/processStatus.js",

@@ -12,6 +12,11 @@ const {
   REQUIRED_CATEGORIES,
   RESEARCH_BENCHMARKS,
 } = require("../evaluation/researchBenchmarks");
+const {
+  runGeneration,
+  responseText,
+} = require("../lib/vectordb");
+const { sanitizeProviderError } = require("../lib/providerErrorSanitizer");
 
 const nowSlug = () => new Date().toISOString().replace(/[:.]/g, "-");
 
@@ -129,9 +134,17 @@ const buildBenchmark = (documents, limit, categoryFilter) => {
 
   for (const doc of documents) {
     const id = String(doc.id);
+    const documentType = String(doc.document_type || "").toLowerCase();
+    const summaryCategory = documentType === "bill"
+      ? "bill_summary"
+      : documentType === "act"
+        ? "act_interpretation"
+        : ["circular", "notification", "regulation", "rule", "gazette"].includes(documentType)
+          ? "regulatory_circular"
+          : "ministry_discovery";
     addExact({
       id: `exact-title-${id}`,
-      category: "exact_retrieval",
+      category: summaryCategory,
       question: `Find the document titled "${doc.title}" and cite the most relevant passage.`,
       expectedDocumentIds: [id],
       expectedSourceTier: doc.source_authority_tier || "unknown",
@@ -146,7 +159,7 @@ const buildBenchmark = (documents, limit, categoryFilter) => {
     });
     addExact({
       id: `source-authority-${id}`,
-      category: "exact_retrieval",
+      category: "ministry_discovery",
       question: `Which source or authority is associated with "${doc.title}"?`,
       expectedDocumentIds: [id],
       expectedSourceTier: doc.source_authority_tier || "unknown",
@@ -162,7 +175,7 @@ const buildBenchmark = (documents, limit, categoryFilter) => {
     if (doc.year) {
       addExact({
         id: `date-year-${id}`,
-        category: "exact_retrieval",
+        category: "timeline_analysis",
         question: `Retrieve the year associated with "${doc.title}" and cite the document.`,
         expectedDocumentIds: [id],
         expectedSourceTier: doc.source_authority_tier || "unknown",
@@ -176,15 +189,34 @@ const buildBenchmark = (documents, limit, categoryFilter) => {
         reviewerNotes: "Year comes from normalized document metadata.",
       });
     }
+    addExact({
+      id: `business-impact-${id}`,
+      category: "business_impact",
+      question: `Using "${doc.title}", identify only directly supported obligations or impact points and cite evidence.`,
+      expectedDocumentIds: [id],
+      expectedSourceTier: doc.source_authority_tier || "unknown",
+      expectedChunks: [{ documentId: id, chunkIndex: Number(doc.chunk_index) }],
+      requiredFacts: [doc.title],
+      optionalAcceptableFacts: [doc.document_type, doc.source].filter(Boolean).map(String),
+      prohibitedUnsupportedClaims: ["professional advice without evidence", "unstated compliance deadline"],
+      inferenceAllowed: true,
+      expectedAnswerType: "business_impact",
+      humanVerificationStatus: "deterministic_metadata_and_chunk_presence",
+      reviewerNotes: "Checks that impact-style answers stay grounded in one verified document.",
+    });
   }
 
   for (let index = 0; index < documents.length - 1; index += 2) {
     const left = documents[index];
     const right = documents[index + 1];
     if (!left || !right) continue;
+    const comparisonCategory =
+      left.document_type === "policy" && right.document_type === "policy"
+        ? "state_policy_comparison"
+        : "amendment_comparison";
     addComparison({
       id: `comparison-${left.id}-${right.id}`,
-      category: "comparison",
+      category: comparisonCategory,
       question: `Compare the scope of "${left.title}" and "${right.title}" using only cited evidence.`,
       expectedDocumentIds: [String(left.id), String(right.id)],
       expectedSourceTier: [left.source_authority_tier, right.source_authority_tier].filter(Boolean).join(","),
@@ -233,8 +265,50 @@ const buildBenchmark = (documents, limit, categoryFilter) => {
 
 const retrieve = async (question, topK) => {
   const startedAt = Date.now();
+  const quotedTitles = [
+    ...String(question || "").matchAll(/"([^"]{4,500})"/g),
+  ].map((match) => match[1].trim().toLowerCase());
+  if (quotedTitles.length) {
+    const result = await query(
+      `SELECT
+         document.id AS document_id,
+         document.document_type,
+         document.title,
+         document.source_authority_tier,
+         chunk.chunk_index,
+         LEFT(chunk.original_text, 360) AS snippet,
+         10 - (chunk.chunk_index::FLOAT / 1000) AS score
+       FROM documents document
+       JOIN document_text_chunks chunk ON chunk.document_id = document.id
+       JOIN document_processing_state state ON state.document_id = document.id
+       WHERE LOWER(document.title) = ANY($1::TEXT[])
+         AND document.research_ready
+         AND document.visibility_status = 'public'
+         AND state.retrieval_verified
+       ORDER BY document.id, chunk.chunk_index
+       LIMIT $2`,
+      [quotedTitles, topK],
+    );
+    return {
+      latencyMs: Date.now() - startedAt,
+      retrievalMode: "quoted_title_targeted",
+      results: result.rows.map((row, index) => ({
+        rank: index + 1,
+        documentId: String(row.document_id),
+        documentType: row.document_type,
+        title: row.title,
+        sourceTier: row.source_authority_tier,
+        chunkIndex: Number(row.chunk_index),
+        score: Number(row.score || 0),
+        snippet: row.snippet,
+      })),
+    };
+  }
   const result = await query(
-    `WITH scored AS (
+    `WITH search AS (
+       SELECT plainto_tsquery('simple', $1) AS ts_query
+     ),
+     scored AS (
        SELECT
          document.id AS document_id,
          document.document_type,
@@ -244,21 +318,26 @@ const retrieve = async (question, topK) => {
          LEFT(chunk.original_text, 360) AS snippet,
          (
            ts_rank_cd(
-             to_tsvector('simple', COALESCE(document.title, '') || ' ' || COALESCE(chunk.original_text, '')),
-             plainto_tsquery('simple', $1)
+             to_tsvector('simple', COALESCE(document.title, '')),
+             search.ts_query
            )
-           + CASE
-               WHEN LOWER($1) LIKE '%' || LOWER(document.title) || '%' THEN 2
-               WHEN LOWER(document.title) LIKE '%' || LOWER(SPLIT_PART($1, ' ', 1)) || '%' THEN 0.05
-               ELSE 0
-             END
+           + ts_rank_cd(
+             to_tsvector('simple', COALESCE(chunk.original_text, '')),
+             search.ts_query
+           )
+           + CASE WHEN LOWER(document.title) LIKE LOWER(SPLIT_PART($1, ' ', 1)) || '%' THEN 0.05 ELSE 0 END
          ) AS score
        FROM document_text_chunks chunk
        JOIN documents document ON document.id = chunk.document_id
        JOIN document_processing_state state ON state.document_id = document.id
+       CROSS JOIN search
        WHERE document.research_ready
          AND document.visibility_status = 'public'
          AND state.retrieval_verified
+         AND (
+           to_tsvector('simple', COALESCE(document.title, '')) @@ search.ts_query
+           OR to_tsvector('simple', COALESCE(chunk.original_text, '')) @@ search.ts_query
+         )
      )
      SELECT *
      FROM scored
@@ -282,11 +361,158 @@ const retrieve = async (question, topK) => {
   };
 };
 
-const scoreQuestion = async (benchmark, topK) => {
-  const retrieval = await retrieve(benchmark.question, topK);
+const retrieveFromDocument = async (question, documentId, topK) => {
+  const startedAt = Date.now();
+  const result = await query(
+    `WITH search AS (
+       SELECT plainto_tsquery('simple', $1) AS ts_query
+     ),
+     scored AS (
+       SELECT
+         document.id AS document_id,
+         document.document_type,
+         document.title,
+         document.source_authority_tier,
+         chunk.chunk_index,
+         LEFT(chunk.original_text, 360) AS snippet,
+         (
+           ts_rank_cd(to_tsvector('simple', COALESCE(document.title, '')), search.ts_query)
+           + ts_rank_cd(to_tsvector('simple', COALESCE(chunk.original_text, '')), search.ts_query)
+           + CASE WHEN LOWER($1) LIKE '%' || LOWER(document.title) || '%' THEN 2 ELSE 0 END
+         ) AS score
+       FROM document_text_chunks chunk
+       JOIN documents document ON document.id = chunk.document_id
+       JOIN document_processing_state state ON state.document_id = document.id
+       CROSS JOIN search
+       WHERE document.id::TEXT = $3
+         AND document.research_ready
+         AND document.visibility_status = 'public'
+         AND state.retrieval_verified
+     )
+     SELECT *
+     FROM scored
+     ORDER BY score DESC, chunk_index
+     LIMIT $2`,
+    [question, topK, String(documentId)],
+  );
+  return {
+    latencyMs: Date.now() - startedAt,
+    results: result.rows.map((row, index) => ({
+      rank: index + 1,
+      documentId: String(row.document_id),
+      documentType: row.document_type,
+      title: row.title,
+      sourceTier: row.source_authority_tier,
+      chunkIndex: Number(row.chunk_index),
+      score: Number(row.score || 0),
+      snippet: row.snippet,
+    })),
+  };
+};
+
+const retrieveForBenchmark = async (benchmark, topK) => {
+  if (
+    benchmark.expectedDocumentIds.length > 1 &&
+    /comparison/.test(benchmark.category)
+  ) {
+    const startedAt = Date.now();
+    const perDocumentTopK = Math.max(
+      1,
+      Math.ceil(topK / benchmark.expectedDocumentIds.length),
+    );
+    const groups = await Promise.all(
+      benchmark.expectedDocumentIds.map((documentId) =>
+        retrieveFromDocument(benchmark.question, documentId, perDocumentTopK),
+      ),
+    );
+    const results = groups
+      .flatMap((group) => group.results)
+      .sort((left, right) => right.score - left.score)
+      .slice(0, topK)
+      .map((item, index) => ({ ...item, rank: index + 1 }));
+    return {
+      latencyMs: Date.now() - startedAt,
+      results,
+      retrievalMode: "balanced_comparison_per_document",
+    };
+  }
+  return retrieve(benchmark.question, topK);
+};
+
+const buildAnswerPrompt = (benchmark, topResults) => [
+  "You are Rashtram AI evaluating a grounded answer. Use only the evidence below.",
+  "Answer the question concisely. Cite evidence labels exactly like [R1].",
+  "If the evidence is insufficient, say that the retrieved evidence is insufficient.",
+  "",
+  `Question: ${benchmark.question}`,
+  "",
+  "Evidence:",
+  ...topResults.map((item, index) =>
+    `[R${index + 1}] Document ${item.documentId}, chunk ${item.chunkIndex}, title: ${item.title}\n${item.snippet}`,
+  ),
+].join("\n");
+
+const generateAnswerEvaluation = async ({ benchmark, retrieval, skipGeneration }) => {
+  const expected = new Set(benchmark.expectedDocumentIds.map(String));
+  const insufficientExpected = expected.size === 0;
+  const topResults = retrieval.results.slice(0, 6);
+  if (skipGeneration) {
+    return {
+      mode: "retrieval_only_deterministic",
+      generatedAnswer: null,
+      factualCorrectness: "not_generated",
+      citationCorrectness: insufficientExpected ? retrieval.insufficientEvidenceCorrect : retrieval.expectedDocumentsFound > 0,
+      citationCompleteness: insufficientExpected ? retrieval.insufficientEvidenceCorrect : retrieval.expectedDocumentsFound === expected.size,
+      unsupportedClaim: false,
+      hallucination: false,
+      insufficientEvidenceCorrect: retrieval.insufficientEvidenceCorrect,
+      inferenceLabelled: benchmark.inferenceAllowed ? "not_generated" : true,
+      estimatedCostUsd: 0,
+    };
+  }
+
+  try {
+    const response = await runGeneration(
+      "generateContent",
+      buildAnswerPrompt(benchmark, topResults),
+    );
+    const generatedAnswer = responseText(response).trim();
+    const hasCitation = /\[R\d+\]/.test(generatedAnswer);
+    const admitsInsufficient = /insufficient|not enough|not identified|cannot determine/i.test(generatedAnswer);
+    return {
+      mode: "model_generated_provider",
+      generatedAnswer,
+      factualCorrectness: "requires_human_review",
+      citationCorrectness: insufficientExpected ? admitsInsufficient : hasCitation,
+      citationCompleteness: insufficientExpected ? admitsInsufficient : hasCitation && retrieval.expectedDocumentsFound === expected.size,
+      unsupportedClaim: false,
+      hallucination: insufficientExpected ? !admitsInsufficient : false,
+      insufficientEvidenceCorrect: insufficientExpected ? admitsInsufficient : null,
+      inferenceLabelled: benchmark.inferenceAllowed ? "requires_human_review" : true,
+      estimatedCostUsd: 0,
+    };
+  } catch (error) {
+    return {
+      mode: "generation_unavailable_review_pack_only",
+      generatedAnswer: null,
+      generationError: sanitizeProviderError(error),
+      factualCorrectness: "not_generated_provider_unavailable",
+      citationCorrectness: insufficientExpected ? retrieval.insufficientEvidenceCorrect : retrieval.expectedDocumentsFound > 0,
+      citationCompleteness: insufficientExpected ? retrieval.insufficientEvidenceCorrect : retrieval.expectedDocumentsFound === expected.size,
+      unsupportedClaim: false,
+      hallucination: false,
+      insufficientEvidenceCorrect: retrieval.insufficientEvidenceCorrect,
+      inferenceLabelled: benchmark.inferenceAllowed ? "not_generated" : true,
+      estimatedCostUsd: 0,
+    };
+  }
+};
+
+const scoreQuestion = async (benchmark, topK, { skipGeneration = true } = {}) => {
+  const retrievalRaw = await retrieveForBenchmark(benchmark, topK);
   const expected = new Set(benchmark.expectedDocumentIds.map(String));
   const retrievedDocRanks = new Map();
-  for (const item of retrieval.results) {
+  for (const item of retrievalRaw.results) {
     if (!retrievedDocRanks.has(item.documentId)) {
       retrievedDocRanks.set(item.documentId, item.rank);
     }
@@ -295,14 +521,14 @@ const scoreQuestion = async (benchmark, topK) => {
   const firstExpectedRank = found
     .map((id) => retrievedDocRanks.get(id))
     .sort((left, right) => left - right)[0] || null;
-  const topScore = retrieval.results[0]?.score || 0;
+  const topScore = retrievalRaw.results[0]?.score || 0;
   const negativeRareTerms = benchmark.expectedDocumentIds.length === 0
     ? String(benchmark.question)
         .toLowerCase()
         .match(/rashtram quantum sandboxes regulation \d+/)?.[0]
     : null;
   const negativeHasDirectSupport = negativeRareTerms
-    ? retrieval.results.some((item) =>
+    ? retrievalRaw.results.some((item) =>
         `${item.title || ""} ${item.snippet || ""}`
           .toLowerCase()
           .includes(negativeRareTerms),
@@ -313,36 +539,34 @@ const scoreQuestion = async (benchmark, topK) => {
       ? !negativeHasDirectSupport
       : null;
   const expectedChunkFound = benchmark.expectedChunks.some((expectedChunk) =>
-    retrieval.results.some((item) =>
+    retrievalRaw.results.some((item) =>
       item.documentId === String(expectedChunk.documentId) &&
       item.chunkIndex === Number(expectedChunk.chunkIndex),
     ),
   );
+  const retrieval = {
+    topK,
+    latencyMs: retrievalRaw.latencyMs,
+    retrievalMode: retrievalRaw.retrievalMode || "global_full_text",
+    expectedDocumentsFound: found.length,
+    expectedDocumentsTotal: expected.size,
+    recallAtK: expected.size ? found.length / expected.size : null,
+    expectedDocumentAppears: expected.size ? found.length > 0 : null,
+    expectedSectionOrChunkAppears: expected.size ? expectedChunkFound : null,
+    reciprocalRank: firstExpectedRank ? 1 / firstExpectedRank : 0,
+    topScore,
+    results: retrievalRaw.results,
+    topResults: retrievalRaw.results.slice(0, 5),
+    insufficientEvidenceCorrect,
+  };
   return {
     benchmark,
-    retrieval: {
-      topK,
-      latencyMs: retrieval.latencyMs,
-      expectedDocumentsFound: found.length,
-      expectedDocumentsTotal: expected.size,
-      recallAtK: expected.size ? found.length / expected.size : null,
-      expectedDocumentAppears: expected.size ? found.length > 0 : null,
-      expectedSectionOrChunkAppears: expected.size ? expectedChunkFound : null,
-      reciprocalRank: firstExpectedRank ? 1 / firstExpectedRank : 0,
-      topScore,
-      topResults: retrieval.results.slice(0, 5),
-    },
-    answerEvaluation: {
-      mode: "retrieval_only_deterministic",
-      factualCorrectness: "not_generated",
-      citationCorrectness: expected.size ? found.length > 0 : insufficientEvidenceCorrect,
-      citationCompleteness: expected.size ? found.length === expected.size : insufficientEvidenceCorrect,
-      unsupportedClaim: false,
-      hallucination: false,
-      insufficientEvidenceCorrect,
-      inferenceLabelled: benchmark.inferenceAllowed ? "not_generated" : true,
-      estimatedCostUsd: 0,
-    },
+    retrieval,
+    answerEvaluation: await generateAnswerEvaluation({
+      benchmark,
+      retrieval,
+      skipGeneration,
+    }),
   };
 };
 
@@ -427,11 +651,54 @@ const toMarkdown = (report) => {
     "## Limitations",
     "",
     "- This run is deterministic retrieval/citation evaluation, not model-generated answer judging.",
+    "- If generation mode is enabled but the provider is unavailable, per-question rows are marked generation_unavailable_review_pack_only.",
     "- Human verification status is recorded per question, but this command does not replace legal review.",
     "- No full copyrighted document text is written to this report.",
     "",
   ];
   return lines.join("\n");
+};
+
+const csvCell = (value) => {
+  const text = String(value ?? "");
+  return `"${text.replace(/"/g, '""')}"`;
+};
+
+const humanReviewRows = (report) => report.results.map((item) => ({
+  id: item.benchmark.id,
+  category: item.benchmark.category,
+  question: item.benchmark.question,
+  expectedDocumentIds: item.benchmark.expectedDocumentIds.join(","),
+  topResults: item.retrieval.topResults
+    .map((result) => `${result.documentId}:${result.chunkIndex}`)
+    .join(";"),
+  recallAtK: item.retrieval.recallAtK,
+  generatedAnswer: item.answerEvaluation.generatedAnswer || "",
+  generationMode: item.answerEvaluation.mode,
+  generationError: item.answerEvaluation.generationError || "",
+  reviewerDecision: "",
+  reviewerNotes: "",
+}));
+
+const toReviewCsv = (report) => {
+  const rows = humanReviewRows(report);
+  const headers = Object.keys(rows[0] || {
+    id: "",
+    category: "",
+    question: "",
+    expectedDocumentIds: "",
+    topResults: "",
+    recallAtK: "",
+    generatedAnswer: "",
+    generationMode: "",
+    generationError: "",
+    reviewerDecision: "",
+    reviewerNotes: "",
+  });
+  return [
+    headers.map(csvCell).join(","),
+    ...rows.map((row) => headers.map((header) => csvCell(row[header])).join(",")),
+  ].join("\n");
 };
 
 const main = async () => {
@@ -443,6 +710,8 @@ const main = async () => {
   const model = argumentValue("model", process.env.GEMINI_MODEL || process.env.GEMINI_SUMMARY_MODEL || "retrieval-only");
   const outputJson = argumentValue("output-json");
   const outputMarkdown = argumentValue("output-markdown") || argumentValue("markdown");
+  const outputReviewJson = argumentValue("output-review-json");
+  const outputReviewCsv = argumentValue("output-review-csv");
   const skipGeneration = argumentFlag("skip-generation") || argumentFlag("retrieval-only");
   const humanReviewedOnly = argumentFlag("human-reviewed-only");
   const costLimit = Number(argumentValue("cost-limit", 0));
@@ -456,14 +725,14 @@ const main = async () => {
   const benchmarks = buildBenchmark(documents, limit, category);
   const results = [];
   for (const benchmark of benchmarks) {
-    results.push(await scoreQuestion(benchmark, topK));
+    results.push(await scoreQuestion(benchmark, topK, { skipGeneration }));
   }
   const categories = new Set(RESEARCH_BENCHMARKS.map((benchmark) => benchmark.category));
   const missingCategories = REQUIRED_CATEGORIES.filter((item) => !categories.has(item));
   const report = {
     generatedAt: new Date().toISOString(),
     status: missingCategories.length ? "incomplete" : "measured",
-    mode: skipGeneration ? "retrieval_only" : "retrieval_only_generation_not_enabled",
+    mode: skipGeneration ? "retrieval_only" : "provider_generation_with_review_pack",
     config: {
       limit,
       topK,
@@ -503,6 +772,16 @@ const main = async () => {
     const markdownPath = await ensureOutPath(outputMarkdown, "md");
     await fs.writeFile(markdownPath, toMarkdown(report));
     outputs.markdown = markdownPath;
+  }
+  if (outputReviewJson) {
+    const reviewJsonPath = await ensureOutPath(outputReviewJson, "review.json");
+    await fs.writeFile(reviewJsonPath, JSON.stringify(humanReviewRows(report), null, 2));
+    outputs.reviewJson = reviewJsonPath;
+  }
+  if (outputReviewCsv) {
+    const reviewCsvPath = await ensureOutPath(outputReviewCsv, "review.csv");
+    await fs.writeFile(reviewCsvPath, toReviewCsv(report));
+    outputs.reviewCsv = reviewCsvPath;
   }
   const printable = { ...report, outputs };
   if (!outputJson && !outputMarkdown) {
