@@ -181,6 +181,22 @@ test("download failure normalization migration uses download-specific codes", ()
   assert.match(source, /DOWNLOAD_ACCESS_DENIED/);
 });
 
+test("source-aware retry control migration adds domain circuit state", () => {
+  const source = fs.readFileSync(
+    path.join(
+      __dirname,
+      "..",
+      "migrations",
+      "018_source_aware_retry_controls.js",
+    ),
+    "utf8",
+  );
+  assert.match(source, /document_retry_domain_state/);
+  assert.match(source, /cooldown_until/);
+  assert.match(source, /circuit_state/);
+  assert.match(source, /retry_decision/);
+});
+
 test("research evaluation scaffold covers required benchmark categories", () => {
   const categories = new Set(RESEARCH_BENCHMARKS.map((item) => item.category));
   for (const category of REQUIRED_CATEGORIES) {

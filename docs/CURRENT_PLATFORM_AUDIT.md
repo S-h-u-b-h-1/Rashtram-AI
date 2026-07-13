@@ -180,3 +180,26 @@ Live production facts after repair:
 Unchanged limitation:
 
 - This pass does not complete broad corpus processing. Remaining retryable download failures still require controlled queue processing and source monitoring, not readiness weakening.
+
+## 2026-07-13 recovery and research-validation delta
+
+Added after commit `b4771a7`:
+
+- Source-aware retry state table with per-domain circuit/cooldown tracking.
+- Worker claim logic that respects PRS concurrency, request spacing, max attempts per window, and cooldown state.
+- Controlled recovery batch runner for PRS/download failures.
+- Research-ready sample audit CLI.
+- Deterministic research benchmark runner with retrieval/citation-proxy metrics.
+
+Live evidence:
+
+- Batch A selected 25 PRS records and processed 5 before circuit-breaker cooldown.
+- 4 records downloaded/extracted far enough to preserve text artifacts and chunk rows.
+- 0 records became newly research-ready in Batch A.
+- Batch B/C were not run because Batch A activated the circuit breaker.
+- Research-ready sample audit checked 33 records across 14 types and found 0 false-ready cases.
+- Research benchmark executed 30 questions with recall@10 of 0.94 and comparison recall@10 of 0.7.
+
+Known issue now fixed in code:
+
+- Lazy summary generation could leave `summary = null`; downstream usage accounting attempted `summary.length`. This caused the four partial Batch A recoveries to fail before readiness completion.

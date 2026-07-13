@@ -61,8 +61,18 @@ const checks = [
           d.canonical_url IS NULL
           OR ps.processing_status <> 'ready'
           OR ps.extraction_status <> 'ready'
-          OR ps.embedding_status <> 'ready'
+          OR NOT (
+            (
+              ps.embedding_status = 'ready'
+              AND ps.embeddings_count >= ps.chunks_count
+            )
+            OR (
+              ps.embedding_status = 'fallback'
+              AND ps.retrieval_mode IN ('local_text', 'hybrid')
+            )
+          )
           OR ps.chunks_count <= 0
+          OR NOT ps.retrieval_verified
           OR ps.error_message IS NOT NULL
           OR NOT EXISTS (
             SELECT 1 FROM document_resources r

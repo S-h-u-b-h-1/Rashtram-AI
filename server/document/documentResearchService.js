@@ -790,7 +790,9 @@ const processDocument = async (documentType, documentId) => {
           matches.map((match) =>
             config.index().update({
               id: match.id,
-              metadata: { ...match.metadata, summary },
+              metadata: summary
+                ? { ...match.metadata, summary }
+                : { ...match.metadata },
             }),
           ),
         );
@@ -824,7 +826,7 @@ const processDocument = async (documentType, documentId) => {
         usage: {
           estimated: true,
           generationInputTokens: Math.ceil(context.length / 4),
-          generationOutputTokens: Math.ceil(summary.length / 4),
+          generationOutputTokens: summary ? Math.ceil(summary.length / 4) : 0,
           embeddingInputTokens: 0,
           ocrUsed: Boolean(matches[0]?.metadata?.ocrUsed),
           summaryFallback: summaryResult.fallback,
@@ -1053,7 +1055,7 @@ const processDocument = async (documentType, documentId) => {
     usage: {
       estimated: true,
       generationInputTokens: Math.ceil(summaryContext.length / 4),
-      generationOutputTokens: Math.ceil(summary.length / 4),
+      generationOutputTokens: summary ? Math.ceil(summary.length / 4) : 0,
       embeddingInputTokens,
       ocrUsed: processed.ocrUsed,
       retrievalMode: vectorStorageError ? "local_text" : "hybrid",

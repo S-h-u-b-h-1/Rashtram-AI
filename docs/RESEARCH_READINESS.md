@@ -5,13 +5,13 @@
 | Metric | Value |
 |---|---:|
 | Total documents | 19,307 |
-| Research-ready | 1,485 |
-| Comparison-ready | 1,485 |
-| Processable backlog | 17,118 |
-| Readiness conversion rate | 7.69% |
-| Processing failure rate | 47.4% |
+| Research-ready | 1,528 |
+| Comparison-ready | 1,528 |
+| Processable backlog | 17,075 |
+| Readiness conversion rate | 7.91% |
+| Processing failure rate | 46.8% |
 
-Readiness conversion rate is `1,485 / 19,307`.
+Readiness conversion rate is `1,528 / 19,307`.
 
 ## Quality tiers
 
@@ -53,4 +53,23 @@ Claims should be labelled:
 - inferred;
 - requires professional review;
 - insufficient evidence.
+
+## Latest readiness audit
+
+Command:
+
+```bash
+npm run research:ready-audit --prefix server -- --per-type=3
+```
+
+Result, 2026-07-13:
+
+- Sample size: 33
+- Document types sampled: 14
+- False-ready cases in sample: 0
+- OCR-derived examples included
+- Native PDF examples included
+- Tier A and Tier C examples included
+
+This sample supports the current readiness gate behavior but is not a full corpus-level legal review.
 

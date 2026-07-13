@@ -85,8 +85,18 @@ const refreshDataQuality = async () => {
             AND COALESCE(resources.has_accessible, FALSE)
             AND ps.processing_status = 'ready'
             AND ps.extraction_status = 'ready'
-            AND ps.embedding_status = 'ready'
+            AND (
+              (
+                ps.embedding_status = 'ready'
+                AND ps.embeddings_count >= ps.chunks_count
+              )
+              OR (
+                ps.embedding_status = 'fallback'
+                AND ps.retrieval_mode IN ('local_text', 'hybrid')
+              )
+            )
             AND ps.chunks_count > 0
+            AND ps.retrieval_verified
             AND ps.error_message IS NULL
           ),
           FALSE

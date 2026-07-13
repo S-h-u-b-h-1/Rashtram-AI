@@ -2,6 +2,11 @@ const { query } = require("../db");
 const DocumentRepository = require("./DocumentRepository");
 const { sanitizeProviderError } = require("../lib/providerErrorSanitizer");
 const { classifyFailure } = require("./failureTaxonomy");
+const {
+  getDomainPolicy,
+  retryDecisionForFailure,
+  retryDelaySeconds,
+} = require("./sourceRetryPolicy");
 
 const RETRIABLE_FAILURE_PATTERN =
   /timeout|timed out|429|rate limit|temporar|network|econn|reset|503|502|504|unavailable|dns|enotfound/i;
@@ -413,6 +418,30 @@ const prepareDocument = async (
     };
   } catch (error) {
     const failure = classifyProcessingFailure(error);
+    const attemptNumber = Number(job.attempt || 1);
+    const maxAttempts = Math.min(
+      Math.max(
+        Number(job.max_attempts || getDomainPolicy(job.source_host).maxAttemptsPerDocument || 3),
+        1,
+      ),
+      20,
+    );
+    const retryExhausted =
+      failure.retriable && attemptNumber >= maxAttempts;
+    const retryDecision = retryDecisionForFailure(
+      failure,
+      attemptNumber,
+      maxAttempts,
+    );
+    const effectiveRetryEligible = Boolean(
+      failure.retryEligible && !retryExhausted && failure.retriable,
+    );
+    const effectiveReadinessClass = retryExhausted
+      ? "processing_deferred_review"
+      : failure.readinessClass;
+    const effectiveReadinessReason = retryExhausted
+      ? `${failure.readinessReason} Retry horizon exhausted; deferred for source review.`
+      : failure.readinessReason;
     await DocumentRepository.updateProcessingStatus(
       document.id,
       "failed",
@@ -422,23 +451,24 @@ const prepareDocument = async (
         failureStage: failure.failureStage,
         failureReason: failure.failureReason,
         failureCode: failure.failureCode,
-        retryEligible: failure.retryEligible,
+        retryEligible: effectiveRetryEligible,
         pipelineStage: failure.pipelineStage,
         failureDetails: failure.details,
-        readinessClass: failure.readinessClass,
-        readinessReason: failure.readinessReason,
+        readinessClass: effectiveReadinessClass,
+        readinessReason: effectiveReadinessReason,
         workerVersion: process.env.VERCEL_GIT_COMMIT_SHA || process.env.npm_package_version || null,
       },
     );
     const nextStatus =
-      failure.retriable && Number(job.attempt || 1) < Number(job.max_attempts || 3)
+      failure.retriable && !retryExhausted
         ? "queued"
-        : failure.permanent
+        : failure.permanent || retryExhausted
           ? "dead_letter"
           : "failed";
-    const retryDelaySeconds = Math.min(
-      900,
-      15 * 2 ** Math.max(Number(job.attempt || 1) - 1, 0),
+    const retryDelay = retryDelaySeconds(
+      failure,
+      attemptNumber,
+      getDomainPolicy(job.source_host),
     );
     const durationMs = Date.now() - startedAt;
     const memoryPeakBytes = Math.max(memoryStart, process.memoryUsage().rss);
@@ -455,20 +485,26 @@ const prepareDocument = async (
            retry_eligible = $9, pipeline_stage = $10,
            worker_version = $11, duration_ms = $5,
            queue_wait_ms = $6, memory_peak_bytes = $7,
+           retry_decision = $12, retry_after_seconds = $4,
+           circuit_opened_at = CASE
+             WHEN $12 IN ('deferred_retry_exhausted', 'permanent') THEN NOW()
+             ELSE circuit_opened_at
+           END,
            heartbeat_at = NOW(), updated_at = NOW()
        WHERE id = $1`,
       [
         job.id,
         nextStatus,
         failure.failureReason,
-        retryDelaySeconds,
+        retryDelay,
         durationMs,
         queueWaitMs,
         memoryPeakBytes,
         failure.failureCode,
-        failure.retryEligible,
+        effectiveRetryEligible,
         failure.pipelineStage,
         process.env.VERCEL_GIT_COMMIT_SHA || process.env.npm_package_version || null,
+        retryDecision,
       ],
     );
     await query(
@@ -489,9 +525,15 @@ const prepareDocument = async (
         durationMs,
         memoryPeakBytes,
         failure.failureCode,
-        failure.retryEligible,
+        effectiveRetryEligible,
         failure.pipelineStage,
-        JSON.stringify(failure.details || {}),
+        JSON.stringify({
+          ...(failure.details || {}),
+          retryDecision,
+          retryExhausted,
+          maxAttempts,
+          retryAfterSeconds: retryDelay,
+        }),
         process.env.AI_PROVIDER || "gemini",
         process.env.GEMINI_MODEL || process.env.GEMINI_SUMMARY_MODEL || null,
       ],

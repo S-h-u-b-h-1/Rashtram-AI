@@ -67,4 +67,8 @@ module.exports = [
     name: "017_normalize_download_failure_codes.js",
     migration: require("./017_normalize_download_failure_codes"),
   },
+  {
+    name: "018_source_aware_retry_controls.js",
+    migration: require("./018_source_aware_retry_controls"),
+  },
 ];

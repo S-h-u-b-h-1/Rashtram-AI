@@ -67,6 +67,32 @@ const retryPermanentRows = async (limit) =>
     [limit],
   )).rows;
 
+const flagMismatchRows = async (limit) =>
+  (await query(
+    `SELECT
+       document.id, document.document_type, document.title,
+       document.research_ready AS document_research_ready,
+       document.comparison_ready AS document_comparison_ready,
+       state.research_ready AS state_research_ready,
+       state.comparison_ready AS state_comparison_ready,
+       state.readiness_class
+     FROM documents document
+     JOIN document_processing_state state ON state.document_id = document.id
+     WHERE (
+       document.research_ready IS DISTINCT FROM state.research_ready
+       OR document.comparison_ready IS DISTINCT FROM state.comparison_ready
+     )
+       AND state.readiness_class = 'comparison_ready'
+       AND state.processing_status = 'ready'
+       AND state.extraction_status = 'ready'
+       AND state.chunking_status = 'ready'
+       AND state.chunks_count > 0
+       AND state.retrieval_verified
+     ORDER BY document.id
+     LIMIT $1`,
+    [limit],
+  )).rows;
+
 const regenerateChunks = async (row, dryRun) => {
   const text = String(row.original_text || "").trim();
   const language = row.language_code || pdfProcessor.detectLanguage(text).languageCode;
@@ -238,11 +264,38 @@ const repairRetryPermanent = async (row, dryRun) => {
   return { documentId: String(row.id), action: "mark_non_retryable", ...next };
 };
 
+const repairFlagMismatch = async (row, dryRun) => {
+  const previous = {
+    researchReady: row.document_research_ready,
+    comparisonReady: row.document_comparison_ready,
+  };
+  const next = {
+    researchReady: row.state_research_ready,
+    comparisonReady: row.state_comparison_ready,
+  };
+  if (!dryRun) {
+    await query(
+      `UPDATE documents
+       SET research_ready = $2,
+           comparison_ready = $3,
+           updated_at = NOW()
+       WHERE id = $1`,
+      [row.id, row.state_research_ready, row.state_comparison_ready],
+    );
+    await audit(row.id, "document_ready_flags_resynced", previous, next, {
+      readinessClass: row.readiness_class,
+      reason: "document flags differed from verified processing state",
+    });
+  }
+  return { documentId: String(row.id), action: "resync_flags", ...next };
+};
+
 const run = async () => {
   const dryRun = argumentFlag("dry-run");
   const limit = argumentInteger("limit", 100, 1, 500);
   const readyRows = await readyWithoutChunksRows(limit);
   const retryRows = await retryPermanentRows(limit);
+  const mismatchRows = await flagMismatchRows(limit);
   const readyResults = [];
   for (const row of readyRows) {
     readyResults.push(await regenerateChunks(row, dryRun));
@@ -250,6 +303,10 @@ const run = async () => {
   const retryResults = [];
   for (const row of retryRows) {
     retryResults.push(await repairRetryPermanent(row, dryRun));
+  }
+  const mismatchResults = [];
+  for (const row of mismatchRows) {
+    mismatchResults.push(await repairFlagMismatch(row, dryRun));
   }
   return {
     generatedAt: new Date().toISOString(),
@@ -261,6 +318,10 @@ const run = async () => {
     retryableMarkedPermanent: {
       found: retryRows.length,
       results: retryResults,
+    },
+    documentFlagMismatches: {
+      found: mismatchRows.length,
+      results: mismatchResults,
     },
   };
 };

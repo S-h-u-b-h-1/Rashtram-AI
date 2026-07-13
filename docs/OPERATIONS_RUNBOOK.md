@@ -131,3 +131,50 @@ npm run process:repair-consistency --prefix server -- --limit=20
 ```
 
 Every repair must leave an audit row in `document_processing_audit_log`.
+
+## Source-aware recovery batches
+
+Run PRS/download recovery through the controlled batch runner:
+
+```bash
+npm run process:recover-downloads --prefix server -- --batch=A --limit=25 --dry-run
+npm run process:recover-downloads --prefix server -- --batch=A --limit=25 --concurrency=1 --max-attempts=4
+```
+
+If an earlier run enqueued jobs but did not process them, resume the exact batch:
+
+```bash
+npm run process:recover-downloads --prefix server -- --batch=A --limit=25 --resume-existing
+```
+
+Do not run Batch B or C unless Batch A completes without:
+
+- circuit-breaker activation;
+- invalid file validation;
+- source/document mismatch;
+- readiness contradictions;
+- unexpected provider quota/cost failures.
+
+Latest Batch A status, 2026-07-13:
+
+- 25 selected, 5 processed before cooldown, 20 paused.
+- 4 recovered far enough to create text artifacts and chunks.
+- 0 newly research-ready.
+- PRS circuit breaker activated and cooldown was respected.
+- Batch B/C were not executed.
+
+## Research evaluation
+
+Run the deterministic benchmark:
+
+```bash
+npm run eval:research --prefix server -- --limit=30 --retrieval-only --output-json --output-markdown
+```
+
+Run the readiness sample audit:
+
+```bash
+npm run research:ready-audit --prefix server -- --per-type=3
+```
+
+Current baseline is documented in `docs/RESEARCH_BENCHMARK_RESULTS.md`.

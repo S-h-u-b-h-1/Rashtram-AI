@@ -6,6 +6,11 @@ const {
   normalizeBatchType,
   prepareDocument,
 } = require("./readinessService");
+const {
+  getDomainPolicy,
+  recordDomainAttempt,
+  recordDomainResult,
+} = require("./sourceRetryPolicy");
 
 const clamp = (value, fallback, minimum, maximum) => {
   const parsed = Number.parseInt(value, 10);
@@ -68,6 +73,8 @@ const claimNextJob = async (
      WHERE job.id = (
        SELECT queued.id
        FROM document_processing_jobs queued
+       LEFT JOIN document_retry_domain_state domain_state
+         ON domain_state.source_host = queued.source_host
        WHERE queued.status = 'queued'
          AND queued.next_attempt_at <= NOW()
          AND (
@@ -75,19 +82,73 @@ const claimNextJob = async (
            OR queued.document_id = ANY($3::BIGINT[])
          )
          AND (
+           queued.source_host IS NULL
+           OR COALESCE(domain_state.cooldown_until, '-infinity'::TIMESTAMPTZ) <= NOW()
+         )
+         AND (
+           queued.source_host IS NULL
+           OR domain_state.last_request_at IS NULL
+           OR domain_state.last_request_at <= NOW() - (
+             (
+               CASE
+                 WHEN queued.source_host ~* '(^|\\.)prsindia\\.org$' THEN $4
+                 ELSE $5
+               END
+             )::TEXT || ' milliseconds'
+           )::INTERVAL
+         )
+         AND (
+           queued.source_host IS NULL
+           OR domain_state.window_started_at IS NULL
+           OR domain_state.window_started_at < NOW() - (
+             (
+               CASE
+                 WHEN queued.source_host ~* '(^|\\.)prsindia\\.org$' THEN $6
+                 ELSE $7
+               END
+             )::TEXT || ' minutes'
+           )::INTERVAL
+           OR domain_state.window_attempts < CASE
+             WHEN queued.source_host ~* '(^|\\.)prsindia\\.org$' THEN $8
+             ELSE $9
+           END::INTEGER
+         )
+         AND (
            SELECT COUNT(*)
            FROM document_processing_jobs active
            WHERE active.status = 'running'
              AND active.source_host IS NOT DISTINCT FROM queued.source_host
-         ) < $2
+         ) < CASE
+           WHEN queued.source_host ~* '(^|\\.)prsindia\\.org$' THEN $10
+           ELSE $2
+         END::INTEGER
        ORDER BY queued.priority DESC, queued.queued_at ASC, queued.id ASC
-       FOR UPDATE SKIP LOCKED
+       FOR UPDATE OF queued SKIP LOCKED
        LIMIT 1
      )
      RETURNING job.*`,
-    [workerId, clamp(sourceConcurrency, 2, 1, 4), allowedDocumentIds],
+    [
+      workerId,
+      clamp(sourceConcurrency, 2, 1, 4),
+      allowedDocumentIds,
+      getDomainPolicy("prsindia.org").minIntervalMs,
+      getDomainPolicy("default").minIntervalMs,
+      getDomainPolicy("prsindia.org").windowMinutes,
+      getDomainPolicy("default").windowMinutes,
+      getDomainPolicy("prsindia.org").maxAttemptsPerWindow,
+      getDomainPolicy("default").maxAttemptsPerWindow,
+      getDomainPolicy("prsindia.org").concurrency,
+    ],
   );
-  return result.rows[0] || null;
+  const job = result.rows[0] || null;
+  if (job?.source_host) {
+    await recordDomainAttempt(job.source_host, {
+      jobId: String(job.id),
+      documentId: String(job.document_id),
+      workerId,
+    });
+  }
+  return job;
 };
 
 const updateWorker = async (
@@ -267,6 +328,7 @@ const workerLoop = async ({
     metadata: { pid: process.pid, hostname: os.hostname() },
   });
   let claimFailures = 0;
+  let idlePolls = 0;
   while (results.length < jobLimit) {
     let job;
     try {
@@ -276,6 +338,7 @@ const workerLoop = async ({
         allowedDocumentIds,
       );
       claimFailures = 0;
+      if (job) idlePolls = 0;
     } catch (error) {
       if (!isTransientDatabaseError(error) || claimFailures >= 3) {
         console.warn(
@@ -319,6 +382,14 @@ const workerLoop = async ({
         continue;
       }
       if (Number(queued.rows[0]?.jobs || 0) <= 0) break;
+      idlePolls += 1;
+      if (idlePolls >= 5) {
+        results.push({
+          status: "paused",
+          reason: "No eligible jobs could be claimed; source cooldown or rate controls may be active.",
+        });
+        break;
+      }
       await wait(1_000);
       continue;
     }
@@ -358,6 +429,17 @@ const workerLoop = async ({
         chunks: Number(result.chunksStored || 0),
         durationMs: Number(result.stageMetrics?.totalMs || 0),
       });
+      if (job.source_host) {
+        await recordDomainResult(job.source_host, {
+          success: true,
+          metadata: {
+            jobId: String(job.id),
+            documentId: String(job.document_id),
+            workerId,
+            status: "ready",
+          },
+        });
+      }
       await updateWorker(workerId, {
         status: "idle",
         concurrency,
@@ -374,6 +456,17 @@ const workerLoop = async ({
           error.processingFailure?.readinessClass ||
           "processing_failed_retriable",
       });
+      if (job.source_host) {
+        await recordDomainResult(job.source_host, {
+          success: false,
+          failure: error.processingFailure,
+          metadata: {
+            jobId: String(job.id),
+            documentId: String(job.document_id),
+            workerId,
+          },
+        });
+      }
       await updateWorker(workerId, {
         status: "idle",
         concurrency,
@@ -423,12 +516,14 @@ const runWorkerPool = async (options = {}) => {
     ),
   );
   const results = workerResults.flat();
+  const documentResults = results.filter((item) => item.documentId);
   return {
     concurrency,
     recovered,
-    processed: results.length,
-    ready: results.filter((item) => item.status === "ready").length,
-    failed: results.filter((item) => item.status !== "ready").length,
+    processed: documentResults.length,
+    ready: documentResults.filter((item) => item.status === "ready").length,
+    failed: documentResults.filter((item) => item.status !== "ready").length,
+    paused: results.filter((item) => item.status === "paused").length,
     results,
   };
 };

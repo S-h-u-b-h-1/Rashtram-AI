@@ -117,3 +117,22 @@ Consistency apply:
 npm run process:repair-consistency --prefix server -- --limit=20
 ```
 
+## Controlled recovery update, 2026-07-13
+
+Use source-aware recovery for PRS batches:
+
+```bash
+npm run process:recover-downloads --prefix server -- --batch=A --limit=25 --dry-run
+npm run process:recover-downloads --prefix server -- --batch=A --limit=25 --concurrency=1 --max-attempts=4
+```
+
+Batch A outcome:
+
+- 25 PRS records selected.
+- 5 processed before source cooldown.
+- 4 created text artifacts/chunk rows.
+- 0 became research-ready.
+- Circuit breaker activated once.
+- Batch B/C were not run.
+
+This is a positive signal that some PRS “download” failures are recoverable, but not enough to justify broad retry. Recovered files must still pass extraction, chunking, embedding/fallback retrieval, and readiness verification.

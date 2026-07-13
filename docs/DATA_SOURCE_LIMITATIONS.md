@@ -70,3 +70,11 @@ By inferred HTTP class:
 | unknown download error | 4 | Retryable only after inspection |
 
 There were no preserved text artifacts and no deterministic canonical-ready alternatives in the latest dry-run sample. The platform should therefore show these documents as unavailable for chat/comparison instead of silently reprocessing them or inventing answers.
+
+## PRS recovery limitation, 2026-07-13
+
+The controlled Batch A experiment showed that PRS direct-PDF records can sometimes progress beyond the old download failure: 4 of the first 5 processed attempts produced text artifacts/chunks.
+
+However, none became research-ready in this run because a later-stage null-summary bug stopped completion and the PRS circuit breaker entered cooldown. Batch B and Batch C were therefore intentionally not run.
+
+The current limitation is no longer just “download unavailable”; for some PRS records it is “download can recover, but full readiness must be rerun after cooldown and code fix.”

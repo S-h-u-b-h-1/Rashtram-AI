@@ -187,3 +187,20 @@ npm run download:alternatives --prefix server -- --dry-run --limit=25
 ```
 
 The latest deterministic alternative-source dry run found no safe canonical alternatives for the first 25 failed downloads. Do not link alternatives unless checksum/legal-identifier evidence is exact.
+
+## 2026-07-13 controlled recovery experiment
+
+Source-aware retry controls were added and Batch A was executed against PRS.
+
+Result:
+
+- Selected documents: 25
+- Processed before safety stop: 5
+- Circuit-breaker activations: 1
+- Downloads/extractions that produced preserved text/chunks: 4
+- Newly research-ready: 0
+- Batch B/C: not executed
+
+The Batch A failures exposed a later-stage null-summary bug, not a readiness-gate issue. The code now handles `summary = null` without failing usage accounting or vector metadata updates.
+
+The PRS circuit entered cooldown and was not bypassed.
