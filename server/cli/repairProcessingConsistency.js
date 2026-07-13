@@ -67,6 +67,21 @@ const retryPermanentRows = async (limit) =>
     [limit],
   )).rows;
 
+const nonRetryableRetriableRows = async (limit) =>
+  (await query(
+    `SELECT document.id, document.document_type, document.title,
+       state.processing_status, state.failure_code, state.retry_eligible,
+       state.readiness_class, state.failure_reason, state.readiness_reason,
+       state.pipeline_stage, state.retry_count
+     FROM documents document
+     JOIN document_processing_state state ON state.document_id = document.id
+     WHERE state.retry_eligible = FALSE
+       AND state.readiness_class = 'processing_failed_retriable'
+     ORDER BY document.id
+     LIMIT $1`,
+    [limit],
+  )).rows;
+
 const flagMismatchRows = async (limit) =>
   (await query(
     `SELECT
@@ -264,6 +279,49 @@ const repairRetryPermanent = async (row, dryRun) => {
   return { documentId: String(row.id), action: "mark_non_retryable", ...next };
 };
 
+const repairNonRetryableRetriable = async (row, dryRun) => {
+  const classified = classifyFailure({
+    failureCode: row.failure_code,
+    failureReason: row.failure_reason || row.readiness_reason,
+    processingStatus: row.processing_status,
+  });
+  const retryEligible = classified.retryEligible !== false;
+  const readinessClass = retryEligible
+    ? "processing_failed_retriable"
+    : "processing_failed_permanent";
+  const previous = {
+    failureCode: row.failure_code,
+    retryEligible: row.retry_eligible,
+    readinessClass: row.readiness_class,
+  };
+  const next = {
+    failureCode: classified.failureCode,
+    retryEligible,
+    readinessClass,
+    pipelineStage: classified.pipelineStage || row.pipeline_stage,
+  };
+  if (!dryRun) {
+    await query(
+      `UPDATE document_processing_state
+       SET failure_code = $2, retry_eligible = $3,
+           readiness_class = $4, pipeline_stage = $5, updated_at = NOW()
+       WHERE document_id = $1`,
+      [row.id, next.failureCode, retryEligible, readinessClass, next.pipelineStage],
+    );
+    await query(
+      `UPDATE document_processing_jobs
+       SET retry_eligible = $2, failure_code = $3,
+           pipeline_stage = $4, updated_at = NOW()
+       WHERE document_id = $1 AND status IN ('failed', 'dead_letter')`,
+      [row.id, retryEligible, next.failureCode, next.pipelineStage],
+    );
+    await audit(row.id, "retry_classification_reconciled", previous, next, {
+      reason: row.failure_reason || row.readiness_reason,
+    });
+  }
+  return { documentId: String(row.id), action: "reconcile_retry_class", ...next };
+};
+
 const repairFlagMismatch = async (row, dryRun) => {
   const previous = {
     researchReady: row.document_research_ready,
@@ -295,6 +353,7 @@ const run = async () => {
   const limit = argumentInteger("limit", 100, 1, 500);
   const readyRows = await readyWithoutChunksRows(limit);
   const retryRows = await retryPermanentRows(limit);
+  const nonRetryableRows = await nonRetryableRetriableRows(limit);
   const mismatchRows = await flagMismatchRows(limit);
   const readyResults = [];
   for (const row of readyRows) {
@@ -303,6 +362,10 @@ const run = async () => {
   const retryResults = [];
   for (const row of retryRows) {
     retryResults.push(await repairRetryPermanent(row, dryRun));
+  }
+  const nonRetryableResults = [];
+  for (const row of nonRetryableRows) {
+    nonRetryableResults.push(await repairNonRetryableRetriable(row, dryRun));
   }
   const mismatchResults = [];
   for (const row of mismatchRows) {
@@ -318,6 +381,10 @@ const run = async () => {
     retryableMarkedPermanent: {
       found: retryRows.length,
       results: retryResults,
+    },
+    nonRetryableMarkedRetriable: {
+      found: nonRetryableRows.length,
+      results: nonRetryableResults,
     },
     documentFlagMismatches: {
       found: mismatchRows.length,

@@ -83,9 +83,9 @@ const dataTrustPrinciples = [
       "Source identity, update timestamps, and original record links are retained for audit and citation.",
   },
   {
-    title: "Duplicate-safe catalogue",
+    title: "Duplicate-aware catalogue",
     description:
-      "Legal identifiers, document fingerprints, and hashes are used to reconcile records across repositories.",
+      "Legal identifiers and document fingerprints support reconciliation; unresolved probable matches remain visible to operators for review.",
   },
   {
     title: "Original record prevails",
@@ -225,10 +225,9 @@ export default function Home() {
               </h2>
             </div>
             <p className="max-w-2xl text-base leading-7 text-[#706a61] lg:justify-self-end">
-              Rashtram AI maintains a continuously refreshed public legislative
-              catalogue while preserving provenance, deduplicating overlapping
-              records, and clearly separating research assistance from legal
-              authority.
+              Rashtram AI refreshes supported public sources on monitored schedules,
+              preserves provenance, flags probable duplicate records for review,
+              and separates research assistance from legal authority.
             </p>
           </div>
 

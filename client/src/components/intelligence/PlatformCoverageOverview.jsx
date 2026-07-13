@@ -12,7 +12,7 @@ import { formatRelativeTime } from "@/lib/document-links";
 
 export function PlatformCoverageOverview({ coverage }) {
   const stats = [
-    ["Total documents", coverage.totalDocuments, Database],
+    ["Public catalogue documents", coverage.totalDocuments, Database],
     ["Parliament Bills", coverage.parliamentBills, Landmark],
     ["State Bills", coverage.stateBills, FileText],
     ["Acts", coverage.acts, Scale],
@@ -30,7 +30,7 @@ export function PlatformCoverageOverview({ coverage }) {
             Data collection and platform coverage
           </p>
           <h2 className="mt-2 font-serif text-2xl text-[#8f1d2c]">
-            Verified catalogue coverage
+            Public catalogue coverage
           </h2>
           <p className="mt-2 text-sm text-[#777066]">
             Live counts from PostgreSQL. No estimates or projected records.

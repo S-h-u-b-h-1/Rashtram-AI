@@ -1153,13 +1153,27 @@ const getTimeline = async (
     })),
   );
   const relationships = relationshipValues || await getRelated(id);
+  const temporalRelationshipTypes = new Set([
+    "BECAME_ACT",
+    "ENACTED_FROM",
+    "AMENDS",
+    "AMENDED_BY",
+    "REPEALS",
+    "REPEALED_BY",
+    "REPLACES",
+    "REPLACED_BY",
+    "SUPERSEDES",
+    "SUPERSEDED_BY",
+  ]);
   events.push(
     ...relationships
       .filter(
         (relationship) =>
-          relationship?.document?.publicationDate ||
-          relationship?.document?.enactedDate ||
-          relationship?.document?.introducedDate,
+          relationship?.verificationStatus === "source_verified" &&
+          temporalRelationshipTypes.has(relationship.relationshipType) &&
+          (relationship?.document?.publicationDate ||
+            relationship?.document?.enactedDate ||
+            relationship?.document?.introducedDate),
       )
       .map((relationship) => ({
         type: relationship.relationshipType || "related",

@@ -1,101 +1,50 @@
-export default function PricingPage() {
-  const plans = [
-    {
-      name: "Basic plan",
-      price: 12,
-      features: [
-        "Curabitur faucibus",
-        "massa ut pretium maximus",
-        "Sed posuere nisi",
-        "Pellentesque eu nibh et neque",
-        "Suspendisse a leo",
-        "Praesent quis venenatis ipsum",
-        "Duis non diam vel tortor",
-      ],
-    },
-    {
-      name: "Startup",
-      price: 35,
-      features: [
-        "Curabitur faucibus",
-        "massa ut pretium maximus",
-        "Sed posuere nisi",
-        "Pellentesque eu nibh et neque",
-        "Suspendisse a leo",
-        "Praesent quis venenatis ipsum",
-        "Duis non diam vel tortor",
-      ],
-    },
-    {
-      name: "Enterprise",
-      price: 60,
-      features: [
-        "Curabitur faucibus",
-        "massa ut pretium maximus",
-        "Sed posuere nisi",
-        "Pellentesque eu nibh et neque",
-        "Suspendisse a leo",
-        "Praesent quis venenatis ipsum",
-        "Duis non diam vel tortor",
-      ],
-    },
-  ];
+import Link from "next/link";
 
+const proposedTiers = [
+  {
+    name: "Academic pilot",
+    audience: "Students, faculty, and research programmes",
+    features: ["Catalogue search", "Grounded document research", "Policy comparison", "Saved research workspace"],
+  },
+  {
+    name: "Professional pilot",
+    audience: "Policy researchers, legal and compliance professionals",
+    features: ["Higher research limits", "Research exports", "Watchlist validation", "Structured feedback and onboarding"],
+  },
+  {
+    name: "Institutional pilot",
+    audience: "Universities, think tanks, and professional teams",
+    features: ["Pilot workspace", "Curated document collections", "Usage evaluation", "Implementation support"],
+  },
+];
+
+export default function PricingPage() {
   return (
-    <section className="py-14 md:py-40 bg-white">
-      <div className="max-w-screen-xl mx-auto px-4 text-gray-600 md:px-8">
-        <div className="relative max-w-xl mx-auto sm:text-center">
-          <h3 className="text-gray-800 text-3xl font-semibold sm:text-4xl">
-            Pricing for all sizes
-          </h3>
-          <div className="mt-3 max-w-xl">
-            <p>
-              Lorem ipsum dolor sit amet, consectetur adipiscing elit. Nullam
-              efficitur consequat nunc.
-            </p>
-          </div>
+    <main className="bg-white px-4 py-28 text-[#29312d] md:py-40">
+      <section className="mx-auto max-w-6xl">
+        <div className="mx-auto max-w-3xl text-center">
+          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[#874047]">Pilot access</p>
+          <h1 className="mt-4 font-serif text-4xl text-[#8f1d2c] sm:text-5xl">Commercial pricing is not yet launched.</h1>
+          <p className="mt-5 text-base leading-7 text-[#706a61]">
+            Rashtram AI is currently validating research quality and institutional use cases. The tiers below describe proposed pilot segments, not purchasable plans or final prices.
+          </p>
         </div>
-        <div className="mt-16 space-y-6 justify-center gap-6 sm:grid sm:grid-cols-2 sm:space-y-0 lg:grid-cols-3">
-          {plans.map((item, idx) => (
-            <div
-              key={idx}
-              className="relative flex-1 flex items-stretch flex-col p-8 rounded-xl border-2 bg-white shadow-lg transform transition duration-300 ease-in-out hover:scale-105 hover:shadow-2xl"
-            >
-              <div>
-                <span className="font-medium text-[#8f1d2c]">{item.name}</span>
-                <div className="mt-4 text-gray-800 text-3xl font-semibold">
-                  ${item.price}{" "}
-                  <span className="text-xl text-gray-600 font-normal">/mo</span>
-                </div>
-              </div>
-              <ul className="py-8 space-y-3">
-                {item.features.map((featureItem, idx) => (
-                  <li key={idx} className="flex items-center gap-5">
-                    <svg
-                      xmlns="http://www.w3.org/2000/svg"
-                      className="h-5 w-5 text-[#8f1d2c]"
-                      viewBox="0 0 20 20"
-                      fill="currentColor"
-                    >
-                      <path
-                        fillRule="evenodd"
-                        d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
-                        clipRule="evenodd"
-                      ></path>
-                    </svg>
-                    {featureItem}
-                  </li>
-                ))}
+        <div className="mt-14 grid gap-5 lg:grid-cols-3">
+          {proposedTiers.map((tier) => (
+            <article key={tier.name} className="rounded-2xl border border-[#8f1d2c]/10 bg-[#f7f2eb] p-7">
+              <h2 className="font-serif text-2xl text-[#8f1d2c]">{tier.name}</h2>
+              <p className="mt-2 text-sm leading-6 text-[#706a61]">{tier.audience}</p>
+              <ul className="mt-6 space-y-3 text-sm text-[#514d46]">
+                {tier.features.map((feature) => <li key={feature}>• {feature}</li>)}
               </ul>
-              <div className="flex-1 flex items-end">
-                <button className="w-full rounded-lg bg-[#8f1d2c] px-3 py-3 text-sm font-semibold text-white duration-150 hover:bg-[#68131f] active:bg-[#68131f]">
-                  Get Started
-                </button>
-              </div>
-            </div>
+              <p className="mt-7 text-xs font-semibold uppercase tracking-[0.12em] text-[#874047]">Pricing to be validated during pilots</p>
+            </article>
           ))}
         </div>
-      </div>
-    </section>
+        <div className="mt-10 text-center">
+          <Link href="/contact" className="inline-flex rounded-xl bg-[#8f1d2c] px-6 py-3 text-sm font-semibold text-white hover:bg-[#68131f]">Discuss a pilot</Link>
+        </div>
+      </section>
+    </main>
   );
 }

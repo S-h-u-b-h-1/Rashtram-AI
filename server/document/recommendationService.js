@@ -105,10 +105,10 @@ const reasonFromSignals = (signals, candidate) => {
   const reasons = [];
   if (signals.relationshipType) {
     reasons.push(
-      `the verified ${signals.relationshipType.replaceAll("_", " ")} relationship`,
+      `a catalogue ${signals.relationshipType.replaceAll("_", " ")} signal`,
     );
   } else if (signals.relationship) {
-    reasons.push("a verified catalogue relationship");
+    reasons.push("a catalogue relationship signal");
   }
   if (signals.sameMinistry) reasons.push("the same ministry");
   if (signals.sameDepartment) reasons.push("the same department");

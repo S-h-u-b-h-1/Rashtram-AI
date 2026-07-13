@@ -78,7 +78,7 @@ function ProductPage() {
       icon: Database,
       title: "Comprehensive Data",
       description:
-        "Explore a continuously refreshed public legislative catalogue built from official public records and trusted legislative references.",
+        "Explore a public legislative catalogue refreshed source by source, with freshness and operational limitations tracked explicitly.",
       delay: "100ms",
     },
     {

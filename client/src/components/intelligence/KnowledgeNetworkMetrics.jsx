@@ -5,9 +5,9 @@ export function KnowledgeNetworkMetrics({ metrics }) {
   if (!metrics) return null;
   const cards = [
     ["Connected documents", metrics.connectedDocuments],
-    ["Verified relationships", metrics.relationships],
+    ["Stored relationship signals", metrics.relationships],
     ["Graph coverage", `${metrics.coveragePercent}%`],
-    ["New relationships", metrics.newRelationships],
+    ["New relationship signals", metrics.newRelationships],
   ];
   return (
     <section className="surface-card p-5 sm:p-6">
@@ -53,7 +53,7 @@ export function KnowledgeNetworkMetrics({ metrics }) {
         </div>
         <div>
           <h3 className="text-xs font-semibold text-[#514d46]">
-            Most amended Acts
+            Most amendment signals
           </h3>
           <ul className="mt-2 space-y-2">
             {(metrics.mostAmendedActs || []).map((item) => (

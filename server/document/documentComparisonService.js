@@ -291,10 +291,12 @@ const createComparison = async (userId, payload) => {
     .join("\n\n");
 
   const graphIntelligence = await getComparisonGraphOverlap(documentIds);
-  const graphContext = graphIntelligence.relationships.length
+  const sourceVerifiedGraphRelationships = graphIntelligence.relationships
+    .filter((relationship) => relationship.isVerified);
+  const graphContext = sourceVerifiedGraphRelationships.length
     ? [
         "=== VERIFIED KNOWLEDGE GRAPH RELATIONSHIPS ===",
-        ...graphIntelligence.relationships.map((relationship) =>
+        ...sourceVerifiedGraphRelationships.map((relationship) =>
           [
             `${relationship.sourceTitle} --${relationship.type}--> ${relationship.targetTitle}`,
             `Confidence: ${relationship.confidence ?? "not scored"}`,

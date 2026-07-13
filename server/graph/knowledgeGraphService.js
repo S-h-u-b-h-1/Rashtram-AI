@@ -57,7 +57,15 @@ const documentNode = (row, prefix = "") => ({
   },
 });
 
-const edgeFromRow = (row) => ({
+const edgeFromRow = (row) => {
+  const evidence = row.relationship_evidence || row.metadata_json || {};
+  const source = row.relationship_source || row.source_name || "catalogue";
+  const sourceVerified = Boolean(
+    evidence.sourceVerified === true ||
+      ["official_source", "source_explicit"].includes(source),
+  );
+  const modelChecked = Boolean(evidence.aiVerified === true);
+  return ({
   id: String(row.relationship_id || row.id),
   from: `document:${row.from_document_id}`,
   to: `document:${row.to_document_id}`,
@@ -73,14 +81,20 @@ const edgeFromRow = (row) => ({
         ? null
         : Number(row.confidence)
       : Number(row.relationship_strength),
-  relationshipSource:
-    row.relationship_source || row.source_name || "catalogue",
+  relationshipSource: source,
+  verificationStatus: sourceVerified
+    ? "source_verified"
+    : modelChecked
+      ? "model_checked_inference"
+      : "inferred",
+  isVerified: sourceVerified,
   explanation: row.explanation || null,
-  evidence: row.relationship_evidence || row.metadata_json || {},
+  evidence,
   sourceUrl: row.source_url || null,
   createdAt: row.created_at,
   updatedAt: row.updated_at,
-});
+  });
+};
 
 const getRelationships = async (documentId, options = {}) => {
   const id = normalizeId(documentId);
@@ -566,6 +580,11 @@ const getKnowledgeGraphMetrics = async () => {
         AS relationships,
       (
         SELECT COUNT(*)::INTEGER FROM document_relationships
+        WHERE COALESCE((relationship_evidence->>'sourceVerified')::BOOLEAN, FALSE)
+          OR relationship_source IN ('official_source', 'source_explicit')
+      ) AS source_verified_relationships,
+      (
+        SELECT COUNT(*)::INTEGER FROM document_relationships
         WHERE created_at >= NOW() - INTERVAL '30 days'
       ) AS new_relationships,
       (
@@ -608,6 +627,7 @@ const getKnowledgeGraphMetrics = async () => {
     connectedDocuments,
     unconnectedDocuments: Math.max(totalDocuments - connectedDocuments, 0),
     relationships: Number(row.relationships || 0),
+    sourceVerifiedRelationships: Number(row.source_verified_relationships || 0),
     newRelationships: Number(row.new_relationships || 0),
     amendmentRelationships: Number(row.amendment_relationships || 0),
     coveragePercent:
@@ -645,6 +665,7 @@ const getRelationshipContext = async (documentId, question, limit = 12) => {
       `Related document: ${relationship.document.title}`,
       `Type: ${relationship.document.documentType}`,
       `Confidence: ${relationship.confidence ?? "not scored"}`,
+      `Evidence status: ${relationship.verificationStatus}`,
       relationship.explanation
         ? `Explanation: ${relationship.explanation}`
         : "",
@@ -664,6 +685,7 @@ const getRelationshipContext = async (documentId, question, limit = 12) => {
         relationship.sourceUrl || relationship.document.sourceUrl,
       relationshipType: relationship.relationshipType,
       confidence: relationship.confidence,
+      verificationStatus: relationship.verificationStatus,
       graphSource: true,
     })),
   };

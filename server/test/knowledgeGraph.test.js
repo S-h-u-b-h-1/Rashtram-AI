@@ -5,6 +5,7 @@ const {
   RELATIONSHIP_TYPES,
   inferRelationship,
   normalizedTokens,
+  textReferencesDocument,
   titleSimilarity,
 } = require("../graph/relationshipEngine");
 const {
@@ -80,6 +81,37 @@ test("similar titles alone never create an amendment relationship", () => {
     }),
   );
   assert.notEqual(relationship?.type, "AMENDS");
+});
+
+test("dispersed title tokens do not count as an explicit title reference", () => {
+  const target = document({
+    id: 2,
+    title: "Haryana Solar Power Policy 2016",
+    document_type: "policy",
+  });
+  const text = "Haryana adopted a power reform. Solar targets changed in 2016. This notice repeals an unrelated rule.";
+  assert.equal(textReferencesDocument(text, target).matched, false);
+  assert.equal(
+    inferRelationship(
+      document({ document_type: "notification", original_text: text }),
+      target,
+    )?.type,
+    undefined,
+  );
+});
+
+test("a contiguous normalized title can count as an explicit reference", () => {
+  const target = document({
+    id: 2,
+    title: "Haryana Solar Power Policy, 2016",
+    document_type: "policy",
+  });
+  const match = textReferencesDocument(
+    "This order replaces the Haryana Solar Power Policy, 2016.",
+    target,
+  );
+  assert.equal(match.matched, true);
+  assert.equal(match.signal, "title_reference");
 });
 
 test("cross-state equivalents preserve jurisdiction evidence", () => {

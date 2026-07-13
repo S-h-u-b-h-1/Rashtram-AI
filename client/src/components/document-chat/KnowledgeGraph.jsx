@@ -276,7 +276,7 @@ export function KnowledgeGraph({ graph, compact = true, highlightedPath = [] }) 
               </p>
               <p className="mt-1 text-xs leading-5 text-[#706a61]">
                 {hoveredEdge.explanation ||
-                  "Verified catalogue relationship; no further explanation is stored."}
+                  "Catalogue relationship signal; no further explanation is stored."}
               </p>
             </div>
           )}

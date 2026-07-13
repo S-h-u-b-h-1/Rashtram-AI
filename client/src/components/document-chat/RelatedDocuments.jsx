@@ -22,7 +22,8 @@ export function RelatedDocuments({
     relation: item.relationshipType,
     explanation: item.explanation,
     confidence: item.confidence,
-    verified: true,
+    verificationStatus: item.verificationStatus || "inferred",
+    verified: item.verificationStatus === "source_verified",
   }));
   return (
     <section>
@@ -45,7 +46,7 @@ export function RelatedDocuments({
       )}
       {items.length > 0 && (
         <p className="mt-5 text-[9px] font-semibold uppercase tracking-[0.12em] text-[#81796e]">
-          Verified catalogue relationships
+          Catalogue relationship signals
         </p>
       )}
       <div className="mt-3 space-y-2">
@@ -55,7 +56,11 @@ export function RelatedDocuments({
             className="rounded-xl border border-[#8f1d2c]/8 bg-white p-3"
           >
             <p className="text-[9px] font-semibold uppercase tracking-[0.1em] text-[#874047]">
-              Verified · {humanize(item.relation || "related")}
+              {item.verified
+                ? "Source-verified"
+                : item.verificationStatus === "model_checked_inference"
+                  ? "Model-checked inference"
+                  : "Inferred"} · {humanize(item.relation || "related")}
               {item.confidence != null
                 ? ` · ${Math.round(item.confidence * 100)}%`
                 : ""}
@@ -121,7 +126,7 @@ export function RelatedDocuments({
           <p className="rounded-xl border border-dashed border-[#8f1d2c]/10 p-4 text-[11px] leading-5 text-[#81796e]">
             {sourceDocumentType === "bill"
               ? "No closely related Bills are available yet."
-              : "Related records will appear when catalogue relationships are verified."}
+              : "Related records will appear when the catalogue has a supported relationship signal."}
           </p>
         )}
       </div>

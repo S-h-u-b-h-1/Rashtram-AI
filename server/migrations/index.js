@@ -75,4 +75,12 @@ module.exports = [
     name: "019_research_retrieval_indexes.js",
     migration: require("./019_research_retrieval_indexes"),
   },
+  {
+    name: "020_quarantine_unsafe_relationship_inferences.js",
+    migration: require("./020_quarantine_unsafe_relationship_inferences"),
+  },
+  {
+    name: "021_quarantine_post_audit_relationship_inferences.js",
+    migration: require("./021_quarantine_post_audit_relationship_inferences"),
+  },
 ];

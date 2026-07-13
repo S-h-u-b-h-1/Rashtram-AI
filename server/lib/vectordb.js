@@ -520,11 +520,16 @@ const isResponsesApiUnavailable = (error) => {
   );
 };
 
-const runGeneration = async (method, contents) => {
+const runGeneration = async (method, contents, options = {}) => {
+  const models = generationModels().slice(
+    0,
+    Math.max(1, Number(options.maxModels || generationModels().length)),
+  );
+  const attempts = Math.max(1, Number(options.attempts || 3));
   if (AI_PROVIDER === "gemini") {
     const stream = method === "generateContentStream";
     let lastError;
-    for (const model of generationModels()) {
+    for (const model of models) {
       try {
         const response = await withOpenAIRetry(
           () =>
@@ -539,9 +544,10 @@ const runGeneration = async (method, contents) => {
                   },
                 ],
               },
-              { stream },
+              { stream, timeoutMs: options.timeoutMs },
             ),
           `Gemini model ${model}`,
+          attempts,
         );
         return stream ? geminiEventStream(response) : response;
       } catch (error) {
@@ -562,7 +568,7 @@ const runGeneration = async (method, contents) => {
   const stream = method === "generateContentStream";
   let lastError;
 
-  for (const model of generationModels()) {
+  for (const model of models) {
     try {
       const response = await withOpenAIRetry(
         () =>
@@ -572,6 +578,7 @@ const runGeneration = async (method, contents) => {
             stream,
           }),
         `OpenAI model ${model}`,
+        attempts,
       );
       return stream ? responseEventStream(response) : response;
     } catch (error) {
@@ -585,6 +592,7 @@ const runGeneration = async (method, contents) => {
                 stream,
               }),
             `OpenAI-compatible chat model ${model}`,
+            attempts,
           );
           return stream ? chatCompletionEventStream(response) : response;
         } catch (chatError) {
@@ -1067,7 +1075,13 @@ Return only valid JSON with this shape:
 Source passages:
 ${context}
 `;
-  const response = await runGeneration("generateContent", prompt);
+  const response = await runGeneration("generateContent", prompt, {
+    // Comparisons run in a serverless request. Fail over to the grounded
+    // extractive result before the platform timeout instead of hanging the UI.
+    timeoutMs: Number(process.env.COMPARISON_AI_TIMEOUT_MS || 12_000),
+    attempts: 1,
+    maxModels: 1,
+  });
   return parseJsonResponse(responseText(response));
 };
 

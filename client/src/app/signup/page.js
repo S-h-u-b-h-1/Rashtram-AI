@@ -58,6 +58,8 @@ const toggle = (items, value) =>
     : [...items, value];
 
 export default function Signup() {
+  const googleAuthEnabled =
+    process.env.NEXT_PUBLIC_GOOGLE_AUTH_ENABLED === "true";
   const router = useRouter();
   const { register, googleLogin, loading, checkAuthStatus } = useAuth();
   const [step, setStep] = useState(0);
@@ -211,7 +213,7 @@ export default function Signup() {
               }}
               className="space-y-4"
             >
-              <button
+              {googleAuthEnabled && <button
                 type="button"
                 onClick={googleLogin}
                 disabled={submitting}
@@ -219,15 +221,15 @@ export default function Signup() {
               >
                 <Chrome className="h-4 w-4" />
                 Continue with Google
-              </button>
+              </button>}
 
-              <div className="flex items-center gap-3">
+              {googleAuthEnabled && <div className="flex items-center gap-3">
                 <div className="h-px flex-1 bg-[#8f1d2c]/10" />
                 <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[#898176]">
                   or use email
                 </span>
                 <div className="h-px flex-1 bg-[#8f1d2c]/10" />
-              </div>
+              </div>}
 
               {error && (
                 <div

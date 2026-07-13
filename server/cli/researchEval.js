@@ -270,14 +270,18 @@ const retrieve = async (question, topK) => {
   ].map((match) => match[1].trim().toLowerCase());
   if (quotedTitles.length) {
     const result = await query(
-      `SELECT
+      `WITH matching AS (
+       SELECT
          document.id AS document_id,
          document.document_type,
          document.title,
          document.source_authority_tier,
          chunk.chunk_index,
          LEFT(chunk.original_text, 360) AS snippet,
-         10 - (chunk.chunk_index::FLOAT / 1000) AS score
+         10 - (chunk.chunk_index::FLOAT / 1000) AS score,
+         ROW_NUMBER() OVER (
+           PARTITION BY document.id ORDER BY chunk.chunk_index
+         ) AS per_document_rank
        FROM documents document
        JOIN document_text_chunks chunk ON chunk.document_id = document.id
        JOIN document_processing_state state ON state.document_id = document.id
@@ -285,9 +289,12 @@ const retrieve = async (question, topK) => {
          AND document.research_ready
          AND document.visibility_status = 'public'
          AND state.retrieval_verified
-       ORDER BY document.id, chunk.chunk_index
+       )
+       SELECT * FROM matching
+       WHERE per_document_rank <= $3
+       ORDER BY per_document_rank, document_id
        LIMIT $2`,
-      [quotedTitles, topK],
+      [quotedTitles, topK, Math.max(1, Math.ceil(topK / quotedTitles.length))],
     );
     return {
       latencyMs: Date.now() - startedAt,
@@ -411,31 +418,8 @@ const retrieveFromDocument = async (question, documentId, topK) => {
 };
 
 const retrieveForBenchmark = async (benchmark, topK) => {
-  if (
-    benchmark.expectedDocumentIds.length > 1 &&
-    /comparison/.test(benchmark.category)
-  ) {
-    const startedAt = Date.now();
-    const perDocumentTopK = Math.max(
-      1,
-      Math.ceil(topK / benchmark.expectedDocumentIds.length),
-    );
-    const groups = await Promise.all(
-      benchmark.expectedDocumentIds.map((documentId) =>
-        retrieveFromDocument(benchmark.question, documentId, perDocumentTopK),
-      ),
-    );
-    const results = groups
-      .flatMap((group) => group.results)
-      .sort((left, right) => right.score - left.score)
-      .slice(0, topK)
-      .map((item, index) => ({ ...item, rank: index + 1 }));
-    return {
-      latencyMs: Date.now() - startedAt,
-      results,
-      retrievalMode: "balanced_comparison_per_document",
-    };
-  }
+  // Expected document IDs are ground truth, never retrieval inputs. Inserting
+  // them here would make comparison recall tautological rather than measured.
   return retrieve(benchmark.question, topK);
 };
 
@@ -463,11 +447,11 @@ const generateAnswerEvaluation = async ({ benchmark, retrieval, skipGeneration }
       factualCorrectness: "not_generated",
       citationCorrectness: insufficientExpected ? retrieval.insufficientEvidenceCorrect : retrieval.expectedDocumentsFound > 0,
       citationCompleteness: insufficientExpected ? retrieval.insufficientEvidenceCorrect : retrieval.expectedDocumentsFound === expected.size,
-      unsupportedClaim: false,
-      hallucination: false,
+      unsupportedClaim: "not_generated",
+      hallucination: "not_generated",
       insufficientEvidenceCorrect: retrieval.insufficientEvidenceCorrect,
       inferenceLabelled: benchmark.inferenceAllowed ? "not_generated" : true,
-      estimatedCostUsd: 0,
+      estimatedCostUsd: null,
     };
   }
 
@@ -477,19 +461,38 @@ const generateAnswerEvaluation = async ({ benchmark, retrieval, skipGeneration }
       buildAnswerPrompt(benchmark, topResults),
     );
     const generatedAnswer = responseText(response).trim();
-    const hasCitation = /\[R\d+\]/.test(generatedAnswer);
+    const citedIndexes = [...generatedAnswer.matchAll(/\[R(\d+)\]/g)]
+      .map((match) => Number(match[1]));
+    const validCitedIndexes = citedIndexes.filter(
+      (index) => index >= 1 && index <= topResults.length,
+    );
+    const invalidCitations = citedIndexes.filter(
+      (index) => index < 1 || index > topResults.length,
+    );
+    const citedDocumentIds = new Set(
+      validCitedIndexes.map((index) => topResults[index - 1]?.documentId).filter(Boolean),
+    );
+    const expectedDocumentsCited = [...expected].filter((id) =>
+      citedDocumentIds.has(id),
+    ).length;
+    const hasValidCitation = validCitedIndexes.length > 0 && invalidCitations.length === 0;
     const admitsInsufficient = /insufficient|not enough|not identified|cannot determine/i.test(generatedAnswer);
     return {
       mode: "model_generated_provider",
       generatedAnswer,
       factualCorrectness: "requires_human_review",
-      citationCorrectness: insufficientExpected ? admitsInsufficient : hasCitation,
-      citationCompleteness: insufficientExpected ? admitsInsufficient : hasCitation && retrieval.expectedDocumentsFound === expected.size,
-      unsupportedClaim: false,
-      hallucination: insufficientExpected ? !admitsInsufficient : false,
+      citationCorrectness: insufficientExpected ? admitsInsufficient : hasValidCitation,
+      citationCompleteness: insufficientExpected
+        ? admitsInsufficient
+        : hasValidCitation && expectedDocumentsCited === expected.size,
+      citedEvidenceLabels: validCitedIndexes,
+      invalidCitationLabels: invalidCitations,
+      expectedDocumentsCited,
+      unsupportedClaim: "requires_human_review",
+      hallucination: insufficientExpected ? !admitsInsufficient : "requires_human_review",
       insufficientEvidenceCorrect: insufficientExpected ? admitsInsufficient : null,
       inferenceLabelled: benchmark.inferenceAllowed ? "requires_human_review" : true,
-      estimatedCostUsd: 0,
+      estimatedCostUsd: null,
     };
   } catch (error) {
     return {
@@ -499,11 +502,11 @@ const generateAnswerEvaluation = async ({ benchmark, retrieval, skipGeneration }
       factualCorrectness: "not_generated_provider_unavailable",
       citationCorrectness: insufficientExpected ? retrieval.insufficientEvidenceCorrect : retrieval.expectedDocumentsFound > 0,
       citationCompleteness: insufficientExpected ? retrieval.insufficientEvidenceCorrect : retrieval.expectedDocumentsFound === expected.size,
-      unsupportedClaim: false,
-      hallucination: false,
+      unsupportedClaim: "not_generated",
+      hallucination: "not_generated",
       insufficientEvidenceCorrect: retrieval.insufficientEvidenceCorrect,
       inferenceLabelled: benchmark.inferenceAllowed ? "not_generated" : true,
-      estimatedCostUsd: 0,
+      estimatedCostUsd: null,
     };
   }
 };
@@ -596,17 +599,25 @@ const aggregate = (results) => {
     expectedChunkAppearanceRate: average(
       retrievalItems.map((item) => item.retrieval.expectedSectionOrChunkAppears ? 1 : 0),
     ),
-    citationCorrectness: average(
-      results.map((item) => item.answerEvaluation.citationCorrectness ? 1 : 0),
-    ),
+    citationCorrectness: average(results
+      .map((item) => item.answerEvaluation.citationCorrectness)
+      .filter((value) => typeof value === "boolean")
+      .map((value) => value ? 1 : 0)),
+    citationCompleteness: average(results
+      .map((item) => item.answerEvaluation.citationCompleteness)
+      .filter((value) => typeof value === "boolean")
+      .map((value) => value ? 1 : 0)),
     unsupportedClaimRate: average(
-      results.map((item) => item.answerEvaluation.unsupportedClaim ? 1 : 0),
+      results
+        .map((item) => item.answerEvaluation.unsupportedClaim)
+        .filter((value) => typeof value === "boolean")
+        .map((value) => value ? 1 : 0),
     ),
     insufficientEvidenceAccuracy: average(
       insufficient.map((item) => item.answerEvaluation.insufficientEvidenceCorrect ? 1 : 0),
     ),
     averageRetrievalLatencyMs: average(results.map((item) => item.retrieval.latencyMs)),
-    estimatedCostUsd: 0,
+    estimatedCostUsd: null,
     byCategory: Object.fromEntries(
       Object.entries(categoryMetrics).map(([category, items]) => [
         category,
@@ -635,10 +646,11 @@ const toMarkdown = (report) => {
     `- Retrieval recall@${report.config.topK}: ${report.metrics.recallAtK}`,
     `- Mean reciprocal rank: ${report.metrics.meanReciprocalRank}`,
     `- Citation correctness proxy: ${report.metrics.citationCorrectness}`,
-    `- Unsupported-claim rate: ${report.metrics.unsupportedClaimRate}`,
+    `- Citation completeness proxy: ${report.metrics.citationCompleteness}`,
+    `- Unsupported-claim rate: ${report.metrics.unsupportedClaimRate ?? "not measured without human review"}`,
     `- Insufficient-evidence accuracy: ${report.metrics.insufficientEvidenceAccuracy}`,
     `- Average retrieval latency: ${report.metrics.averageRetrievalLatencyMs} ms`,
-    `- Estimated generation cost: $${report.metrics.estimatedCostUsd}`,
+    `- Estimated generation cost: ${report.metrics.estimatedCostUsd == null ? "not reported by provider wrapper" : `$${report.metrics.estimatedCostUsd}`}`,
     "",
     "## Per-question summary",
     "",
@@ -650,7 +662,10 @@ const toMarkdown = (report) => {
     "",
     "## Limitations",
     "",
-    "- This run is deterministic retrieval/citation evaluation, not model-generated answer judging.",
+    "- Questions are generated from the same research-ready catalogue and use exact quoted titles. This is a catalogue resolver regression test, not an independent accuracy benchmark.",
+    report.mode === "retrieval_only"
+      ? "- This run is deterministic retrieval evaluation, not generated-answer judging."
+      : "- Generated answers are exported for human review; unsupported-claim and factual-correctness rates remain unmeasured until that review is completed.",
     "- If generation mode is enabled but the provider is unavailable, per-question rows are marked generation_unavailable_review_pack_only.",
     "- Human verification status is recorded per question, but this command does not replace legal review.",
     "- No full copyrighted document text is written to this report.",
@@ -733,6 +748,9 @@ const main = async () => {
     generatedAt: new Date().toISOString(),
     status: missingCategories.length ? "incomplete" : "measured",
     mode: skipGeneration ? "retrieval_only" : "provider_generation_with_review_pack",
+    benchmarkDesign: "synthetic_catalogue_resolver_regression",
+    independentGroundTruth: false,
+    completedHumanReviews: 0,
     config: {
       limit,
       topK,

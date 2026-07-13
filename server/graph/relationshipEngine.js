@@ -123,13 +123,12 @@ const textReferencesDocument = (text, document) => {
   }
   const meaningfulTitle = normalizedTokens(document.title).join(" ");
   if (meaningfulTitle.length >= 12) {
-    const titleTokens = meaningfulTitle.split(" ");
-    const matched = titleTokens.filter((token) => haystack.includes(token));
-    if (matched.length >= Math.min(4, Math.ceil(titleTokens.length * 0.7))) {
+    const normalizedHaystack = normalizedTokens(text).join(" ");
+    if (normalizedHaystack.includes(meaningfulTitle)) {
       return {
         matched: true,
         signal: "title_reference",
-        value: matched.slice(0, 8).join(" "),
+        value: meaningfulTitle,
       };
     }
   }
@@ -605,5 +604,6 @@ module.exports = {
   inferRelationship,
   normalizedTokens,
   persistRelationshipPair,
+  textReferencesDocument,
   titleSimilarity,
 };
