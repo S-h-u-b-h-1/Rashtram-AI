@@ -83,3 +83,32 @@ Readiness does not claim:
 - benchmarked answer quality.
 
 Those remain separate research-quality and data-platform workstreams.
+
+## Consistency repair audit, 2026-07-13
+
+The production consistency audit now explicitly checks:
+
+- ready documents with no chunks;
+- ready documents with no embeddings and no approved local-text fallback;
+- comparison-ready documents whose processing state is not ready;
+- ready documents with unresolved structured failures;
+- failed documents that still have chunks;
+- permanent/retryable failure-code contradictions;
+- active duplicate processing jobs;
+- retryable failures past the configured retry ceiling.
+
+The 2026-07-13 repair pass fixed:
+
+- 5 ready-without-chunks records by regenerating 101 total chunks from preserved original text;
+- 4 retryability contradictions by marking permanent/non-retryable states consistently.
+
+Post-repair audit result:
+
+- `ready_without_chunks`: 0
+- `failed_with_chunks`: 0
+- `comparison_ready_without_ready_state`: 0
+- `ready_with_unresolved_failure`: 0
+- `non_retryable_marked_retriable`: 0
+- `retryable_marked_permanent`: 0
+
+The remaining `retryable_exceeding_max_attempts` count is an operational backlog signal, not a readiness bypass. Those records must remain non-ready until a controlled retry or source repair succeeds.

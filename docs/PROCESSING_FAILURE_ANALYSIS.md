@@ -148,3 +148,42 @@ Chat and comparison must remain gated by readiness. A document should only be sh
 - no active processing failure remains.
 
 The new taxonomy makes non-ready states explainable instead of silently failing with generic 500s or ambiguous “processing failed” labels.
+
+## 2026-07-13 production hardening update
+
+Live production diagnostics after migration `017_normalize_download_failure_codes.js`:
+
+- Total catalogue documents: 19,307
+- Failed documents: 464
+- Download-stage failures: 452
+- Retry-eligible failures: 398
+- Uncoded failures: 0
+- Failed-with-chunks contradictions: 0
+- Ready-without-chunks contradictions: 0
+- Retryable/permanent contradictions: 0
+
+Current failure-code distribution:
+
+| Failure code | Documents | Retry eligible |
+| --- | ---: | --- |
+| `DOWNLOAD_SERVER_ERROR` | 386 | yes |
+| `DOWNLOAD_NOT_FOUND` | 52 | no |
+| `DOWNLOAD_ACCESS_DENIED` | 10 | no |
+| `UNKNOWN_PROCESSING_ERROR` | 8 | yes |
+| `DOWNLOAD_UNKNOWN` | 4 | yes |
+| `PDF_SCANNED_OCR_REQUIRED` | 3 | no |
+| `INVALID_MIME_TYPE` | 1 | no |
+| `TEXT_ENCODING_UNSUPPORTED` | 1 | no |
+
+The previous generic HTTP download codes were normalized to `DOWNLOAD_*` codes. Permanent source errors such as 404 and 403 are no longer retry-eligible.
+
+Five `ready_without_chunks` records were repaired by regenerating chunks from preserved `document_text_artifacts.original_text`. Four retryability contradictions were corrected and written to `document_processing_audit_log`.
+
+Download diagnostics:
+
+```bash
+npm run download:failures --prefix server -- --limit=1000 --sample=0
+npm run download:alternatives --prefix server -- --dry-run --limit=25
+```
+
+The latest deterministic alternative-source dry run found no safe canonical alternatives for the first 25 failed downloads. Do not link alternatives unless checksum/legal-identifier evidence is exact.

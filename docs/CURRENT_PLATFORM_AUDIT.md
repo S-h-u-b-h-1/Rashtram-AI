@@ -156,3 +156,27 @@ The remaining work is connector population, not only schema creation.
 - Source authority tiers need to be enforced in retrieval ranking and answer citations everywhere.
 - Page/section citations exist in chunks but need stronger end-to-end citation validation.
 - Existing docs include older OpenAI-oriented language; actual provider path is Gemini-first.
+
+## 2026-07-13 production hardening delta
+
+Added in this pass:
+
+- Central document downloader/validator with bounded redirects, byte limits, stable user-agent, temp-file cleanup, PDF signature/MIME/length/checksum validation, and private-network URL rejection.
+- Download-specific failure taxonomy and normalization migration for historical HTTP-style acquisition errors.
+- Processing audit log table for corrective repairs.
+- Consistency repair CLI that regenerates chunks only from preserved original text and records audit evidence.
+- Download-failure and deterministic-alternative diagnostics for source-level acquisition triage.
+- Retryable queue CLI filters for stage, failure code, source, document type, limits, and dry-run-first behavior.
+
+Live production facts after repair:
+
+- Failed records remain: 464.
+- Download-stage failures remain: 452.
+- Most download failures are source/server acquisition failures, not readiness-gate bugs.
+- Previous `ready_without_chunks` contradictions are repaired to 0.
+- Previous retryable/permanent contradictions are repaired to 0.
+- No deterministic alternative source links were found in the reviewed dry-run sample.
+
+Unchanged limitation:
+
+- This pass does not complete broad corpus processing. Remaining retryable download failures still require controlled queue processing and source monitoring, not readiness weakening.

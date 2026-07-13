@@ -46,3 +46,27 @@ npm run document:readiness --prefix server -- --document-id=<id>
 ```
 
 If a document is not `comparison_ready`, the product should explain why rather than implying chat/comparison support.
+
+## 2026-07-13 download-source limits
+
+The current production download-failure sample contains 452 download-stage failures:
+
+| Source | Documents |
+| --- | ---: |
+| PRS India | 397 |
+| Policy Edge | 29 |
+| CERC | 13 |
+| India Code | 10 |
+| NCLAT | 2 |
+| State policy | 1 |
+
+By inferred HTTP class:
+
+| Class | Documents | Operational meaning |
+| --- | ---: | --- |
+| 5xx/server-side | 386 | Retryable in bounded batches only |
+| 404/not found | 52 | Permanent until source URL changes |
+| 403/access denied | 10 | Permanent until source policy/access changes |
+| unknown download error | 4 | Retryable only after inspection |
+
+There were no preserved text artifacts and no deterministic canonical-ready alternatives in the latest dry-run sample. The platform should therefore show these documents as unavailable for chat/comparison instead of silently reprocessing them or inventing answers.

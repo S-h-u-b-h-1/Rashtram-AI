@@ -59,4 +59,12 @@ module.exports = [
     name: "015_normalize_failure_pipeline_stage.js",
     migration: require("./015_normalize_failure_pipeline_stage"),
   },
+  {
+    name: "016_processing_audit_log.js",
+    migration: require("./016_processing_audit_log"),
+  },
+  {
+    name: "017_normalize_download_failure_codes.js",
+    migration: require("./017_normalize_download_failure_codes"),
+  },
 ];

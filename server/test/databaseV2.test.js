@@ -34,6 +34,8 @@ test("database migrations are versioned and ordered", () => {
   assert.ok(files.includes("013_processing_failure_taxonomy.js"));
   assert.ok(files.includes("014_document_content_fingerprint.js"));
   assert.ok(files.includes("015_normalize_failure_pipeline_stage.js"));
+  assert.ok(files.includes("016_processing_audit_log.js"));
+  assert.ok(files.includes("017_normalize_download_failure_codes.js"));
 });
 
 test("quality score rewards provenance and processing evidence", () => {
@@ -146,6 +148,37 @@ test("failure pipeline stage normalization uses structured codes", () => {
   assert.match(source, /download/);
   assert.match(source, /document_processing_jobs/);
   assert.match(source, /document_processing_attempts/);
+});
+
+test("processing audit log migration records corrective actions", () => {
+  const source = fs.readFileSync(
+    path.join(
+      __dirname,
+      "..",
+      "migrations",
+      "016_processing_audit_log.js",
+    ),
+    "utf8",
+  );
+  assert.match(source, /document_processing_audit_log/);
+  assert.match(source, /previous_state_json/);
+  assert.match(source, /new_state_json/);
+  assert.match(source, /evidence_json/);
+});
+
+test("download failure normalization migration uses download-specific codes", () => {
+  const source = fs.readFileSync(
+    path.join(
+      __dirname,
+      "..",
+      "migrations",
+      "017_normalize_download_failure_codes.js",
+    ),
+    "utf8",
+  );
+  assert.match(source, /DOWNLOAD_SERVER_ERROR/);
+  assert.match(source, /DOWNLOAD_NOT_FOUND/);
+  assert.match(source, /DOWNLOAD_ACCESS_DENIED/);
 });
 
 test("research evaluation scaffold covers required benchmark categories", () => {

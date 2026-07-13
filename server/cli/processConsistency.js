@@ -42,6 +42,81 @@ const buildReport = async () => {
             AND state.chunks_count = 0
         )::INTEGER AS ready_without_chunks,
         COUNT(*) FILTER (
+          WHERE state.processing_status = 'ready'
+            AND state.chunks_count > 0
+            AND NOT (
+              (
+                state.embedding_status = 'ready'
+                AND state.embeddings_count >= state.chunks_count
+              )
+              OR (
+                state.embedding_status = 'fallback'
+                AND state.retrieval_mode IN ('local_text', 'hybrid')
+              )
+            )
+        )::INTEGER AS ready_without_embeddings_or_fallback,
+        COUNT(*) FILTER (
+          WHERE document.comparison_ready
+            AND state.processing_status <> 'ready'
+        )::INTEGER AS comparison_ready_without_ready_state,
+        COUNT(*) FILTER (
+          WHERE state.processing_status = 'ready'
+            AND (
+              state.failure_code IS NOT NULL
+              OR state.failure_reason IS NOT NULL
+              OR state.error_message IS NOT NULL
+            )
+        )::INTEGER AS ready_with_unresolved_failure,
+        COUNT(*) FILTER (
+          WHERE state.processing_status = 'ready'
+            AND NOT EXISTS (
+              SELECT 1
+              FROM document_resources resource
+              WHERE resource.document_id = document.id
+                AND resource.resource_type IN ('pdf', 'text', 'html')
+                AND resource.is_accessible
+            )
+        )::INTEGER AS ready_with_missing_source_provenance,
+        COUNT(*) FILTER (
+          WHERE state.processing_status = 'failed'
+            AND EXISTS (
+              SELECT 1
+              FROM document_processing_attempts attempt
+              WHERE attempt.document_id = document.id
+                AND attempt.status = 'completed'
+                AND attempt.started_at >= COALESCE(state.last_attempted_at, state.updated_at)
+            )
+        )::INTEGER AS failed_with_successful_latest_attempt,
+        COUNT(*) FILTER (
+          WHERE EXISTS (
+            SELECT 1
+            FROM document_processing_jobs active
+            WHERE active.document_id = document.id
+              AND active.status IN ('queued', 'running')
+            GROUP BY active.document_id
+            HAVING COUNT(*) > 1
+          )
+        )::INTEGER AS multiple_active_jobs,
+        COUNT(*) FILTER (
+          WHERE state.readiness_class = 'processing_failed_permanent'
+            AND state.failure_code IN (
+              'DOWNLOAD_DNS_FAILED',
+              'DOWNLOAD_TIMEOUT',
+              'DOWNLOAD_RATE_LIMITED',
+              'DOWNLOAD_SERVER_ERROR',
+              'NETWORK_ERROR',
+              'HTTP_SERVER_ERROR'
+            )
+        )::INTEGER AS permanent_with_transient_code,
+        COUNT(*) FILTER (
+          WHERE state.readiness_class = 'processing_failed_retriable'
+            AND state.retry_count >= COALESCE((
+              SELECT MAX(job.max_attempts)
+              FROM document_processing_jobs job
+              WHERE job.document_id = document.id
+            ), 3)
+        )::INTEGER AS retryable_exceeding_max_attempts,
+        COUNT(*) FILTER (
           WHERE state.failure_code IS NULL
             AND state.processing_status = 'failed'
         )::INTEGER AS failed_without_failure_code,

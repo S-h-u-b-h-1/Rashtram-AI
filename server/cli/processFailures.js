@@ -178,11 +178,11 @@ const buildReport = async () => {
     ),
     query(
       `SELECT
-         COUNT(*) FILTER (WHERE state.failure_code = 'SOURCE_URL_MISSING')::INTEGER AS source_missing,
-         COUNT(*) FILTER (WHERE state.failure_code IN ('HTTP_NOT_FOUND', 'HTTP_FORBIDDEN', 'HTTP_UNAUTHORIZED'))::INTEGER AS inaccessible_source,
+         COUNT(*) FILTER (WHERE state.failure_code IN ('SOURCE_URL_MISSING', 'DOWNLOAD_URL_MISSING'))::INTEGER AS source_missing,
+         COUNT(*) FILTER (WHERE state.failure_code IN ('HTTP_NOT_FOUND', 'HTTP_FORBIDDEN', 'HTTP_UNAUTHORIZED', 'DOWNLOAD_NOT_FOUND', 'DOWNLOAD_ACCESS_DENIED'))::INTEGER AS inaccessible_source,
          COUNT(*) FILTER (WHERE state.failure_code IN ('PDF_CORRUPT', 'PDF_ENCRYPTED'))::INTEGER AS corrupt_or_encrypted_pdf,
          COUNT(*) FILTER (WHERE state.failure_code = 'PDF_SCANNED_OCR_REQUIRED')::INTEGER AS scanned_ocr_required,
-         COUNT(*) FILTER (WHERE state.failure_code IN ('TEXT_EXTRACTION_EMPTY', 'TEXT_EXTRACTION_TOO_SHORT', 'CHUNKING_EMPTY'))::INTEGER AS unusable_text,
+         COUNT(*) FILTER (WHERE state.failure_code IN ('TEXT_EXTRACTION_EMPTY', 'TEXT_EXTRACTION_TOO_SHORT', 'TEXT_ENCODING_UNSUPPORTED', 'CHUNKING_EMPTY'))::INTEGER AS unusable_text,
          COUNT(*) FILTER (WHERE state.failure_code IN ('SUMMARY_PROVIDER_ERROR', 'PROVIDER_AUTH_ERROR', 'PROVIDER_QUOTA_ERROR'))::INTEGER AS ai_provider_failures,
          COUNT(*) FILTER (WHERE state.failure_code IN ('EMBEDDING_PROVIDER_ERROR', 'VECTOR_STORE_ERROR'))::INTEGER AS embedding_or_vector_failures,
          COUNT(*) FILTER (

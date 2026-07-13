@@ -11,9 +11,9 @@ const {
 test("failure taxonomy classifies permanent source and PDF failures", () => {
   assert.equal(
     classifyFailureCode({ status: 404, failureReason: "PDF not found" }),
-    FAILURE_CODES.HTTP_NOT_FOUND,
+    FAILURE_CODES.DOWNLOAD_NOT_FOUND,
   );
-  assert.equal(isRetryableFailure(FAILURE_CODES.HTTP_NOT_FOUND), false);
+  assert.equal(isRetryableFailure(FAILURE_CODES.DOWNLOAD_NOT_FOUND), false);
 
   const corrupt = classifyFailure({
     failureReason: "invalid pdf: bad xref table",
@@ -39,6 +39,22 @@ test("failure taxonomy classifies transient provider and network failures", () =
   assert.equal(quota.failureCode, FAILURE_CODES.PROVIDER_QUOTA_ERROR);
   assert.equal(quota.retryEligible, true);
   assert.equal(quota.pipelineStage, "ai_provider");
+});
+
+test("failure taxonomy prevents permanent/retryable contradictions", () => {
+  const scanned = classifyFailure({
+    failureReason: "The scanned PDF is too large for inline OCR processing.",
+  });
+  assert.equal(scanned.failureCode, FAILURE_CODES.PDF_SCANNED_OCR_REQUIRED);
+  assert.equal(scanned.retryEligible, false);
+  assert.equal(scanned.readinessClass, "processing_failed_permanent");
+
+  const encoding = classifyFailure({
+    failureReason: "unsupported Unicode escape sequence",
+  });
+  assert.equal(encoding.failureCode, FAILURE_CODES.TEXT_ENCODING_UNSUPPORTED);
+  assert.equal(encoding.retryEligible, false);
+  assert.equal(encoding.pipelineStage, "chunking");
 });
 
 test("failure taxonomy gives chunk and retrieval errors stable codes", () => {

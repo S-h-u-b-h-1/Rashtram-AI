@@ -83,3 +83,51 @@ Provider failure:
 1. Check `AI_PROVIDER`, model variables, and provider health.
 2. Confirm fallbacks do not leak provider secrets.
 3. Preserve extracted text even if summary/embedding fails.
+
+## Download failure diagnostics
+
+Use the download-specific report before retrying acquisition failures:
+
+```bash
+npm run download:failures --prefix server -- --limit=1000 --sample=0
+```
+
+Use the deterministic-alternative dry run before relinking any failed document:
+
+```bash
+npm run download:alternatives --prefix server -- --dry-run --limit=25
+```
+
+Rules:
+
+- Retry only `DOWNLOAD_SERVER_ERROR`, `DOWNLOAD_RATE_LIMITED`, `DOWNLOAD_DNS_FAILED`, `DOWNLOAD_TIMEOUT`, and `DOWNLOAD_UNKNOWN` in bounded batches.
+- Do not retry `DOWNLOAD_NOT_FOUND`, `DOWNLOAD_ACCESS_DENIED`, `DOWNLOAD_HTML_RESPONSE`, `DOWNLOAD_UNSUPPORTED_CONTENT`, `DOWNLOAD_ZERO_BYTE`, `DOWNLOAD_TRUNCATED`, or checksum mismatches until the source URL or connector is fixed.
+- Do not bypass source restrictions, robots rules, private-network protection, or blocked-source behavior.
+- Do not relink to an alternative URL unless the checksum, canonical identifier, or exact legal identifier is deterministic.
+- Use `process:retryable -- --dry-run` first; enqueue only after reviewing the exact candidates.
+
+Dry run:
+
+```bash
+npm run process:retryable --prefix server -- --stage=download --limit=25 --dry-run
+```
+
+Queue only reviewed retriable records:
+
+```bash
+npm run process:retryable --prefix server -- --stage=download --limit=25 --enqueue
+```
+
+If readiness/chunking consistency contradicts the database state, run the repair dry run first:
+
+```bash
+npm run process:repair-consistency --prefix server -- --dry-run --limit=20
+```
+
+Apply only after reviewing the dry-run output:
+
+```bash
+npm run process:repair-consistency --prefix server -- --limit=20
+```
+
+Every repair must leave an audit row in `document_processing_audit_log`.

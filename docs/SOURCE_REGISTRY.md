@@ -64,3 +64,22 @@ Registry presence is not equal to complete coverage. A source should be marked f
 - stored documents preserve provenance and checksums;
 - controlled sample processing succeeds.
 
+## Download failure evidence, 2026-07-13
+
+The source registry should reflect that the largest current acquisition problem is not a generic parser failure. It is concentrated in source download responses:
+
+| Source/domain | Failed downloads | Dominant code |
+| --- | ---: | --- |
+| `prsindia.org` | 397 | `DOWNLOAD_SERVER_ERROR` |
+| `www.policyedge.in` | 29 | malformed/missing direct file URL in stored record |
+| `cercind.gov.in` | 13 | mixed download errors |
+| `indiacode.nic.in` | 10 | `DOWNLOAD_NOT_FOUND`/access-style permanent failures |
+| `nclat.nic.in` | 2 | retriable download errors |
+| `cdnbbsr.s3waas.gov.in` | 1 | permanent source failure |
+
+Operational action:
+
+- Keep source records visible but non-ready when download evidence is missing.
+- Mark 403/404-style acquisition failures as permanent until source repair.
+- Retry 5xx-style failures only in bounded queue batches.
+- Do not fabricate direct PDF URLs from listing pages unless the connector can verify the final PDF bytes.

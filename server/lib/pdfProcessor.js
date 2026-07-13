@@ -1,5 +1,8 @@
 const axios = require("axios");
 const pdf = require("pdf-parse");
+const {
+  downloadAndValidateDocument,
+} = require("./documentDownloadService");
 
 const DEVANAGARI_PATTERN = /[\u0900-\u097f]/gu;
 const LATIN_PATTERN = /[A-Za-z]/g;
@@ -263,46 +266,12 @@ class PDFProcessor {
   }
 
   async downloadPDF(pdfUrl) {
-    let parsedUrl;
-    try {
-      parsedUrl = new URL(pdfUrl);
-    } catch {
-      const error = new Error("The PDF URL is invalid.");
-      error.status = 422;
-      throw error;
-    }
-    if (!["http:", "https:"].includes(parsedUrl.protocol)) {
-      const error = new Error("The PDF URL uses an unsupported protocol.");
-      error.status = 422;
-      throw error;
-    }
-    if (
-      /^(?:localhost|0\.0\.0\.0|\[?::1\]?|127\.|10\.|192\.168\.|169\.254\.)/i
-        .test(parsedUrl.hostname)
-    ) {
-      const error = new Error("Private network PDF URLs are not allowed.");
-      error.status = 422;
-      throw error;
-    }
-    const response = await axios.get(pdfUrl, {
-      responseType: "arraybuffer",
-      timeout: 30_000,
-      maxContentLength: 30 * 1024 * 1024,
-      maxBodyLength: 30 * 1024 * 1024,
-      headers: {
-        Accept: "application/pdf",
-        "User-Agent": "RashtramAI/1.0 (+https://rashtram-ai.vercel.app)",
-      },
+    const result = await downloadAndValidateDocument(pdfUrl, {
+      accept: "application/pdf",
+      expectedExtension: "pdf",
     });
-    const buffer = Buffer.from(response.data);
-    if (buffer.subarray(0, 4).toString() !== "%PDF") {
-      const error = new Error(
-        "Downloaded resource does not have a valid PDF signature.",
-      );
-      error.status = 422;
-      throw error;
-    }
-    return buffer;
+    this.lastDownloadResult = result;
+    return result.buffer;
   }
 
   async parsePDFBuffer(buffer) {
@@ -547,6 +516,11 @@ class PDFProcessor {
       pdfQuality,
       stageMetrics: {
         downloadMs,
+        downloadAttempts: this.lastDownloadResult?.attempts?.length || 1,
+        downloadFinalUrl: this.lastDownloadResult?.finalUrl || pdfUrl,
+        downloadChecksumSha256:
+          this.lastDownloadResult?.validation?.checksumSha256 || null,
+        downloadValidation: this.lastDownloadResult?.validation || null,
         parseMs,
         ocrMs,
         cleanupMs,

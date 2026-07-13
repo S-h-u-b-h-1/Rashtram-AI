@@ -86,3 +86,33 @@ Do not treat this as a completed five-type smoke. Select smaller replacement rec
 3. Repair only a bounded class and limit.
 4. Re-run readiness audit.
 5. Verify `db:verify`, `process:status`, and `release:verify`.
+
+## 2026-07-13 document acquisition hardening
+
+Document acquisition now uses a central downloader/validator path:
+
+- URL validation rejects missing, malformed, unsupported-protocol, and private-network URLs.
+- Downloads use bounded redirects, bounded bytes, stable user-agent, retry/backoff, and temp-file cleanup.
+- PDF validation rejects HTML responses, zero-byte files, unsupported content, truncated downloads, encrypted PDFs, and checksum mismatches.
+- The processing pipeline stores download attempts, final URL, checksum, and validation diagnostics in stage metrics.
+- Historical download failures are normalized into `DOWNLOAD_*` failure codes.
+
+Current live download failure report:
+
+```bash
+npm run download:failures --prefix server -- --limit=1000 --sample=0
+```
+
+Current live retry dry run:
+
+```bash
+npm run process:retryable --prefix server -- --stage=download --limit=25 --dry-run
+```
+
+Current live alternative-source dry run:
+
+```bash
+npm run download:alternatives --prefix server -- --dry-run --limit=25
+```
+
+As of 2026-07-13, the alternative-source dry run found no deterministic safe replacements in the reviewed sample. Recovery should therefore focus on bounded retries for `DOWNLOAD_SERVER_ERROR` records and connector/source repair for permanent failures.

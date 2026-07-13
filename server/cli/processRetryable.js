@@ -6,17 +6,26 @@ const { argumentFlag, argumentInteger, argumentValue } = require("./cliArgs");
 
 const buildReport = async () => {
   const enqueue = argumentFlag("enqueue");
+  const dryRun = argumentFlag("dry-run") || !enqueue;
   const limit = argumentInteger("limit", 50, 1, 500);
+  const concurrency = argumentInteger("concurrency", 1, 1, 8);
   const failureCode = argumentValue("failure-code");
   const source = argumentValue("source");
-  const type = argumentValue("type");
-  const maxRetryCount = argumentInteger("max-retry-count", 3, 0, 20);
+  const type = argumentValue("document-type") || argumentValue("type");
+  const stage = argumentValue("stage");
+  const maxRetryCount = argumentInteger(
+    "max-attempts",
+    argumentInteger("max-retry-count", 3, 0, 20),
+    0,
+    20,
+  );
   const priority = argumentInteger("priority", 55, 1, 100);
+  const excludePermanent = argumentFlag("exclude-permanent") || true;
+  const onlyWithAlternative = argumentFlag("only-with-alternative");
 
   const params = [limit, maxRetryCount];
   const filters = [
     "state.retry_eligible = TRUE",
-    "state.readiness_class = 'processing_failed_retriable'",
     "state.retry_count <= $2",
     "document.visibility_status = 'public'",
     `NOT EXISTS (
@@ -26,6 +35,10 @@ const buildReport = async () => {
          AND active.status IN ('queued', 'running')
      )`,
   ];
+  if (excludePermanent) {
+    filters.push("state.readiness_class <> 'processing_failed_permanent'");
+  }
+  filters.push("state.readiness_class = 'processing_failed_retriable'");
   if (failureCode) {
     params.push(String(failureCode).toUpperCase());
     filters.push(`state.failure_code = $${params.length}`);
@@ -37,6 +50,20 @@ const buildReport = async () => {
   if (type) {
     params.push(String(type).toLowerCase().replace(/-/g, "_"));
     filters.push(`LOWER(document.document_type) = $${params.length}`);
+  }
+  if (stage) {
+    params.push(String(stage).toLowerCase());
+    filters.push(`LOWER(COALESCE(state.pipeline_stage, state.failure_stage, '')) = $${params.length}`);
+  }
+  if (onlyWithAlternative) {
+    filters.push(`EXISTS (
+      SELECT 1
+      FROM document_resources alternative
+      WHERE alternative.document_id = document.id
+        AND alternative.resource_type IN ('pdf', 'text', 'html')
+        AND alternative.is_accessible
+        AND alternative.hash_sha256 IS NOT NULL
+    )`);
   }
 
   const candidateSql = `
@@ -60,7 +87,7 @@ const buildReport = async () => {
 
   const candidates = await query(candidateSql, params);
   let enqueued = [];
-  if (enqueue && candidates.rows.length) {
+  if (!dryRun && candidates.rows.length) {
     const ids = candidates.rows.map((row) => row.document_id);
     const enqueueResult = await query(
       `INSERT INTO document_processing_jobs (
@@ -72,7 +99,9 @@ const buildReport = async () => {
          JSONB_BUILD_OBJECT(
            'reason', 'retryable_failure_backfill',
            'failureCode', state.failure_code,
-           'requestedBy', 'process:retryable'
+           'requestedBy', 'process:retryable',
+           'stage', $3,
+           'concurrency', $4
          ),
          NULLIF(LOWER(SUBSTRING((
            SELECT COALESCE(legacy.pdf_url, legacy.canonical_url, legacy.source_url)
@@ -86,21 +115,25 @@ const buildReport = async () => {
          WHERE status IN ('queued', 'running')
        DO NOTHING
        RETURNING document_id, id AS job_id`,
-      [ids, priority],
+      [ids, priority, stage || null, concurrency],
     );
     enqueued = enqueueResult.rows;
   }
 
   return {
     generatedAt: new Date().toISOString(),
-    mode: enqueue ? "enqueue" : "dry_run",
+    mode: dryRun ? "dry_run" : "enqueue",
     filters: {
       limit,
+      concurrency,
+      stage: stage || null,
       failureCode: failureCode || null,
       source: source || null,
       type: type || null,
       maxRetryCount,
       priority,
+      onlyWithAlternative,
+      excludePermanent,
     },
     candidates: candidates.rows.map((row) => ({
       ...row,
@@ -110,9 +143,9 @@ const buildReport = async () => {
       documentId: String(row.document_id),
       jobId: String(row.job_id),
     })),
-    note: enqueue
+    note: !dryRun
       ? "Queued only candidates without an active queued/running job."
-      : "Dry run only. Pass --enqueue to create jobs.",
+      : "Dry run only. Pass --enqueue without --dry-run to create jobs.",
   };
 };
 
