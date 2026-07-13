@@ -69,7 +69,7 @@ A bounded live health check of PRS, India Code, eGazette, PIB, RBI, and SEBI on 
 |---|---|---|
 | Email registration/login/logout | Implemented and deployed | Authenticated temporary-account flow passed. |
 | Google OAuth | Configurable, not currently enabled | UI now hides Google login unless explicitly enabled and configured. |
-| Onboarding and personal profile | Implemented; deletion repair awaiting deployment verification | Signup, onboarding skip, and profile routing passed. The final browser pass exposed a retired-table failure in account deletion; the audit now skips absent legacy user-data tables without skipping deletion of tables that still exist. |
+| Onboarding and personal profile | Implemented and deployed | Signup, onboarding skip, profile routing, and transactional account deletion passed. The deletion flow tolerates retired optional chat tables while deleting all user-owned rows in tables that exist. |
 | Legislative/policy catalogue and filters | Implemented and deployed | Bills, Acts, state records, gazette, policies, universal search, and detail routes passed release checks. |
 | Dashboard and source-health views | Implemented | Counts are live; public UI count can differ from raw DB totals because invalid/internal records are excluded. |
 | Grounded document chat | Implemented for research-ready documents | Authenticated production question returned the stated 1,600 MW rooftop target with six cited passages. Not every catalogue record is chat-ready. |
@@ -115,16 +115,15 @@ A bounded live health check of PRS, India Code, eGazette, PIB, RBI, and SEBI on 
 - Research-ready sample audit: 36 records across 14 document types; zero false-ready in the bounded sample.
 - Release route verification: passed for dashboard, profile, catalogues, search, detail, graph, timeline, and unified chats.
 - Bounded live connector health: PRS, eGazette, PIB, RBI, and SEBI connected; India Code reachable/valid but empty in the one-record sample.
-- Authenticated deployed browser: registration, login/session, dashboard/search, document research, cited chat, note, bookmark interaction, recommendation display, completed comparison with transparent provider fallback, corrected graph/timeline display, pricing, profile, and deletion workflow inspected. The final deletion attempt exposed the retired-table bug described above; its corrected deployment still requires one repeat check.
+- Authenticated deployed browser: registration, login/session, dashboard/search, document research, cited chat, note, bookmark interaction, recommendation display, completed comparison with transparent provider fallback, corrected graph/timeline display, pricing, profile, and HTTP 200 account deletion followed by redirect to login all passed. The temporary audit account and its user-owned test data were removed through the product workflow.
 
 ## Remaining limitations and next gates
 
-1. Deploy the account-deletion compatibility fix and repeat the temporary-account deletion check.
-2. Complete actual human review of at least 20 generated answers and build an independent, expert-curated evaluation set.
-3. Reduce the 16,997 processable backlog and clean 371 exhausted legacy retry rows.
-4. Populate file checksums and review 1,113 probable duplicate groups.
-5. Increase depth and freshness for PIB, India Code, eGazette, regulators, ministries, and states without implying comprehensive coverage.
-6. Run institutional pilots before setting final pricing or making commercial accuracy claims.
+1. Complete actual human review of at least 20 generated answers and build an independent, expert-curated evaluation set.
+2. Reduce the 16,997 processable backlog and clean 371 exhausted legacy retry rows.
+3. Populate file checksums and review 1,113 probable duplicate groups.
+4. Increase depth and freshness for PIB, India Code, eGazette, regulators, ministries, and states without implying comprehensive coverage.
+5. Run institutional pilots before setting final pricing or making commercial accuracy claims.
 
 ## Accurate external description
 
