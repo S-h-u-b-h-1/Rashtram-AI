@@ -1,4 +1,6 @@
 const assert = require("node:assert/strict");
+const fs = require("node:fs");
+const path = require("node:path");
 const test = require("node:test");
 
 const {
@@ -13,6 +15,10 @@ const {
   WEEKLY_SOURCES,
   scheduleForProfile,
 } = require("../lib/ingestion/schedules");
+const {
+  REQUIRED_CATEGORIES,
+  RESEARCH_BENCHMARKS,
+} = require("../evaluation/researchBenchmarks");
 
 test("database migrations are versioned and ordered", () => {
   const files = migrationFiles();
@@ -24,6 +30,7 @@ test("database migrations are versioned and ordered", () => {
   assert.ok(files.includes("005_government_knowledge_graph.js"));
   assert.ok(files.includes("006_full_research_readiness.js"));
   assert.ok(files.includes("007_mass_processing_infrastructure.js"));
+  assert.ok(files.includes("012_source_authority_and_canonical_provenance.js"));
 });
 
 test("quality score rewards provenance and processing evidence", () => {
@@ -68,4 +75,36 @@ test("scheduled ingestion profiles are bounded and source-based", () => {
   assert.ok(DAILY_SOURCES.includes("niti-aayog"));
   assert.ok(WEEKLY_SOURCES.includes("state-gazette"));
   assert.ok(BOUNDED_CRON_SOURCES.length <= 3);
+});
+
+test("canonical provenance migration adds authority tiers and operations view", () => {
+  const source = fs.readFileSync(
+    path.join(
+      __dirname,
+      "..",
+      "migrations",
+      "012_source_authority_and_canonical_provenance.js",
+    ),
+    "utf8",
+  );
+  assert.match(source, /source_authority_tier/);
+  assert.match(source, /original_source_page/);
+  assert.match(source, /file_checksum_sha256/);
+  assert.match(source, /authority_tier/);
+  assert.match(source, /supported_document_types/);
+  assert.match(source, /source_registry_operations/);
+  assert.match(source, /Tier|authority_tier|source_authority_tier/);
+});
+
+test("research evaluation scaffold covers required benchmark categories", () => {
+  const categories = new Set(RESEARCH_BENCHMARKS.map((item) => item.category));
+  for (const category of REQUIRED_CATEGORIES) {
+    assert.equal(categories.has(category), true);
+  }
+  for (const benchmark of RESEARCH_BENCHMARKS) {
+    assert.ok(benchmark.id);
+    assert.ok(benchmark.query);
+    assert.ok(Array.isArray(benchmark.requiredDocumentTypes));
+    assert.ok(Array.isArray(benchmark.mustMeasure));
+  }
 });

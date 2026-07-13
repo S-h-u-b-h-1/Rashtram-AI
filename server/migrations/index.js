@@ -43,4 +43,8 @@ module.exports = [
     name: "011_profile_role_and_preference_sync.js",
     migration: require("./011_profile_role_and_preference_sync"),
   },
+  {
+    name: "012_source_authority_and_canonical_provenance.js",
+    migration: require("./012_source_authority_and_canonical_provenance"),
+  },
 ];

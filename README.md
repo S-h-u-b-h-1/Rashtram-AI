@@ -153,3 +153,30 @@ The backend requires these encrypted Vercel environment variables:
 
 Never commit `.env` or `.env.local` files. Rotate any credential that has been
 shared publicly or committed previously.
+# Rashtram AI — current engineering status
+
+Rashtram AI is an advanced prototype of an AI-assisted Indian government, legislative, regulatory and policy research platform. The current priority is corpus reliability: authoritative source ingestion, provenance preservation, processing quality, citation-backed retrieval, comparison readiness and operational observability.
+
+Current evidence from the production-linked database audit on 2026-07-13:
+
+- 19,307 canonical documents
+- 17,514 documents with PDFs
+- 1,485 research-ready documents
+- 1,485 comparison-ready documents
+- 17,118 processable backlog
+- 47.4% current processing failure rate
+
+Do not treat catalogued documents as research-ready unless the readiness pipeline marks them ready.
+
+Key docs:
+
+- `docs/CURRENT_PLATFORM_AUDIT.md`
+- `docs/CANONICAL_DOCUMENT_MODEL.md`
+- `docs/SOURCE_REGISTRY.md`
+- `docs/INGESTION_ARCHITECTURE.md`
+- `docs/PROCESSING_PIPELINE.md`
+- `docs/RESEARCH_READINESS.md`
+- `docs/RESEARCH_EVALUATION_FRAMEWORK.md`
+- `docs/OPERATIONS_RUNBOOK.md`
+- `docs/DEPLOYMENT_GUIDE.md`
+- `docs/DATA_SOURCE_LIMITATIONS.md`
