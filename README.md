@@ -10,9 +10,10 @@ summaries, and supports source-grounded chat.
 
 - `client/`: Next.js 15 and React 19 web application
 - `server/`: Express API, authentication, document processing, and AI services
-- PostgreSQL: users, chats, related-bill cache, and the legislative catalogue
-- Pinecone: vector retrieval for Bills, Acts, and universal documents
-- OpenAI: multilingual embeddings, OCR, summaries, and streamed chat responses
+- PostgreSQL: users, workspaces, processing state, provenance, and catalogue data
+- Pinecone and local-text fallback: versioned document retrieval paths
+- Gemini-first AI services for embeddings, OCR, summaries, and streamed chat;
+  OpenAI-compatible operation is an explicit configured alternative
 
 Detailed references:
 
@@ -33,10 +34,10 @@ Detailed references:
 
 - Node.js 22
 - PostgreSQL (Neon is supported)
-- OpenAI API access
-- Pinecone account with two 768-dimension indexes:
-  - `rashtram-bills` (or the value of `PINECONE_INDEX_NAME`)
-  - `rashtram-acts`
+- Gemini API access for the current production-compatible AI path, or an
+  explicitly configured compatible provider
+- Pinecone account with provider/model/dimension-versioned namespaces when
+  vector retrieval is enabled
 - Optional Google OAuth credentials
 
 ## Local setup
@@ -130,24 +131,26 @@ the `/api` suffix.
 Set `NEXT_PUBLIC_FORMSPREE_CONTACT_ENDPOINT` on the frontend to the verified
 Formspree form endpoint. See `docs/CONTACT_FORM_SETUP.md`.
 
-The backend requires these encrypted Vercel environment variables:
+The backend requires encrypted database and authentication variables plus the
+variables for the explicitly selected AI provider. See
+[`docs/DEPLOYMENT_GUIDE.md`](docs/DEPLOYMENT_GUIDE.md) for the canonical list.
+The current production path uses:
 
 - `DATABASE_URL`
 - `JWT_SECRET`
 - `CLIENT_URL`
-- `GOOGLE_CLIENT_ID`
-- `GOOGLE_CLIENT_SECRET`
-- `GOOGLE_CALLBACK_URL`
-- `OPENAI_API_KEY`
-- `OPENAI_MODEL`
-- `OPENAI_FALLBACK_MODEL`
-- `OPENAI_OCR_MODEL`
-- `OPENAI_EMBEDDING_MODEL`
-- `EMBEDDING_PROVIDER=openai`
+- `AI_PROVIDER=gemini`
+- `EMBEDDING_PROVIDER=gemini`
+- `GEMINI_API_KEY`
+- Gemini generation, OCR, and embedding model variables
 - `PINECONE_API_KEY`
 - `PINECONE_INDEX_NAME`
 - `PINECONE_ACT_INDEX_NAME`
-- `PINECONE_NAMESPACE=openai-text-embedding-3-large-768-v1`
+- A provider/model/dimension-specific `PINECONE_NAMESPACE`
+
+Google OAuth variables are optional. Set
+`NEXT_PUBLIC_GOOGLE_AUTH_ENABLED=true` on the frontend only when the backend
+OAuth client and callback are configured and verified.
 
 ## Security
 
@@ -157,14 +160,18 @@ shared publicly or committed previously.
 
 Rashtram AI is an advanced prototype of an AI-assisted Indian government, legislative, regulatory and policy research platform. The current priority is corpus reliability: authoritative source ingestion, provenance preservation, processing quality, citation-backed retrieval, comparison readiness and operational observability.
 
-Current evidence from the production-linked database audit on 2026-07-13:
+Current evidence from the production-linked database audit on 2026-07-13
+(refresh these numbers before reusing them in external reports):
 
 - 19,307 canonical documents
 - 17,514 documents with PDFs
-- 1,485 research-ready documents
-- 1,485 comparison-ready documents
-- 17,118 processable backlog
-- 47.4% current processing failure rate
+- 1,602 research-ready documents
+- 1,602 comparison-ready documents
+- 16,997 processable backlog
+- 45.8% processing-attempt failure rate (historical attempts, not the
+  percentage of catalogue records permanently unusable)
+- 1,113 probable duplicate groups remain unresolved
+- PDF checksum coverage is currently incomplete
 
 Do not treat catalogued documents as research-ready unless the readiness pipeline marks them ready.
 

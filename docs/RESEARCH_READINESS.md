@@ -5,13 +5,13 @@
 | Metric | Value |
 |---|---:|
 | Total documents | 19,307 |
-| Research-ready | 1,528 |
-| Comparison-ready | 1,528 |
+| Research-ready | 1,602 |
+| Comparison-ready | 1,602 |
 | Processable backlog | 17,075 |
 | Readiness conversion rate | 7.91% |
 | Processing failure rate | 46.8% |
 
-Readiness conversion rate is `1,528 / 19,307`.
+Readiness conversion rate at the 2026-07-13 11:04 UTC audit snapshot is `1,602 / 19,307` (about 8.3%). Some ready records use verified local-text fallback rather than vector embeddings.
 
 ## Quality tiers
 
@@ -72,4 +72,3 @@ Result, 2026-07-13:
 - Tier A and Tier C examples included
 
 This sample supports the current readiness gate behavior but is not a full corpus-level legal review.
-

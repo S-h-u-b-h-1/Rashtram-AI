@@ -1,84 +1,51 @@
-# Research Benchmark Results
+# Research Evaluation Status
 
 Last updated: 2026-07-13
 
-## Execution status
+## What the current benchmark is
 
-The first live deterministic research benchmark was executed against production-backed stored chunks.
+`npm run eval:research --prefix server` builds a synthetic regression set from current research-ready catalogue records. Questions quote exact stored titles and check whether the catalogue resolver returns the seeded records. It also includes synthetic negative controls.
 
-Command:
+This is useful for detecting retrieval regressions. It is not an independent legal-research accuracy benchmark because:
 
-```bash
-npm run eval:research --prefix server -- --limit=30 --retrieval-only --output-json --output-markdown
-```
+- the questions and expected IDs are generated from the same catalogue;
+- exact quoted titles are substantially easier than open-ended research questions;
+- there have been zero completed formal human/legal reviews;
+- required-fact and unsupported-claim adjudication is not automated reliably;
+- provider usage wrappers do not currently expose a trustworthy monetary cost.
 
-Output files were written to ignored local paths under `server/evaluation-results/` and were not committed.
+## Historical result and correction
 
-## Measured results
+Commit `b18c916` reported a 50-question run with Recall@10, comparison Recall@10, citation proxy, and negative-control accuracy all equal to 1.0, with average retrieval latency of 1,054.5 ms. Five bounded questions used Gemini generation.
 
-| Metric | Result |
-| --- | ---: |
-| Questions executed | 30 |
-| Retrieval questions | 25 |
-| Insufficient-evidence questions | 5 |
-| Recall@10 | 0.94 |
-| Mean reciprocal rank | 1.0 |
-| Expected document appearance rate | 1.0 |
-| Expected chunk appearance rate | 1.0 |
-| Citation correctness proxy | 1.0 |
-| Unsupported-claim rate | 0 |
-| Insufficient-evidence accuracy | 1.0 |
-| Average retrieval latency | 3165.4 ms |
-| Estimated generation cost | $0 |
+Those figures must be described as a **synthetic catalogue resolver regression result**, not product-wide research accuracy. The comparison evaluator passed expected document IDs directly into per-document retrieval, making perfect comparison recall tautological. This audit removes that expected-ID injection.
 
-Category results:
+The prior “unsupported-claim rate: 0” was also not a valid generated-answer metric: generated positive answers were assigned `unsupportedClaim: false` without claim-level review. The evaluator now reports `requires_human_review`; the aggregate rate stays unmeasured until decisions exist. Unknown generation cost is now `null`, not `$0`.
 
-| Category | Questions | Recall@10 | MRR | Citation correctness proxy |
-| --- | ---: | ---: | ---: | ---: |
-| Exact retrieval | 20 | 1.0 | 1.0 | 1.0 |
-| Comparison | 5 | 0.7 | 1.0 | 1.0 |
-| Insufficient evidence | 5 | n/a | 0 | 1.0 |
+## Current evaluation behavior
 
-## Interpretation
+- Expected document IDs are used only for scoring, never as retrieval inputs.
+- Quoted-title retrieval balances result allocation without inspecting expected IDs.
+- Generated citations are validated against available evidence labels.
+- Citation completeness checks whether expected retrieved documents were actually cited.
+- Factual correctness, inference quality, and unsupported claims require human review.
+- The JSON/CSV review export remains the path for faculty, policy, or legal adjudication.
 
-The exact-retrieval baseline is strong on this small deterministic benchmark.
+## Claims that are permitted
 
-The comparison baseline is weaker: both expected documents were not always recovered within top K. This is the most important retrieval-quality gap found in this run.
+- “The platform has a 50-question catalogue-derived retrieval regression framework.”
+- “A historical self-seeded run resolved all expected exact-title records within top 10.”
+- “Generated-answer review exports and reviewer guidance exist.”
 
-The insufficient-evidence cases use synthetic negative controls. The evaluator checks for direct rare-fact support rather than trusting high-level lexical matches.
+## Claims that are not permitted
 
-## Human-reviewed sample
+- “Rashtram AI is 100% accurate.”
+- “Citation correctness is independently proven at 100%.”
+- “Unsupported claims are zero.”
+- “The benchmark proves production-grade legal accuracy.”
+- “The benchmark is human reviewed.”
 
-The benchmark questions are deterministically generated from research-ready metadata and stored chunks. A separate research-ready sample audit reviewed 33 records across 14 document types and found 0 false-ready cases.
+## Required next evaluation
 
-This is not a substitute for legal review. Human legal adjudication of benchmark answers remains pending.
-
-## Automated evaluation limits
-
-- No model-generated answers were scored in this run.
-- Citation correctness is a deterministic retrieval/citation proxy, not a human legal citation audit.
-- Unsupported-claim rate is 0 because no generated answers were produced.
-- Cost is 0 because the run was retrieval-only.
-- Latency reflects unoptimized SQL retrieval over live stored chunks.
-
-## Known biases
-
-- Exact title/source/year questions are easier than open-ended legal reasoning.
-- Comparison questions are generated from paired ready documents, not hand-curated amendment relationships.
-- Negative controls are synthetic and may not represent realistic vague user questions.
-- The benchmark is useful as a baseline, not a final research-quality certification.
-
-## Gates
-
-Current advisory gates:
-
-- Expected document recall@K baseline: measured 0.94.
-- Citation correctness proxy: measured 1.0.
-- Unsupported-claim rate: measured 0 in retrieval-only mode.
-- Insufficient-evidence behavior: measured 1.0 on synthetic controls.
-
-Release-blocking gates remain:
-
-- No critical readiness contradictions.
-- No citation to an unrelated document in controlled deterministic checks.
+Build an independent set of at least 100 questions authored and reviewed by faculty, policy researchers, law students, or legal professionals. It should include open-ended retrieval, clauses, amendments, supersession, source conflicts, state comparisons, realistic insufficient-evidence cases, and claim-to-citation adjudication.
 

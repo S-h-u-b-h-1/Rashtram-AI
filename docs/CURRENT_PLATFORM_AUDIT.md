@@ -1,61 +1,52 @@
-# Current Platform Audit
+# Rashtram AI — Current Platform Audit
 
-Date: 2026-07-13
+Audit date: 2026-07-13
+Evidence standard: repository code, production-linked database commands, bounded live connector checks, and authenticated deployed-browser tests. Historical reports are not current evidence.
 
-This audit is based on the repository, migrations, route map, package scripts, and live database-backed CLI outputs. It intentionally separates implemented capability from roadmap.
+## Executive conclusion
 
-## Evidence commands used
+Rashtram AI is a working research-grade prototype suitable for a controlled institutional pilot. It is not yet a complete commercial SaaS product, a legal-advice system, or an enterprise compliance platform.
 
-- `npm run catalog:stats --prefix server`
-- `npm run process:status --prefix server`
-- `npm run process:audit --prefix server`
-- `npm run process:failures --prefix server`
-- `npm run process:backlog --prefix server`
-- `npm run process:consistency --prefix server`
-- `npm run db:migrate --prefix server`
-- `npm run db:verify --prefix server`
-- repository route, migration, connector, and workflow inspection
+The deployed product supports email authentication, onboarding/profile workflows, a public legislative and policy catalogue, research-ready document workspaces, grounded chat with citations, private notes and history, bookmarks, document recommendations, comparison selection, knowledge-network exploration, and source-health views. The underlying platform includes provenance, readiness controls, retry controls, processing audits, connector infrastructure, and a Gemini-first AI path.
 
-## Current counts
+The largest constraints are corpus conversion, processing-attempt failures, unresolved probable duplicates, incomplete file-checksum coverage, incomplete independent/human evaluation, uneven source depth, and enterprise/commercial features that remain roadmap-only.
 
-| Metric | Current value |
+## Measured database baseline
+
+These figures were measured on 2026-07-13 and will drift as ingestion and processing continue.
+
+| Metric | Measured value |
 |---|---:|
-| Canonical documents | 19,307 |
-| Documents with PDF | 17,514 |
-| Canonical source groups represented in catalogue | 20 |
-| Jurisdictions represented | 32 |
-| Research-ready documents | 1,485 |
-| Comparison-ready documents | 1,485 |
-| Processable backlog | 17,118 |
-| Stored chunks | 11,954 |
-| Stored embeddings/local retrieval vectors | 11,954 |
-| Processing attempts | 2,808 |
-| Completed attempts | 1,475 |
-| Failed attempts | 1,331 |
-| Current processing failure rate | 47.4% |
+| Canonical catalogue records | 19,307 |
+| Records with a PDF URL | 17,514 |
+| Public jurisdictions represented | 32 |
+| Canonical source labels represented | 20 |
+| Research-ready | 1,602 |
+| Comparison-ready | 1,602 |
+| Processable backlog | 16,997 |
+| Stored chunks | 12,296 |
+| Stored embeddings | 12,120 |
+| Queue completed | 1,597 |
+| Queue failed | 371 |
+| Queue dead-letter | 70 |
+| Queue queued | 1,325 |
+| Historical processing attempts | 2,928 |
+| Historical failed attempts | 1,341 |
+| Attempt failure rate | 45.8% |
 | Probable duplicate groups | 1,113 |
-| Documents in probable duplicate groups | 2,442 |
+| Records in probable duplicate groups | 2,442 |
 | Pending match reviews | 26 |
+| Records with populated PDF hash in the catalogue report | 0 |
 
-## Processing state distribution
+The 45.8% figure is the failure rate of recorded processing attempts. It is not the percentage of catalogue documents proven permanently unusable.
 
-| State | Documents |
-|---|---:|
-| `pdf_available_not_processed` | 16,311 |
-| `comparison_ready` | 1,485 |
-| `source_only` | 599 |
-| `source_extractable_not_processed` | 407 |
-| `processing_failed_retriable` | 398 |
-| `processing_failed_permanent` | 66 |
-| `invalid_or_quarantined` | 38 |
-| `processing_pending` | 2 |
-| `unsupported_file_type` | 1 |
+Some research-ready records use a verified local-text retrieval fallback and have no vector embedding. The product must not claim that every ready document is vector-indexed.
 
-## Source distribution
+## Source coverage
 
-The catalogue is broad but uneven. PRS dominates the current corpus.
+The catalogue is highly concentrated in PRS.
 
-| Source | Records | PDFs |
+| Source | Records | Records with PDF URL |
 |---|---:|---:|
 | PRS India | 17,545 | 17,229 |
 | PIB | 134 | 5 |
@@ -69,137 +60,72 @@ The catalogue is broad but uneven. PRS dominates the current corpus.
 | UIDAI | 31 | 31 |
 | SEBI | 26 | 0 |
 | NITI Aayog | 25 | 25 |
-| State Policy | 15 | 15 |
-| MyGov | 3 | 0 |
 
-## What is implemented and working
+A bounded live health check of PRS, India Code, eGazette, PIB, RBI, and SEBI on 2026-07-13 found five connected sources and one reachable/valid India Code sample with no records in that single-page sample. RBI was reachable and discovered a sample, while its latest stored ingestion run still carried two prior errors. This is evidence of connector operability, not proof of complete source coverage.
 
-- Next.js frontend with landing pages, auth pages, dashboard, document catalogue, chat routes, comparison, recommendations, onboarding, profile, and contact form.
-- Express backend with authenticated APIs for auth, onboarding, dashboard, profile, activity, documents, graph, recommendations, contact, and internal cron ingestion.
-- Canonical document tables, source registry, document resources, text artifacts, processing state, processing jobs, processing attempts, processing workers, recommendations, comparisons, knowledge graph relationships, and user research data.
-- Gemini-first AI provider abstraction with OpenAI-compatible/fallback paths.
-- Pinecone/local retrieval support and fallback-safe readiness logic.
-- PDF processing with native extraction, OCR fallback, language detection, Hindi-aware cleanup/chunking, raw/clean/summary artifact separation, and multilingual tests.
-- Research/comparison readiness gates that distinguish catalogued, processable, failed, pending, source-only, research-ready, and comparison-ready documents.
-- Recommendation service for document recommendations, problem recommendations, comparison recommendations, and profile recommendation history.
-- Knowledge graph relationship discovery/verification foundation.
-- Scheduled ingestion scripts and GitHub workflows.
-- Release verifier covering dashboard, profile, document sections, search, document detail, graph, timeline, and unified chats.
-- Account onboarding, profile preferences, user-specific comparison selection, and account deletion.
+## Capability truth table
 
-## Partially implemented
+| Capability | Status | Evidence and limitation |
+|---|---|---|
+| Email registration/login/logout | Implemented and deployed | Authenticated temporary-account flow passed. |
+| Google OAuth | Configurable, not currently enabled | UI now hides Google login unless explicitly enabled and configured. |
+| Onboarding and personal profile | Implemented and deployed | Signup, onboarding skip, profile routing, and account deletion exist. |
+| Legislative/policy catalogue and filters | Implemented and deployed | Bills, Acts, state records, gazette, policies, universal search, and detail routes passed release checks. |
+| Dashboard and source-health views | Implemented | Counts are live; public UI count can differ from raw DB totals because invalid/internal records are excluded. |
+| Grounded document chat | Implemented for research-ready documents | Authenticated production question returned the stated 1,600 MW rooftop target with six cited passages. Not every catalogue record is chat-ready. |
+| Evidence briefs/summaries | Implemented for processed documents | AI or extractive fallback; outputs remain research assistance requiring source verification. |
+| Notes, bookmarks, chat history | Implemented | Temporary-account browser test created a note and a saved chat. |
+| Recommendations | Implemented | Uses catalogue, metadata, profile, semantic, and relationship signals. Recommendation confidence is relevance scoring, not legal certainty. |
+| Document comparison | Implemented but production latency needed repair | Selection and retrieval worked; deployed request hung in provider generation. The audit adds a bounded AI timeout and grounded extractive fallback. Must be reverified after deployment. |
+| Multi-document chat | Implemented route and UI | Route passes release verification; a complete deployed conversational turn was not independently exercised in this audit. |
+| Knowledge graph | Partially implemented | Graph storage and UI work, but many edges are inferred signals. They must not be called source-verified. The audit removes misleading labels, excludes inferred legal-effect edges from timelines/comparison prompts, tightens title-reference inference, and adds auditable quarantine migration 020. |
+| Legal timeline | Implemented for document dates/events; relationship-derived items restricted | Before this audit, unrelated inferred replacement events appeared. Only source-verified temporal legal relationships are now eligible. |
+| Provenance and source authority | Implemented in schema/API | Population is incomplete across connectors; file checksums are notably absent in the catalogue report. |
+| Deduplication | Partially implemented | Deterministic/fuzzy infrastructure exists, but 1,113 probable groups remain and hash coverage is incomplete. “Duplicate-safe” was an overstatement and has been corrected. |
+| Processing/readiness/retry controls | Implemented | Critical contradictions are zero; 371 legacy retryable records exceed max attempts and require backlog hygiene. |
+| Automated ingestion | Implemented on schedules for configured sources | Connector coverage and freshness are uneven; “continuous” is replaced with “scheduled/monitored.” |
+| PIB and regulator connectors | Implemented with partial coverage | PIB, RBI, SEBI and other regulator adapters exist; this is not comprehensive regulator intelligence. |
+| Research benchmark | Internal regression benchmark only | Fifty catalogue-derived exact-title questions previously reported 1.0 recall. The benchmark was self-seeded and comparison retrieval used expected IDs, so it was not an independent accuracy result. The audit removes expected-ID injection and labels the design honestly. |
+| Human/legal evaluation | Not completed | Review export/guide exist; completed formal human reviews: 0. |
+| Pricing and billing | Not implemented | Placeholder dollar pricing was removed. The page now states commercial pricing is not launched and describes proposed pilot tiers only. |
+| Organization tenancy, shared team workspaces, enterprise RBAC, SSO, audit console, SLAs | Roadmap only | Do not describe as implemented. |
+| Compliance applicability engine/copilot | Roadmap only | General impact research is not a deterministic legal-compliance engine. |
+| Case-law/judgment integration | Roadmap only | No complete judicial corpus or production case-law workflow. |
+| API product with customer keys, quotas, billing and public docs | Roadmap only | Internal application APIs are not a commercial API product. |
 
-- Source connectors exist for many official and secondary sources, but coverage and reliability are uneven.
-- Source registry exists; migration `012_source_authority_and_canonical_provenance.js` adds explicit authority tiers, source ops counters, and operations view.
-- Structured processing failures now have migration `013_processing_failure_taxonomy.js`, which adds failure codes, retry eligibility, pipeline stage, checksums, extraction method, extraction quality metadata, worker version, and cost placeholder fields.
-- Duplicate analysis now has migration `014_document_content_fingerprint.js`, which adds `content_fingerprint_sha256` for processed-text fingerprinting where available.
-- Canonical document model exists; migration `012` fills several missing provenance fields, but not every connector fully populates every new field yet.
-- Processing jobs and attempts exist; stage-level timestamps are partly represented through job/attempt timestamps and stage metrics JSON, but not every individual stage has first-class start/finish columns.
-- Hybrid retrieval exists through full-text, metadata, vector/local retrieval, recommendations, and graph signals; ranking still needs more explicit authority-tier/date/supersession weighting throughout all query paths.
-- Knowledge graph distinguishes several relationship types, but validation workflows for AI-inferred relationships remain immature.
-- Operations visibility exists through CLI scripts and DB views; no polished internal admin UI yet.
-- Evaluation is test-heavy but not benchmark-dataset-driven yet.
+## Critical audit findings and fixes
 
-## Broken or unreliable
+1. **Unsafe graph claims:** deployed UI displayed unrelated repeal/replacement edges as “verified.” Root cause was dispersed title-token matching combined with document-wide legal verbs. Fixed with contiguous normalized title matching, evidence-status fields, conservative UI labels, source-verified timeline filtering, source-verified-only comparison context, tests, and migrations 020/021 to preserve and quarantine unsafe legacy title-reference rows. The pre-cleanup graph contained 1,418 signals, 1,298 of which were legacy title-reference inferences; zero relationships met the new source-verified standard.
+2. **Comparison request could hang:** the AI provider path retried for longer than a serverless request budget. Fixed with a 12-second single-attempt comparison generation ceiling and grounded extractive fallback.
+3. **Fake pricing:** `/pricing` contained lorem ipsum, arbitrary dollar prices, and non-functional purchase buttons. Replaced with transparent pilot-stage messaging.
+4. **Unavailable Google login advertised:** Google buttons appeared without deployed OAuth credentials. Buttons now require `NEXT_PUBLIC_GOOGLE_AUTH_ENABLED=true`.
+5. **Benchmark overstatement:** perfect metrics came from catalogue-derived exact-title questions and expected-ID-assisted comparison retrieval. Expected IDs are no longer retrieval inputs; unsupported claims and factual correctness remain “requires human review,” and unknown provider cost is no longer reported as zero.
+6. **Documentation/provider drift:** README described OpenAI as the active primary provider and carried stale readiness figures. Updated to Gemini-first and current measured counts.
+7. **Marketing overstatement:** “continuously refreshed” and “duplicate-safe” language was replaced with scheduled refresh and duplicate-aware wording.
 
-- `npm run ingest:health --prefix server` did not finish within the manual 90-second observation window in this audit session.
-- A large processable backlog remains: 17,118 documents.
-- Current processing failure rate is high: 47.4%.
-- Many source records have no PDF hashes yet; checksum coverage is incomplete.
-- Duplicate review is incomplete: 1,113 probable duplicate groups remain.
-- Some official-source connectors are represented but have very low stored records, indicating partial discovery or parser limits.
+## Verification completed in this audit
 
-## Documented but not implemented as product features
+- Server unit/integration suite (the suite passes when local loopback permissions are available; sandbox-only rerun produced two `listen EPERM` environment failures).
+- Client lint and production build: passed; 22 routes generated.
+- Database migrations through 021: code-verified; migration 021 is intentionally left for corrected-code deployment so the old production worker cannot recreate quarantined edges afterward.
+- Database verification: passed with 1,602 research-ready records and all strict invariants satisfied.
+- Processing status and catalogue statistics: measured above.
+- Processing consistency: zero critical readiness contradictions after one retry-class repair; 371 legacy retryable/max-attempt hygiene rows remain.
+- Research-ready sample audit: 36 records across 14 document types; zero false-ready in the bounded sample.
+- Release route verification: passed for dashboard, profile, catalogues, search, detail, graph, timeline, and unified chats.
+- Bounded live connector health: PRS, eGazette, PIB, RBI, and SEBI connected; India Code reachable/valid but empty in the one-record sample.
+- Authenticated deployed browser: registration, login/session, dashboard/search, document research, cited chat, note, bookmark interaction, recommendation display, comparison selection, and graph display inspected.
 
-- Enterprise multi-tenant organization accounts.
-- Team workspaces and shared notes/collections.
-- SSO.
-- Billing/subscriptions.
-- Role-based access control beyond basic user/admin-style metadata.
-- Legal case-law/judgment ingestion.
-- Production-grade cost accounting dashboard.
-- Formal research-quality benchmark runner before this sprint.
+## Remaining limitations and next gates
 
-## Missing provenance and control gaps
+1. Deploy and reverify migrations 020/021 and the relationship/timeline UI against the production deployment that showed the unsafe edges.
+2. Reverify comparison completion after the new bounded provider timeout reaches production.
+3. Complete actual human review of at least 20 generated answers and build an independent, expert-curated evaluation set.
+4. Reduce the 16,997 processable backlog and clean 371 exhausted legacy retry rows.
+5. Populate file checksums and review 1,113 probable duplicate groups.
+6. Increase depth and freshness for PIB, India Code, eGazette, regulators, ministries, and states without implying comprehensive coverage.
+7. Run institutional pilots before setting final pricing or making commercial accuracy claims.
 
-Migration `012` adds explicit fields for:
+## Accurate external description
 
-- source-specific ID
-- alternate title
-- authority tier
-- original source page
-- original file URL
-- object storage path
-- file checksum
-- retrieval date
-- last source update
-- expiry date
-- regulator
-- sector
-- topic
-- legislative status
-- notification/gazette numbers
-- session/version
-- parent document
-- validation status
-- extraction version
-
-The remaining work is connector population, not only schema creation.
-
-## Technical debt
-
-- PRS dominates the corpus; official-source parity is not yet achieved.
-- Processing queue completion estimate is long at current throughput.
-- Retry/failure controls exist but the failure rate requires root-cause reduction.
-- Failure diagnostics now exist through `process:failures`, `process:backlog`, `process:retryable`, `process:consistency`, and `document:readiness`; these reduce ambiguity but do not by themselves lower the backlog.
-- Connector health should have bounded timeouts and consistently machine-readable output.
-- Source authority tiers need to be enforced in retrieval ranking and answer citations everywhere.
-- Page/section citations exist in chunks but need stronger end-to-end citation validation.
-- Existing docs include older OpenAI-oriented language; actual provider path is Gemini-first.
-
-## 2026-07-13 production hardening delta
-
-Added in this pass:
-
-- Central document downloader/validator with bounded redirects, byte limits, stable user-agent, temp-file cleanup, PDF signature/MIME/length/checksum validation, and private-network URL rejection.
-- Download-specific failure taxonomy and normalization migration for historical HTTP-style acquisition errors.
-- Processing audit log table for corrective repairs.
-- Consistency repair CLI that regenerates chunks only from preserved original text and records audit evidence.
-- Download-failure and deterministic-alternative diagnostics for source-level acquisition triage.
-- Retryable queue CLI filters for stage, failure code, source, document type, limits, and dry-run-first behavior.
-
-Live production facts after repair:
-
-- Failed records remain: 464.
-- Download-stage failures remain: 452.
-- Most download failures are source/server acquisition failures, not readiness-gate bugs.
-- Previous `ready_without_chunks` contradictions are repaired to 0.
-- Previous retryable/permanent contradictions are repaired to 0.
-- No deterministic alternative source links were found in the reviewed dry-run sample.
-
-Unchanged limitation:
-
-- This pass does not complete broad corpus processing. Remaining retryable download failures still require controlled queue processing and source monitoring, not readiness weakening.
-
-## 2026-07-13 recovery and research-validation delta
-
-Added after commit `b4771a7`:
-
-- Source-aware retry state table with per-domain circuit/cooldown tracking.
-- Worker claim logic that respects PRS concurrency, request spacing, max attempts per window, and cooldown state.
-- Controlled recovery batch runner for PRS/download failures.
-- Research-ready sample audit CLI.
-- Deterministic research benchmark runner with retrieval/citation-proxy metrics.
-
-Live evidence:
-
-- Batch A selected 25 PRS records and processed 5 before circuit-breaker cooldown.
-- 4 records downloaded/extracted far enough to preserve text artifacts and chunk rows.
-- 0 records became newly research-ready in Batch A.
-- Batch B/C were not run because Batch A activated the circuit breaker.
-- Research-ready sample audit checked 33 records across 14 types and found 0 false-ready cases.
-- Research benchmark executed 30 questions with recall@10 of 0.94 and comparison recall@10 of 0.7.
-
-Known issue now fixed in code:
-
-- Lazy summary generation could leave `summary = null`; downstream usage accounting attempted `summary.length`. This caused the four partial Batch A recoveries to fail before readiness completion.
+> Rashtram AI is a source-grounded Indian legislative and policy research prototype approaching controlled institutional pilot readiness. It combines a public-document catalogue, provenance-aware processing, research-ready document chat, citations, comparison, recommendations, personal research tools, and an experimental knowledge network. Its current strengths are architecture, traceability, and working research workflows; its remaining work is corpus conversion, independent expert evaluation, relationship verification, broader official-source depth, operational cleanup, and commercial/enterprise productization.

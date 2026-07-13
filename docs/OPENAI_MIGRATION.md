@@ -1,5 +1,7 @@
 # OpenAI Migration
 
+> Historical implementation note. This document describes an earlier provider phase. The current production runtime is Gemini-first; use `AI_PROVIDER_AUDIT.md`, `EMBEDDING_PROVIDER_STRATEGY.md`, and `CURRENT_PLATFORM_AUDIT.md` for current status.
+
 Last reviewed: 1 July 2026
 
 ## Scope

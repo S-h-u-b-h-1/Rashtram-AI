@@ -1,5 +1,7 @@
 # Processing Pipeline
 
+> The counts below are a historical baseline. Current measured counts are maintained in `CURRENT_PLATFORM_AUDIT.md`; pipeline mechanics remain relevant.
+
 ## Target lifecycle
 
 `discovered → downloaded → validated → extracted → cleaned → structured → chunked → embedded → summarised → related → quality_checked → research_ready`
@@ -54,4 +56,3 @@ A document should not be marked research-ready unless:
 - Expand structure-aware parsing for parts, chapters, sections, clauses, schedules, tables, and annexures.
 - Improve retry classification to reduce the 47.4% failure rate.
 - Surface processing operations in admin APIs/UI.
-

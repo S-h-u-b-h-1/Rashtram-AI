@@ -2,7 +2,7 @@
 
 ## Current corpus caveat
 
-The catalogue contains 19,307 records, but only 1,485 are research-ready and comparison-ready. The product must not imply that every catalogued record supports AI chat, comparison, or compliance conclusions.
+The 2026-07-13 11:04 UTC audit snapshot contains 19,307 records, but only 1,602 are research-ready and comparison-ready. The product must not imply that every catalogued record supports AI chat, comparison, or compliance conclusions.
 
 ## Source caveats
 
@@ -27,7 +27,9 @@ The system must not produce final legal/compliance advice without:
 ## Current known limitations
 
 - 17,118 documents remain in the processable backlog.
-- Processing failure rate is 47.4%.
+- The historical processing-attempt failure rate is 45.8%; this is not the percentage of catalogue records proven permanently unusable.
+- PDF checksum population is incomplete (the catalogue statistics report zero populated PDF hashes).
+- 1,113 probable duplicate groups remain unresolved.
 - 1,113 probable duplicate groups remain.
 - Source health command needs bounded timeout behavior.
 - File checksum coverage is incomplete.

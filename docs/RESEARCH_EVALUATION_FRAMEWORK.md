@@ -1,5 +1,7 @@
 # Research Evaluation Framework
 
+> The earlier benchmark figures in this document are historical catalogue-regression results, not independent legal-accuracy measurements. See `RESEARCH_BENCHMARK_RESULTS.md` for the corrected interpretation.
+
 ## Goal
 
 Create repeatable measurements for retrieval quality, citation correctness, answer groundedness, comparison quality, latency, and cost.

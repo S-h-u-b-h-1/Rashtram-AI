@@ -1,5 +1,7 @@
 # Processing Failure Analysis
 
+> Historical diagnostic snapshot. Do not reuse its counts as current metrics; see `CURRENT_PLATFORM_AUDIT.md` and rerun the operational commands.
+
 Date: 2026-07-13
 
 This document captures the current production-hardening position for Rashtram AI document processing. It is intentionally operational: it explains what fails, how failures are now classified, and how to inspect or retry safely.
