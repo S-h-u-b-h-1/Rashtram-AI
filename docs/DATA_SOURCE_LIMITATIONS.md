@@ -31,5 +31,18 @@ The system must not produce final legal/compliance advice without:
 - 1,113 probable duplicate groups remain.
 - Source health command needs bounded timeout behavior.
 - File checksum coverage is incomplete.
+- Processing failures are now structured with `failure_code`, `retry_eligible`, `pipeline_stage`, checksums, and extraction metadata, but historical records still require migration/backfill verification before every failure can be trusted as fully classified.
 - Enterprise controls and billing are not implemented.
 
+## Failure and readiness inspection
+
+Use these commands before making any coverage claim:
+
+```bash
+npm run process:failures --prefix server
+npm run process:backlog --prefix server
+npm run process:consistency --prefix server
+npm run document:readiness --prefix server -- --document-id=<id>
+```
+
+If a document is not `comparison_ready`, the product should explain why rather than implying chat/comparison support.

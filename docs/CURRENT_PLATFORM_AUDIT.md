@@ -9,6 +9,9 @@ This audit is based on the repository, migrations, route map, package scripts, a
 - `npm run catalog:stats --prefix server`
 - `npm run process:status --prefix server`
 - `npm run process:audit --prefix server`
+- `npm run process:failures --prefix server`
+- `npm run process:backlog --prefix server`
+- `npm run process:consistency --prefix server`
 - `npm run db:migrate --prefix server`
 - `npm run db:verify --prefix server`
 - repository route, migration, connector, and workflow inspection
@@ -88,6 +91,8 @@ The catalogue is broad but uneven. PRS dominates the current corpus.
 
 - Source connectors exist for many official and secondary sources, but coverage and reliability are uneven.
 - Source registry exists; migration `012_source_authority_and_canonical_provenance.js` adds explicit authority tiers, source ops counters, and operations view.
+- Structured processing failures now have migration `013_processing_failure_taxonomy.js`, which adds failure codes, retry eligibility, pipeline stage, checksums, extraction method, extraction quality metadata, worker version, and cost placeholder fields.
+- Duplicate analysis now has migration `014_document_content_fingerprint.js`, which adds `content_fingerprint_sha256` for processed-text fingerprinting where available.
 - Canonical document model exists; migration `012` fills several missing provenance fields, but not every connector fully populates every new field yet.
 - Processing jobs and attempts exist; stage-level timestamps are partly represented through job/attempt timestamps and stage metrics JSON, but not every individual stage has first-class start/finish columns.
 - Hybrid retrieval exists through full-text, metadata, vector/local retrieval, recommendations, and graph signals; ranking still needs more explicit authority-tier/date/supersession weighting throughout all query paths.
@@ -146,8 +151,8 @@ The remaining work is connector population, not only schema creation.
 - PRS dominates the corpus; official-source parity is not yet achieved.
 - Processing queue completion estimate is long at current throughput.
 - Retry/failure controls exist but the failure rate requires root-cause reduction.
+- Failure diagnostics now exist through `process:failures`, `process:backlog`, `process:retryable`, `process:consistency`, and `document:readiness`; these reduce ambiguity but do not by themselves lower the backlog.
 - Connector health should have bounded timeouts and consistently machine-readable output.
 - Source authority tiers need to be enforced in retrieval ranking and answer citations everywhere.
 - Page/section citations exist in chunks but need stronger end-to-end citation validation.
 - Existing docs include older OpenAI-oriented language; actual provider path is Gemini-first.
-

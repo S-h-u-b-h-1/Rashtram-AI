@@ -31,6 +31,9 @@ test("database migrations are versioned and ordered", () => {
   assert.ok(files.includes("006_full_research_readiness.js"));
   assert.ok(files.includes("007_mass_processing_infrastructure.js"));
   assert.ok(files.includes("012_source_authority_and_canonical_provenance.js"));
+  assert.ok(files.includes("013_processing_failure_taxonomy.js"));
+  assert.ok(files.includes("014_document_content_fingerprint.js"));
+  assert.ok(files.includes("015_normalize_failure_pipeline_stage.js"));
 });
 
 test("quality score rewards provenance and processing evidence", () => {
@@ -94,6 +97,55 @@ test("canonical provenance migration adds authority tiers and operations view", 
   assert.match(source, /supported_document_types/);
   assert.match(source, /source_registry_operations/);
   assert.match(source, /Tier|authority_tier|source_authority_tier/);
+});
+
+test("processing failure taxonomy migration adds traceability fields", () => {
+  const source = fs.readFileSync(
+    path.join(
+      __dirname,
+      "..",
+      "migrations",
+      "013_processing_failure_taxonomy.js",
+    ),
+    "utf8",
+  );
+  assert.match(source, /failure_code/);
+  assert.match(source, /retry_eligible/);
+  assert.match(source, /pipeline_stage/);
+  assert.match(source, /input_checksum_sha256/);
+  assert.match(source, /output_checksum_sha256/);
+  assert.match(source, /extraction_quality_json/);
+  assert.match(source, /document_processing_attempts/);
+});
+
+test("content fingerprint migration adds duplicate analysis support", () => {
+  const source = fs.readFileSync(
+    path.join(
+      __dirname,
+      "..",
+      "migrations",
+      "014_document_content_fingerprint.js",
+    ),
+    "utf8",
+  );
+  assert.match(source, /content_fingerprint_sha256/);
+  assert.match(source, /documents_content_fingerprint_sha256_idx/);
+});
+
+test("failure pipeline stage normalization uses structured codes", () => {
+  const source = fs.readFileSync(
+    path.join(
+      __dirname,
+      "..",
+      "migrations",
+      "015_normalize_failure_pipeline_stage.js",
+    ),
+    "utf8",
+  );
+  assert.match(source, /HTTP_SERVER_ERROR/);
+  assert.match(source, /download/);
+  assert.match(source, /document_processing_jobs/);
+  assert.match(source, /document_processing_attempts/);
 });
 
 test("research evaluation scaffold covers required benchmark categories", () => {

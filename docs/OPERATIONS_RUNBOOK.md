@@ -7,6 +7,9 @@ Run:
 ```bash
 npm run db:verify --prefix server
 npm run process:status --prefix server
+npm run process:failures --prefix server
+npm run process:backlog --prefix server
+npm run process:consistency --prefix server
 npm run release:verify --prefix server
 ```
 
@@ -51,9 +54,22 @@ Do not scale concurrency until:
 High extraction failure:
 
 1. Inspect `process:status`.
-2. Inspect representative failed documents with `documents:inspect`.
-3. Classify failure as permanent/retriable/provider/source/parser.
-4. Do not mark ready until retrieval verification passes.
+2. Inspect grouped failure causes with `process:failures`.
+3. Inspect representative failed documents with `document:readiness -- --document-id=<id>` or `documents:inspect`.
+4. Classify failure as permanent/retriable/provider/source/parser using `failure_code` and `pipeline_stage`.
+5. Do not mark ready until retrieval verification passes.
+
+Retryable backlog:
+
+1. Run `npm run process:retryable --prefix server` first. This is a dry run.
+2. Review failure codes, retry counts, and sources.
+3. Enqueue only a bounded retry batch:
+
+```bash
+npm run process:retryable --prefix server -- --enqueue --limit=50
+```
+
+Do not enqueue permanent failures until the source, connector, parser, or metadata issue is fixed.
 
 Connector failure:
 
@@ -67,4 +83,3 @@ Provider failure:
 1. Check `AI_PROVIDER`, model variables, and provider health.
 2. Confirm fallbacks do not leak provider secrets.
 3. Preserve extracted text even if summary/embedding fails.
-

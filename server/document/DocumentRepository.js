@@ -5,6 +5,7 @@ const {
   normalizeTypeList,
 } = require("./documentTypes");
 const { sanitizeProviderError } = require("../lib/providerErrorSanitizer");
+const { classifyFailure } = require("./failureTaxonomy");
 const {
   normalizeNullableString,
   safeDate,
@@ -730,6 +731,31 @@ const updateProcessingStatus = async (
     (status === "ready" ? "available" : "unknown");
   const failureReason =
     details.failureReason || errorMessage || null;
+  const structuredFailure = status === "failed"
+    ? classifyFailure({
+        failureStage,
+        failureReason,
+        errorMessage,
+        readinessReason: details.readinessReason,
+        processingStatus: status,
+        pdfStatus,
+        extractionStatus,
+        embeddingStatus,
+        summaryStatus,
+        ocrStatus,
+        chunksCount,
+      })
+    : {
+        failureCode: details.failureCode ?? null,
+        retryEligible: details.retryEligible ?? true,
+        pipelineStage: details.pipelineStage ?? null,
+      };
+  const failureCode = details.failureCode ?? structuredFailure.failureCode;
+  const retryEligible = Boolean(
+    details.retryEligible ?? structuredFailure.retryEligible,
+  );
+  const pipelineStage =
+    details.pipelineStage || structuredFailure.pipelineStage || failureStage;
   const readinessClass =
     details.readinessClass ||
     (status === "ready"
@@ -765,14 +791,17 @@ const updateProcessingStatus = async (
        embeddings_count, text_length, language, script, is_bilingual,
        retry_count, failure_stage, failure_reason, failure_details_json,
        readiness_class, readiness_reason, last_attempted_at,
-       retrieval_mode, retrieval_verified, retrieval_verified_at
+       retrieval_mode, retrieval_verified, retrieval_verified_at,
+       failure_code, retry_eligible, pipeline_stage, extraction_method,
+       worker_version, estimated_cost_usd
      )
      VALUES (
        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10,
        CASE WHEN $2 = 'ready' THEN NOW() ELSE $11 END,
        NOW(), $12, $13, FALSE, FALSE, $14, $15, $16, $17, $18,
        $19, $20, $21, $22::jsonb, $23, $24, NOW(),
-       $25, $26, CASE WHEN $26 THEN NOW() ELSE NULL END
+       $25, $26, CASE WHEN $26 THEN NOW() ELSE NULL END,
+       $27, $28, $29, $30, $31, $32
      )
      ON CONFLICT (document_id) DO UPDATE SET
        processing_status = EXCLUDED.processing_status,
@@ -808,6 +837,12 @@ const updateProcessingStatus = async (
          EXCLUDED.retrieval_verified_at,
          document_processing_state.retrieval_verified_at
        ),
+       failure_code = EXCLUDED.failure_code,
+       retry_eligible = EXCLUDED.retry_eligible,
+       pipeline_stage = EXCLUDED.pipeline_stage,
+       extraction_method = EXCLUDED.extraction_method,
+       worker_version = EXCLUDED.worker_version,
+       estimated_cost_usd = EXCLUDED.estimated_cost_usd,
        updated_at = NOW()`,
     [
       id,
@@ -841,6 +876,12 @@ const updateProcessingStatus = async (
       readinessReason,
       retrievalMode,
       retrievalVerified,
+      failureCode,
+      retryEligible,
+      pipelineStage,
+      details.extractionMethod || existing.extraction_method || null,
+      details.workerVersion || existing.worker_version || null,
+      details.estimatedCostUsd ?? existing.estimated_cost_usd ?? null,
     ],
   );
   await query(

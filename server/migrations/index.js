@@ -47,4 +47,16 @@ module.exports = [
     name: "012_source_authority_and_canonical_provenance.js",
     migration: require("./012_source_authority_and_canonical_provenance"),
   },
+  {
+    name: "013_processing_failure_taxonomy.js",
+    migration: require("./013_processing_failure_taxonomy"),
+  },
+  {
+    name: "014_document_content_fingerprint.js",
+    migration: require("./014_document_content_fingerprint"),
+  },
+  {
+    name: "015_normalize_failure_pipeline_stage.js",
+    migration: require("./015_normalize_failure_pipeline_stage"),
+  },
 ];

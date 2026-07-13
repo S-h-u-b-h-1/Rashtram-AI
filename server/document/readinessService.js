@@ -1,6 +1,7 @@
 const { query } = require("../db");
 const DocumentRepository = require("./DocumentRepository");
 const { sanitizeProviderError } = require("../lib/providerErrorSanitizer");
+const { classifyFailure } = require("./failureTaxonomy");
 
 const RETRIABLE_FAILURE_PATTERN =
   /timeout|timed out|429|rate limit|temporar|network|econn|reset|503|502|504|unavailable|dns|enotfound/i;
@@ -13,6 +14,12 @@ const classifyProcessingFailure = (error, fallbackStage = "processing") => {
     .slice(0, 2_000);
   const message = sanitizeProviderError(error);
   const status = Number(error?.response?.status || error?.status || 0);
+  const structured = classifyFailure({
+    error,
+    status,
+    failureStage: fallbackStage,
+    failureReason: rawMessage,
+  });
   let failureStage = fallbackStage;
   if (
     [401, 403, 404, 410, 415].includes(status) ||
@@ -41,15 +48,22 @@ const classifyProcessingFailure = (error, fallbackStage = "processing") => {
   return {
     failureStage,
     failureReason: message,
-    readinessClass: permanent
-      ? "processing_failed_permanent"
-      : "processing_failed_retriable",
+    failureCode: structured.failureCode,
+    retryEligible: structured.retryEligible,
+    pipelineStage: structured.pipelineStage,
+    readinessClass: structured.readinessClass ||
+      (permanent
+        ? "processing_failed_permanent"
+        : "processing_failed_retriable"),
     readinessReason: message,
-    retriable,
-    permanent,
+    retriable: structured.retryEligible && retriable,
+    permanent: !structured.retryEligible || permanent,
     details: {
       status: status || null,
       code: error?.code || null,
+      failureCode: structured.failureCode,
+      retryEligible: structured.retryEligible,
+      pipelineStage: structured.pipelineStage,
       provider: error?.response?.headers?.server || null,
       classifiedAt: new Date().toISOString(),
     },
@@ -288,6 +302,11 @@ const prepareDocument = async (
           process.env.OPENAI_EMBEDDING_MODEL ||
           "gemini",
         aiProvider: process.env.AI_PROVIDER || "gemini",
+        pipelineStage: "complete",
+        extractionMethod: artifact.extractionMethod || result.extractionMethod || null,
+        failureCode: null,
+        retryEligible: true,
+        workerVersion: process.env.VERCEL_GIT_COMMIT_SHA || process.env.npm_package_version || null,
         retrievalVerified: true,
         retrievalMode: retrieval.retrievalMode,
         readinessClass: "comparison_ready",
@@ -296,7 +315,10 @@ const prepareDocument = async (
     await query(
       `UPDATE document_processing_jobs
        SET status = 'completed', completed_at = NOW(),
-           failure_reason = NULL, updated_at = NOW(),
+           failure_reason = NULL, failure_code = NULL,
+           retry_eligible = TRUE, pipeline_stage = 'complete',
+           extraction_method = $7, worker_version = $8,
+           updated_at = NOW(),
            duration_ms = $2, queue_wait_ms = $3,
            stage_metrics_json = $4::jsonb,
            usage_json = $5::jsonb, memory_peak_bytes = $6,
@@ -309,13 +331,18 @@ const prepareDocument = async (
         JSON.stringify(stageMetrics),
         JSON.stringify(result.usage || {}),
         Math.max(memoryStart, process.memoryUsage().rss),
+        artifact.extractionMethod || result.extractionMethod || null,
+        process.env.VERCEL_GIT_COMMIT_SHA || process.env.npm_package_version || null,
       ],
     );
     await query(
       `UPDATE document_processing_attempts
        SET status = 'completed', completed_at = NOW(),
            duration_ms = $3, stage_metrics_json = $4::jsonb,
-           usage_json = $5::jsonb, memory_peak_bytes = $6
+           usage_json = $5::jsonb, memory_peak_bytes = $6,
+           pipeline_stage = 'complete', failure_code = NULL,
+           retry_eligible = TRUE, extraction_method = $7,
+           ai_provider = $8, ai_model = $9
        WHERE job_id = $1 AND attempt = $2`,
       [
         job.id,
@@ -324,6 +351,9 @@ const prepareDocument = async (
         JSON.stringify(stageMetrics),
         JSON.stringify(result.usage || {}),
         Math.max(memoryStart, process.memoryUsage().rss),
+        artifact.extractionMethod || result.extractionMethod || null,
+        process.env.AI_PROVIDER || "gemini",
+        process.env.GEMINI_MODEL || process.env.GEMINI_SUMMARY_MODEL || null,
       ],
     );
     if (discoverGraph) {
@@ -391,9 +421,13 @@ const prepareDocument = async (
         pdfStatus: failure.failureStage === "pdf" ? "invalid" : "available",
         failureStage: failure.failureStage,
         failureReason: failure.failureReason,
+        failureCode: failure.failureCode,
+        retryEligible: failure.retryEligible,
+        pipelineStage: failure.pipelineStage,
         failureDetails: failure.details,
         readinessClass: failure.readinessClass,
         readinessReason: failure.readinessReason,
+        workerVersion: process.env.VERCEL_GIT_COMMIT_SHA || process.env.npm_package_version || null,
       },
     );
     const nextStatus =
@@ -417,7 +451,9 @@ const prepareDocument = async (
                THEN NOW() + ($4 * INTERVAL '1 second')
              ELSE next_attempt_at
            END,
-           failure_reason = $3, duration_ms = $5,
+           failure_reason = $3, failure_code = $8,
+           retry_eligible = $9, pipeline_stage = $10,
+           worker_version = $11, duration_ms = $5,
            queue_wait_ms = $6, memory_peak_bytes = $7,
            heartbeat_at = NOW(), updated_at = NOW()
        WHERE id = $1`,
@@ -429,13 +465,20 @@ const prepareDocument = async (
         durationMs,
         queueWaitMs,
         memoryPeakBytes,
+        failure.failureCode,
+        failure.retryEligible,
+        failure.pipelineStage,
+        process.env.VERCEL_GIT_COMMIT_SHA || process.env.npm_package_version || null,
       ],
     );
     await query(
       `UPDATE document_processing_attempts
        SET status = $3, failure_stage = $4, failure_reason = $5,
            completed_at = NOW(), duration_ms = $6,
-           memory_peak_bytes = $7
+           memory_peak_bytes = $7, failure_code = $8,
+           retry_eligible = $9, pipeline_stage = $10,
+           failure_detail_json = $11::jsonb,
+           ai_provider = $12, ai_model = $13
        WHERE job_id = $1 AND attempt = $2`,
       [
         job.id,
@@ -445,6 +488,12 @@ const prepareDocument = async (
         failure.failureReason,
         durationMs,
         memoryPeakBytes,
+        failure.failureCode,
+        failure.retryEligible,
+        failure.pipelineStage,
+        JSON.stringify(failure.details || {}),
+        process.env.AI_PROVIDER || "gemini",
+        process.env.GEMINI_MODEL || process.env.GEMINI_SUMMARY_MODEL || null,
       ],
     );
     error.processingFailure = failure;
