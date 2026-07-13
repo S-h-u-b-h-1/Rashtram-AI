@@ -82,6 +82,16 @@ test("scheduled ingestion profiles are bounded and source-based", () => {
   assert.ok(BOUNDED_CRON_SOURCES.length <= 3);
 });
 
+test("account deletion tolerates retired optional user-data tables", () => {
+  const source = fs.readFileSync(
+    path.join(__dirname, "..", "profile", "profileService.js"),
+    "utf8",
+  );
+  assert.match(source, /SELECT to_regclass\(\$1\) IS NOT NULL AS exists/);
+  assert.match(source, /if \(!\(await relationExists\(table\)\)\)/);
+  assert.match(source, /await deleteOwned\("policy_chats"\)/);
+});
+
 test("canonical provenance migration adds authority tiers and operations view", () => {
   const source = fs.readFileSync(
     path.join(

@@ -69,16 +69,16 @@ A bounded live health check of PRS, India Code, eGazette, PIB, RBI, and SEBI on 
 |---|---|---|
 | Email registration/login/logout | Implemented and deployed | Authenticated temporary-account flow passed. |
 | Google OAuth | Configurable, not currently enabled | UI now hides Google login unless explicitly enabled and configured. |
-| Onboarding and personal profile | Implemented and deployed | Signup, onboarding skip, profile routing, and account deletion exist. |
+| Onboarding and personal profile | Implemented; deletion repair awaiting deployment verification | Signup, onboarding skip, and profile routing passed. The final browser pass exposed a retired-table failure in account deletion; the audit now skips absent legacy user-data tables without skipping deletion of tables that still exist. |
 | Legislative/policy catalogue and filters | Implemented and deployed | Bills, Acts, state records, gazette, policies, universal search, and detail routes passed release checks. |
 | Dashboard and source-health views | Implemented | Counts are live; public UI count can differ from raw DB totals because invalid/internal records are excluded. |
 | Grounded document chat | Implemented for research-ready documents | Authenticated production question returned the stated 1,600 MW rooftop target with six cited passages. Not every catalogue record is chat-ready. |
 | Evidence briefs/summaries | Implemented for processed documents | AI or extractive fallback; outputs remain research assistance requiring source verification. |
 | Notes, bookmarks, chat history | Implemented | Temporary-account browser test created a note and a saved chat. |
 | Recommendations | Implemented | Uses catalogue, metadata, profile, semantic, and relationship signals. Recommendation confidence is relevance scoring, not legal certainty. |
-| Document comparison | Implemented but production latency needed repair | Selection and retrieval worked; deployed request hung in provider generation. The audit adds a bounded AI timeout and grounded extractive fallback. Must be reverified after deployment. |
+| Document comparison | Implemented and deployed | A production comparison of the Haryana Solar Power Policy and its addendum completed and persisted as comparison 23. The provider was unavailable, so the UI transparently returned the grounded extractive fallback within the request budget. |
 | Multi-document chat | Implemented route and UI | Route passes release verification; a complete deployed conversational turn was not independently exercised in this audit. |
-| Knowledge graph | Partially implemented | Graph storage and UI work, but many edges are inferred signals. They must not be called source-verified. The audit removes misleading labels, excludes inferred legal-effect edges from timelines/comparison prompts, tightens title-reference inference, and adds auditable quarantine migration 020. |
+| Knowledge graph | Partially implemented | Graph storage and UI work, but most remaining edges are catalogue/entity signals rather than verified legal effects. Migrations 020/021 reduced the graph from 1,418 to 120 edges by quarantining 1,298 unsafe legacy title-reference inferences. The audited production document no longer shows the false repeal/replacement events. |
 | Legal timeline | Implemented for document dates/events; relationship-derived items restricted | Before this audit, unrelated inferred replacement events appeared. Only source-verified temporal legal relationships are now eligible. |
 | Provenance and source authority | Implemented in schema/API | Population is incomplete across connectors; file checksums are notably absent in the catalogue report. |
 | Deduplication | Partially implemented | Deterministic/fuzzy infrastructure exists, but 1,113 probable groups remain and hash coverage is incomplete. “Duplicate-safe” was an overstatement and has been corrected. |
@@ -102,29 +102,29 @@ A bounded live health check of PRS, India Code, eGazette, PIB, RBI, and SEBI on 
 5. **Benchmark overstatement:** perfect metrics came from catalogue-derived exact-title questions and expected-ID-assisted comparison retrieval. Expected IDs are no longer retrieval inputs; unsupported claims and factual correctness remain “requires human review,” and unknown provider cost is no longer reported as zero.
 6. **Documentation/provider drift:** README described OpenAI as the active primary provider and carried stale readiness figures. Updated to Gemini-first and current measured counts.
 7. **Marketing overstatement:** “continuously refreshed” and “duplicate-safe” language was replaced with scheduled refresh and duplicate-aware wording.
+8. **Account deletion failure:** the production deletion cascade aborted on the retired `policy_chats` table. The service now checks whether each optional legacy relation exists before deleting from it, while retaining the transactional deletion of all present user-owned tables.
 
 ## Verification completed in this audit
 
-- Server unit/integration suite (the suite passes when local loopback permissions are available; sandbox-only rerun produced two `listen EPERM` environment failures).
+- Server unit/integration suite: 145 tests, 144 passed and 1 database-writing fixture intentionally skipped.
 - Client lint and production build: passed; 22 routes generated.
-- Database migrations through 021: code-verified; migration 021 is intentionally left for corrected-code deployment so the old production worker cannot recreate quarantined edges afterward.
+- Database migrations through 021: deployed and verified.
 - Database verification: passed with 1,602 research-ready records and all strict invariants satisfied.
 - Processing status and catalogue statistics: measured above.
 - Processing consistency: zero critical readiness contradictions after one retry-class repair; 371 legacy retryable/max-attempt hygiene rows remain.
 - Research-ready sample audit: 36 records across 14 document types; zero false-ready in the bounded sample.
 - Release route verification: passed for dashboard, profile, catalogues, search, detail, graph, timeline, and unified chats.
 - Bounded live connector health: PRS, eGazette, PIB, RBI, and SEBI connected; India Code reachable/valid but empty in the one-record sample.
-- Authenticated deployed browser: registration, login/session, dashboard/search, document research, cited chat, note, bookmark interaction, recommendation display, comparison selection, and graph display inspected.
+- Authenticated deployed browser: registration, login/session, dashboard/search, document research, cited chat, note, bookmark interaction, recommendation display, completed comparison with transparent provider fallback, corrected graph/timeline display, pricing, profile, and deletion workflow inspected. The final deletion attempt exposed the retired-table bug described above; its corrected deployment still requires one repeat check.
 
 ## Remaining limitations and next gates
 
-1. Deploy and reverify migrations 020/021 and the relationship/timeline UI against the production deployment that showed the unsafe edges.
-2. Reverify comparison completion after the new bounded provider timeout reaches production.
-3. Complete actual human review of at least 20 generated answers and build an independent, expert-curated evaluation set.
-4. Reduce the 16,997 processable backlog and clean 371 exhausted legacy retry rows.
-5. Populate file checksums and review 1,113 probable duplicate groups.
-6. Increase depth and freshness for PIB, India Code, eGazette, regulators, ministries, and states without implying comprehensive coverage.
-7. Run institutional pilots before setting final pricing or making commercial accuracy claims.
+1. Deploy the account-deletion compatibility fix and repeat the temporary-account deletion check.
+2. Complete actual human review of at least 20 generated answers and build an independent, expert-curated evaluation set.
+3. Reduce the 16,997 processable backlog and clean 371 exhausted legacy retry rows.
+4. Populate file checksums and review 1,113 probable duplicate groups.
+5. Increase depth and freshness for PIB, India Code, eGazette, regulators, ministries, and states without implying comprehensive coverage.
+6. Run institutional pilots before setting final pricing or making commercial accuracy claims.
 
 ## Accurate external description
 

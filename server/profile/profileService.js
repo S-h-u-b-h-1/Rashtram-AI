@@ -657,7 +657,22 @@ const deleteAccount = async (userId, payload = {}) => {
     }
 
     const deletions = {};
+    const relationExists = async (table) => {
+      const result = await client.query(
+        `SELECT to_regclass($1) IS NOT NULL AS exists`,
+        [`public.${table}`],
+      );
+      return Boolean(result.rows[0]?.exists);
+    };
     const deleteOwned = async (table, condition = "user_id = $1") => {
+      // Some production databases no longer contain legacy, document-specific
+      // chat tables. Account deletion must remain complete and idempotent across
+      // schema generations instead of aborting the whole transaction on the
+      // first retired relation.
+      if (!(await relationExists(table))) {
+        deletions[table] = 0;
+        return;
+      }
       const result = await client.query(
         `DELETE FROM ${table} WHERE ${condition}`,
         [userId],
