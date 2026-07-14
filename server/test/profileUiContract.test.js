@@ -70,6 +70,20 @@ test("profile exposes responsive sections and reliable database-backed stats", (
     "profile",
     "ResearchActivity.jsx",
   );
+  const recommendationHistory = read(
+    "client",
+    "src",
+    "components",
+    "profile",
+    "RecommendationHistory.jsx",
+  );
+  const recommendationUtils = read(
+    "client",
+    "src",
+    "components",
+    "recommendations",
+    "recommendation-utils.mjs",
+  );
   const service = read("server", "profile", "profileService.js");
 
   for (const id of [
@@ -80,7 +94,15 @@ test("profile exposes responsive sections and reliable database-backed stats", (
   ]) {
     assert.match(profileView, new RegExp(id));
   }
-  assert.match(profileView, /grid gap-5 xl:grid-cols-2/);
+  assert.match(
+    profileView,
+    /<RecommendationHistory \/>\s*<GraphResearchJourneys/,
+  );
+  assert.match(recommendationHistory, /surface-card min-w-0 overflow-hidden/);
+  assert.match(
+    recommendationUtils,
+    /grid-cols-1[\s\S]*sm:grid-cols-2[\s\S]*xl:grid-cols-3[\s\S]*2xl:grid-cols-4/,
+  );
   assert.match(activity, /Documents opened/);
   assert.match(activity, /Policies opened/);
   assert.match(activity, /Research sessions/);

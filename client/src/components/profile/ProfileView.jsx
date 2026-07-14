@@ -159,10 +159,8 @@ export function ProfileView() {
         }
       />
 
-      <div className="grid gap-5 xl:grid-cols-2 min-w-0 items-start">
-        <RecommendationHistory />
-        <GraphResearchJourneys insights={profile.graphInsights} />
-      </div>
+      <RecommendationHistory />
+      <GraphResearchJourneys insights={profile.graphInsights} />
 
       <div id="privacy-settings" className="scroll-mt-6">
         <DataPersonalization
