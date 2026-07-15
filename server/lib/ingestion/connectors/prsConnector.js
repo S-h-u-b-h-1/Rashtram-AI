@@ -35,26 +35,40 @@ const enrichBill = async (document, options) => {
   };
 };
 
+const selectedDefinitions = (options = {}) => {
+  const requested = options.collection || options.collections;
+  const selected = requested
+    ? String(requested)
+        .split(",")
+        .map((value) => value.trim())
+        .filter(Boolean)
+    : SOURCE_DEFINITIONS.map((definition) => definition.key);
+  if (selected.includes("all")) {
+    return SOURCE_DEFINITIONS;
+  }
+  return SOURCE_DEFINITIONS.filter((definition) =>
+    selected.includes(definition.key),
+  );
+};
+
 const prsConnector = {
   name: "prs-india",
-  defaultCollection: "parliament-bills",
+  defaultCollection: "all",
 
   async collect(options = {}) {
-    const selected = String(
-      options.collection || options.collections || this.defaultCollection,
-    )
-      .split(",")
-      .map((value) => value.trim());
-    const definitions = SOURCE_DEFINITIONS.filter((definition) =>
-      selected.includes(definition.key),
-    );
+    const definitions = selectedDefinitions(options);
     if (!definitions.length) {
-      throw new Error(`Unknown PRS collection: ${selected.join(", ")}`);
+      throw new Error(
+        `Unknown PRS collection: ${
+          options.collection || options.collections || "(empty)"
+        }`,
+      );
     }
 
     const records = [];
     const snapshots = [];
     const errors = [];
+    const diagnostics = [];
     for (const definition of definitions) {
       try {
         const result = await crawlDefinition(definition, options);
@@ -79,15 +93,24 @@ const prsConnector = {
             collectedAt: new Date().toISOString(),
           })),
         );
+        if (result.truncated) {
+          diagnostics.push({
+            type: "page-limit-reached",
+            collection: definition.key,
+            pagesFetched: result.pagesFetched,
+            nextPageUrl: result.nextPageUrl,
+          });
+        }
       } catch (error) {
         errors.push({
           stage: "collection",
           collection: definition.key,
+          code: "PRS_COLLECTION_FAILED",
           message: error.message,
         });
       }
     }
-    return { records, snapshots, errors };
+    return { records, snapshots, errors, diagnostics };
   },
 };
 
@@ -98,4 +121,5 @@ attachConnectorLifecycle(
 
 module.exports = {
   prsConnector,
+  selectedDefinitions,
 };

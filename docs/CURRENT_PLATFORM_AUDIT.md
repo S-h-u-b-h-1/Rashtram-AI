@@ -48,7 +48,7 @@ The catalogue is highly concentrated in PRS.
 
 | Source | Records | Records with PDF URL |
 |---|---:|---:|
-| PRS India | 17,545 | 17,229 |
+| PRS India | 17,548 | 17,232 |
 | PIB | 134 | 5 |
 | India Code | 78 | 16 |
 | RBI | 62 | 26 |
@@ -62,6 +62,14 @@ The catalogue is highly concentrated in PRS.
 | NITI Aayog | 25 | 25 |
 
 A bounded live health check of PRS, India Code, eGazette, PIB, RBI, and SEBI on 2026-07-13 found five connected sources and one reachable/valid India Code sample with no records in that single-page sample. RBI was reachable and discovered a sample, while its latest stored ingestion run still carried two prior errors. This is evidence of connector operability, not proof of complete source coverage.
+
+On 2026-07-15, a focused PRS audit found that scheduled runs covered only the
+default Parliament Bills collection and that bounded State pagination threw
+away already collected pages. After correcting both behaviours, all four PRS
+collections passed a live health probe. A bounded live sync fetched 100,
+inserted 2, updated 15, skipped 83 unchanged duplicates, found 75 PDF URLs,
+and failed 0. The configured integration is public-HTML ingestion, not an
+authenticated PRS API.
 
 ## Capability truth table
 

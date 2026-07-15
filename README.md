@@ -98,6 +98,18 @@ npm run ingest:catalog-only --prefix server
 npm run catalog:stats --prefix server
 ```
 
+Check the current PRS transport and preview or run a bounded, idempotent sync:
+
+```bash
+npm run prs:health --prefix server -- --collections=all --limit=5 --max-pages=1
+npm run prs:sync --prefix server -- --dry-run --collections=all --limit=25 --max-pages=1
+npm run prs:sync --prefix server -- --collections=all --limit=25 --max-pages=1
+```
+
+The PRS connector uses PRS's public HTML listings; it is not an authenticated
+PRS API client. Scheduled ingestion covers Parliament Bills, Parliament Acts,
+State Bills, and State Acts.
+
 Collect small official-source samples through the universal ingestion layer:
 
 ```bash

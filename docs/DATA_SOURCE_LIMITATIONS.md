@@ -29,7 +29,6 @@ The system must not produce final legal/compliance advice without:
 - 17,118 documents remain in the processable backlog.
 - The historical processing-attempt failure rate is 45.8%; this is not the percentage of catalogue records proven permanently unusable.
 - PDF checksum population is incomplete (the catalogue statistics report zero populated PDF hashes).
-- 1,113 probable duplicate groups remain unresolved.
 - 1,113 probable duplicate groups remain.
 - Source health command needs bounded timeout behavior.
 - File checksum coverage is incomplete.
@@ -80,3 +79,23 @@ The controlled Batch A experiment showed that PRS direct-PDF records can sometim
 However, none became research-ready in this run because a later-stage null-summary bug stopped completion and the PRS circuit breaker entered cooldown. Batch B and Batch C were therefore intentionally not run.
 
 The current limitation is no longer just “download unavailable”; for some PRS records it is “download can recover, but full readiness must be rerun after cooldown and code fix.”
+
+## PRS catalogue ingestion audit, 2026-07-15
+
+PRS currently exposes the four catalogues used by Rashtram AI as public HTML
+pages, not through an authenticated API configured in this repository. Live
+HTTP checks returned `200` and the current parser discovered records and PDF
+links from Parliament Bills, Parliament Acts, State Bills, and State Acts.
+
+The scheduled connector previously defaulted to Parliament Bills only. In
+addition, bounded State pagination raised an exception after reaching
+`maxPages`, discarding the records already collected from the permitted pages.
+Both behaviours are fixed: the scheduled default is all four collections, and
+a page bound now returns collected records with a non-fatal truncation
+diagnostic.
+
+A bounded post-fix run fetched 100 records, inserted 2 new Maharashtra source
+records, updated 15 changed records, skipped 83 unchanged duplicates, found 75
+PDF URLs, and recorded 0 failures. This confirms current bounded cataloguing;
+it does not claim complete historical coverage beyond the configured page
+limit, nor does cataloguing alone imply research readiness.

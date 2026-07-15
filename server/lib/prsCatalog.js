@@ -87,6 +87,16 @@ const resourceTypeForUrl = (url) => {
   return "link";
 };
 
+const documentTypeForTitle = (title, fallback) => {
+  const value = String(title || "").toLowerCase();
+  if (/\bbill\b/.test(value)) return "bill";
+  if (/\bordinance\b/.test(value)) return "ordinance";
+  if (/\brules?\b/.test(value)) return "rule";
+  if (/\bregulations?\b/.test(value)) return "regulation";
+  if (/\bact\b/.test(value)) return "act";
+  return fallback;
+};
+
 const buildDocument = ({
   anchor,
   documentType,
@@ -106,7 +116,7 @@ const buildDocument = ({
   return {
     sourceName: "prs-india",
     sourceDocumentId: sourceDocumentId(sourceUrl),
-    documentType,
+    documentType: documentTypeForTitle(title, documentType),
     jurisdictionLevel,
     jurisdiction:
       jurisdictionLevel === "parliament"
@@ -144,15 +154,24 @@ const parseListingPage = (html, definition, sourcePageUrl) => {
   const $ = cheerio.load(html);
   const documents = [];
 
-  $(".view-content .views-row").each((position, row) => {
+  $(".view-content .views-row, #Parliament_list .views-row").each((position, row) => {
     const rowElement = $(row);
     const anchor = rowElement
-      .find(".views-field-title-field a[href]")
+      .find(
+        ".views-field-title-field a[href], h3.cate a[href], " +
+          ".views-field-title a[href]",
+      )
       .first();
     if (!anchor.length) return;
 
     const secondaryValue = normalizeText(
-      rowElement.find(".views-field-field-bill-status").text(),
+      rowElement
+        .find(
+          ".views-field-field-bill-status, .views-field-status, " +
+            "[data-field='status']",
+        )
+        .first()
+        .text(),
     );
     const jurisdiction =
       definition.jurisdictionLevel === "state" ? secondaryValue : "India";
@@ -174,7 +193,11 @@ const parseListingPage = (html, definition, sourcePageUrl) => {
     if (document) documents.push(document);
   });
 
-  const nextHref = $("li.next a[href]").attr("href");
+  const nextHref = $(
+    "li.next a[href], .pagination .next a[href], a[rel='next'][href]",
+  )
+    .first()
+    .attr("href");
 
   return {
     documents,
@@ -314,6 +337,8 @@ const crawlDefinition = async (definition, options = {}) => {
   const documentsById = new Map();
   const snapshots = [];
   const seenPages = new Set();
+  const fetchPage = options.requestPageFn || requestPage;
+  let truncated = false;
 
   let pageUrl = definition.paginated
     ? `${definition.url}?page=1&per-page=50`
@@ -321,13 +346,12 @@ const crawlDefinition = async (definition, options = {}) => {
 
   while (pageUrl && !seenPages.has(pageUrl)) {
     if (seenPages.size >= maxPages) {
-      throw new Error(
-        `${definition.key} exceeded the configured ${maxPages}-page limit`,
-      );
+      truncated = true;
+      break;
     }
 
     seenPages.add(pageUrl);
-    const html = await requestPage(pageUrl, options);
+    const html = await fetchPage(pageUrl, options);
     const parsed = parseListingPage(html, definition, pageUrl);
 
     snapshots.push({
@@ -339,6 +363,7 @@ const crawlDefinition = async (definition, options = {}) => {
         collection: definition.key,
         pageNumber: seenPages.size,
         pageTitle: parsed.title,
+        maxPages,
       },
     });
 
@@ -356,6 +381,8 @@ const crawlDefinition = async (definition, options = {}) => {
     documents: [...documentsById.values()],
     snapshots,
     pagesFetched: seenPages.size,
+    truncated,
+    nextPageUrl: truncated ? pageUrl : null,
   };
 };
 
@@ -370,6 +397,7 @@ module.exports = {
   parseListingPage,
   requestPage,
   resourceTypeForUrl,
+  documentTypeForTitle,
   sha256,
   sleep,
   sourceDocumentId,

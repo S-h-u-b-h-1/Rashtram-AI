@@ -69,17 +69,19 @@ const runIngestion = async (connector, options = {}) => {
     throw new Error("A connector with name and collect() is required");
   }
 
+  const requestedCollection =
+    options.collection || options.collections || connector.defaultCollection;
   const run = options.dryRun
     ? { id: null }
     : await createRun({
         sourceName: connector.name,
-        collectionName: options.collection || connector.defaultCollection,
+        collectionName: requestedCollection,
         options,
       });
   const summary = {
     runId: run.id,
     source: connector.name,
-    collection: options.collection || connector.defaultCollection || null,
+    collection: requestedCollection || null,
     status: "completed",
     discovered: 0,
     stored: 0,
@@ -93,6 +95,7 @@ const runIngestion = async (connector, options = {}) => {
       errors: 0,
       skipped: 0,
       manual_review_required: 0,
+      duplicates_skipped: 0,
       created: 0,
       merged: 0,
       reviewsQueued: 0,
@@ -205,8 +208,10 @@ const runIngestion = async (connector, options = {}) => {
           summary.counters.inserted += 1;
         } else if (persisted.sourceAdded) {
           summary.counters.duplicate_sources_added += 1;
-        } else {
+        } else if (persisted.changed) {
           summary.counters.updated += 1;
+        } else {
+          summary.counters.duplicates_skipped += 1;
         }
         if (persisted.reviewQueued) {
           summary.counters.reviewsQueued += 1;

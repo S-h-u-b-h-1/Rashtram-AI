@@ -344,28 +344,28 @@ const insertDocument = async (client, record) => {
 const updateCanonicalDocument = async (client, documentId, record) => {
   const result = await client.query(
     `UPDATE legislative_documents
-        SET title = CASE WHEN $2 < source_priority OR title IS NULL
+        SET title = CASE WHEN $2 < source_priority OR canonical_source = $32 OR title IS NULL
                          THEN $3 ELSE title END,
             normalized_title = CASE
-              WHEN $2 < source_priority OR normalized_title IS NULL
+              WHEN $2 < source_priority OR canonical_source = $32 OR normalized_title IS NULL
               THEN $4 ELSE normalized_title END,
             document_type = CASE
-              WHEN $2 < source_priority THEN $5 ELSE document_type END,
+              WHEN $2 < source_priority OR canonical_source = $32 THEN $5 ELSE document_type END,
             jurisdiction_level = CASE
-              WHEN $2 < source_priority THEN $6 ELSE jurisdiction_level END,
+              WHEN $2 < source_priority OR canonical_source = $32 THEN $6 ELSE jurisdiction_level END,
             jurisdiction = CASE
-              WHEN $2 < source_priority THEN $7 ELSE jurisdiction END,
-            year = CASE WHEN $2 < source_priority OR year IS NULL
+              WHEN $2 < source_priority OR canonical_source = $32 THEN $7 ELSE jurisdiction END,
+            year = CASE WHEN $2 < source_priority OR canonical_source = $32 OR year IS NULL
                         THEN COALESCE($8, year) ELSE year END,
-            status = CASE WHEN $2 < source_priority OR status IS NULL
+            status = CASE WHEN $2 < source_priority OR canonical_source = $32 OR status IS NULL
                           THEN COALESCE($9, status) ELSE status END,
-            authority = CASE WHEN $2 < source_priority OR authority IS NULL
+            authority = CASE WHEN $2 < source_priority OR canonical_source = $32 OR authority IS NULL
                              THEN COALESCE($10, authority) ELSE authority END,
-            ministry = CASE WHEN $2 < source_priority OR ministry IS NULL
+            ministry = CASE WHEN $2 < source_priority OR canonical_source = $32 OR ministry IS NULL
                             THEN COALESCE($11, ministry) ELSE ministry END,
-            department = CASE WHEN $2 < source_priority OR department IS NULL
+            department = CASE WHEN $2 < source_priority OR canonical_source = $32 OR department IS NULL
                               THEN COALESCE($12, department) ELSE department END,
-            category = CASE WHEN $2 < source_priority OR category IS NULL
+            category = CASE WHEN $2 < source_priority OR canonical_source = $32 OR category IS NULL
                             THEN COALESCE($13, category) ELSE category END,
             legal_identifier = COALESCE(legal_identifier, $14),
             bill_number = COALESCE(bill_number, $15),
@@ -379,7 +379,7 @@ const updateCanonicalDocument = async (client, documentId, record) => {
             publication_date = COALESCE(publication_date, $21),
             effective_date = COALESCE(effective_date, $22),
             commencement_date = COALESCE(commencement_date, $22),
-            pdf_url = CASE WHEN $2 < source_priority OR pdf_url IS NULL
+            pdf_url = CASE WHEN $2 < source_priority OR canonical_source = $32 OR pdf_url IS NULL
                            THEN COALESCE($23, pdf_url) ELSE pdf_url END,
             content_hash = COALESCE(content_hash, $24),
             text_fingerprint = COALESCE(text_fingerprint, $25),
@@ -428,6 +428,7 @@ const updateCanonicalDocument = async (client, documentId, record) => {
       record.fileHash,
       record.mimeType,
       record.fileSizeBytes,
+      record.sourceName,
     ],
   );
   return result.rows[0];
@@ -758,6 +759,7 @@ const hasMeaningfulDocumentUpdate = (candidate, record) => {
   if (!candidate) return false;
   const fields = [
     ["title", "title"],
+    ["documentType", "document_type"],
     ["status", "status"],
     ["pdfUrl", "pdf_url"],
     ["introducedDate", "introduced_date"],
@@ -859,6 +861,7 @@ const persistRecord = async (record, decision) => {
       matchReason: decision.reason,
       reviewQueued: decision.action === "review",
       sourceAdded: source.added,
+      changed: decision.action !== "merge" || meaningfulUpdate,
     };
   } catch (error) {
     await client.query("ROLLBACK");

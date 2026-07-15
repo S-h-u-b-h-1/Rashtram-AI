@@ -30,9 +30,17 @@ Run:
 ```bash
 npm run catalog:stats --prefix server
 npm run ingest:health --prefix server
+npm run prs:health --prefix server -- --collections=all --limit=5 --max-pages=1
+npm run prs:sync --prefix server -- --dry-run --collections=all --limit=25 --max-pages=1
 ```
 
 If `ingest:health` hangs or exceeds the operations timeout, treat that as a source-health bug. Health checks must return partial failure information.
+
+PRS uses public HTML catalogue pages rather than an authenticated API. A PRS
+dry run compares stable source IDs with the database and reports prospective
+new records, updates, and unchanged duplicates before any write. `max-pages`
+is a safe page bound: reaching it returns the collected page and a truncation
+diagnostic; it must not discard already discovered records.
 
 ## Processing
 

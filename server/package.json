@@ -39,6 +39,8 @@
     "ingest:catalog-only": "node scripts/ingest-prs-catalog.js --catalog-only",
     "ingest:sources": "node cli/ingestSources.js",
     "ingest:health": "node cli/ingestHealth.js",
+    "prs:health": "node cli/prsHealth.js",
+    "prs:sync": "node cli/prsSync.js",
     "ingest:scheduled": "node cli/scheduledIngestion.js",
     "ingest:daily": "node cli/scheduledIngestion.js --profile=daily",
     "ingest:weekly": "node cli/scheduledIngestion.js --profile=weekly",
