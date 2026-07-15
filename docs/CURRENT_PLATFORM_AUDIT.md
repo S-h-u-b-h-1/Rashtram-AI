@@ -1,6 +1,6 @@
 # Rashtram AI — Current Platform Audit
 
-Audit date: 2026-07-13
+Audit date: 2026-07-13; source-ingestion addendum verified 2026-07-15
 Evidence standard: repository code, production-linked database commands, bounded live connector checks, and authenticated deployed-browser tests. Historical reports are not current evidence.
 
 ## Executive conclusion
@@ -40,6 +40,15 @@ These figures were measured on 2026-07-13 and will drift as ingestion and proces
 
 The 45.8% figure is the failure rate of recorded processing attempts. It is not the percentage of catalogue documents proven permanently unusable.
 
+### 2026-07-15 live addendum
+
+After the PRS and all-source repairs, `catalog:stats`, `process:status`, and
+`db:verify` measured 19,355 canonical records, 17,550 records with PDF URLs,
+22 canonical source labels, 1,912 research-ready/comparison-ready records,
+16,681 processable backlog records, and a 41.58% historical attempt failure
+rate. Database verification passed all nine integrity checks. These current
+figures supersede the baseline above for operational reporting.
+
 Some research-ready records use a verified local-text retrieval fallback and have no vector embedding. The product must not claim that every ready document is vector-indexed.
 
 ## Source coverage
@@ -62,6 +71,14 @@ The catalogue is highly concentrated in PRS.
 | NITI Aayog | 25 | 25 |
 
 A bounded live health check of PRS, India Code, eGazette, PIB, RBI, and SEBI on 2026-07-13 found five connected sources and one reachable/valid India Code sample with no records in that single-page sample. RBI was reachable and discovered a sample, while its latest stored ingestion run still carried two prior errors. This is evidence of connector operability, not proof of complete source coverage.
+
+On 2026-07-15, a complete bounded sweep of all configured connectors found 23
+connected, 5 reachable/no-data, 8 blocked, and 0 TLS-unavailable sources. A
+host-scoped trust-chain repair restored IGOD, CCI, NMC, and CBIC connectivity
+without disabling certificate verification. Bounded production runs inserted
+10 CCI regulations, 10 NMC records, and 4 state-legislature records. CBIC's
+client application was reachable, but its public notifications API returned
+HTTP 500, so no CBIC catalogue coverage is claimed.
 
 On 2026-07-15, a focused PRS audit found that scheduled runs covered only the
 default Parliament Bills collection and that bounded State pagination threw

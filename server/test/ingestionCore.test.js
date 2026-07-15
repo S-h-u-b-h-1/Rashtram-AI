@@ -221,6 +221,20 @@ test("intelligence updates are emitted only for meaningful field changes", () =>
     }),
     true,
   );
+  assert.equal(
+    hasMeaningfulDocumentUpdate(
+      { publication_date: new Date(2025, 4, 7) },
+      { publicationDate: "2025-05-07" },
+    ),
+    false,
+  );
+  assert.equal(
+    hasMeaningfulDocumentUpdate(
+      { publication_date: new Date(2025, 4, 7) },
+      { publicationDate: "2025-05-08" },
+    ),
+    true,
+  );
 });
 
 test("intelligence event types require evidence from normalized records", () => {

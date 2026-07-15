@@ -1,6 +1,7 @@
 # Source Connector Status
 
-Status reviewed: 2 July 2026 after bounded production runs 49–58.
+Status reviewed: 15 July 2026 after a complete read-only health sweep and
+bounded production runs 258–263.
 
 This is an operational snapshot. `Connected` means a live, read-only sample
 returned valid normalized records or directory entities. `Populated` means
@@ -14,7 +15,7 @@ instead of bypassing source controls or inventing coverage.
 | `prs-india` | Populated | 17,544 source records across Parliament and state Bills/Acts | Historical fuzzy-title groups still require human review |
 | `india-code` | Populated | Central Acts and subordinate-resource framework | Expand authoritative state handles incrementally |
 | `egazette` | Populated | Recent Gazette/notification records and official PDF archive links | Historical search remains interactive |
-| `state-legislature` | Populated | Six reviewed official state portals plus PRS state coverage | Thirty jurisdictions still need official portal adapters |
+| `state-legislature` | Populated / fresh | Ten stored official records after the bounded Delhi refresh, plus PRS state coverage | Most jurisdictions still need official portal adapters |
 | `digital-sansad` | Blocked | Connector and parser implemented | Current official listings time out or hydrate client-side |
 | `lok-sabha` | Blocked | Questions, debates, bulletins, business adapters | Some official listings are client-rendered |
 | `rajya-sabha` | Blocked | Questions, meetings, debates adapters | Malformed headers/client rendering in current sample |
@@ -44,7 +45,7 @@ instead of bypassing source controls or inventing coverage.
 | `regulator-sebi` | Connected | 10 records stored |
 | `regulator-trai` | Connected | 10 consultation records stored |
 | `regulator-cerc` | Connected | 10 records stored |
-| `regulator-aicte` | Connected | 10 records stored |
+| `regulator-aicte` | Connected / fresh | 10 records stored; bounded refresh completed without errors |
 | `regulator-ugc` | Connected | 10 records stored |
 | `regulator-nclat` | Connected | 10 public order/listing records stored |
 | `regulator-gst-council` | Connected | 10 records stored |
@@ -53,17 +54,38 @@ instead of bypassing source controls or inventing coverage.
 | `regulator-pfrda` | Blocked | `robots.txt` disallows the sampled circular path |
 | `regulator-ec` | Blocked by HTTP 403 | No records stored |
 | `regulator-cbdt` | Blocked by HTTP 403 | No records stored |
-| `regulator-uidai` | Degraded | Official page timed out |
-| `regulator-cci` | Degraded | Official TLS certificate could not be verified |
-| `regulator-nmc` | Degraded | Official TLS certificate could not be verified |
-| `regulator-cbic` | Degraded | Official TLS certificate could not be verified |
+| `regulator-uidai` | Connected | 31 records stored |
+| `regulator-cci` | Populated / fresh | 10 regulations stored from the current official DataTables JSON endpoint, with 10 official PDFs |
+| `regulator-nmc` | Populated / fresh | 10 rules/regulation records stored, with 10 official PDFs |
+| `regulator-cbic` | Reachable / no data | Angular shell is reachable; its public same-origin notifications API returned HTTP 500 during the audit |
 
-Certificate failures are not bypassed with disabled TLS validation. Robots,
-CAPTCHA, and 403 responses are not worked around.
+Four official sites omitted public intermediate certificates required by the
+Node runtime. Connectivity was restored with host-scoped, fingerprinted public
+intermediates while retaining `rejectUnauthorized: true`; TLS validation was
+not disabled. Robots, CAPTCHA, and access-control responses are not worked
+around.
+
+## 15 July 2026 complete health sweep
+
+The bounded read-only sweep covered every configured connector:
+
+- 23 connected;
+- 5 reachable with no records in the bounded sample;
+- 8 blocked by robots rules, CAPTCHA, timeouts, malformed upstream headers, or
+  client-only/interactive catalogues;
+- 0 unavailable because of a connector TLS failure.
+
+The five pre-fix TLS failures were `ministry`, `state-directory`,
+`regulator-cci`, `regulator-nmc`, and `regulator-cbic`. After the repair, all
+five official sites were reachable. CCI and NMC produced catalog records;
+ministry/state-directory produced their intended directory entities; CBIC
+remained a reachable client application with no usable server-rendered listing.
 
 ## Verified production coverage
 
-After runs 49–58:
+The figures below are the 2 July baseline. Later bounded runs added 10 CCI,
+10 NMC, and 4 state-legislature canonical records; use `catalog:stats` for the
+current live total.
 
 - 17,741 canonical documents;
 - 17,334 canonical documents with PDF URLs;

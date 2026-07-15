@@ -44,6 +44,9 @@ const {
   parsePibListing,
   pibType,
 } = require("../lib/ingestion/connectors/governanceSourceConnectors");
+const {
+  parseCciRegulationsPayload,
+} = require("../lib/ingestion/connectors/regulatorConnectors");
 
 test("IndiaCode parser discovers year buckets and canonical act rows", () => {
   const years = parseYearLinks(
@@ -414,6 +417,39 @@ test("every registered connector exposes the operational lifecycle contract", ()
     "state-legislature",
   );
   assert.equal(connectorByName("indiacode").name, "india-code");
+});
+
+test("CCI API parser preserves stable identity, date, and official PDF", () => {
+  const records = parseCciRegulationsPayload({
+    recordsTotal: 1,
+    data: [
+      {
+        id: 119,
+        page_slug: "cost-of-production-regulations-2025",
+        title:
+          '<span class="blue">Competition Commission Regulations, 2025</span>',
+        order_date: "07/05/2025",
+        file_content:
+          '[{&quot;title&quot;:&quot;Gazette Notification&quot;,&quot;file_name&quot;:&quot;images\\/legalframeworkregulation\\/en\\/regulation.pdf&quot;,&quot;file_size&quot;:&quot;1,335.21&quot;}]',
+      },
+    ],
+  });
+
+  assert.equal(records.length, 1);
+  assert.equal(records[0].sourceRecordId, "cci-regulation:119");
+  assert.equal(records[0].publicationDate, "2025-05-07");
+  assert.equal(
+    records[0].pdfUrl,
+    "https://www.cci.gov.in/public/images/legalframeworkregulation/en/regulation.pdf",
+  );
+  assert.equal(records[0].resources[0].metadata.fileSizeKilobytes, 1335.21);
+});
+
+test("CCI API parser rejects schema drift instead of cataloguing navigation", () => {
+  assert.throws(
+    () => parseCciRegulationsPayload({ records: [] }),
+    /data array/,
+  );
 });
 
 test("PIB listing preserves release identity, ministry, date, and type", () => {

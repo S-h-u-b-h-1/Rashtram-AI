@@ -757,6 +757,28 @@ const recordIntelligenceEvent = async (
 
 const hasMeaningfulDocumentUpdate = (candidate, record) => {
   if (!candidate) return false;
+  const dateFields = new Set([
+    "introducedDate",
+    "passedDate",
+    "enactedDate",
+    "publicationDate",
+    "effectiveDate",
+  ]);
+  const comparable = (value, dateField) => {
+    if (value == null || value === "") return "";
+    if (!dateField) return String(value);
+    if (!(value instanceof Date)) {
+      const literal = String(value);
+      if (/^\d{4}-\d{2}-\d{2}/.test(literal)) return literal.slice(0, 10);
+    }
+    const date = value instanceof Date ? value : new Date(value);
+    if (Number.isNaN(date.getTime())) return String(value).slice(0, 10);
+    return [
+      date.getFullYear(),
+      String(date.getMonth() + 1).padStart(2, "0"),
+      String(date.getDate()).padStart(2, "0"),
+    ].join("-");
+  };
   const fields = [
     ["title", "title"],
     ["documentType", "document_type"],
@@ -772,7 +794,10 @@ const hasMeaningfulDocumentUpdate = (candidate, record) => {
     const incoming = record[recordKey];
     if (incoming == null || incoming === "") return false;
     const current = candidate[candidateKey];
-    return String(incoming) !== String(current ?? "");
+    return (
+      comparable(incoming, dateFields.has(recordKey)) !==
+      comparable(current, dateFields.has(recordKey))
+    );
   });
 };
 

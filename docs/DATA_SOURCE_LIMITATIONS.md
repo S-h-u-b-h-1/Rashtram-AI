@@ -2,7 +2,9 @@
 
 ## Current corpus caveat
 
-The 2026-07-13 11:04 UTC audit snapshot contains 19,307 records, but only 1,602 are research-ready and comparison-ready. The product must not imply that every catalogued record supports AI chat, comparison, or compliance conclusions.
+The 2026-07-15 live snapshot contains 19,355 records, but only 1,912 are
+research-ready and comparison-ready. The product must not imply that every
+catalogued record supports AI chat, comparison, or compliance conclusions.
 
 ## Source caveats
 
@@ -26,11 +28,11 @@ The system must not produce final legal/compliance advice without:
 
 ## Current known limitations
 
-- 17,118 documents remain in the processable backlog.
-- The historical processing-attempt failure rate is 45.8%; this is not the percentage of catalogue records proven permanently unusable.
+- 16,681 documents remain in the processable backlog.
+- The historical processing-attempt failure rate is 41.58%; this is not the percentage of catalogue records proven permanently unusable.
 - PDF checksum population is incomplete (the catalogue statistics report zero populated PDF hashes).
-- 1,113 probable duplicate groups remain.
-- Source health command needs bounded timeout behavior.
+- 1,117 probable duplicate groups remain.
+- Source health is bounded and reports partial failures, but upstream availability still varies.
 - File checksum coverage is incomplete.
 - Processing failures are now structured with `failure_code`, `retry_eligible`, `pipeline_stage`, checksums, and extraction metadata, but historical records still require migration/backfill verification before every failure can be trusted as fully classified.
 - Enterprise controls and billing are not implemented.
@@ -99,3 +101,34 @@ records, updated 15 changed records, skipped 83 unchanged duplicates, found 75
 PDF URLs, and recorded 0 failures. This confirms current bounded cataloguing;
 it does not claim complete historical coverage beyond the configured page
 limit, nor does cataloguing alone imply research readiness.
+
+## All-source connectivity audit, 2026-07-15
+
+A complete bounded health sweep found 23 connected sources, 5 reachable sources
+with no records in the sample, 8 intentionally blocked sources, and no source
+remaining unavailable because of a TLS-chain error.
+
+The Node runtime could not build certificate chains for IGOD, CCI, NMC, and
+CBIC because those official servers omitted public intermediates. The fetcher
+now adds only the validated public intermediates required by those exact host
+families, alongside Node's normal root store. Certificate and hostname
+verification remain enabled; this is not an insecure TLS bypass.
+
+CCI's generic HTML page previously exposed navigation links that could be
+mistaken for regulation records. CCI now uses its official public DataTables
+JSON listing, stable numeric IDs, publication dates, and official PDF paths.
+A bounded live run inserted 10 CCI regulations. A separate bounded live run
+inserted 10 NMC records. Directory refreshes completed for IGOD ministry and
+state entries, and a stale-source refresh inserted 4 new Delhi legislature
+records.
+
+An idempotency rerun exposed a cross-source date-comparison bug: PostgreSQL
+`DATE` values were serialized with the local offset and counted as changes on
+every run. Date-only comparison now preserves calendar dates. The final CCI
+rerun inserted 0, updated 0, and skipped the same 10 records as duplicates.
+
+CBIC is only partially operational: its Angular application shell is reachable,
+but the public same-origin notifications endpoint identified in the official
+bundle returned HTTP 500 during this audit. No CBIC records were fabricated or
+scraped from navigation. The source remains “reachable / no data” until the
+upstream API returns a valid document payload.

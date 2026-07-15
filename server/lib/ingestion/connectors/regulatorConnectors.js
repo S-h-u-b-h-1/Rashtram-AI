@@ -2,6 +2,7 @@ const {
   createPublicListingConnector,
 } = require("./publicListingConnector");
 const { createSnapshot } = require("../core/sourceSnapshots");
+const { normalizeDate } = require("../core/normalizer");
 const { attachConnectorLifecycle } = require("./connectorLifecycle");
 
 const regulatorType = (value) => {
@@ -75,15 +76,6 @@ const configs = [
     linkPattern:
       /circular|memorandum|notification|policy|guideline|sop|\.pdf(?:$|[?#])/i,
     allowedHosts: ["uidai.gov.in"],
-  },
-  {
-    name: "regulator-cci",
-    collection: "cci-legal-framework",
-    url: "https://www.cci.gov.in/public/legal-framwork/regulations",
-    authority: "Competition Commission of India",
-    linkPattern:
-      /regulation|notification|order|consultation|images\/.*\.pdf/i,
-    allowedHosts: ["cci.gov.in"],
   },
   {
     name: "regulator-cerc",
@@ -197,6 +189,157 @@ const regulatorConnectors = configs.map((config) =>
   }),
 );
 
+const cleanMarkup = (value) =>
+  String(value || "")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/&quot;/g, '"')
+    .replace(/&amp;/g, "&")
+    .replace(/&#(?:39|x27);/gi, "'")
+    .replace(/\s+/g, " ")
+    .trim();
+
+const parseCciFiles = (value) => {
+  try {
+    const decoded = String(value || "")
+      .replace(/&quot;/g, '"')
+      .replace(/&amp;/g, "&");
+    const parsed = JSON.parse(decoded);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+};
+
+const parseCciRegulationsPayload = (payload) => {
+  if (!payload || !Array.isArray(payload.data)) {
+    throw new Error("CCI regulations response did not contain a data array");
+  }
+  return payload.data
+    .map((item) => {
+      const id = Number(item?.id);
+      const title = cleanMarkup(item?.title || item?.description);
+      if (!Number.isInteger(id) || !title) return null;
+      const files = parseCciFiles(item.file_content);
+      const resources = files
+        .map((file) => {
+          const relative = String(file?.file_name || "").replace(/\\\//g, "/");
+          if (!relative || !/\.pdf(?:$|[?#])/i.test(relative)) return null;
+          return {
+            label: cleanMarkup(file.title) || title,
+            resourceType: "file",
+            category: "regulatory",
+            url: new URL(relative, "https://www.cci.gov.in/public/").toString(),
+            metadata: {
+              mimeType: "application/pdf",
+              fileSizeKilobytes: Number(
+                String(file.file_size || "").replace(/,/g, ""),
+              ) || null,
+            },
+          };
+        })
+        .filter(Boolean);
+      const sourceUrl = `https://www.cci.gov.in/public/legal-framwork/regulations/${id}/0`;
+      return {
+        sourceName: "regulator-cci",
+        sourceRecordId: `cci-regulation:${id}`,
+        sourceUrl,
+        detailUrl: sourceUrl,
+        pdfUrl: resources[0]?.url || null,
+        title,
+        documentType: "regulation",
+        jurisdictionLevel: "union",
+        jurisdiction: "India",
+        authority: "Competition Commission of India",
+        category: "regulatory",
+        status: "Published",
+        publicationDate: normalizeDate(item.order_date),
+        mimeType: resources[0] ? "application/pdf" : "text/html",
+        resources,
+        metadata: {
+          collection: "cci-legal-framework",
+          cciPageSlug: item.page_slug || null,
+          officialApi: "fetch-regulationslist",
+        },
+      };
+    })
+    .filter(Boolean);
+};
+
+const cciConnector = attachConnectorLifecycle(
+  {
+    name: "regulator-cci",
+    defaultCollection: "cci-legal-framework",
+    async collect(options = {}, { fetcher }) {
+      const limit = Math.max(1, Number(options.limit || 100));
+      const pageSize = Math.min(100, Math.max(1, Number(options.pageSize || limit)));
+      const maxPages = Math.max(1, Number(options.maxPages || 1));
+      const records = [];
+      const snapshots = [];
+      const errors = [];
+      let recordsTotal = null;
+
+      for (let page = 0; page < maxPages && records.length < limit; page += 1) {
+        const start = page * pageSize;
+        const endpoint = new URL(
+          "https://www.cci.gov.in/public/legal-framwork/fetch-regulationslist",
+        );
+        endpoint.searchParams.set("draw", String(page + 1));
+        endpoint.searchParams.set("start", String(start));
+        endpoint.searchParams.set("length", String(pageSize));
+        endpoint.searchParams.set("searchString", "");
+        endpoint.searchParams.set("fromdate", "");
+        endpoint.searchParams.set("todate", "");
+        try {
+          const response = await fetcher.getText(endpoint.toString());
+          const payload = JSON.parse(response.body);
+          const pageRecords = parseCciRegulationsPayload(payload);
+          recordsTotal = Number(payload.recordsFiltered ?? payload.recordsTotal);
+          records.push(...pageRecords);
+          snapshots.push(
+            createSnapshot({
+              sourceName: this.name,
+              sourceUrl: endpoint.toString(),
+              body: response.body,
+              responseStatus: response.status,
+              recordCount: pageRecords.length,
+              metadata: {
+                collection: this.defaultCollection,
+                page,
+                recordsTotal: Number.isFinite(recordsTotal) ? recordsTotal : null,
+              },
+            }),
+          );
+          if (!pageRecords.length || records.length >= recordsTotal) break;
+        } catch (error) {
+          errors.push({
+            stage: "listing",
+            collection: this.defaultCollection,
+            page,
+            code: "SOURCE_PAYLOAD_INVALID",
+            message: error.message,
+          });
+          break;
+        }
+      }
+      return {
+        records: records.slice(0, limit),
+        snapshots,
+        errors,
+        diagnostics: records.length || errors.length
+          ? []
+          : [{
+              type: "empty-source",
+              collection: this.defaultCollection,
+              message: "CCI returned a valid empty regulations listing.",
+            }],
+      };
+    },
+  },
+  ["cci-legal-framework"],
+);
+
+regulatorConnectors.push(cciConnector);
+
 const ncltConnector = {
   name: "regulator-nclt",
   defaultCollection: "nclt-orders",
@@ -256,6 +399,8 @@ module.exports = {
   REGULATOR_SOURCE_CONFIGS: configs,
   ncltConnector,
   regulatorConnectors,
+  cciConnector,
+  parseCciRegulationsPayload,
   regulatorRecordHasEvidence,
   regulatorType,
 };

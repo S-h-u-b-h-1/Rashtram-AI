@@ -1,4 +1,5 @@
 const axios = require("axios");
+const { httpsAgentForUrl } = require("./tlsTrust");
 
 const sleep = (milliseconds) =>
   new Promise((resolve) => setTimeout(resolve, milliseconds));
@@ -82,7 +83,9 @@ class PoliteFetcher {
 
     try {
       await this.waitForHost(parsed.hostname);
-      const response = await this.client.get(`${origin}/robots.txt`, {
+      const robotsUrl = `${origin}/robots.txt`;
+      const response = await this.client.get(robotsUrl, {
+        httpsAgent: httpsAgentForUrl(robotsUrl),
         validateStatus: (status) => status >= 200 && status < 500,
       });
       const rules = response.status === 200 ? parseRobots(response.data) : [];
@@ -111,7 +114,10 @@ class PoliteFetcher {
     for (let attempt = 0; attempt <= this.retries; attempt += 1) {
       try {
         await this.waitForHost(parsed.hostname);
-        return await this.client.get(url, options);
+        return await this.client.get(url, {
+          ...options,
+          httpsAgent: options.httpsAgent || httpsAgentForUrl(url),
+        });
       } catch (error) {
         lastError = error;
         const status = error.response?.status;
