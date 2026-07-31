@@ -1,6 +1,7 @@
 # Multilingual Document Pipeline
 
-Last reviewed: 1 July 2026
+Last reviewed: 31 July 2026 (corrected stale OpenAI-primary references; see
+docs/AI_PROVIDER_AUDIT.md for the Gemini-first migration)
 
 ## Guarantees
 
@@ -18,14 +19,15 @@ verifiable against the PDF.
    repeated page furniture, Devanagari matras, and punctuation.
 3. Detect `language_code`, `script`, `is_bilingual`, and whether OCR was
    required.
-4. If embedded text is insufficient, send the PDF to OpenAI with an
+4. If embedded text is insufficient, send the PDF to Gemini (the
+   OpenAI-compatible endpoint is an explicit configured alternative) with an
    exact-transcription OCR instruction. The OCR result is cleaned but not
    translated.
 5. Split text on headings, paragraphs, English sentence boundaries, Hindi
    danda boundaries, and bounded overlap.
-6. Create 768-dimension multilingual embeddings with
-   `text-embedding-3-large`, then store the original chunks in a dedicated
-   Pinecone namespace.
+6. Create 768-dimension multilingual embeddings with `gemini-embedding-001`
+   (or the configured OpenAI-compatible model), then store the original
+   chunks in a model/dimension-versioned Pinecone namespace.
 7. Generate and store an English structured summary independently.
 8. Retrieve original-language passages for chat and preserve their language in
    citations and source snippets.

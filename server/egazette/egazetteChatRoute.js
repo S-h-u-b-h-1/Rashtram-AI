@@ -1,5 +1,6 @@
 const express = require("express");
 const EGazetteChat = require("../models/EGazetteChat");
+const { generationLimiter } = require("../middleware/security");
 const {
   generateResponse,
   searchSimilarContentForEGazette,
@@ -130,7 +131,7 @@ router.delete("/history", async (req, res) => {
   }
 });
 
-router.post("/", async (req, res) => {
+router.post("/", generationLimiter, async (req, res) => {
   try {
     const { message, gazetteId } = req.body;
     if (!message || !gazetteId) {

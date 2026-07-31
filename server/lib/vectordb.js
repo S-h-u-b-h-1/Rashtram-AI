@@ -1,5 +1,6 @@
 const { Pinecone } = require("@pinecone-database/pinecone");
 const { sanitizeProviderError } = require("./providerErrorSanitizer");
+const { createCircuitBreaker } = require("./circuitBreaker");
 
 const EMBEDDING_DIMENSION = 768;
 const EMBEDDING_BATCH_SIZE = 50;
@@ -91,6 +92,20 @@ const VECTOR_NAMESPACE =
   (EMBEDDING_PROVIDER === "local"
     ? "local-hash-v1"
     : `${EMBEDDING_MODEL}-${EMBEDDING_DIMENSION}-v1`);
+
+// Independently-scoped breakers: an embedding outage must never block chat
+// generation (or vice versa) since chunk creation must not depend on
+// generation succeeding. Both fail fast into each function's existing
+// fallback path (local embeddings / extractive chat fallback) — no new
+// fallback behavior, just fewer wasted calls into a provider that's down.
+const embeddingBreaker = createCircuitBreaker(`embedding:${EMBEDDING_PROVIDER}`, {
+  failureThreshold: 5,
+  cooldownMs: 30_000,
+});
+const generationBreaker = createCircuitBreaker(`generation:${AI_PROVIDER}`, {
+  failureThreshold: 5,
+  cooldownMs: 30_000,
+});
 
 let pineconeClient;
 let openAIClientPromise;
@@ -357,6 +372,7 @@ const providerConfig = () => ({
   embeddingModel: EMBEDDING_MODEL,
   embeddingFallbackProvider: EMBEDDING_FALLBACK_PROVIDER,
   embeddingDimension: EMBEDDING_DIMENSION,
+  vectorNamespace: VECTOR_NAMESPACE,
   chatModelConfigured: Boolean(GENERATION_MODEL),
   embeddingModelConfigured: Boolean(EMBEDDING_MODEL),
   credentialsConfigured: providerCredentialsConfigured(),
@@ -520,7 +536,10 @@ const isResponsesApiUnavailable = (error) => {
   );
 };
 
-const runGeneration = async (method, contents, options = {}) => {
+const runGeneration = (method, contents, options = {}) =>
+  generationBreaker.exec(() => runGenerationInternal(method, contents, options));
+
+const runGenerationInternal = async (method, contents, options = {}) => {
   const models = generationModels().slice(
     0,
     Math.max(1, Number(options.maxModels || generationModels().length)),
@@ -747,17 +766,19 @@ const generateEmbeddings = async (
   try {
     if (selectedProvider === "gemini") {
       for (const batch of buildEmbeddingBatches(texts, { maxInputs: 100 })) {
-        const response = await withOpenAIRetry(
-          () =>
-            geminiFetch(selectedModel, "batchEmbedContents", {
-              requests: batch.map((text) => ({
-                model: geminiModelPath(selectedModel),
-                content: { parts: [{ text: String(text || "") }] },
-                taskType,
-                outputDimensionality: EMBEDDING_DIMENSION,
-              })),
-            }),
-          `Gemini embedding model ${selectedModel}`,
+        const response = await embeddingBreaker.exec(() =>
+          withOpenAIRetry(
+            () =>
+              geminiFetch(selectedModel, "batchEmbedContents", {
+                requests: batch.map((text) => ({
+                  model: geminiModelPath(selectedModel),
+                  content: { parts: [{ text: String(text || "") }] },
+                  taskType,
+                  outputDimensionality: EMBEDDING_DIMENSION,
+                })),
+              }),
+            `Gemini embedding model ${selectedModel}`,
+          ),
         );
 
         const embeddings = response.embeddings || [];
@@ -778,15 +799,17 @@ const generateEmbeddings = async (
 
     const openai = await getOpenAI();
     for (const batch of buildEmbeddingBatches(texts)) {
-      const response = await withOpenAIRetry(
-        () =>
-          openai.embeddings.create({
-            model: selectedModel,
-            input: batch,
-            encoding_format: "float",
-            dimensions: EMBEDDING_DIMENSION,
-          }),
-        `OpenAI embedding model ${selectedModel}`,
+      const response = await embeddingBreaker.exec(() =>
+        withOpenAIRetry(
+          () =>
+            openai.embeddings.create({
+              model: selectedModel,
+              input: batch,
+              encoding_format: "float",
+              dimensions: EMBEDDING_DIMENSION,
+            }),
+          `OpenAI embedding model ${selectedModel}`,
+        ),
       );
 
       const embeddings = [...(response.data || [])].sort(
@@ -1262,17 +1285,28 @@ const storeContentInChunks = async ({
   idField,
   titleField,
   chunkIdField = "billId",
+  // Chunk IDs whose content hash and embedding namespace are unchanged
+  // since the last successful run — Pinecone already has a valid vector at
+  // that exact deterministic ID, so they're skipped from both embedding
+  // and upsert. `chunks` itself stays the FULL set (unfiltered) so
+  // cleanupStaleVectors below still sees the complete expected ID set;
+  // only the embed/upsert loop is narrowed.
+  unchangedChunkIds = new Set(),
 }) => {
   let totalStored = 0;
   let embeddingsMs = 0;
   let pineconeMs = 0;
+  const chunksToEmbed = unchangedChunkIds.size
+    ? chunks.filter((chunk) => !unchangedChunkIds.has(chunk.id))
+    : chunks;
+  const embeddingCacheHits = chunks.length - chunksToEmbed.length;
 
   for (
     let start = 0;
-    start < chunks.length;
+    start < chunksToEmbed.length;
     start += EMBEDDING_BATCH_SIZE
   ) {
-    const batch = chunks.slice(start, start + EMBEDDING_BATCH_SIZE);
+    const batch = chunksToEmbed.slice(start, start + EMBEDDING_BATCH_SIZE);
     const embeddingStartedAt = Date.now();
     const embeddings = await generateEmbeddings(
       batch.map((chunk) => chunk.embeddingText || chunk.content),
@@ -1312,45 +1346,100 @@ const storeContentInChunks = async ({
     totalStored += vectors.length;
   }
 
+  const staleVectorsRemoved = await cleanupStaleVectors({
+    chunks,
+    index,
+    idField,
+    chunkIdField,
+  });
+
   return {
     chunksStored: totalStored,
     success: true,
     metrics: { embeddingsMs, pineconeMs },
+    staleVectorsRemoved,
+    embeddingCacheHits,
+    embeddingCacheMisses: chunksToEmbed.length,
   };
 };
 
-const storeBillContentInChunks = (chunks) =>
+// Reprocessing a document can produce fewer chunks than the previous run
+// (content shrank, or chunking logic changed). Pinecone upserts only ever
+// add/overwrite by ID, so without this step the old chunk indices beyond
+// the new count would remain in the index forever as stale vectors —
+// producing wrong citations, duplicated context, or outdated answers on
+// retrieval. Best-effort: a cleanup failure must never fail the store that
+// already succeeded above, so it's caught and logged, not thrown.
+const cleanupStaleVectors = async ({ chunks, index, idField, chunkIdField }) => {
+  const documentIdValue = String(
+    chunks[0]?.[chunkIdField] ?? chunks[0]?.billId ?? chunks[0]?.documentId ?? "",
+  );
+  if (!documentIdValue) return 0;
+
+  try {
+    const newIds = new Set(chunks.map((chunk) => chunk.id));
+    const queryResults = await index.query({
+      vector: createProbeVector(),
+      topK: 1000,
+      filter: { [idField]: { $eq: documentIdValue } },
+      includeMetadata: false,
+    });
+    const existingIds = (queryResults.matches || []).map((match) => match.id);
+    if (existingIds.length === 1000) {
+      console.warn(
+        `Stale-vector cleanup for ${idField}=${documentIdValue} hit the 1000-match query cap; some stale vectors may not have been found.`,
+      );
+    }
+
+    const staleIds = existingIds.filter((id) => !newIds.has(id));
+    if (staleIds.length === 0) return 0;
+
+    await index.deleteMany(staleIds);
+    return staleIds.length;
+  } catch (error) {
+    console.warn(
+      `Stale-vector cleanup failed for ${idField}=${documentIdValue}; leaving existing vectors in place: ${error.message}`,
+    );
+    return 0;
+  }
+};
+
+const storeBillContentInChunks = (chunks, options = {}) =>
   storeContentInChunks({
     chunks,
     index: getIndex(),
     idField: "billId",
     titleField: "billTitle",
+    ...options,
   });
 
-const storeActContentInChunks = (chunks) =>
+const storeActContentInChunks = (chunks, options = {}) =>
   storeContentInChunks({
     chunks,
     index: getActIndex(),
     idField: "actId",
     titleField: "actTitle",
+    ...options,
   });
 
-const storeEGazetteContentInChunks = (chunks) =>
+const storeEGazetteContentInChunks = (chunks, options = {}) =>
   storeContentInChunks({
     chunks,
     index: getEGazetteIndex(),
     idField: "gazetteId",
     titleField: "gazetteTitle",
     chunkIdField: "gazetteId",
+    ...options,
   });
 
-const storePolicyContentInChunks = (chunks) =>
+const storePolicyContentInChunks = (chunks, options = {}) =>
   storeContentInChunks({
     chunks,
     index: getPolicyIndex(),
     idField: "policyId",
     titleField: "policyTitle",
     chunkIdField: "policyId",
+    ...options,
   });
 
 const splitIntoChunks = (text, chunkSize = 1_000) => {
@@ -1423,6 +1512,7 @@ module.exports = {
   checkBillExists,
   checkEGazetteExists,
   checkPolicyExists,
+  cleanupStaleVectors,
   createProbeVector,
   findSimilarBills,
   generateActSummary,
@@ -1457,6 +1547,7 @@ module.exports = {
   storeActContentInChunks,
   storeBillContent,
   storeBillContentInChunks,
+  storeContentInChunks,
   storeEGazetteContentInChunks,
   storePolicyContentInChunks,
   validateAIProvider,

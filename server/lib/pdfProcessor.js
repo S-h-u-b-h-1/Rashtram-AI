@@ -1,5 +1,6 @@
 const axios = require("axios");
 const pdf = require("pdf-parse");
+const { createCircuitBreaker } = require("./circuitBreaker");
 const {
   downloadAndValidateDocument,
 } = require("./documentDownloadService");
@@ -8,6 +9,15 @@ const DEVANAGARI_PATTERN = /[\u0900-\u097f]/gu;
 const LATIN_PATTERN = /[A-Za-z]/g;
 const LETTER_PATTERN = /[\p{L}\p{M}]/gu;
 const MAX_INLINE_OCR_BYTES = 18 * 1024 * 1024;
+
+// Scoped independently from the embedding/generation breakers in vectordb.js
+// so an OCR provider outage never blocks chunk creation for documents that
+// already have a usable text layer (chunking must not depend on OCR/
+// generation success).
+const ocrBreaker = createCircuitBreaker("ocr", {
+  failureThreshold: 5,
+  cooldownMs: 30_000,
+});
 
 class PDFProcessor {
   constructor({ ocrExtractor } = {}) {
@@ -407,39 +417,41 @@ class PDFProcessor {
       String(process.env.AI_PROVIDER || "gemini").toLowerCase() !== "openai" &&
       process.env.GEMINI_API_KEY
     ) {
-      return this.extractTextWithGeminiOcr(buffer);
+      return ocrBreaker.exec(() => this.extractTextWithGeminiOcr(buffer));
     }
-    const openai = await this.getOpenAI();
-    const response = await openai.responses.create({
-      model:
-        process.env.OPENAI_OCR_MODEL ||
-        process.env.OPENAI_MODEL ||
-        "gpt-5.4-mini",
-      max_output_tokens: 32_000,
-      input: [
-        {
-          role: "user",
-          content: [
-            {
-              type: "input_file",
-              filename: "government-document.pdf",
-              file_data: `data:application/pdf;base64,${buffer.toString("base64")}`,
-            },
-            {
-              type: "input_text",
-              text: [
-                "Transcribe this scanned Indian government document exactly.",
-                "Preserve the original language, Devanagari text, numbers,",
-                "headings, paragraph order, and page breaks. Do not translate,",
-                "summarize, explain, or invent missing text. Return only the",
-                "transcription in plain text.",
-              ].join(" "),
-            },
-          ],
-        },
-      ],
+    return ocrBreaker.exec(async () => {
+      const openai = await this.getOpenAI();
+      const response = await openai.responses.create({
+        model:
+          process.env.OPENAI_OCR_MODEL ||
+          process.env.OPENAI_MODEL ||
+          "gpt-5.4-mini",
+        max_output_tokens: 32_000,
+        input: [
+          {
+            role: "user",
+            content: [
+              {
+                type: "input_file",
+                filename: "government-document.pdf",
+                file_data: `data:application/pdf;base64,${buffer.toString("base64")}`,
+              },
+              {
+                type: "input_text",
+                text: [
+                  "Transcribe this scanned Indian government document exactly.",
+                  "Preserve the original language, Devanagari text, numbers,",
+                  "headings, paragraph order, and page breaks. Do not translate,",
+                  "summarize, explain, or invent missing text. Return only the",
+                  "transcription in plain text.",
+                ].join(" "),
+              },
+            ],
+          },
+        ],
+      });
+      return response.output_text || "";
     });
-    return response.output_text || "";
   }
 
   async processPDFByPages(pdfUrl) {

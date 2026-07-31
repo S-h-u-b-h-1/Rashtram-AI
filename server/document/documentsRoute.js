@@ -1,5 +1,6 @@
 const express = require("express");
 const crypto = require("node:crypto");
+const { generationLimiter } = require("../middleware/security");
 const { query } = require("../db");
 const DocumentService = require("./DocumentService");
 const DocumentRepository = require("./DocumentRepository");
@@ -28,6 +29,7 @@ const {
   prepareDocument,
 } = require("./readinessService");
 const { getDocumentReadiness } = require("./readinessContract");
+const { sendError } = require("../lib/httpResponse");
 
 const router = express.Router();
 
@@ -64,22 +66,6 @@ const buildExtractiveMultiDocumentFallback = (message, sources) => {
     "Grounded extractive answer:",
     lines.length ? lines.join("\n") : "- No suitable passage excerpt was available.",
   ].join("\n");
-};
-
-const sendError = (res, error, context) => {
-  const status = error.status || 500;
-  const requestId = crypto.randomUUID();
-  if (status >= 500) {
-    console.error(`${context} [${requestId}]:`, error);
-  }
-  return res.status(status).json({
-    error:
-      status >= 500
-        ? "Internal document service error."
-        : error.message,
-    ...(status >= 500 ? { requestId } : {}),
-    ...(status < 500 && error.details ? { details: error.details } : {}),
-  });
 };
 
 router.get("/", async (req, res) => {
@@ -161,7 +147,7 @@ router.delete("/chat/history", async (req, res) => {
   }
 });
 
-router.post("/compare", async (req, res) => {
+router.post("/compare", generationLimiter, async (req, res) => {
   try {
     const comparison = await createComparison(req.user.id, req.body);
     return res.status(201).json({
@@ -213,7 +199,7 @@ router.delete("/compare/:comparisonId", async (req, res) => {
   }
 });
 
-router.post("/chat", async (req, res) => {
+router.post("/chat", generationLimiter, async (req, res) => {
   try {
     const ids = normalizeChatIds(req.body.documentIds);
     const message = String(req.body.message || "").trim();
@@ -404,7 +390,7 @@ router.get("/:id/readiness", async (req, res) => {
   }
 });
 
-router.post("/:id/prepare", async (req, res) => {
+router.post("/:id/prepare", generationLimiter, async (req, res) => {
   try {
     const before = await getDocumentReadiness(req.params.id);
     if (!before) {

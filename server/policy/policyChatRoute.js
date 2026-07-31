@@ -1,5 +1,6 @@
 const express = require("express");
 const PolicyChat = require("../models/PolicyChat");
+const { generationLimiter } = require("../middleware/security");
 const {
   generateResponse,
   searchSimilarContentForPolicy,
@@ -127,7 +128,7 @@ router.delete("/history", async (req, res) => {
   }
 });
 
-router.post("/", async (req, res) => {
+router.post("/", generationLimiter, async (req, res) => {
   try {
     const { message, policyId } = req.body;
     if (!message || !policyId) {

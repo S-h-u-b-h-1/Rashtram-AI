@@ -1,3 +1,4 @@
+const crypto = require("node:crypto");
 const { pdfProcessor } = require("../lib/pdfProcessor");
 const { query } = require("../db");
 const {
@@ -17,6 +18,7 @@ const {
   getPolicyIndex,
   checkPolicyExists,
   generatePolicySummary,
+  providerConfig,
   searchSimilarContentForPolicy,
   storePolicyContentInChunks,
   searchSimilarContent,
@@ -425,22 +427,60 @@ const loadIndexedChunks = async (config, documentId, topK = 100) => {
   return result.matches || [];
 };
 
+const computeChunkContentHash = (content) =>
+  crypto.createHash("sha256").update(String(content || "")).digest("hex");
+
+// Reads the previous hash/namespace for each chunk index before the
+// delete-then-insert replace below wipes them, so unchanged content can be
+// recognized after the fact. A chunk only counts as reusable when BOTH the
+// content hash AND the embedding namespace (provider+model+dimension+
+// version) match — content hashing alone would be unsafe across a provider
+// migration, since the old vector wouldn't exist in a new namespace at all.
 const saveNormalizedChunks = async (documentId, chunks, languageCode) => {
+  const currentNamespace = providerConfig().vectorNamespace;
+  const previous = await query(
+    `SELECT chunk_index, content_hash, embedding_namespace
+     FROM document_text_chunks WHERE document_id = $1`,
+    [documentId],
+  );
+  const previousByIndex = new Map(
+    previous.rows.map((row) => [Number(row.chunk_index), row]),
+  );
+
   await query(`DELETE FROM document_text_chunks WHERE document_id = $1`, [
     documentId,
   ]);
+
+  const unchangedChunkIds = new Set();
+  let cacheHits = 0;
+  let cacheMisses = 0;
+
   for (let index = 0; index < chunks.length; index += 1) {
     const chunk = chunks[index];
     const content = String(
       chunk.content || chunk.metadata?.content || "",
     ).trim();
     if (!content) continue;
+    const chunkIndex = chunk.metadata?.chunkIndex ?? chunk.chunkIndex ?? index;
+    const contentHash = computeChunkContentHash(content);
+    const previousRow = previousByIndex.get(Number(chunkIndex));
+    const reusable =
+      previousRow?.content_hash === contentHash &&
+      previousRow?.embedding_namespace === currentNamespace;
+    if (reusable) {
+      cacheHits += 1;
+      if (chunk.id) unchangedChunkIds.add(chunk.id);
+    } else {
+      cacheMisses += 1;
+    }
+
     await query(
       `INSERT INTO document_text_chunks (
          document_id, chunk_index, original_text, translated_text,
-         language, token_count, vector_reference, metadata_json
+         language, token_count, vector_reference, metadata_json,
+         content_hash, embedding_namespace
        )
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb, $9, $10)
        ON CONFLICT (document_id, chunk_index)
        DO UPDATE SET
          original_text = EXCLUDED.original_text,
@@ -449,19 +489,25 @@ const saveNormalizedChunks = async (documentId, chunks, languageCode) => {
          token_count = EXCLUDED.token_count,
          vector_reference = EXCLUDED.vector_reference,
          metadata_json = EXCLUDED.metadata_json,
+         content_hash = EXCLUDED.content_hash,
+         embedding_namespace = EXCLUDED.embedding_namespace,
          updated_at = NOW()`,
       [
         documentId,
-        chunk.metadata?.chunkIndex ?? chunk.chunkIndex ?? index,
+        chunkIndex,
         content,
         chunk.translatedText || null,
         chunk.metadata?.languageCode || languageCode || "und",
         Math.ceil(content.length / 4),
         chunk.id || `${documentId}-chunk-${index}`,
         JSON.stringify(chunk.metadata || {}),
+        contentHash,
+        currentNamespace,
       ],
     );
   }
+
+  return { unchangedChunkIds, cacheHits, cacheMisses };
 };
 
 const loadLocalChunks = async (documentId, limit = 500) => {
@@ -643,7 +689,7 @@ const processExtractableSourceDocument = async (
   });
 
   const chunkPersistenceStartedAt = Date.now();
-  await saveNormalizedChunks(
+  const chunkCacheResult = await saveNormalizedChunks(
     document.id,
     sourceChunks,
     detectedLanguage.languageCode,
@@ -665,6 +711,7 @@ const processExtractableSourceDocument = async (
           summary,
         },
       })),
+      { unchangedChunkIds: chunkCacheResult.unchangedChunkIds },
     );
   } catch (error) {
     vectorStorageError = error;
@@ -1004,7 +1051,7 @@ const processDocument = async (documentType, documentId) => {
     },
   }));
   const chunkPersistenceStartedAt = Date.now();
-  await saveNormalizedChunks(
+  const chunkCacheResult = await saveNormalizedChunks(
     documentId,
     chunks,
     processed.language.languageCode,
@@ -1018,7 +1065,9 @@ const processDocument = async (documentType, documentId) => {
   };
   let vectorStorageError = null;
   try {
-    stored = await config.store(chunks);
+    stored = await config.store(chunks, {
+      unchangedChunkIds: chunkCacheResult.unchangedChunkIds,
+    });
   } catch (error) {
     vectorStorageError = error;
     console.warn(
@@ -1123,15 +1172,174 @@ const tokenizeForLocalRetrieval = (value) => [
   ),
 ];
 
-const localChunkScore = (chunk, queryTokens) => {
-  const content = String(chunk.original_text || chunk.translated_text || "");
+const tokenOverlapScore = (content, queryTokens) => {
   if (!queryTokens.length) return 0.1;
-  const lower = content.toLowerCase();
+  const lower = String(content || "").toLowerCase();
   const hits = queryTokens.reduce(
     (count, token) => count + (lower.includes(token) ? 1 : 0),
     0,
   );
   return hits / queryTokens.length;
+};
+
+const localChunkScore = (chunk, queryTokens) =>
+  tokenOverlapScore(chunk.original_text || chunk.translated_text, queryTokens);
+
+// Cheap, deterministic, in-process signal: does the question name a specific
+// section/article/rule/clause that this passage's own structural metadata
+// matches? No extra API call, just a regex extraction over the question text.
+const IDENTIFIER_PATTERNS = [
+  /\b(?:section|sec\.?)\s*([0-9]+[a-z]?)\b/gi,
+  /\b(?:article|art\.?)\s*([0-9]+[a-z]?)\b/gi,
+  /\b(?:clause|sub-clause)\s*([0-9]+[a-z]?)\b/gi,
+  /\b(?:rule)\s*([0-9]+[a-z]?)\b/gi,
+  /\bधारा\s*([0-9]+[क-ह]?)\b/g,
+];
+
+const extractIdentifiers = (message) => {
+  const identifiers = new Set();
+  for (const pattern of IDENTIFIER_PATTERNS) {
+    pattern.lastIndex = 0;
+    let match;
+    while ((match = pattern.exec(message))) {
+      if (match[1]) identifiers.add(match[1].toLowerCase());
+    }
+  }
+  return identifiers;
+};
+
+const identifierBoost = (passage, identifiers) => {
+  if (!identifiers.size) return 0;
+  const haystacks = [passage.sectionId, passage.sectionTitle, passage.clauseId]
+    .filter(Boolean)
+    .map((value) => String(value).toLowerCase());
+  if (!haystacks.length) return 0;
+  for (const identifier of identifiers) {
+    if (haystacks.some((haystack) => haystack.includes(identifier))) return 1;
+  }
+  return 0;
+};
+
+// Combines vector similarity, fresh lexical overlap, full-text rank, and a
+// legal-identifier match into one deterministic score. No external API call
+// — safe to run on every retrieval. Vector similarity stays the dominant
+// signal (weight 0.45) so reranking nudges results rather than overriding
+// what Pinecone already found relevant.
+const rerankPassages = (passages, message, { topK = 6 } = {}) => {
+  const queryTokens = tokenizeForLocalRetrieval(message);
+  const identifiers = extractIdentifiers(String(message || ""));
+
+  const scored = passages.map((passage) => {
+    // Callers are expected to have normalized a `.vectorScore` field onto
+    // every vector-origin passage before merging; this fallback only
+    // covers passages that never went through that normalization.
+    const vectorScore = Number(
+      passage.vectorScore ?? (passage.retrievalMode === "vector" ? passage.score : 0) ?? 0,
+    );
+    const lexicalScore = tokenOverlapScore(passage.content, queryTokens);
+    const ftsScore = Number(passage.ftsScore ?? 0);
+    const boost = identifierBoost(passage, identifiers);
+    const finalScore =
+      0.45 * vectorScore + 0.3 * lexicalScore + 0.15 * ftsScore + 0.1 * boost;
+    return { ...passage, vectorScore, lexicalScore, ftsScore, identifierBoost: boost, finalScore };
+  });
+
+  return scored
+    .sort((left, right) => {
+      if (right.finalScore !== left.finalScore) return right.finalScore - left.finalScore;
+      return left.chunkIndex - right.chunkIndex;
+    })
+    .slice(0, Math.max(1, Number(topK) || 6))
+    .map((passage, index) => ({ ...passage, passage: index + 1 }));
+};
+
+// Reuses the migration-019 GIN index on document_text_chunks (already
+// applied in production, no schema change needed here). Runs alongside
+// vector search rather than only as a fallback, so exact legal phrasing
+// contributes even when semantic search already found good matches.
+const retrieveFtsPassages = async (documentId, message, limit = 25) => {
+  const text = String(message || "").trim();
+  if (!text) return [];
+  let result;
+  try {
+    result = await query(
+      `WITH search AS (
+         SELECT plainto_tsquery('simple', $1) AS ts_query
+       )
+       SELECT
+         chunk.chunk_index, chunk.original_text, chunk.translated_text,
+         chunk.language, chunk.metadata_json,
+         ts_rank_cd(to_tsvector('simple', COALESCE(chunk.original_text, '')), search.ts_query) AS fts_score
+       FROM document_text_chunks chunk
+       CROSS JOIN search
+       WHERE chunk.document_id = $2
+         AND to_tsvector('simple', COALESCE(chunk.original_text, '')) @@ search.ts_query
+       ORDER BY fts_score DESC
+       LIMIT $3`,
+      [text, documentId, limit],
+    );
+  } catch (error) {
+    console.warn(`Full-text retrieval failed for document ${documentId}: ${error.message}`);
+    return [];
+  }
+
+  const maxScore = result.rows.reduce(
+    (max, row) => Math.max(max, Number(row.fts_score) || 0),
+    0,
+  );
+
+  return result.rows.map((row, index) => {
+    const metadata = row.metadata_json || {};
+    const content = String(row.original_text || row.translated_text || "").trim();
+    return {
+      passage: index + 1,
+      score: 0,
+      vectorScore: 0,
+      ftsScore: maxScore > 0 ? Number(row.fts_score) / maxScore : 0,
+      chunkIndex: Number(row.chunk_index ?? index),
+      totalChunks: metadata.totalChunks || result.rows.length,
+      content,
+      source: metadata.source || "Indexed document text",
+      pdfUrl: metadata.pdfUrl || null,
+      languageCode:
+        metadata.languageCode || metadata.originalLanguage || row.language || "und",
+      pageStart: metadata.pageStart || null,
+      pageEnd: metadata.pageEnd || null,
+      pageEstimate: Boolean(metadata.pageEstimate),
+      sectionId: metadata.sectionId || null,
+      sectionTitle: metadata.sectionTitle || null,
+      clauseId: metadata.clauseId || null,
+      structuralType: metadata.structuralType || "passage",
+      sourceUrl: metadata.sourceUrl || null,
+      retrievalMode: "fts",
+    };
+  }).filter((passage) => passage.content);
+};
+
+// Unions two passage sets by chunk identity, keeping the richer (first-seen)
+// metadata but merging in whichever score fields the other set carries.
+const mergePassagesByChunk = (primary, secondary) => {
+  const byChunk = new Map();
+  for (const passage of primary) {
+    byChunk.set(String(passage.chunkIndex), { ...passage });
+  }
+  for (const passage of secondary) {
+    const key = String(passage.chunkIndex);
+    const existing = byChunk.get(key);
+    if (existing) {
+      byChunk.set(key, {
+        ...existing,
+        ftsScore: Math.max(Number(existing.ftsScore) || 0, Number(passage.ftsScore) || 0),
+        vectorScore: Math.max(
+          Number(existing.vectorScore) || 0,
+          Number(passage.vectorScore) || 0,
+        ),
+      });
+    } else {
+      byChunk.set(key, { ...passage });
+    }
+  }
+  return [...byChunk.values()];
 };
 
 const retrieveLocalTextPassages = async (documentId, message, topK = 6) => {
@@ -1191,37 +1399,63 @@ const retrieveDocumentContext = async (
   options = {},
 ) => {
   const topK = Math.max(1, Number(options.topK || 6));
+  // Widen the candidate pool before reranking so reranking has real
+  // choices to make, rather than just re-ordering the final 6.
+  const candidatePoolSize = Math.min(Math.max(topK * 3, 12), 25);
   const config = typeConfig(documentType);
-  let vectorError = null;
-  try {
-    const matches = await config.search(message, documentId, topK);
-    const passages = matches
-      .map(passageFromVectorMatch)
-      .filter((passage) => passage.content.trim());
-    if (passages.length > 0) {
+
+  // Vector search and full-text search always run together — FTS is not
+  // gated behind "vector search was weak." Each is caught independently so
+  // one failing doesn't lose the other.
+  const [vectorOutcome, ftsPassages] = await Promise.all([
+    config
+      .search(message, documentId, candidatePoolSize)
+      .then((matches) => ({
+        passages: matches
+          .map(passageFromVectorMatch)
+          .filter((passage) => passage.content.trim())
+          .map((passage) => ({ ...passage, vectorScore: passage.score })),
+        error: null,
+      }))
+      .catch((error) => ({ passages: [], error })),
+    retrieveFtsPassages(documentId, message, candidatePoolSize),
+  ]);
+
+  const vectorError = vectorOutcome.error;
+  const vectorPassages = vectorOutcome.passages;
+
+  if (vectorPassages.length > 0 || ftsPassages.length > 0) {
+    const merged = mergePassagesByChunk(vectorPassages, ftsPassages);
+    const reranked = rerankPassages(merged, message, { topK });
+    if (reranked.length > 0) {
       return {
         documentId: String(documentId),
-        retrievalMode: "vector",
+        retrievalMode: vectorError
+          ? "fts"
+          : ftsPassages.length > 0
+          ? "hybrid"
+          : "vector",
         retrievalVerified: true,
-        passages,
+        vectorError: vectorError?.message || null,
+        passages: reranked,
       };
     }
-  } catch (error) {
-    vectorError = error;
   }
 
   const localPassages = await retrieveLocalTextPassages(
     documentId,
     message,
-    topK,
+    candidatePoolSize,
   );
   if (localPassages.length > 0) {
+    const merged = mergePassagesByChunk(localPassages, ftsPassages);
+    const reranked = rerankPassages(merged, message, { topK });
     return {
       documentId: String(documentId),
       retrievalMode: vectorError ? "local_text" : "hybrid",
       retrievalVerified: true,
       vectorError: vectorError?.message || null,
-      passages: localPassages,
+      passages: reranked,
     };
   }
 
@@ -1386,7 +1620,11 @@ module.exports = {
   processDocument,
   getTextArtifact,
   retrieveDocumentContext,
+  retrieveFtsPassages,
+  retrieveLocalTextPassages,
   retrievePassages,
+  rerankPassages,
+  mergePassagesByChunk,
   saveTextArtifact,
   saveNormalizedChunks,
   buildExtractiveSummary,

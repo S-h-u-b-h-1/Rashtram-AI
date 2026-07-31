@@ -1,5 +1,6 @@
 const express = require("express");
 const fetchuser = require("../middleware/fetchuser");
+const { sendError } = require("../lib/httpResponse");
 const {
   findPath,
   getKnowledgeGraphMetrics,
@@ -8,11 +9,6 @@ const {
 } = require("./knowledgeGraphService");
 
 const router = express.Router();
-
-const respond = (res, error, context) => {
-  if ((error.status || 500) >= 500) console.error(`${context}:`, error);
-  return res.status(error.status || 500).json({ error: error.message });
-};
 
 router.get("/search", fetchuser, async (req, res) => {
   try {
@@ -23,7 +19,7 @@ router.get("/search", fetchuser, async (req, res) => {
       }),
     );
   } catch (error) {
-    return respond(res, error, "Knowledge graph search failed");
+    return sendError(res, error, "Knowledge graph search failed");
   }
 });
 
@@ -35,7 +31,7 @@ router.get("/path", fetchuser, async (req, res) => {
       }),
     });
   } catch (error) {
-    return respond(res, error, "Knowledge graph path search failed");
+    return sendError(res, error, "Knowledge graph path search failed");
   }
 });
 
@@ -49,7 +45,7 @@ router.post("/paths", fetchuser, async (req, res) => {
     );
     return res.status(201).json({ savedPath });
   } catch (error) {
-    return respond(res, error, "Knowledge graph path save failed");
+    return sendError(res, error, "Knowledge graph path save failed");
   }
 });
 
@@ -57,7 +53,7 @@ router.get("/metrics", fetchuser, async (req, res) => {
   try {
     return res.json({ knowledgeGraph: await getKnowledgeGraphMetrics() });
   } catch (error) {
-    return respond(res, error, "Knowledge graph metrics failed");
+    return sendError(res, error, "Knowledge graph metrics failed");
   }
 });
 

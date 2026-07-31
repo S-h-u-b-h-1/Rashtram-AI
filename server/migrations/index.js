@@ -83,4 +83,8 @@ module.exports = [
     name: "021_quarantine_post_audit_relationship_inferences.js",
     migration: require("./021_quarantine_post_audit_relationship_inferences"),
   },
+  {
+    name: "022_document_text_chunks_content_hash.js",
+    migration: require("./022_document_text_chunks_content_hash"),
+  },
 ];

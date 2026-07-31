@@ -1,4 +1,5 @@
 const rateLimit = require('express-rate-limit');
+const { ipKeyGenerator } = rateLimit;
 const helmet = require('helmet');
 
 
@@ -38,6 +39,24 @@ const activityLimiter = rateLimit({
   skipSuccessfulRequests: false,
 });
 
+// Dedicated budget for expensive AI-calling routes (chat, comparison, prepare,
+// OCR). Separate from generalLimiter so cheap browsing never competes with a
+// single client exhausting LLM budget. Keyed by authenticated user when
+// available so one account can't dodge the limit by rotating networks, and
+// falls back to IP for unauthenticated callers.
+const generationLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 30,
+  message: {
+    error: "Too many AI requests. Please slow down and try again shortly.",
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
+  skipSuccessfulRequests: false,
+  keyGenerator: (req) =>
+    req.user?.id ? `user:${req.user.id}` : ipKeyGenerator(req.ip),
+});
+
 
 const helmetConfig = helmet({
   contentSecurityPolicy: {
@@ -66,5 +85,6 @@ module.exports = {
   activityLimiter,
   generalLimiter,
   authLimiter,
+  generationLimiter,
   helmetConfig
 };

@@ -1,5 +1,6 @@
 const express = require('express');
 const { searchSimilarContentForAct, generateResponse } = require('../lib/vectordb');
+const { generationLimiter } = require('../middleware/security');
 const {
   completeSSE,
   errorSSE,
@@ -9,7 +10,7 @@ const {
 
 const router = express.Router();
 
-router.post('/', async (req, res) => {
+router.post('/', generationLimiter, async (req, res) => {
   try {
     const { message, actId } = req.body;
 

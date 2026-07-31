@@ -1,4 +1,5 @@
 const express = require("express");
+const { sendError } = require("../lib/httpResponse");
 const {
   getProblemRecommendations,
   getRecentRecommendations,
@@ -10,11 +11,7 @@ router.post("/problem", async (req, res) => {
   try {
     return res.json(await getProblemRecommendations(req.user.id, req.body));
   } catch (error) {
-    const status = error.status || 500;
-    if (status >= 500) {
-      console.error("Problem recommendation failed:", error);
-    }
-    return res.status(status).json({ error: error.message });
+    return sendError(res, error, "Problem recommendation failed");
   }
 });
 
@@ -27,10 +24,7 @@ router.get("/recent", async (req, res) => {
       ),
     });
   } catch (error) {
-    console.error("Recent recommendation lookup failed:", error);
-    return res.status(500).json({
-      error: "Unable to load recent recommendations.",
-    });
+    return sendError(res, error, "Recent recommendation lookup failed");
   }
 });
 

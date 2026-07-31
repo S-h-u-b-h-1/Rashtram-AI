@@ -1,4 +1,5 @@
 const express = require("express");
+const { generationLimiter } = require("../middleware/security");
 const DocumentChat = require("../models/DocumentChat");
 const {
   getDocumentContext,
@@ -7,6 +8,7 @@ const {
 } = require("./documentResearchService");
 const { generateResponse } = require("../lib/vectordb");
 const { sanitizeProviderError } = require("../lib/providerErrorSanitizer");
+const { sendError } = require("../lib/httpResponse");
 const {
   getRelationshipContext,
 } = require("../graph/knowledgeGraphService");
@@ -81,14 +83,6 @@ const identity = (req) => {
   };
 };
 
-const respondWithError = (res, error, context) => {
-  const status = error.status || 500;
-  if (status >= 500) {
-    console.error(`${context}:`, error);
-  }
-  return res.status(status).json({ error: error.message });
-};
-
 router.get("/document/:documentType/:documentId", async (req, res) => {
   try {
     const { documentType, documentId } = identity(req);
@@ -148,11 +142,11 @@ router.get("/document/:documentType/:documentId", async (req, res) => {
       backgroundPreparation,
     });
   } catch (error) {
-    return respondWithError(res, error, "Unified document context failed");
+    return sendError(res, error, "Unified document context failed");
   }
 });
 
-router.post("/process", async (req, res) => {
+router.post("/process", generationLimiter, async (req, res) => {
   const startedAt = Date.now();
   let documentId = null;
   try {
@@ -196,7 +190,7 @@ router.post("/process", async (req, res) => {
       documentType: req.body?.documentType,
       documentId: req.body?.documentId,
     });
-    return respondWithError(
+    return sendError(
       res,
       error,
       "Unified document processing failed",
@@ -219,7 +213,7 @@ router.post("/session", async (req, res) => {
     });
     return res.json({ success: true, chat, document });
   } catch (error) {
-    return respondWithError(res, error, "Unified chat session failed");
+    return sendError(res, error, "Unified chat session failed");
   }
 });
 
@@ -242,7 +236,7 @@ router.get("/history", async (req, res) => {
     );
     return res.json({ success: true, chat, notes });
   } catch (error) {
-    return respondWithError(res, error, "Unified chat history failed");
+    return sendError(res, error, "Unified chat history failed");
   }
 });
 
@@ -263,7 +257,7 @@ router.post("/message", async (req, res) => {
     if (!chat) return res.status(404).json({ error: "Chat not found." });
     return res.json({ success: true, chat });
   } catch (error) {
-    return respondWithError(res, error, "Unified chat message save failed");
+    return sendError(res, error, "Unified chat message save failed");
   }
 });
 
@@ -281,7 +275,7 @@ router.patch("/summary", async (req, res) => {
     );
     return res.json({ success: true, summary: chat?.summary || null });
   } catch (error) {
-    return respondWithError(res, error, "Unified chat summary update failed");
+    return sendError(res, error, "Unified chat summary update failed");
   }
 });
 
@@ -296,7 +290,7 @@ router.patch("/pin", async (req, res) => {
     );
     return res.json({ success: true, chat });
   } catch (error) {
-    return respondWithError(res, error, "Unified chat pin update failed");
+    return sendError(res, error, "Unified chat pin update failed");
   }
 });
 
@@ -310,7 +304,7 @@ router.delete("/history", async (req, res) => {
     );
     return res.json({ success: true, chat });
   } catch (error) {
-    return respondWithError(res, error, "Unified chat clear failed");
+    return sendError(res, error, "Unified chat clear failed");
   }
 });
 
@@ -327,7 +321,7 @@ router.post("/notes", async (req, res) => {
     );
     return res.status(201).json({ success: true, note });
   } catch (error) {
-    return respondWithError(res, error, "Unified research note save failed");
+    return sendError(res, error, "Unified research note save failed");
   }
 });
 
@@ -352,7 +346,7 @@ router.post("/feedback", async (req, res) => {
     );
     return res.json({ success: true, feedback });
   } catch (error) {
-    return respondWithError(res, error, "Unified chat feedback save failed");
+    return sendError(res, error, "Unified chat feedback save failed");
   }
 });
 
@@ -388,11 +382,11 @@ router.get("/export", async (req, res) => {
     );
     return res.send(markdown);
   } catch (error) {
-    return respondWithError(res, error, "Unified chat export failed");
+    return sendError(res, error, "Unified chat export failed");
   }
 });
 
-router.post("/", async (req, res) => {
+router.post("/", generationLimiter, async (req, res) => {
   try {
     const { documentType, documentId } = identity(req);
     const message = String(req.body.message || "").trim();

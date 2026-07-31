@@ -102,9 +102,12 @@ open document
        embed in bounded batches
        upsert typed vectors
        generate structured summary
-  -> retrieve six typed passages
+  -> retrieve candidates via vector search and PostgreSQL full-text search
+     in parallel, merge, and rerank (semantic + lexical + full-text +
+     legal-identifier signals) down to six typed passages
   -> label [Passage N]
-  -> stream OpenAI answer through Server-Sent Events
+  -> stream Gemini answer through Server-Sent Events (OpenAI-compatible
+     endpoint is an explicit configured alternative)
   -> persist answer and citations
 ```
 
@@ -114,7 +117,8 @@ Bulk PDF processing remains prohibited.
 
 Every on-demand PDF process detects language and script after native PDF text
 extraction. If a scanned PDF does not contain usable embedded text, the service
-uses OpenAI PDF OCR with an exact-transcription prompt. Devanagari text is
+uses Gemini PDF OCR with an exact-transcription prompt (OpenAI OCR remains an
+explicit configured alternative). Devanagari text is
 Unicode-normalized without translation and chunked using Hindi danda sentence
 boundaries.
 
