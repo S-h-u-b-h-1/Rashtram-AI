@@ -98,11 +98,11 @@ const checks = [
     ) AS passed`,
   },
   {
-    name: "latest migration is 022",
+    name: "latest migration is 024",
     sql: `SELECT (
       SELECT migration_name FROM schema_migrations
       ORDER BY applied_at DESC, migration_name DESC LIMIT 1
-    ) = '022_document_text_chunks_content_hash.js' AS passed`,
+    ) = '024_shared_artifact_object_keys.js' AS passed`,
   },
   {
     name: "migration 022 columns complete",
@@ -128,6 +128,23 @@ const checks = [
         AND indexname = 'document_text_chunks_content_hash_idx'
         AND indexdef ILIKE '%(document_id, content_hash)%'
         AND indexdef ILIKE '%WHERE (content_hash IS NOT NULL)%'
+    ) AS passed`,
+  },
+  {
+    name: "migration 023 object references complete",
+    sql: `SELECT
+      TO_REGCLASS('public.document_artifact_objects') IS NOT NULL
+      AND TO_REGCLASS('public.artifact_storage_migration_runs') IS NOT NULL
+      AND TO_REGCLASS('public.artifact_storage_migration_items') IS NOT NULL
+      AS passed`,
+  },
+  {
+    name: "migration 024 shared object-key index complete",
+    sql: `SELECT EXISTS (
+      SELECT 1 FROM pg_indexes
+      WHERE schemaname = 'public'
+        AND tablename = 'document_artifact_objects'
+        AND indexname = 'document_artifact_objects_object_key_idx'
     ) AS passed`,
   },
 ];

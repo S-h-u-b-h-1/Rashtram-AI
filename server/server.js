@@ -81,6 +81,12 @@ app.use(
 app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true }));
 
+app.get("/favicon.ico", (req, res) => {
+  res.status(200).type("image/svg+xml").send(
+    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><path fill="#8f1d2c" d="M32 3 55 11v18c0 15-9.7 26.3-23 32C18.7 55.3 9 44 9 29V11z"/><path fill="#fff" d="M20 18h24v6H20zm3 10h18v6H23zm4 10h10v10H27z"/></svg>',
+  );
+});
+
 app.use(generalLimiter);
 
 app.use("/api/auth", authLimiter, authRouter);

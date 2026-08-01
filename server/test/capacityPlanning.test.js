@@ -4,15 +4,22 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const {
   assertBulkProcessingSafe,
+  buildProjectionModels,
   buildProjections,
   evaluateStorageStatus,
 } = require("../lib/database/capacity");
 const {
   artifactKey,
   createObjectStorage,
+  objectStorageConfig,
+  runObjectStorageSmokeTest,
   sanitizedObjectStorageStatus,
   sha256,
 } = require("../lib/storage/objectStorage");
+const {
+  artifactKindForRow,
+  migrateArtifacts,
+} = require("../lib/storage/artifactMigration");
 const {
   postgresChunkMetadata,
 } = require("../document/documentResearchService");
@@ -65,6 +72,28 @@ test("storage guard fails closed when the provider limit is unavailable", async 
   );
 });
 
+test("storage status calculates a bounded safe batch from both headroom guards", () => {
+  const status = evaluateStorageStatus(
+    { databaseBytes: 600 * MiB, maxBytes: 1024 * MiB },
+    {
+      ...thresholds,
+      highGrowthBytesPerReadyDocument: 128 * 1024,
+    },
+  );
+  assert.equal(status.state, "Healthy");
+  assert.equal(status.safeBatchSize, 25);
+  const noByteHeadroom = evaluateStorageStatus(
+    { databaseBytes: 965 * MiB, maxBytes: 1024 * MiB },
+    {
+      ...thresholds,
+      pausePercent: 99,
+      highGrowthBytesPerReadyDocument: 128 * 1024,
+    },
+  );
+  assert.equal(noByteHeadroom.safeBatchSize, 0);
+  assert.equal(noByteHeadroom.bulkProcessingAllowed, false);
+});
+
 test("capacity projections scale measured ready-document categories", () => {
   const projections = buildProjections({
     databaseBytes: 1_000,
@@ -84,10 +113,30 @@ test("capacity projections scale measured ready-document categories", () => {
     },
     targets: [20],
   });
-  assert.equal(projections[0].breakdown.chunks, 400);
-  assert.equal(projections[0].breakdown.summaries, 200);
-  assert.equal(projections[0].breakdown.documents, 100);
-  assert.equal(projections[0].projectedBytes, 1_050);
+  assert.equal(projections[0].expected, 1_350);
+  assert.equal(projections[0].incrementalDocuments, 10);
+});
+
+test("existing architecture projections never fall below current allocation", () => {
+  const report = buildProjectionModels({
+    databaseBytes: 1_000,
+    researchReadyDocuments: 12,
+    artifactDocuments: 12,
+    chunkDocuments: 12,
+    categories: {
+      chunks: { bytes: 240 },
+      summaries: { bytes: 120 },
+      graphRelationships: { bytes: 120 },
+      legacyMirror: { bytes: 100 },
+    },
+    targets: [10, 20],
+  });
+  assert.deepEqual(
+    report.models[0].projections.map((projection) => projection.expected),
+    [1_000, 1_320],
+  );
+  assert.ok(report.models[2].projections[0].expected < 1_000);
+  assert.equal(report.models[2].completedMigrationAssumed, true);
 });
 
 test("manual and batch processing invoke the database storage guard", () => {
@@ -131,6 +180,7 @@ test("object-storage adapter verifies writes without exposing credentials", asyn
     },
   };
   const env = {
+    OBJECT_STORAGE_PROVIDER: "r2",
     OBJECT_STORAGE_ENDPOINT: "https://example.r2.cloudflarestorage.com",
     OBJECT_STORAGE_BUCKET: "rashtram-artifacts",
     OBJECT_STORAGE_ACCESS_KEY_ID: "private-access-key",
@@ -148,7 +198,132 @@ test("object-storage adapter verifies writes without exposing credentials", asyn
   assert.equal(commands[0].input.Metadata.sha256, result.hash);
   const status = JSON.stringify(sanitizedObjectStorageStatus(env));
   assert.doesNotMatch(status, /private-access-key|private-secret/);
-  assert.match(status, /example\.r2\.cloudflarestorage\.com/);
+  assert.deepEqual(Object.keys(JSON.parse(status)).sort(), [
+    "configured",
+    "providerName",
+    "reachable",
+    "readAvailable",
+    "writeAvailable",
+  ]);
+  assert.equal(JSON.parse(status).providerName, "r2");
+});
+
+test("object storage is explicitly disabled for absent or partial configuration", () => {
+  assert.equal(objectStorageConfig({}).configured, false);
+  assert.equal(objectStorageConfig({ OBJECT_STORAGE_PROVIDER: "disabled" }).configured, false);
+  assert.equal(objectStorageConfig({
+    OBJECT_STORAGE_PROVIDER: "s3",
+    OBJECT_STORAGE_ENDPOINT: "https://s3.example.test",
+  }).configured, false);
+});
+
+test("object-storage smoke test uploads, verifies bytes, deletes, and confirms absence", async () => {
+  let stored = null;
+  const client = {
+    send: async (command) => {
+      const name = command.constructor.name;
+      if (name === "PutObjectCommand") {
+        stored = Buffer.from(command.input.Body);
+        return {};
+      }
+      if (name === "GetObjectCommand") {
+        return {
+          Body: { transformToByteArray: async () => stored },
+          Metadata: { sha256: sha256(stored) },
+          ContentType: "text/plain",
+        };
+      }
+      if (name === "DeleteObjectCommand") {
+        stored = null;
+        return {};
+      }
+      if (name === "HeadObjectCommand") {
+        if (!stored) {
+          const error = new Error("missing");
+          error.name = "NotFound";
+          throw error;
+        }
+        return {
+          ContentLength: stored.length,
+          Metadata: { sha256: sha256(stored) },
+        };
+      }
+      throw new Error(`Unexpected command ${name}`);
+    },
+  };
+  const smoke = await runObjectStorageSmokeTest({
+    env: { OBJECT_STORAGE_BUCKET: "test" },
+    client,
+  });
+  assert.equal(smoke.checksumVerified, true);
+  assert.equal(smoke.byteEqualityVerified, true);
+  assert.equal(smoke.leftoverObject, false);
+  assert.equal(stored, null);
+});
+
+test("artifact migration records a reference only after object verification", async () => {
+  const events = [];
+  const pool = {
+    query: async (sql) => {
+      if (sql.includes("FROM document_text_artifacts artifact")) {
+        return { rows: [{
+          document_id: "7",
+          original_text: "citation-safe source text",
+          extraction_method: "pdf_text",
+          ocr_used: false,
+          metadata_json: { pipelineVersion: "v2" },
+          updated_at: new Date(),
+          resource_id: "9",
+        }] };
+      }
+      if (sql.includes("INSERT INTO artifact_storage_migration_runs")) {
+        return { rows: [{ id: "3" }] };
+      }
+      events.push("pool-query");
+      return { rows: [], rowCount: 1 };
+    },
+    connect: async () => ({
+      query: async (sql) => {
+        if (sql.includes("INSERT INTO document_artifact_objects")) {
+          events.push("database-reference");
+          assert.match(sql, /original_retained/);
+        }
+        return { rows: [], rowCount: 1 };
+      },
+      release: () => undefined,
+    }),
+  };
+  const body = Buffer.from("citation-safe source text");
+  const storage = {
+    putArtifact: async () => {
+      events.push("upload");
+      return { key: "key", hash: sha256(body), bytes: body.length };
+    },
+    headArtifact: async () => {
+      events.push("head-verify");
+      return { key: "key", hash: sha256(body), bytes: body.length };
+    },
+    getArtifact: async () => {
+      events.push("read-verify");
+      return { key: "key", hash: sha256(body), body };
+    },
+  };
+  const result = await migrateArtifacts(pool, { limit: 1, storage });
+  assert.equal(result.verified, 1);
+  assert.ok(events.indexOf("database-reference") > events.indexOf("read-verify"));
+  assert.equal(artifactKindForRow({ extraction_method: "source_html" }), "source-html");
+  assert.equal(artifactKindForRow({ extraction_method: "gemini_ocr" }), "ocr-text");
+});
+
+test("backend and Next metadata provide favicon endpoints", () => {
+  const serverSource = fs.readFileSync(path.resolve(__dirname, "../server.js"), "utf8");
+  const layoutSource = fs.readFileSync(
+    path.resolve(__dirname, "../../client/src/app/layout.js"),
+    "utf8",
+  );
+  assert.match(serverSource, /app\.get\("\/favicon\.ico"/);
+  assert.match(layoutSource, /url: "\/favicon\.ico"/);
+  assert.equal(fs.existsSync(path.resolve(__dirname, "../../client/src/app/favicon.ico")), true);
 });
 
 test("PostgreSQL chunk metadata omits duplicated payloads but preserves citations", () => {

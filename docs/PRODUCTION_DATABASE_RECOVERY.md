@@ -97,62 +97,241 @@ Avoid `VACUUM FULL`, `CLUSTER`, and non-concurrent index rebuilds during product
 ## Remaining capacity risk
 
 The outage is recovered, but 90.01% use is only about 51 MiB of headroom. Treat 85% as a warning and 90% as an incident threshold. Move to a Neon plan with at least 1 GiB logical storage before the next bulk ingestion or derived-data rebuild; target at least 25% steady-state free space. Retention protects operational growth but cannot offset growth in essential documents, resources, provenance, and research artifacts.
+## Storage projection validation — 2026-08-01
 
-## Capacity planning baseline — 2026-08-01
+The post-migration-023 production baseline is **483,434,496 bytes
+(461.04 MiB) of 536,870,912 bytes (512 MiB)**. Free space is 53,436,416
+bytes (50.96 MiB), usage is 90.05%, and the storage state is
+`Processing Paused`. The safe processing limit is **zero documents** because
+usage is above the 82% pause threshold and free space is below the 64 MiB
+floor. The guard was not bypassed.
 
-`npm run db:capacity-report --prefix server` is the canonical read-only capacity report. It verifies migration 022, measures chunk and artifact payloads, inventories the legacy table dependencies, and projects storage from exact production relation sizes. It does not enqueue work or modify records.
+The catalogue contains 19,618 documents, 3,107 marked research-ready, and
+3,113 with chunks/artifacts. The projection denominator is therefore 3,113
+prepared documents, not an approximate 1,000.
 
-The post-sprint production baseline is 483,262,464 bytes used of 536,870,912 bytes, leaving 53,608,448 bytes (51.13 MiB) and reporting 90.01% usage. There are 19,618 catalogue documents, 3,107 research-ready documents, and 3,113 documents with artifacts and chunks.
+### Corrected formula and measured ranges
 
-Measured storage categories:
+Current physical allocation separates into:
 
-| Category | Current bytes | Current MiB | Projection driver |
+| Component | Bytes | MiB | Projection treatment |
 | --- | ---: | ---: | --- |
-| Documents, metadata, legacy mirror | 139,886,592 | 133.41 | Catalogue documents |
-| Sources and resources | 92,676,096 | 88.38 | Catalogue documents |
-| Citation-ready chunks | 117,063,680 | 111.64 | Research-ready documents |
-| Full-text artifacts and summaries | 52,633,600 | 50.20 | Artifact-bearing documents |
-| Processing state/jobs/attempts | 30,449,664 | 29.04 | Existing catalogue; jobs are retention bounded |
-| Graph relationships | 30,384,128 | 28.98 | Measured relationships per prepared document |
-| User data | 3,874,816 | 3.70 | Traffic, held constant in processing projections |
-| Operational logs | 4,530,176 | 4.32 | Traffic and retention, held constant |
-| Database/catalog allocation overhead | 11,763,712 | 11.22 | Held constant |
+| Fixed baseline | 283,353,088 | 270.23 | Held fixed while the existing catalogue is prepared |
+| Existing prepared-variable storage | 200,081,408 | 190.81 | Chunks, artifacts, and graph at 3,113 prepared documents |
+| Legacy mirror within fixed baseline | 53,100,544 | 50.64 | Removed only in the completed target-architecture model |
+| Total | 483,434,496 | 461.04 | Exact `pg_database_size` after migration 023 |
 
-### Storage growth model
+The measured prepared-variable categories are 117,063,680 bytes of chunks,
+52,633,600 bytes of text artifacts/summaries, and 30,384,128 bytes of graph
+storage. Documents, sources/resources, processing state, user data,
+operational logs, and database overhead remain in the fixed baseline because
+the 19,618-row catalogue already exists.
 
-The model keeps the existing 19,618-document catalogue and its source/resource rows in place while more of that corpus becomes research-ready. Catalogue-sized categories scale only when the target exceeds 19,618 documents. Chunks, artifacts, and graph rows scale from their measured bytes per currently prepared document. User and retention-bounded operational data remain at current size because they are traffic-driven. PostgreSQL relation allocation is page-granular, and a future corpus can have a different document-length mix, so these are measured planning estimates rather than quotas.
+For each category, expected growth is current physical relation bytes divided
+by its actual prepared-document count. Low and high use the observed P25 and
+P90 per-document logical row-size ratios from the production corpus. The
+resulting combined bytes per additional prepared document are:
 
-| Research-ready target | Projected bytes | Projected MiB | Position against current 512 MiB tier |
-| ---: | ---: | ---: | --- |
-| 2,500 | 443,863,202 | 423.30 | Historical/theoretical point; already exceeded in ready count |
-| 5,000 | 604,545,347 | 576.54 | Does not fit |
-| 10,000 | 925,909,640 | 883.02 | Does not fit; below 25% free on 1 GiB |
-| 20,000 | 1,573,759,577 | 1,500.85 | Requires at least a 2 GiB working tier for 25% free |
+| Architecture | Low (P25-scaled) | Expected | High (P90-scaled) |
+| --- | ---: | ---: | ---: |
+| Current, no optimization | 13,570 | 64,292 | 130,931 |
+| New chunk writes omit duplicated summary/content metadata | 13,570 | 59,705 | 130,931 |
+| Object-storage + legacy-deprecation target | 7,803 | 47,184 | 128,634 |
 
-At the current mix, one prepared document consumes approximately 64,273 bytes across chunks, artifacts, and measured graph storage. The current safe processing limit is therefore **zero**: the hard guard blocks automatic, manual, resumed, and batch processing until usage is below 82% and at least 64 MiB is free. Research on documents that are already prepared remains available. After upgrading, restart with a 1–5 document smoke and then a maximum 25-document batch; re-run the capacity report between batches.
+The new-write optimization saves an expected 4,587 physical bytes per new
+prepared document. P25 and P90 duplicate-metadata payloads were zero, so the
+low and high bounds are intentionally unchanged rather than invented. The
+object-storage target retains summaries and citation-ready chunks in
+PostgreSQL and removes only the measured physical share attributable to full
+`original_text` after a verified migration and rollback window.
 
-## Migration 022 verification
+Exact formulas:
 
-The normal migration command completed with no pending migration. Production records `022_document_text_chunks_content_hash.js` at `2026-08-01T04:30:14.553Z`, and it is the latest migration.
+- Existing architectures:
+  `current_database_bytes + max(0, target - 3,113) × measured_incremental_bytes_per_document + max(0, target - 19,618) × 10,702 measured catalogue bytes/document`.
+- Completed target architecture:
+  `(fixed_baseline_bytes - legacy_mirror_bytes) + target ×
+  (optimized_chunks + retained_artifacts + graph)_bytes_per_document + max(0,
+  target - 19,618) × 10,702 measured catalogue bytes/document`.
+- The current and new-write models floor targets below 3,113 at current
+  allocation. Only the target model may be lower than current usage, and it
+  explicitly assumes completed object offload, physical table compaction, and
+  approved legacy deprecation.
 
-Verified schema state:
+### Low / expected / high projections
+
+All values are MiB. These are capacity ranges, not quotas; PostgreSQL relation
+allocation is page-granular and future document length/type mix can differ.
+
+| Ready target | Current architecture | Optimized new writes | Completed offload/deprecation target |
+| ---: | ---: | ---: | ---: |
+| 2,500 | 461.04 / 461.04 / 461.04 | 461.04 / 461.04 / 461.04 | 238.19 / 332.08 / 526.27 |
+| 5,000 | 485.46 / 576.74 / 696.66 | 485.46 / 568.48 / 696.66 | 256.79 / 444.58 / 832.96 |
+| 10,000 | 550.17 / 883.30 / 1,320.99 | 550.17 / 853.18 / 1,320.99 | 294.00 / 669.57 / 1,446.33 |
+| 20,000 | 683.48 / 1,500.34 / 2,573.55 | 683.48 / 1,426.46 / 2,573.55 | 372.31 / 1,123.46 / 2,676.98 |
+
+The target model applies corpus-size variability to every row in a rebuilt
+target corpus; its high bound can therefore exceed the current model, whose
+already-written 3,113 documents remain at their known physical size. Plan
+tiers against the high bound plus operational margin, not expected alone.
+
+## Migration status
+
+The normal migration runner applied `023_artifact_object_storage.js` and
+`024_shared_artifact_object_keys.js` after confirming migrations 001–022.
+They created only empty reference/checkpoint tables and a lookup index. No
+artifact payload was moved, rewritten, or deleted.
+
+Migration 022 remains verified:
 
 - `document_text_chunks.content_hash` exists.
 - `document_text_chunks.embedding_namespace` exists.
-- Partial index `document_text_chunks_content_hash_idx (document_id, content_hash) WHERE content_hash IS NOT NULL` exists.
-- The migration runner reports no pending or partial migration.
-- Both new fields currently have zero populated rows. This is expected because migration 022 is additive and deliberately does not rewrite the 23,234-row chunk table.
-- New/reprocessed chunks calculate and use both values. Automated retrieval tests verify that unchanged hashes in the same namespace avoid embedding writes and changed chunks remain citation-safe.
+- Partial index
+  `document_text_chunks_content_hash_idx (document_id, content_hash) WHERE
+  content_hash IS NOT NULL` exists.
+- Migration 022 remains recorded at 2026-08-01T04:30:14.553Z.
+- Historical chunks remain intentionally unbackfilled at current capacity.
+- New/reprocessed chunks calculate the fields, and retrieval regression tests
+  cover unchanged-hash reuse and changed-content citation safety.
 
-Do not backfill the two fields on the current tier. A full update would grow the heap/TOAST/index and generate WAL while production is at 90.01%. Backfill only after a tier upgrade, in bounded batches guarded by the storage check.
+Migration 023 adds:
 
-## `legislative_documents` compatibility audit
+- `document_artifact_objects`: document/resource reference, artifact kind,
+  object key, SHA-256, MIME type, byte size, processing version, verification
+  timestamp, status, and whether the PostgreSQL original remains.
+- `artifact_storage_migration_runs`: bounded-run checkpoint and counters.
+- `artifact_storage_migration_items`: per-object success/failure record.
 
-`legislative_documents` occupies 41,803,776 bytes: 20,389,888 heap, 13,819,904 indexes, and 7,593,984 TOAST across 19,618 rows. The corresponding legacy resource mirror adds 11,296,768 bytes. It is not removable in this sprint.
+Migration 024 permits multiple document references to the same
+content-addressed object key while preserving document identity in separate
+rows. It replaces object-key uniqueness with a non-unique lookup index; it
+does not merge documents based on text.
 
-Runtime and operational reads remain in catalogue/policy/egazette services, dashboard and profile intelligence, recommendation and graph services, activity, document repository/readiness/processing code, recovery/evaluation CLIs, and both ingestion repositories. Direct writes remain in the ingestion repositories, `DocumentRepository`, readiness status compatibility updates, and the Policy Edge importer. An `AFTER INSERT OR UPDATE` trigger still synchronizes legacy rows into schema v2.
+## Object-storage configuration and verification
 
-Eleven foreign-key columns still target the legacy table:
+The adapter is provider-neutral S3-compatible and uses only server-side
+environment variables:
+
+`OBJECT_STORAGE_PROVIDER`, `OBJECT_STORAGE_ENDPOINT`,
+`OBJECT_STORAGE_BUCKET`, `OBJECT_STORAGE_ACCESS_KEY_ID`,
+`OBJECT_STORAGE_SECRET_ACCESS_KEY`, `OBJECT_STORAGE_REGION`, and
+`OBJECT_STORAGE_PUBLIC_BASE_URL`. Optional
+`OBJECT_STORAGE_FORCE_PATH_STYLE` supports compatible local/providers.
+Credentials are never logged or returned. Missing/partial configuration is an
+explicit disabled state.
+
+The protected admin health response exposes only `configured`, `reachable`,
+`readAvailable`, `writeAvailable`, and `providerName`. A configured health
+probe uses disposable content and cleans it up.
+
+Current production/local configuration result:
+
+- configured: false
+- reachable/read/write: false
+- provider: disabled
+- smoke test: **not run against a provider**, because no object-storage
+  credentials/bucket are configured
+- production objects moved: zero
+- object references: zero
+- migration failures: zero
+
+`storage:audit` found 3,113 eligible full-text artifacts totaling 89,242,062
+logical bytes: 1,004 source-HTML extractions, 37 OCR outputs, and 2,072 PDF-text
+extractions. `storage:migrate --dry-run --limit=10` selected ten records and
+1,290,000 bytes without writing. `storage:verify` correctly reported the
+disabled state and checked zero references.
+
+A configured smoke performs upload, object metadata SHA verification, read,
+byte equality, delete, and a post-delete head check. Automated tests exercise
+the full lifecycle with a disposable fake provider; that is not represented
+as a production-provider success.
+
+Neon’s native branch-aware S3-compatible storage is currently beta and limited
+to eligible `us-east-2` projects, so it must not be assumed available for this
+existing project without console/API confirmation. R2 or standard S3 remain
+valid through the same adapter. See [Neon’s current storage beta
+notice](https://neon.com/blog/neon-backend-is-beta).
+
+## Canonical artifact placement policy
+
+| Category | Placement | Reason |
+| --- | --- | --- |
+| Canonical document metadata and source/resource provenance | PostgreSQL | Transactional identity and joins |
+| Citation-ready chunks, page/section coordinates, FTS index | PostgreSQL | Local retrieval and citation accuracy |
+| Active/frequently read summaries | PostgreSQL | Low-latency product reads |
+| Processing state, graph relationships, user data | PostgreSQL | Transactional application state |
+| Object key/hash/size/type/version/reference | PostgreSQL | Integrity and lifecycle authority |
+| Original PDFs and source HTML | Private object storage | Large immutable source artifacts |
+| Complete extracted text and OCR output | Private object storage | Large payload; PostgreSQL retains citation chunks |
+| Archived snapshots, old processing artifacts, quarantine exports | Versioned object storage/archive tier | Infrequent access and lifecycle controls |
+| Embeddings and regenerable derived projections | Regenerable | Rebuild only from checksummed authoritative input |
+
+Every stored object must have document ID, optional resource ID, object key,
+SHA-256, MIME type, byte size, processing version, and creation/verification
+timestamp in PostgreSQL.
+
+## Resumable production migration and rollback
+
+Commands:
+
+- `npm run storage:audit --prefix server` — read-only eligibility and reference
+  inventory.
+- `npm run storage:migrate --prefix server -- --dry-run --limit=10` — bounded,
+  no-write candidate manifest.
+- `npm run storage:migrate --prefix server -- --limit=10` — real migration;
+  unavailable while object storage is disabled.
+- `npm run storage:verify --prefix server -- --limit=25` — disposable provider
+  smoke plus checksum readback of bounded references.
+- `npm run storage:migrate --prefix server -- --rollback-run=<id>` — marks
+  references from one run rolled back; PostgreSQL originals remain authoritative.
+
+Apply behavior is idempotent by document/kind/SHA and content-addressed object
+key. Each object is uploaded, headed, read, hashed, and byte-compared before a
+database reference is committed. A run checkpoints after each document,
+records per-object failure codes, never clears `original_text`, and caps one
+invocation at 25. Rollback changes reference state only; it does not delete a
+possibly shared content-addressed object. Raw PostgreSQL values can be removed
+only in a separately approved phase after shadow reads, a full rollback
+window, a backup, and storage reclamation planning.
+
+## Legacy dependency inventory
+
+The physical mirror is still essential today. It consumes 53,100,544 bytes:
+41,803,776 for `legislative_documents` and 11,296,768 for
+`legislative_document_resources`.
+
+Active runtime reads exist in:
+
+- `activity/activityService.js`
+- `dashboard/intelligenceService.js`
+- `document/DocumentRepository.js`, `catalogueAuditService.js`,
+  `documentResearchService.js`, `processingWorkerService.js`,
+  `readinessService.js`, and `recommendationService.js`
+- `egazette/egazetteService.js`
+- `graph/knowledgeGraphService.js` and `relationshipEngine.js`
+- `policy/policyService.js`
+- `profile/profileService.js`
+- `lib/catalogRepository.js` and
+  `lib/ingestion/core/catalogRepository.js`
+
+Active writes remain in both catalogue repositories,
+`DocumentRepository.js`, `documentResearchService.js`,
+`readinessService.js`, and `cli/ingestPolicyEdge.js`. Operational
+compatibility/fallback reads remain in `cli/dbVerify.js`,
+`documentReadiness.js`, `documentsInspect.js`, `downloadAlternatives.js`,
+`downloadFailures.js`, `processBacklog.js`, `processFailures.js`,
+`processPolicyBatch.js`, `processRetryable.js`, `recoverEmbeddings.js`,
+`researchEval.js`, `researchReadyAudit.js`, and
+`runDownloadRecoveryBatch.js`. Migration-only references exist in migrations
+001, 002, 005, and 006 and the legacy bootstrap in `db.js`.
+`test/databaseMaintenance.test.js` is test-only. No reference was classified
+obsolete without runtime evidence.
+
+There are two synchronization triggers (four trigger events): document and
+resource mirrors both synchronize on INSERT and UPDATE. There are no
+compatibility views today.
+
+Eleven foreign-key columns still target `legislative_documents`:
 
 - `catalog_match_reviews.candidate_document_id`
 - `document_relationships.from_document_id` and `to_document_id`
@@ -164,112 +343,81 @@ Eleven foreign-key columns still target the legacy table:
 - `user_activity_events.document_id`
 - `user_document_interactions.document_id`
 
-Rollback value is currently high: the legacy table is still an ingestion/write authority and provides compatibility for old routes and recovery tooling. Removal complexity is high because reads, writes, triggers, foreign keys, and rollback procedures must all move together.
+Rollback value and removal complexity are both high. Staged deprecation:
 
-Staged deprecation plan:
+1. Instrument every remaining legacy read/write and reject new legacy FKs.
+2. Move runtime reads to Schema V2 with API/row parity assertions.
+3. Repoint FKs to `documents(id)` using additive not-valid/validate/swap
+   migrations where applicable.
+4. Make Schema V2 authoritative and stop dual writes only after one complete
+   ingestion/retention cycle passes parity checks.
+5. Replace physical legacy reads with a read-only compatibility view.
+6. Export/checksum the mirror and remove physical tables only with explicit
+   approval and a tested rollback.
 
-1. Prohibit new legacy foreign keys and inventory every legacy SQL reference in CI.
-2. Move product reads to `documents`, `document_sources`, `document_resources`, and processing state; retain parity assertions.
-3. Make schema v2 the only write authority and replace the legacy table with a compatibility view or reverse projection.
-4. Repoint foreign keys to `documents(id)` using validated, low-lock migrations.
-5. Run row, checksum, source, and API parity checks for at least one full ingestion/retention cycle.
-6. Snapshot and export the mirror, disable the trigger, observe rollback telemetry, then archive/drop only in a separately approved sprint.
+No legacy row/table was deleted, truncated, or made read-only in this sprint.
 
-## Chunk-storage audit
+## Storage guardrails and controlled processing
 
-`document_text_chunks` contains 23,234 chunks across 3,113 documents, averaging 7.46 chunks per document, 4,260.98 original-text bytes, 985.76 tokens, and 875.22 metadata bytes per chunk. No row currently stores translated text, so `translated_text` consumes no material payload and must not be populated with English duplicates.
+Defaults:
 
-The table uses 59,473,920 bytes of TOAST. Its 33,538,048-byte full-text GIN index is the largest index and remains required by the local lexical/hybrid retrieval plan even though the cumulative scan counter was reset or reports zero. The document/chunk indexes have 29,367 and 26,694 observed scans.
+- warning at 70%
+- processing pause at 82%
+- critical alert at 90%
+- minimum free space 67,108,864 bytes
+- conservative high-growth planning unit 131,072 bytes/document, rounded up
+  from the measured 130,931-byte P90
+- maximum calculated initial batch 25
 
-There are 402 repeated payload rows in 371 text-hash groups (1.73% of chunks). These cannot be deleted or merged solely by text because separate document versions and chunk coordinates require independent citation identity. Migration 022's per-document content hash enables safe reuse during reprocessing without cross-document merging.
+The admin status contains current bytes, limit, free bytes, percentage,
+state/severity, safe batch size, and pause reason, without URLs or credentials.
+Processing is allowed only when both percentage and byte-headroom checks pass.
+Unknown provider capacity fails closed.
 
-Chunk metadata is citation-bearing: chunk index, language, page estimates, structural type, section/clause identifiers, source URL, and embedding provider/model/dimension are read by retrieval, citation rendering, and embedding recovery. The audit also found 7,720,115 bytes of repeated `summary` values and 1,074,054 bytes of repeated `content` values inside chunk metadata. These payloads already live in `document_text_artifacts` and `document_text_chunks.original_text`; new/naturally reprocessed PostgreSQL chunks now omit those two metadata keys while Pinecone retains the metadata its legacy routes require. Existing rows are not rewritten under current headroom. Repeated PDF/source URLs remain because local citations currently read them without an additional join.
+At 90.05%, the current safe limit is zero. Do not run the five-type validation
+or Batch B. After a confirmed capacity upgrade:
 
-Recommended optimization order after capacity upgrade:
+1. Re-run migration, capacity, database, and release verification.
+2. Confirm usage below 82% and at least 64 MiB free.
+3. Use the reported safe batch, capped at five for Batch A: one Parliament
+   Bill, State Bill, Act, Policy, and Gazette.
+4. Measure database before/after, chunks, artifacts, vector writes, processing
+   duration, retrieval, and failures.
+5. Stop if failures exceed 10%, observed growth materially exceeds the
+   130,931-byte P90, provider health degrades, vector writes fail, or the guard
+   approaches either threshold.
+6. Only then run Batch B, capped at 25 and the calculated safe batch. Never
+   continue automatically.
 
-1. Populate content hash and embedding namespace only as chunks are naturally reprocessed.
-2. Keep citation-ready normalized/original chunks and the full-text index in PostgreSQL.
-3. Do not store translated text when it is identical or unused.
-4. Move full raw extracted/OCR text out of `document_text_artifacts`, after checksum-verified object writes and retrieval fallback are deployed.
-5. Evaluate metadata normalization with an observed-key report before changing citation fields.
-6. Never deduplicate different document IDs or versions based only on chunk text.
+## Favicon verification
 
-## Artifact and summary retention audit
+The Next.js application has `client/src/app/favicon.ico`, and metadata
+references `/favicon.ico`, 16×16/32×32 PNGs, and the Apple icon. The frontend
+production endpoint returned HTTP 200 with `image/x-icon` during this sprint.
+The API host was the remaining 404 source; it now has a branded, no-database
+`/favicon.ico` response. Production API HTTP 200 must be confirmed after the
+new commit is deployed.
 
-`document_text_artifacts` contains exactly one row per document because `document_id` is the primary key. It has 3,113 rows, no empty original text, 1,339 rows without an English summary, and no content-fingerprint mismatch where both hashes are present. All artifact timestamps precede their associated `documents.updated_at`, but this is caused by later catalogue/quality timestamp updates; the matching content fingerprints do not indicate stale text.
+## Exact next operational action
 
-Twenty duplicate original-text groups contain 21 additional rows. These are cross-document matches and may be legitimate versions or duplicate official publications. They are not confirmed deletion candidates. Multiple model-version rows cannot accumulate in this schema, because every save upserts the single document row. Consequently the safe deletion count is zero, and no artifact was removed or rewritten in this sprint.
+**Increase the PostgreSQL storage limit before processing anything.** Use a
+tier sized against the high projection and at least 25% steady-state
+headroom—not merely the expected curve. After the upgrade, re-run
+`db:capacity-report`; the guard will calculate the safe initial batch. In
+parallel, provision a private S3-compatible bucket with least-privilege
+credentials, versioning/lifecycle policy, and no public write access, then run
+`storage:verify`. Do not run `storage:migrate --limit=10` until that
+synthetic smoke passes.
 
-Before any future artifact cleanup: produce a dry-run list containing document IDs, canonical IDs, source URLs, content fingerprints, and byte totals; export the selected rows to checksummed object storage; verify citations and rollback restoration; then delete only content-identical obsolete versions whose canonical/version identity has been independently resolved.
+Current operational risks:
 
-## Artifact placement strategy
-
-| Data | Class | Target placement |
-| --- | --- | --- |
-| Canonical document metadata, provenance pointers, user data | A — must remain in PostgreSQL | PostgreSQL |
-| Citation chunks, page/section coordinates, active summaries | B — fast retrieval | PostgreSQL |
-| Raw PDFs, source HTML, complete extracted text, OCR text | C — object storage | R2/S3-compatible bucket; PostgreSQL keeps hash, key, MIME type and provenance |
-| Embeddings, derived summaries, processing-state projections | D — regenerable | Keep active state; rebuild from checksummed source/artifact |
-| Old source snapshots, expired processing diagnostics, quarantine exports | E — archive | Versioned object storage with lifecycle policy and manifest |
-
-The server now has an S3-compatible adapter supporting Cloudflare R2 or AWS S3. Objects use content-addressed keys such as `rashtram/pdf/<hash-prefix>/<sha256>.pdf`, send a SHA-256 checksum, store checksum metadata, and verify bytes again on read. Configuration is fail-closed and its health representation never returns access keys or secrets. Production credentials and buckets are not configured, and no production object was moved in this sprint.
-
-Cloudflare R2 Standard is the preferred first artifact tier because its S3 API works with the adapter, the first 10 GB-month is included, standard storage is $0.015/GB-month, and direct egress is free. Pricing source: [Cloudflare R2 pricing](https://developers.cloudflare.com/r2/pricing/).
-
-Migration sequence for artifacts:
-
-1. Create a private bucket, least-privilege writer/reader credentials, versioning, retention, and lifecycle rules.
-2. Upload without deleting PostgreSQL data; record object key, SHA-256, size, type, and source provenance.
-3. Read back and hash every object; sample-render PDFs and compare extracted-text hashes.
-4. Shadow-read through the abstraction while PostgreSQL remains authoritative.
-5. Switch raw-artifact reads to object storage with PostgreSQL fallback.
-6. After a full rollback window, remove only the duplicated raw payload column—not citation chunks or provenance—in bounded batches.
-
-## Capacity options
-
-### 1. Upgrade Neon — recommended now
-
-- Native compatibility: no connection, extension, pool, or operational migration.
-- Downtime: none expected for a billing-tier change.
-- Rollback: retain the current branch, snapshot, and restore window.
-- Cost: Launch is usage-based, currently shown as approximately $15/month for an intermittent 1 GB workload, with compute at $0.106/CU-hour and storage at $0.35/GB-month. History storage is separately metered. Source: [Neon pricing](https://neon.com/pricing).
-- Fit: best immediate path. Use at least 1 GiB before any next batch; plan for at least 2 GiB if 20,000 ready documents remains the target.
-
-### 2. Migrate to another managed PostgreSQL provider
-
-- Compatibility: high with standard PostgreSQL, but validate extensions, TLS/pooling, generated columns, triggers, and connection limits.
-- Downtime/effort: low-to-moderate with `pg_dump`/`pg_restore`; lower downtime is possible with logical replication and a short write freeze/cutover.
-- Rollback: keep Neon read-only and reverse the application connection string until post-cutover writes begin; after that, a reverse-replication plan is required.
-- Expected cost examples: Supabase Pro starts at $25/month, includes an 8 GB database disk and 100 GB object storage, with database disk overage at $0.125/GB-month. Sources: [Supabase pricing](https://supabase.com/pricing), [disk pricing](https://supabase.com/docs/guides/platform/manage-your-usage/disk-size). DigitalOcean managed PostgreSQL starts at $15/month for a single 1 GiB node; production HA starts with larger matching primary/standby nodes, and added storage is $0.21/GiB-month. Source: [DigitalOcean PostgreSQL pricing](https://docs.digitalocean.com/products/databases/postgresql/details/pricing/).
-- Fit: reasonable if the team wants bundled object storage/auth or fixed managed operations, but it offers no compelling short-term advantage over a Neon upgrade for this 0.5–2 GiB dataset.
-
-### 3. Self-host PostgreSQL
-
-- Compatibility/control: highest PostgreSQL control, but every patch, backup, restore, replication, monitoring, TLS, failover, and capacity incident becomes Rashtram AI's responsibility.
-- Downtime/effort: moderate-to-high. Use a separate `pg_dump` file for this dataset or logical replication for low downtime; validate restore before cutover.
-- Rollback: preserve Neon, stop writes, restore connection configuration; reconcile writes made after cutover.
-- Expected infrastructure cost: DigitalOcean Basic VMs currently start at $6/month for 1 GiB RAM/25 GiB SSD or $12/month for 2 GiB RAM/50 GiB SSD; backups and engineering/on-call time are additional. Source: [DigitalOcean Droplet pricing](https://www.digitalocean.com/pricing/droplets).
-- Fit: not recommended at current scale. The apparent VM saving is smaller than the reliability and operational burden.
-
-Rashtram AI should remain on PostgreSQL. No CockroachDB migration is recommended: the current system relies on PostgreSQL-specific full-text search, JSONB, generated columns, partial indexes, triggers, advisory/migration behavior, `SKIP LOCKED`, and PostgreSQL catalog functions, and no compatibility test has established drop-in equivalence.
-
-## Storage safety controls
-
-Document processing now evaluates live `pg_database_size` against Neon's reported limit before automatic/manual enqueueing, batch enqueueing, or resuming work. Defaults are configurable without code changes:
-
-- `DATABASE_STORAGE_WARNING_PERCENT=70`
-- `DATABASE_STORAGE_PAUSE_PERCENT=82`
-- `DATABASE_STORAGE_CRITICAL_PERCENT=90`
-- `DATABASE_STORAGE_MIN_HEADROOM_BYTES=67108864`
-- `DATABASE_STORAGE_MAX_BYTES` is a fail-safe fallback when the provider limit setting is unavailable.
-
-The guard fails closed if no trustworthy limit is available. At 70%, 80%, and 90% it emits sanitized alert codes. At or above 82%, or below the minimum byte headroom, processing throws `DATABASE_STORAGE_HEADROOM_LOW` before jobs are enqueued or claimed. The protected internal health endpoint `/api/internal/cron/health` returns bytes, percentage, thresholds, alerts, and whether processing is allowed; it is protected by `CRON_SECRET` and contains no database hostname, URL, or credentials. Daily maintenance logs warning/critical storage events and returns the same sanitized status.
-
-## Approved next action
-
-1. Upgrade Neon to Launch before any bulk processing.
-2. Confirm a tier capable of at least 1 GiB logical storage, then re-run migration, capacity, database, and release verification.
-3. Run one document from each required type, then at most 25 documents.
-4. Re-run capacity report and stop if the 82%/64 MiB guard approaches.
-5. Provision the private R2 bucket and perform a no-delete shadow migration for raw artifacts.
-6. Keep `legislative_documents` until its staged deprecation and rollback gates are complete.
+- 90.05% usage leaves insufficient headroom for batch processing, index/WAL
+  bursts, or an in-place artifact rewrite.
+- Object storage is not configured, so no provider read/write guarantee exists.
+- The legacy mirror remains a live authority/fallback with eleven FK columns
+  and two sync triggers.
+- Moving logical artifact bytes does not shrink PostgreSQL immediately;
+  reclamation requires a separately planned rewrite/compaction with temporary
+  headroom.
+- P90 ranges are measured from this corpus, not a guarantee for unusually long
+  gazettes, acts, or OCR-heavy documents.

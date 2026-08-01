@@ -3,20 +3,21 @@ const DEFAULT_STORAGE_THRESHOLDS = Object.freeze({
   pausePercent: 82,
   criticalPercent: 90,
   minimumHeadroomBytes: 64 * 1024 * 1024,
+  highGrowthBytesPerReadyDocument: 128 * 1024,
 });
 
 const CAPACITY_CATEGORIES = Object.freeze({
-  documents: new Set(["documents", "legislative_documents", "document_metadata"]),
+  documents: new Set(["documents", "document_metadata"]),
   sourcesResources: new Set([
     "document_sources",
     "document_resources",
-    "legislative_document_resources",
     "source_registry",
     "source_health",
     "source_connectors",
     "source_directory_entries",
     "source_snapshots",
     "source_collection_snapshots",
+    "document_artifact_objects",
   ]),
   chunks: new Set(["document_text_chunks"]),
   summaries: new Set(["document_text_artifacts"]),
@@ -77,6 +78,12 @@ const CAPACITY_CATEGORIES = Object.freeze({
     "contact_submissions",
     "feedback_submissions",
     "bug_reports",
+    "artifact_storage_migration_runs",
+    "artifact_storage_migration_items",
+  ]),
+  legacyMirror: new Set([
+    "legislative_documents",
+    "legislative_document_resources",
   ]),
 });
 
@@ -112,6 +119,12 @@ const storageThresholds = (env = process.env) => ({
     0,
     Number.MAX_SAFE_INTEGER,
   ),
+  highGrowthBytesPerReadyDocument: boundedNumber(
+    env.DATABASE_STORAGE_HIGH_GROWTH_BYTES_PER_READY_DOCUMENT,
+    DEFAULT_STORAGE_THRESHOLDS.highGrowthBytesPerReadyDocument,
+    1,
+    Number.MAX_SAFE_INTEGER,
+  ),
 });
 
 const evaluateStorageStatus = (
@@ -136,6 +149,21 @@ const evaluateStorageStatus = (
     maxBytes == null ||
     usagePercent >= thresholds.pausePercent ||
     belowHeadroomFloor;
+  const bytesUntilPause = maxBytes == null
+    ? 0
+    : Math.max(
+      0,
+      Math.min(
+        Math.floor((maxBytes * thresholds.pausePercent) / 100) - databaseBytes,
+        headroomBytes - thresholds.minimumHeadroomBytes,
+      ),
+    );
+  const safeBatchSize = paused
+    ? 0
+    : Math.min(
+      25,
+      Math.floor(bytesUntilPause / thresholds.highGrowthBytesPerReadyDocument),
+    );
   const level =
     usagePercent == null
       ? "unknown"
@@ -148,10 +176,18 @@ const evaluateStorageStatus = (
             : "ok";
   return {
     level,
+    state: paused
+      ? "Processing Paused"
+      : usagePercent >= thresholds.criticalPercent
+        ? "Critical"
+        : usagePercent >= thresholds.warningPercent
+          ? "Warning"
+          : "Healthy",
     databaseBytes,
     maxBytes,
     headroomBytes,
     usagePercent,
+    safeBatchSize,
     thresholds,
     alerts,
     bulkProcessingAllowed: !paused,
@@ -221,47 +257,157 @@ const sumCategoryBytes = (relations) => {
   return categories;
 };
 
-const buildProjections = ({
+const measuredRange = (physicalBytes, documents, distribution = {}) => {
+  const expected = physicalBytes / Math.max(1, documents);
+  const logicalExpected = Number(distribution.expected || 0);
+  const ratio = (value, fallback) => logicalExpected > 0
+    ? Number(value || logicalExpected) / logicalExpected
+    : fallback;
+  return {
+    low: expected * Math.max(0, ratio(distribution.low, 0.75)),
+    expected,
+    high: expected * Math.max(1, ratio(distribution.high, 1.25)),
+  };
+};
+
+const addRanges = (...ranges) => Object.fromEntries(
+  ["low", "expected", "high"].map((name) => [
+    name,
+    ranges.reduce((sum, range) => sum + Number(range?.[name] || 0), 0),
+  ]),
+);
+
+const subtractRanges = (range, savings) => ({
+  low: Math.max(0, range.low - Number(savings?.high || 0)),
+  expected: Math.max(0, range.expected - Number(savings?.expected || 0)),
+  high: Math.max(0, range.high - Number(savings?.low || 0)),
+});
+
+const buildProjectionModels = ({
   databaseBytes,
-  catalogueDocuments,
+  catalogueDocuments = Number.MAX_SAFE_INTEGER,
   researchReadyDocuments,
   artifactDocuments,
   chunkDocuments,
   categories,
+  growthMeasurements = {},
   targets = [2500, 5000, 10000, 20000],
 }) => {
   const categoryBytes = (name) => categories[name]?.bytes || 0;
-  const readyDenominator = Math.max(
+  const preparedDocuments = Math.max(
     1,
     researchReadyDocuments,
     artifactDocuments,
     chunkDocuments,
   );
-  const scalableReady = new Set(["chunks", "summaries", "graphRelationships"]);
-  const scalableCatalogue = new Set(["documents", "sourcesResources", "processingState"]);
-  return targets.map((target) => {
-    const breakdown = {};
-    for (const name of Object.keys(categories)) {
-      const currentBytes = categoryBytes(name);
-      if (scalableReady.has(name)) {
-        breakdown[name] = Math.round((currentBytes / readyDenominator) * target);
-      } else if (scalableCatalogue.has(name)) {
-        breakdown[name] = Math.round(
-          currentBytes * (Math.max(catalogueDocuments, target) / Math.max(1, catalogueDocuments)),
+  const currentVariableBytes = categoryBytes("chunks") +
+    categoryBytes("summaries") + categoryBytes("graphRelationships");
+  const fixedBaselineBytes = databaseBytes - currentVariableBytes;
+  const chunkRange = measuredRange(
+    categoryBytes("chunks"),
+    chunkDocuments,
+    growthMeasurements.chunks,
+  );
+  const artifactRange = measuredRange(
+    categoryBytes("summaries"),
+    artifactDocuments,
+    growthMeasurements.artifacts,
+  );
+  const graphRange = measuredRange(
+    categoryBytes("graphRelationships"),
+    researchReadyDocuments,
+    growthMeasurements.graph,
+  );
+  const duplicateMetadataRange = growthMeasurements.chunkDuplicateMetadata || {
+    low: 0,
+    expected: 0,
+    high: 0,
+  };
+  const optimizedChunkRange = subtractRanges(chunkRange, duplicateMetadataRange);
+  const artifactOffloadRange = growthMeasurements.artifactOriginalPhysical || {
+    low: 0,
+    expected: 0,
+    high: 0,
+  };
+  const retainedArtifactRange = subtractRanges(artifactRange, artifactOffloadRange);
+  const legacyMirrorBytes = categoryBytes("legacyMirror");
+  const catalogueGrowthBytesPerDocument = (
+    categoryBytes("documents") +
+    categoryBytes("sourcesResources") +
+    categoryBytes("processingState")
+  ) / Math.max(1, catalogueDocuments);
+  const models = [
+    {
+      key: "currentArchitecture",
+      label: "Current architecture (no optimization)",
+      completedMigrationAssumed: false,
+      baselineBytes: databaseBytes,
+      perDocument: addRanges(chunkRange, artifactRange, graphRange),
+    },
+    {
+      key: "optimizedChunkWrites",
+      label: "New chunk-write optimization",
+      completedMigrationAssumed: false,
+      baselineBytes: databaseBytes,
+      perDocument: addRanges(optimizedChunkRange, artifactRange, graphRange),
+    },
+    {
+      key: "objectStorageAndLegacyDeprecation",
+      label: "Object storage plus legacy-deprecation target",
+      completedMigrationAssumed: true,
+      baselineBytes: fixedBaselineBytes - legacyMirrorBytes,
+      perDocument: addRanges(optimizedChunkRange, retainedArtifactRange, graphRange),
+    },
+  ];
+
+  return {
+    currentPreparedDocuments: preparedDocuments,
+    fixedBaselineBytes,
+    variablePreparedBytes: currentVariableBytes,
+    legacyMirrorBytes,
+    catalogueGrowthBytesPerDocument,
+    ranges: {
+      chunks: chunkRange,
+      artifacts: artifactRange,
+      graph: graphRange,
+      optimizedChunks: optimizedChunkRange,
+      retainedArtifacts: retainedArtifactRange,
+    },
+    models: models.map((model) => ({
+      ...model,
+      projections: targets.map((target) => {
+        const incrementalDocuments = model.completedMigrationAssumed
+          ? target
+          : Math.max(0, target - preparedDocuments);
+        const estimate = Object.fromEntries(
+          ["low", "expected", "high"].map((name) => {
+            const catalogueGrowth = Math.max(0, target - catalogueDocuments) *
+              catalogueGrowthBytesPerDocument;
+            const projected = model.baselineBytes +
+              incrementalDocuments * model.perDocument[name] + catalogueGrowth;
+            return [name, Math.max(0, Math.round(projected))];
+          }),
         );
-      } else {
-        breakdown[name] = currentBytes;
-      }
-    }
-    const projectedBytes = Object.values(breakdown).reduce((sum, bytes) => sum + bytes, 0);
-    return {
-      researchReadyDocuments: target,
-      projectedBytes,
-      deltaFromCurrentBytes: projectedBytes - databaseBytes,
-      breakdown,
-    };
-  });
+        return {
+          researchReadyDocuments: target,
+          incrementalDocuments,
+          ...estimate,
+          deltaFromCurrentBytes: estimate.expected - databaseBytes,
+        };
+      }),
+    })),
+    formula: {
+      existingArchitectures:
+        "current_database_bytes + max(0, target - current_prepared_documents) * measured_bytes_per_prepared_document + max(0, target - current_catalogue_documents) * measured_catalogue_bytes_per_document",
+      targetArchitecture:
+        "(fixed_baseline_bytes - legacy_mirror_bytes) + target * (optimized_chunks + retained_artifacts + graph)_bytes_per_document + max(0, target - current_catalogue_documents) * measured_catalogue_bytes_per_document",
+      ranges:
+        "Expected uses current physical relation bytes/document. Low and high apply measured per-document P25 and P90 logical-size ratios; optimization savings use the inverse conservative bounds.",
+    },
+  };
 };
+
+const buildProjections = (input) => buildProjectionModels(input).models[0].projections;
 
 const buildCapacityReport = async (pool) => {
   const client = await pool.connect();
@@ -281,6 +427,10 @@ const buildCapacityReport = async (pool) => {
       artifactStaleness,
       legacyDependencies,
       legacyTriggers,
+      legacyViews,
+      chunkGrowthDistribution,
+      artifactGrowthDistribution,
+      graphGrowthDistribution,
     ] = await Promise.all([
       pool.query(
         `SELECT pg_database_size(current_database())::bigint AS database_bytes,
@@ -401,15 +551,72 @@ const buildCapacityReport = async (pool) => {
            ON ccu.constraint_name = tc.constraint_name AND ccu.constraint_schema = tc.constraint_schema
          WHERE tc.constraint_type = 'FOREIGN KEY'
            AND ccu.table_schema = 'public'
-           AND ccu.table_name = 'legislative_documents'
+           AND ccu.table_name IN ('legislative_documents', 'legislative_document_resources')
          ORDER BY tc.table_name, kcu.column_name`,
       ),
       pool.query(
         `SELECT trigger_name, event_manipulation, action_timing
          FROM information_schema.triggers
          WHERE event_object_schema = 'public'
-           AND event_object_table = 'legislative_documents'
+           AND event_object_table IN ('legislative_documents', 'legislative_document_resources')
          ORDER BY trigger_name, event_manipulation`,
+      ),
+      pool.query(
+        `SELECT schemaname, viewname
+         FROM pg_views
+         WHERE schemaname = 'public'
+           AND (definition ILIKE '%legislative_documents%'
+             OR definition ILIKE '%legislative_document_resources%')
+         ORDER BY viewname`,
+      ),
+      pool.query(
+        `WITH per_document AS (
+           SELECT document_id,
+                  SUM(pg_column_size(chunk))::numeric AS logical_bytes,
+                  SUM(
+                    COALESCE(pg_column_size(metadata_json -> 'summary'), 0) +
+                    COALESCE(pg_column_size(metadata_json -> 'content'), 0)
+                  )::numeric AS duplicate_metadata_bytes
+           FROM document_text_chunks chunk
+           GROUP BY document_id
+         )
+         SELECT
+           PERCENTILE_CONT(0.25) WITHIN GROUP (ORDER BY logical_bytes)::numeric(16,2) AS low_bytes,
+           AVG(logical_bytes)::numeric(16,2) AS expected_bytes,
+           PERCENTILE_CONT(0.90) WITHIN GROUP (ORDER BY logical_bytes)::numeric(16,2) AS high_bytes,
+           PERCENTILE_CONT(0.25) WITHIN GROUP (ORDER BY duplicate_metadata_bytes)::numeric(16,2) AS duplicate_low_bytes,
+           AVG(duplicate_metadata_bytes)::numeric(16,2) AS duplicate_expected_bytes,
+           PERCENTILE_CONT(0.90) WITHIN GROUP (ORDER BY duplicate_metadata_bytes)::numeric(16,2) AS duplicate_high_bytes
+         FROM per_document`,
+      ),
+      pool.query(
+        `WITH per_document AS (
+           SELECT document_id,
+                  pg_column_size(artifact)::numeric AS logical_bytes,
+                  pg_column_size(original_text)::numeric AS original_bytes
+           FROM document_text_artifacts artifact
+         )
+         SELECT
+           PERCENTILE_CONT(0.25) WITHIN GROUP (ORDER BY logical_bytes)::numeric(16,2) AS low_bytes,
+           AVG(logical_bytes)::numeric(16,2) AS expected_bytes,
+           PERCENTILE_CONT(0.90) WITHIN GROUP (ORDER BY logical_bytes)::numeric(16,2) AS high_bytes,
+           PERCENTILE_CONT(0.25) WITHIN GROUP (ORDER BY original_bytes)::numeric(16,2) AS original_low_bytes,
+           AVG(original_bytes)::numeric(16,2) AS original_expected_bytes,
+           PERCENTILE_CONT(0.90) WITHIN GROUP (ORDER BY original_bytes)::numeric(16,2) AS original_high_bytes
+         FROM per_document`,
+      ),
+      pool.query(
+        `WITH per_document AS (
+           SELECT from_document_id AS document_id,
+                  SUM(pg_column_size(relationship))::numeric AS logical_bytes
+           FROM document_relationships relationship
+           GROUP BY from_document_id
+         )
+         SELECT
+           PERCENTILE_CONT(0.25) WITHIN GROUP (ORDER BY logical_bytes)::numeric(16,2) AS low_bytes,
+           AVG(logical_bytes)::numeric(16,2) AS expected_bytes,
+           PERCENTILE_CONT(0.90) WITHIN GROUP (ORDER BY logical_bytes)::numeric(16,2) AS high_bytes
+         FROM per_document`,
       ),
     ]);
 
@@ -437,19 +644,66 @@ const buildCapacityReport = async (pool) => {
       rationale:
         "Database-level allocation and catalog overhead not attributed to public relation totals.",
     };
+    const numericRange = (row, prefix = "") => ({
+      low: Number(row[`${prefix}low_bytes`] || 0),
+      expected: Number(row[`${prefix}expected_bytes`] || 0),
+      high: Number(row[`${prefix}high_bytes`] || 0),
+    });
+    const chunkDistribution = numericRange(chunkGrowthDistribution.rows[0]);
+    const artifactDistribution = numericRange(artifactGrowthDistribution.rows[0]);
+    const graphDistribution = numericRange(graphGrowthDistribution.rows[0]);
+    const duplicateLogical = numericRange(chunkGrowthDistribution.rows[0], "duplicate_");
+    const artifactOriginalLogical = numericRange(
+      artifactGrowthDistribution.rows[0],
+      "original_",
+    );
+    const physicalSavings = (logicalSavings, logicalTotal, physicalTotal, documents) => {
+      const physicalPerDocument = physicalTotal / Math.max(1, documents);
+      const expectedRatio = logicalTotal.expected > 0
+        ? logicalSavings.expected / logicalTotal.expected
+        : 0;
+      const expected = physicalPerDocument * Math.min(1, Math.max(0, expectedRatio));
+      return {
+        low: expected * (logicalSavings.expected > 0
+          ? logicalSavings.low / logicalSavings.expected
+          : 0),
+        expected,
+        high: expected * (logicalSavings.expected > 0
+          ? logicalSavings.high / logicalSavings.expected
+          : 0),
+      };
+    };
+    const growthMeasurements = {
+      chunks: chunkDistribution,
+      artifacts: artifactDistribution,
+      graph: graphDistribution,
+      chunkDuplicateMetadata: physicalSavings(
+        duplicateLogical,
+        chunkDistribution,
+        categories.chunks?.bytes || 0,
+        Number(countRow.chunk_documents),
+      ),
+      artifactOriginalPhysical: physicalSavings(
+        artifactOriginalLogical,
+        artifactDistribution,
+        categories.summaries?.bytes || 0,
+        Number(countRow.artifact_documents),
+      ),
+    };
     return {
       generatedAt: new Date().toISOString(),
       storage: evaluateStorageStatus({ databaseBytes, maxBytes }),
       migration022: migration.rows[0],
       counts: Object.fromEntries(Object.entries(countRow).map(([key, value]) => [key, Number(value)])),
       categories,
-      projections: buildProjections({
+      projections: buildProjectionModels({
         databaseBytes,
         catalogueDocuments: Number(countRow.catalogue_documents),
         researchReadyDocuments: Number(countRow.research_ready_documents),
         artifactDocuments: Number(countRow.artifact_documents),
         chunkDocuments: Number(countRow.chunk_documents),
         categories,
+        growthMeasurements,
       }),
       chunks: {
         ...chunkMetrics.rows[0],
@@ -474,12 +728,13 @@ const buildCapacityReport = async (pool) => {
         table: exactRelations.find((relation) => relation.table_name === "legislative_documents") || null,
         foreignKeys: legacyDependencies.rows,
         triggers: legacyTriggers.rows,
+        compatibilityViews: legacyViews.rows,
       },
       methodology: {
         catalogueBaseline:
           "Canonical catalogue tables remain at their measured current size while existing documents are made research-ready; they scale only above the current catalogue count.",
         readyDocumentGrowth:
-          "Chunks, artifacts, and graph relations scale from their measured current bytes per research-ready/artifact-bearing document.",
+          "Expected growth uses measured physical relation bytes per prepared document. Low and high bounds use the observed P25 and P90 per-document logical-size ratios from the current corpus.",
         fixedGrowth:
           "User data and retention-bounded operational logs are held at current measured bytes; their growth depends on traffic, not processing target.",
         limitation:
@@ -499,6 +754,7 @@ module.exports = {
   DEFAULT_STORAGE_THRESHOLDS,
   assertBulkProcessingSafe,
   buildCapacityReport,
+  buildProjectionModels,
   buildProjections,
   categoryForTable,
   evaluateStorageStatus,

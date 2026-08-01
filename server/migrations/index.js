@@ -87,4 +87,12 @@ module.exports = [
     name: "022_document_text_chunks_content_hash.js",
     migration: require("./022_document_text_chunks_content_hash"),
   },
+  {
+    name: "023_artifact_object_storage.js",
+    migration: require("./023_artifact_object_storage"),
+  },
+  {
+    name: "024_shared_artifact_object_keys.js",
+    migration: require("./024_shared_artifact_object_keys"),
+  },
 ];

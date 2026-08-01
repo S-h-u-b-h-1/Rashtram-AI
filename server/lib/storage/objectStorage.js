@@ -1,5 +1,6 @@
 const crypto = require("node:crypto");
 const {
+  DeleteObjectCommand,
   GetObjectCommand,
   HeadObjectCommand,
   PutObjectCommand,
@@ -32,13 +33,16 @@ const artifactKey = ({ kind, hash, extension = "bin" }) => {
 };
 
 const objectStorageConfig = (env = process.env) => {
+  const provider = String(env.OBJECT_STORAGE_PROVIDER || "disabled").trim().toLowerCase();
   const endpoint = env.OBJECT_STORAGE_ENDPOINT || null;
   const bucket = env.OBJECT_STORAGE_BUCKET || null;
   const accessKeyId = env.OBJECT_STORAGE_ACCESS_KEY_ID || null;
   const secretAccessKey = env.OBJECT_STORAGE_SECRET_ACCESS_KEY || null;
-  const configured = Boolean(endpoint && bucket && accessKeyId && secretAccessKey);
+  const configured = provider !== "disabled" &&
+    Boolean(endpoint && bucket && accessKeyId && secretAccessKey);
   return {
     configured,
+    provider,
     endpoint,
     bucket,
     region: env.OBJECT_STORAGE_REGION || "auto",
@@ -46,25 +50,18 @@ const objectStorageConfig = (env = process.env) => {
       String(env.OBJECT_STORAGE_FORCE_PATH_STYLE || "false").toLowerCase(),
     ),
     credentials: configured ? { accessKeyId, secretAccessKey } : null,
+    publicBaseUrl: env.OBJECT_STORAGE_PUBLIC_BASE_URL || null,
   };
 };
 
 const sanitizedObjectStorageStatus = (env = process.env) => {
   const config = objectStorageConfig(env);
-  let endpointHost = null;
-  if (config.endpoint) {
-    try {
-      endpointHost = new URL(config.endpoint).hostname;
-    } catch {
-      endpointHost = "invalid";
-    }
-  }
   return {
     configured: config.configured,
-    provider: "s3-compatible",
-    endpointHost,
-    bucketConfigured: Boolean(config.bucket),
-    region: config.region,
+    reachable: false,
+    readAvailable: false,
+    writeAvailable: false,
+    providerName: config.provider,
   };
 };
 
@@ -131,7 +128,77 @@ const createObjectStorage = ({ env = process.env, client } = {}) => {
         contentType: result.ContentType || null,
       };
     },
+
+    async deleteArtifact(key) {
+      await storageClient.send(new DeleteObjectCommand({ Bucket: bucket, Key: key }));
+      return { key, deleted: true };
+    },
   };
+};
+
+const isMissingObjectError = (error) =>
+  error?.name === "NotFound" ||
+  error?.name === "NoSuchKey" ||
+  error?.$metadata?.httpStatusCode === 404;
+
+const runObjectStorageSmokeTest = async ({ env = process.env, client } = {}) => {
+  const status = sanitizedObjectStorageStatus(env);
+  if (!status.configured && !client) {
+    return { ...status, skipped: true, reason: "Object storage is disabled." };
+  }
+  const storage = createObjectStorage({ env, client });
+  const nonce = crypto.randomBytes(16).toString("hex");
+  const body = Buffer.from(`rashtram-object-storage-smoke:${nonce}`, "utf8");
+  let key = null;
+  try {
+    const uploaded = await storage.putArtifact({
+      kind: "processing-log",
+      body,
+      contentType: "text/plain; charset=utf-8",
+      extension: "txt",
+      metadata: { disposable: "true" },
+    });
+    key = uploaded.key;
+    const head = await storage.headArtifact(key);
+    const downloaded = await storage.getArtifact({
+      key,
+      expectedHash: uploaded.hash,
+    });
+    if (head.hash !== uploaded.hash || !downloaded.body.equals(body)) {
+      const error = new Error("Object-storage smoke-test byte verification failed.");
+      error.code = "OBJECT_STORAGE_SMOKE_VERIFICATION_FAILED";
+      throw error;
+    }
+    await storage.deleteArtifact(key);
+    try {
+      await storage.headArtifact(key);
+      const error = new Error("Object-storage smoke-test object remained after deletion.");
+      error.code = "OBJECT_STORAGE_SMOKE_DELETE_FAILED";
+      throw error;
+    } catch (error) {
+      if (!isMissingObjectError(error)) throw error;
+    }
+    return {
+      configured: true,
+      reachable: true,
+      readAvailable: true,
+      writeAvailable: true,
+      providerName: objectStorageConfig(env).provider,
+      checksumVerified: true,
+      byteEqualityVerified: true,
+      leftoverObject: false,
+    };
+  } catch (error) {
+    if (key) await storage.deleteArtifact(key).catch(() => undefined);
+    error.objectStorageStatus = {
+      configured: true,
+      reachable: Boolean(key),
+      readAvailable: false,
+      writeAvailable: Boolean(key),
+      providerName: objectStorageConfig(env).provider,
+    };
+    throw error;
+  }
 };
 
 module.exports = {
@@ -140,5 +207,6 @@ module.exports = {
   createObjectStorage,
   objectStorageConfig,
   sanitizedObjectStorageStatus,
+  runObjectStorageSmokeTest,
   sha256,
 };

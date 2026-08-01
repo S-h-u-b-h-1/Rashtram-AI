@@ -9,6 +9,10 @@ const { refreshDataQuality } = require("../lib/database/quality");
 const { getPool } = require("../db");
 const { runRetention } = require("../lib/database/maintenance");
 const { readStorageStatus } = require("../lib/database/capacity");
+const {
+  runObjectStorageSmokeTest,
+  sanitizedObjectStorageStatus,
+} = require("../lib/storage/objectStorage");
 
 const router = express.Router();
 
@@ -107,10 +111,24 @@ router.get("/maintenance", async (req, res, next) => {
 router.get("/health", async (req, res, next) => {
   try {
     const storage = await readStorageStatus(getPool());
+    let objectStorage;
+    try {
+      const smoke = await runObjectStorageSmokeTest();
+      objectStorage = {
+        configured: smoke.configured,
+        reachable: smoke.reachable,
+        readAvailable: smoke.readAvailable,
+        writeAvailable: smoke.writeAvailable,
+        providerName: smoke.providerName,
+      };
+    } catch (error) {
+      objectStorage = error.objectStorageStatus || sanitizedObjectStorageStatus();
+    }
     return res.status(storage.level === "critical" ? 503 : 200).json({
       ok: storage.level !== "critical",
       database: "connected",
       storage,
+      objectStorage,
       checkedAt: new Date().toISOString(),
     });
   } catch (error) {
