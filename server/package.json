@@ -13,6 +13,7 @@
     "db:audit": "node cli/dbAudit.js",
     "db:cleanup-report": "node cli/dbCleanupReport.js",
     "db:storage-report": "node cli/dbStorageReport.js",
+    "db:capacity-report": "node cli/dbCapacityReport.js",
     "db:maintenance": "node cli/dbMaintenance.js",
     "db:retention": "node cli/dbRetention.js",
     "db:migrate": "node cli/dbMigrate.js",
@@ -55,6 +56,7 @@
   "license": "ISC",
   "description": "",
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.1101.0",
     "@pinecone-database/pinecone": "^6.1.2",
     "axios": "^1.13.1",
     "bcryptjs": "^3.0.2",

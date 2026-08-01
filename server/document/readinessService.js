@@ -1,4 +1,5 @@
-const { query } = require("../db");
+const { getPool, query } = require("../db");
+const { assertBulkProcessingSafe } = require("../lib/database/capacity");
 const DocumentRepository = require("./DocumentRepository");
 const { sanitizeProviderError } = require("../lib/providerErrorSanitizer");
 const { classifyFailure } = require("./failureTaxonomy");
@@ -82,6 +83,7 @@ const enqueueProcessing = async (
     priority = 50,
     reason = "manual_prepare",
     maxAttempts = 3,
+    storageChecked = false,
   } = {},
 ) => {
   const id = Number.parseInt(documentId, 10);
@@ -90,6 +92,7 @@ const enqueueProcessing = async (
     error.status = 400;
     throw error;
   }
+  if (!storageChecked) await assertBulkProcessingSafe(getPool());
   const result = await query(
     `INSERT INTO document_processing_jobs (
        document_id, requested_by, priority, metadata_json,

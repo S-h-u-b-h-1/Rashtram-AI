@@ -1,6 +1,7 @@
 const os = require("node:os");
 const crypto = require("node:crypto");
-const { query } = require("../db");
+const { getPool, query } = require("../db");
+const { assertBulkProcessingSafe } = require("../lib/database/capacity");
 const {
   enqueueProcessing,
   normalizeBatchType,
@@ -191,6 +192,9 @@ const updateWorker = async (
 };
 
 const enqueueCandidateBatch = async (options = {}) => {
+  const storage = options.storageChecked
+    ? options.storageStatus || null
+    : await assertBulkProcessingSafe(getPool());
   const limit = clamp(options.limit, 100, 1, 5_000);
   const requestedType = normalizeBatchType(options.type);
   const retryFailed = Boolean(options.retryFailed);
@@ -304,12 +308,14 @@ const enqueueCandidateBatch = async (options = {}) => {
         priority: candidate.processing_priority,
         reason: "mass_corpus_backfill",
         maxAttempts: options.maxAttempts,
+        storageChecked: true,
       }),
     );
   }
   return {
     selected: candidates.rows.length,
     jobs,
+    storage,
   };
 };
 
@@ -529,10 +535,16 @@ const runWorkerPool = async (options = {}) => {
 };
 
 const runProcessingBatch = async (options = {}) => {
+  const storage = await assertBulkProcessingSafe(getPool());
   const maxJobs = clamp(options.limit, 100, 1, 5_000);
   const enqueued = options.resume
     ? { selected: 0, jobs: [] }
-    : await enqueueCandidateBatch({ ...options, limit: maxJobs });
+    : await enqueueCandidateBatch({
+        ...options,
+        limit: maxJobs,
+        storageChecked: true,
+        storageStatus: storage,
+      });
   const allowedDocumentIds = options.resume
     ? null
     : enqueued.jobs.map((job) => Number(job.document_id)).filter(Boolean);
@@ -544,6 +556,7 @@ const runProcessingBatch = async (options = {}) => {
       ready: 0,
       failed: 0,
       results: [],
+      storage,
     };
   }
   const processed = await runWorkerPool({
@@ -554,6 +567,7 @@ const runProcessingBatch = async (options = {}) => {
   return {
     requested: maxJobs,
     enqueued: enqueued.selected,
+    storage,
     ...processed,
   };
 };

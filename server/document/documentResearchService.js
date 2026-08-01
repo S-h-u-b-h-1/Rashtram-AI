@@ -430,6 +430,11 @@ const loadIndexedChunks = async (config, documentId, topK = 100) => {
 const computeChunkContentHash = (content) =>
   crypto.createHash("sha256").update(String(content || "")).digest("hex");
 
+const postgresChunkMetadata = (metadata = {}) => {
+  const { content, summary, ...citationMetadata } = metadata || {};
+  return citationMetadata;
+};
+
 // Reads the previous hash/namespace for each chunk index before the
 // delete-then-insert replace below wipes them, so unchanged content can be
 // recognized after the fact. A chunk only counts as reusable when BOTH the
@@ -500,7 +505,7 @@ const saveNormalizedChunks = async (documentId, chunks, languageCode) => {
         chunk.metadata?.languageCode || languageCode || "und",
         Math.ceil(content.length / 4),
         chunk.id || `${documentId}-chunk-${index}`,
-        JSON.stringify(chunk.metadata || {}),
+        JSON.stringify(postgresChunkMetadata(chunk.metadata)),
         contentHash,
         currentNamespace,
       ],
@@ -1627,6 +1632,7 @@ module.exports = {
   mergePassagesByChunk,
   saveTextArtifact,
   saveNormalizedChunks,
+  postgresChunkMetadata,
   buildExtractiveSummary,
   parseSummarySections,
   searchAcrossIndexedDocuments,

@@ -97,6 +97,39 @@ const checks = [
       WHERE migration_name = '001_database_v2.js'
     ) AS passed`,
   },
+  {
+    name: "latest migration is 022",
+    sql: `SELECT (
+      SELECT migration_name FROM schema_migrations
+      ORDER BY applied_at DESC, migration_name DESC LIMIT 1
+    ) = '022_document_text_chunks_content_hash.js' AS passed`,
+  },
+  {
+    name: "migration 022 columns complete",
+    sql: `SELECT
+      EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_schema = 'public'
+          AND table_name = 'document_text_chunks'
+          AND column_name = 'content_hash'
+      ) AND EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_schema = 'public'
+          AND table_name = 'document_text_chunks'
+          AND column_name = 'embedding_namespace'
+      ) AS passed`,
+  },
+  {
+    name: "migration 022 content hash index complete",
+    sql: `SELECT EXISTS (
+      SELECT 1 FROM pg_indexes
+      WHERE schemaname = 'public'
+        AND tablename = 'document_text_chunks'
+        AND indexname = 'document_text_chunks_content_hash_idx'
+        AND indexdef ILIKE '%(document_id, content_hash)%'
+        AND indexdef ILIKE '%WHERE (content_hash IS NOT NULL)%'
+    ) AS passed`,
+  },
 ];
 
 const main = async () => {

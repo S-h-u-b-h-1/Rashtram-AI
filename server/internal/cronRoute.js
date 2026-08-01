@@ -8,6 +8,7 @@ const {
 const { refreshDataQuality } = require("../lib/database/quality");
 const { getPool } = require("../db");
 const { runRetention } = require("../lib/database/maintenance");
+const { readStorageStatus } = require("../lib/database/capacity");
 
 const router = express.Router();
 
@@ -79,11 +80,39 @@ router.get("/ingest", runBoundedCron);
 router.post("/ingest", runBoundedCron);
 router.get("/maintenance", async (req, res, next) => {
   try {
+    const storage = await readStorageStatus(getPool());
+    if (storage.alerts.length) {
+      const details = {
+        level: storage.level,
+        usagePercent: storage.usagePercent,
+        headroomBytes: storage.headroomBytes,
+        alerts: storage.alerts,
+      };
+      if (storage.level === "critical") {
+        console.error("Database storage capacity alert", details);
+      } else {
+        console.warn("Database storage capacity alert", details);
+      }
+    }
     const retention = await runRetention(getPool(), {
       batchSize: 250,
       maxBatches: 4,
     });
-    return res.json({ ok: true, retention });
+    return res.json({ ok: true, storage, retention });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.get("/health", async (req, res, next) => {
+  try {
+    const storage = await readStorageStatus(getPool());
+    return res.status(storage.level === "critical" ? 503 : 200).json({
+      ok: storage.level !== "critical",
+      database: "connected",
+      storage,
+      checkedAt: new Date().toISOString(),
+    });
   } catch (error) {
     return next(error);
   }
