@@ -6,6 +6,8 @@ const {
   BOUNDED_CRON_SOURCES,
 } = require("../lib/ingestion/schedules");
 const { refreshDataQuality } = require("../lib/database/quality");
+const { getPool } = require("../db");
+const { runRetention } = require("../lib/database/maintenance");
 
 const router = express.Router();
 
@@ -75,5 +77,16 @@ const runBoundedCron = async (req, res, next) => {
 router.use(authorizeCron);
 router.get("/ingest", runBoundedCron);
 router.post("/ingest", runBoundedCron);
+router.get("/maintenance", async (req, res, next) => {
+  try {
+    const retention = await runRetention(getPool(), {
+      batchSize: 250,
+      maxBatches: 4,
+    });
+    return res.json({ ok: true, retention });
+  } catch (error) {
+    return next(error);
+  }
+});
 
 module.exports = router;

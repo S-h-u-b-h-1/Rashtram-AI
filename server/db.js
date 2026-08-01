@@ -1,31 +1,18 @@
 const { Pool } = require("pg");
 require("dotenv").config();
+const { poolConfig } = require("./lib/database/connectionConfig");
 
 const globalForDatabase = globalThis;
 const SCHEMA_VERSION = 2026070201;
 const SCHEMA_LOCK_KEY = 1_847_263_911;
 const { runMigrations } = require("./lib/database/migrator");
 
-const normalizeConnectionString = (connectionString) => {
-  const url = new URL(connectionString);
-  const sslMode = url.searchParams.get("sslmode");
-  if (["prefer", "require", "verify-ca"].includes(sslMode)) {
-    url.searchParams.set("sslmode", "verify-full");
-  }
-  return url.toString();
-};
-
 const createPool = () => {
   if (!process.env.DATABASE_URL) {
     throw new Error("DATABASE_URL is required");
   }
 
-  const pool = new Pool({
-    connectionString: normalizeConnectionString(process.env.DATABASE_URL),
-    max: 5,
-    idleTimeoutMillis: 30_000,
-    connectionTimeoutMillis: 10_000,
-  });
+  const pool = new Pool(poolConfig(process.env.DATABASE_URL));
 
   pool.on("error", (err) => {
     console.error("Unexpected error on idle PostgreSQL client:", err.message);

@@ -620,8 +620,11 @@ const runReadinessAudit = async () => {
         state.failure_reason,
         state.chunks_count,
         state.embeddings_count,
+        state.pdf_status,
         state.retrieval_mode,
         state.retrieval_verified,
+        state.retrieval_verified_at,
+        state.last_processed_at,
         EXISTS (
           SELECT 1 FROM document_resources resource
           WHERE resource.document_id = document.id
@@ -668,41 +671,40 @@ const runReadinessAudit = async () => {
           AND canonical_url IS NOT NULL
         ) AS extractable_policy_source
       FROM computed
-    )
-    UPDATE document_processing_state state
-    SET pdf_status = CASE
+    ),
+    desired AS (
+      SELECT readiness.*,
+        CASE
           WHEN readiness.pdf_url IS NOT NULL THEN
             CASE
               WHEN readiness.mime_type IS NOT NULL
                 AND readiness.mime_type NOT ILIKE '%pdf%'
                 THEN 'unsupported'
-              ELSE COALESCE(NULLIF(state.pdf_status, 'unknown'), 'available')
+              ELSE COALESCE(NULLIF(readiness.pdf_status, 'unknown'), 'available')
             END
           WHEN readiness.has_extractable_source_resource THEN 'not_required'
           ELSE 'missing'
-        END,
-        research_ready = readiness.genuinely_ready,
-        comparison_ready = readiness.genuinely_ready,
-        retrieval_mode = CASE
+        END AS desired_pdf_status,
+        CASE
           WHEN readiness.retrieval_mode <> 'unknown' THEN readiness.retrieval_mode
           WHEN readiness.chunks_count > 0 THEN 'local_text'
           ELSE readiness.retrieval_mode
-        END,
-        retrieval_verified = CASE
+        END AS desired_retrieval_mode,
+        CASE
           WHEN readiness.retrieval_verified THEN TRUE
           WHEN readiness.chunks_count > 0
             AND readiness.embedding_status = 'fallback'
             THEN TRUE
           ELSE readiness.retrieval_verified
-        END,
-        retrieval_verified_at = CASE
-          WHEN readiness.retrieval_verified THEN state.retrieval_verified_at
+        END AS desired_retrieval_verified,
+        CASE
+          WHEN readiness.retrieval_verified THEN readiness.retrieval_verified_at
           WHEN readiness.chunks_count > 0
             AND readiness.embedding_status = 'fallback'
-            THEN COALESCE(state.retrieval_verified_at, state.last_processed_at, NOW())
-          ELSE state.retrieval_verified_at
-        END,
-        readiness_class = CASE
+            THEN COALESCE(readiness.retrieval_verified_at, readiness.last_processed_at, NOW())
+          ELSE readiness.retrieval_verified_at
+        END AS desired_retrieval_verified_at,
+        CASE
           WHEN readiness.visibility_status = 'hidden_invalid'
             THEN 'invalid_or_quarantined'
           WHEN readiness.genuinely_ready THEN 'comparison_ready'
@@ -725,8 +727,8 @@ const runReadinessAudit = async () => {
             THEN 'source_extractable_not_processed'
           WHEN readiness.canonical_url IS NOT NULL THEN 'source_only'
           ELSE 'missing_pdf'
-        END,
-        readiness_reason = CASE
+        END AS desired_readiness_class,
+        CASE
           WHEN readiness.visibility_status = 'hidden_invalid'
             THEN 'Invalid or quarantined catalogue record.'
           WHEN readiness.genuinely_ready THEN NULL
@@ -751,10 +753,40 @@ const runReadinessAudit = async () => {
           WHEN readiness.canonical_url IS NOT NULL
             THEN 'Only a source page is currently available.'
           ELSE 'No accessible PDF or extractable source is available.'
-        END,
+        END AS desired_readiness_reason
+      FROM readiness
+    )
+    UPDATE document_processing_state state
+    SET pdf_status = desired.desired_pdf_status,
+        research_ready = desired.genuinely_ready,
+        comparison_ready = desired.genuinely_ready,
+        retrieval_mode = desired.desired_retrieval_mode,
+        retrieval_verified = desired.desired_retrieval_verified,
+        retrieval_verified_at = desired.desired_retrieval_verified_at,
+        readiness_class = desired.desired_readiness_class,
+        readiness_reason = desired.desired_readiness_reason,
         updated_at = NOW()
-    FROM readiness
-    WHERE state.document_id = readiness.id
+    FROM desired
+    WHERE state.document_id = desired.id
+      AND ROW(
+        state.pdf_status,
+        state.research_ready,
+        state.comparison_ready,
+        state.retrieval_mode,
+        state.retrieval_verified,
+        state.retrieval_verified_at,
+        state.readiness_class,
+        state.readiness_reason
+      ) IS DISTINCT FROM ROW(
+        desired.desired_pdf_status,
+        desired.genuinely_ready,
+        desired.genuinely_ready,
+        desired.desired_retrieval_mode,
+        desired.desired_retrieval_verified,
+        desired.desired_retrieval_verified_at,
+        desired.desired_readiness_class,
+        desired.desired_readiness_reason
+      )
     RETURNING state.readiness_class
   `);
   await query(`
@@ -822,8 +854,12 @@ const runReadinessAudit = async () => {
       AND job.status = 'failed'
     RETURNING job.id
   `);
+  const audited = await query(
+    "SELECT COUNT(*)::INTEGER AS documents FROM document_processing_state",
+  );
   return {
-    audited: result.rows.length,
+    audited: Number(audited.rows[0]?.documents || 0),
+    updatedStates: result.rows.length,
     createdStates: inserted.rows.length,
     reconciledDeadLetters: reconciled.rows.length,
     sanitizedFailures: sanitizedFailures.rows.length,

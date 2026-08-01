@@ -72,6 +72,24 @@ test("quality score rewards provenance and processing evidence", () => {
   assert.equal(warned, 80);
 });
 
+test("quality refresh avoids rewriting unchanged document rows", () => {
+  const source = fs.readFileSync(
+    path.join(__dirname, "../lib/database/quality.js"),
+    "utf8",
+  );
+  assert.match(source, /quality_score IS DISTINCT FROM quality\.score/);
+  assert.match(source, /research_ready IS DISTINCT FROM quality\.ready/);
+  assert.match(source, /visibility_status IS DISTINCT FROM CASE/);
+});
+
+test("readiness audit avoids rewriting unchanged processing rows", () => {
+  const source = fs.readFileSync(
+    path.join(__dirname, "../document/readinessService.js"),
+    "utf8",
+  );
+  assert.match(source, /FROM desired[\s\S]*ROW\([\s\S]*IS DISTINCT FROM ROW\(/);
+});
+
 test("scheduled ingestion profiles are bounded and source-based", () => {
   assert.equal(scheduleForProfile("daily"), DAILY_SOURCES);
   assert.equal(scheduleForProfile("weekly"), WEEKLY_SOURCES);

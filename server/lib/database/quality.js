@@ -119,6 +119,17 @@ const refreshDataQuality = async () => {
         updated_at = GREATEST(d.updated_at, NOW())
     FROM quality
     WHERE quality.id = d.id
+      AND (
+        d.quality_score IS DISTINCT FROM quality.score
+        OR d.research_ready IS DISTINCT FROM quality.ready
+        OR d.visibility_status IS DISTINCT FROM CASE
+          WHEN d.metadata_json ->> 'qualityDisposition' = 'invalid_navigation'
+            THEN 'hidden_invalid'
+          WHEN d.canonical_url IS NULL THEN 'internal_only'
+          WHEN quality.score < 40 THEN 'low_quality'
+          ELSE 'public'
+        END
+      )
     RETURNING d.id, d.quality_score, d.research_ready, d.visibility_status
   `);
 
