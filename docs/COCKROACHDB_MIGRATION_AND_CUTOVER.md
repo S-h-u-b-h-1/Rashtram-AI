@@ -210,7 +210,103 @@ the transaction, since it can legitimately run more than once. This is
 documented in the module and matters for any call site that also writes to
 Pinecone or increments module-scope counters.
 
-## Unverified — requires the live cluster
+## MEASURED — live cluster results (2026-08-05)
+
+Cluster: CockroachDB CCL **v26.2.5**, `gcp-asia-south1`, database
+`defaultdb`, user `shubhaang`. Empty evaluation cluster; **no production
+data was copied and Neon was not touched.**
+
+### Result 1 — the `db.js` bootstrap passes completely
+
+**115 / 115 statements applied.** This directly contradicts the earlier
+prediction in this document that `db.js` would be "the harder half".
+That prediction was wrong and is retracted.
+
+| Feature | Statements | Passed |
+|---|---:|---:|
+| `CREATE TABLE` | 32 | 32 |
+| Plain indexes | 38 | 38 |
+| `ALTER TABLE` | 18 | 18 |
+| Partial indexes | 9 | 9 |
+| Data backfills | 11 | 11 |
+| Expression indexes | 2 | 2 |
+| **GIN indexes** | 2 | 2 |
+| **Generated `tsvector` column** | 1 | 1 |
+| Generated column | 1 | 1 |
+| PostgreSQL `\m`/`\M` regex backfill | 1 | 1 |
+
+The generated `TSVECTOR ... STORED` column and its GIN index — previously
+flagged as a major risk — were **accepted**.
+
+**Important caveat:** these ran against an empty database. Syntax
+acceptance is not behavioural equivalence. The `\m`/`\M` regex backfill
+parsed, but matched zero rows, so whether it produces identical
+normalized titles (which feed deduplication) is still unproven and needs
+a data-bearing test.
+
+### Result 2 — dual-write triggers do NOT port
+
+Isolated minimal test on the live cluster:
+
+| Construct | Result |
+|---|---|
+| `CREATE FUNCTION ... RETURNS TRIGGER` referencing `NEW` | **PASS** (body accepted at creation) |
+| `CREATE TRIGGER ... EXECUTE FUNCTION` | **FAIL** — `42P01: no data source matches prefix: new in this context` |
+| Row written through the intended dual-write path | **0 rows** — confirming no trigger fired |
+| `DECLARE r tbl%ROWTYPE` | **FAIL** — `0A000: unimplemented: %TYPE and %ROWTYPE syntax` |
+
+Two independent blockers, either of which is sufficient on its own.
+`sync_document_v2_from_legacy()` uses `document_text_artifacts%ROWTYPE`,
+so it is blocked twice over. **The legacy→v2 synchronisation contract
+cannot be carried over as-is and must be reimplemented in application
+code.** This is the single largest work item in the migration.
+
+Note the trap: `CREATE FUNCTION` *succeeds*. A migration run that only
+checks for thrown errors on function creation would report success while
+the dual-write silently does nothing — exactly the failure mode that
+corrupts data quietly rather than loudly.
+
+### Result 3 — migration results, correct sequence
+
+Migrations are **not standalone**: `db.js` `initializeSchema()` must run
+first. Auditing migrations against a truly empty database produces a
+misleading 0/24 with 21 phantom "relation does not exist" cascades.
+
+Run in the correct order (bootstrap, then migrations): **6 / 24 passed**,
+17 blocked by cascade, 1 genuine failure.
+
+Root causes, all verified:
+
+| Construct | SQLSTATE | Where | Severity |
+|---|---|---|---|
+| `DEFERRABLE INITIALLY DEFERRED` FK | `0A000` | `001:384`, `002:146` | **Semantic** — see below |
+| `CREATE TABLE AS ... WITH NO DATA` | `0A000` | `020:8` | Low — `LIMIT 0` is equivalent |
+| `DROP SCHEMA public CASCADE` | — | audit harness | Low — drop objects individually |
+| `NEW` unresolved in `CREATE TRIGGER` | `42P01` | `002` | **Blocking** |
+| `%ROWTYPE` | `0A000` | `001` | **Blocking** |
+| Column-type mismatch after CTAS rewrite | `22P02` | `020` | Medium — rewrite not fully equivalent |
+| `column "source_type" does not exist` | `42703` | `001` | Unresolved — needs investigation |
+
+**The `DEFERRABLE` finding is not a keyword strip.**
+`documents.primary_pdf_resource_id → document_resources(id)` while
+`document_resources → documents` — a genuine cycle. Deferred checking is
+what permits both sides to be written in one transaction in any order.
+CockroachDB does not support deferrable FKs, so removing the clause makes
+checks immediate and **any out-of-order write path fails at runtime, not
+at migration time.** A clean migration here does not mean the application
+works.
+
+### Compatibility layer built
+
+`lib/database/cockroachSqlCompat.js` rewrites migration SQL for Cockroach
+without touching the PostgreSQL migrations. Each transform declares
+whether it is semantics-**preserving** or semantics-**changing**; a
+changing transform is reported as a finding, not silently applied. The
+audit classifies a migration that only applied under rewriting as
+`passes_with_rewrite` / `passes_with_semantic_change` — never as
+`passes_unchanged`.
+
+## Still unverified — requires further work
 
 No claim is made about any of these. They are the reason the evaluation
 cannot conclude yet:

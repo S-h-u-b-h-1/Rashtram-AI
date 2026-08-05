@@ -28,11 +28,31 @@ const {
   maskConnectionString,
 } = require("../lib/database/dialect");
 
+const { toCockroachSql } = require("../lib/database/cockroachSqlCompat");
+
 const parseArgs = (argv) => ({
   dryRun: argv.includes("--dry-run"),
   reset: argv.includes("--reset"),
   json: argv.includes("--json"),
   stopOnFirstFailure: argv.includes("--stop-on-first-failure"),
+  // Off by default: a raw run shows true out-of-the-box compatibility.
+  // With --compat, Cockroach SQL transforms are applied so the audit can
+  // discover what blocks NEXT rather than stopping at the first hurdle.
+  compat: argv.includes("--compat"),
+});
+
+// Wraps a pg Client so migration SQL is rewritten for CockroachDB on the
+// way through. The migration modules themselves are never modified, which
+// is what keeps the PostgreSQL/Neon path identical.
+const compatClient = (client, collected) => ({
+  query: (text, params) => {
+    if (typeof text !== "string") return client.query(text, params);
+    const { sql, applied } = toCockroachSql(text);
+    for (const entry of applied) {
+      if (!collected.some((e) => e.id === entry.id)) collected.push(entry);
+    }
+    return client.query(sql, params);
+  },
 });
 
 // Classify a failure by SQLSTATE + message so the report says WHY, not
@@ -73,7 +93,7 @@ const classifyFailure = (error) => {
   };
 };
 
-const runAudit = async ({ dryRun, reset, json, stopOnFirstFailure }) => {
+const runAudit = async ({ dryRun, reset, json, stopOnFirstFailure, compat }) => {
   // Fail closed. Without this, a mis-set env var could point a schema-
   // dropping audit at production.
   assertCockroachTarget("the CockroachDB migration audit");
@@ -100,24 +120,50 @@ const runAudit = async ({ dryRun, reset, json, stopOnFirstFailure }) => {
   try {
     if (reset) {
       // Only ever runs against an explicitly-confirmed cockroach target.
-      await client.query("DROP SCHEMA IF EXISTS public CASCADE");
-      await client.query("CREATE SCHEMA public");
+      //
+      // CockroachDB refuses `DROP SCHEMA public CASCADE` ("cannot drop
+      // schema public"), unlike PostgreSQL. Enumerate and drop the objects
+      // instead. Views must go before tables, and CASCADE handles the
+      // remaining dependency ordering.
+      const views = await client.query(
+        `SELECT table_name FROM information_schema.views WHERE table_schema = 'public'`,
+      );
+      for (const { table_name: name } of views.rows) {
+        await client.query(`DROP VIEW IF EXISTS "${name.replace(/"/g, '""')}" CASCADE`);
+      }
+      const tables = await client.query(
+        `SELECT table_name FROM information_schema.tables
+          WHERE table_schema = 'public' AND table_type = 'BASE TABLE'`,
+      );
+      for (const { table_name: name } of tables.rows) {
+        await client.query(`DROP TABLE IF EXISTS "${name.replace(/"/g, '""')}" CASCADE`);
+      }
     }
 
     for (const [index, { name, migration }] of registeredMigrations.entries()) {
       const startedAt = Date.now();
       let transactionOpen = false;
+      const transforms = [];
       try {
         await client.query("BEGIN");
         transactionOpen = true;
-        await migration.up(client);
+        await migration.up(compat ? compatClient(client, transforms) : client);
         await client.query("COMMIT");
         transactionOpen = false;
         results.push({
           order: index + 1,
           name,
           status: "passed",
-          classification: "passes_unchanged",
+          // A migration that only applied under rewriting has NOT passed
+          // unchanged, and a semantics-changing rewrite is a finding, not
+          // a pass. Keeping these distinct is the difference between an
+          // honest report and a misleading green run.
+          classification: transforms.length === 0
+            ? "passes_unchanged"
+            : transforms.some((t) => t.semantics === "changing")
+            ? "passes_with_semantic_change"
+            : "passes_with_rewrite",
+          transforms: transforms.length ? transforms : undefined,
           durationMs: Date.now() - startedAt,
         });
       } catch (error) {
