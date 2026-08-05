@@ -20,6 +20,7 @@
     "db:maintenance": "node cli/dbMaintenance.js",
     "db:retention": "node cli/dbRetention.js",
     "db:migrate": "node cli/dbMigrate.js",
+    "db:cockroach-audit": "node cli/cockroachMigrationAudit.js",
     "db:verify": "node cli/dbVerify.js",
     "graph:discover": "node cli/discoverRelationships.js",
     "graph:verify": "node cli/verifyGraph.js",

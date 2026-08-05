@@ -44,10 +44,41 @@ constraint with zero migration risk and zero code change.
 | §11–13 Export/import, rehearsal, parity | **Not started** |
 | §14–16 Cutover, rollback, readiness | **Not started** |
 
-**Blocker:** `COCKROACH_DATABASE_URL` is not configured, and the
-CockroachDB MCP connector is disconnected. Every phase that requires
-executing SQL against CockroachDB cannot proceed. No compatibility verdict
-can be issued until it does.
+**Blocker (re-verified 2026-08-05):** two independent access paths were
+attempted and both are unavailable:
+
+1. **MCP** — `cockroachdb-cloud` was registered successfully via
+   `claude mcp add`, but `claude mcp list` reports
+   `! Needs authentication`. The OAuth flow cannot be completed from a
+   non-interactive session.
+2. **Direct connection** — `COCKROACH_DATABASE_URL` is not set in the
+   shell or in any of the six env files checked
+   (`server/.env.local`, `.env`, `.env.production`, `.env.preview`,
+   root `.env.local`, `.env`).
+
+The cluster root certificate **is** in place and valid
+(`~/.postgresql/root.crt`, 2,728 bytes, PEM).
+
+No compatibility verdict can be issued until one of these paths works.
+
+### Ready to run the moment access exists
+
+`npm run db:cockroach-audit --prefix server` applies every registered
+migration to the evaluation cluster in order and classifies each one.
+
+- `--dry-run` enumerates the migration set without connecting.
+- `--reset` recreates the public schema first (cockroach target only).
+- `--json` emits a machine-readable report.
+- By default it **continues past failures**, because the goal is the
+  complete incompatibility set in one pass — stopping at the first error
+  would mean one round-trip per problem and a badly wrong effort estimate.
+- Failures are classified by SQLSTATE into `unsupported`,
+  `rewrite_required`, `blocked` (a cascade from an earlier failure, not an
+  independent problem), or `failed`, each with remediation text.
+- It calls `assertCockroachTarget()` first, so it physically cannot run
+  against Neon. Verified: it refuses on an unset dialect, refuses on
+  `postgres`, and errors cleanly without leaking secrets when the URL is
+  absent.
 
 ## Measured: PostgreSQL-specific surface in this codebase
 
