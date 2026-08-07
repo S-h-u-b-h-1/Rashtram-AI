@@ -306,6 +306,66 @@ audit classifies a migration that only applied under rewriting as
 `passes_with_rewrite` / `passes_with_semantic_change` — never as
 `passes_unchanged`.
 
+### Result 4 — trigger replacement built and live-tested (Phase 1)
+
+`lib/database/legacySyncService.js` replaces the PL/pgSQL dual-write
+triggers with explicit application-level SQL. The port was mechanical, not
+a redesign: the trigger body was already a single `INSERT ... ON CONFLICT`,
+and the two PL/pgSQL lookups become joins.
+
+| PL/pgSQL construct | Portable replacement |
+|---|---|
+| `DECLARE registry_id ... SELECT INTO` | `LEFT JOIN source_registry` |
+| `DECLARE r document_text_artifacts%ROWTYPE` | `LEFT JOIN document_text_artifacts` |
+| `NEW.<col>` | `legacy.<col>` (reads the committed row) |
+
+Every derived expression — `document_subtype`, the readiness predicate,
+the 8-term `quality_score`, the `ON CONFLICT` update list — is carried
+over unchanged, so PostgreSQL behaviour is preserved when the trigger is
+eventually dropped.
+
+**Live parity test against CockroachDB: 15/17 checks passed.**
+
+Verified on the cluster: insert parity; `document_subtype` → `state_bill`;
+`state` extracted from JSONB metadata; `country` defaulting;
+`visibility_status`; `quality_score` computing 80 then recomputing 90 when
+a ministry is added; update propagation; `research_ready` flipping true
+once a text artifact exists; `language`/`script`/`is_bilingual` sourced
+from the artifact; a nonexistent id being a safe no-op rather than an
+error; and **rollback discarding legacy and v2 together** (the property
+that keeps the two schemas from diverging).
+
+Neither failure was a defect in the service:
+
+1. The idempotency assertion compared `count === 1` against a **string**
+   `"1"` — see Result 5. Idempotency itself held: 3 syncs, 1 row.
+2. Resource sync could not run: `document_resources` is created by a
+   migration still blocked upstream.
+
+### Result 5 — `::INT` returns a different JS type on each engine
+
+Measured directly:
+
+| Expression | PostgreSQL | CockroachDB |
+|---|---|---|
+| `1::INT` | number | **string** |
+| `1::INT4` | number | number |
+| `count(*)::INT` | number | **string** |
+| `1::BIGINT` | string | string |
+
+`INT` means `int4` in PostgreSQL but `int8` in CockroachDB, and
+node-postgres returns 64-bit integers as strings to avoid precision loss.
+
+This is the most dangerous class of finding so far, because **nothing
+throws**. Code doing `count === 1`, `total > 0`, or arithmetic on a
+`::INT` result silently changes behaviour. It surfaced here only because a
+test asserted strict equality — exactly how it would surface in
+production, i.e. as a wrong answer rather than an error.
+
+**Exposure: 185 occurrences across 20 files.** Every one needs review;
+the mechanical fix is `::INT4` where the value is known small, or explicit
+`Number()` coercion at the call site.
+
 ## Still unverified — requires further work
 
 No claim is made about any of these. They are the reason the evaluation
