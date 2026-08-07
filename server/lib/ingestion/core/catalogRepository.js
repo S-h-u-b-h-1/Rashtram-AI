@@ -1,7 +1,55 @@
 const crypto = require("crypto");
 const { connectDB, getPool, query } = require("../../../db");
 
+// completeRun() only executes on the happy path, so a run whose process
+// is killed mid-flight (serverless timeout, cancelled CI job, terminated
+// CLI) stays 'running' forever. Those orphans are not harmless: source
+// health reads the latest run per source, so one orphan makes a source
+// report as perpetually "running" with a frozen refresh age, hiding the
+// fact that it has not actually ingested for days.
+//
+// Reaping on run creation keeps this self-healing with no extra cron.
+// The threshold is deliberately well beyond the longest legitimate run
+// (corpus processing allows 330 minutes) so a slow-but-alive run is never
+// reaped out from under itself.
+const STALE_RUN_HOURS = 6;
+
+const reapStaleRuns = async (maxHours = STALE_RUN_HOURS) => {
+  const result = await query(
+    `UPDATE ingestion_runs
+        SET status = 'failed',
+            completed_at = NOW(),
+            errors = COALESCE(errors, '[]'::jsonb) || $2::jsonb,
+            errors_json = COALESCE(errors_json, '[]'::jsonb) || $2::jsonb
+      WHERE status = 'running'
+        AND started_at < NOW() - ($1 || ' hours')::INTERVAL
+      RETURNING id, source_name`,
+    [
+      String(maxHours),
+      JSON.stringify([
+        {
+          code: "RUN_ABANDONED",
+          message:
+            `Run exceeded ${maxHours}h without completing and was reaped. ` +
+            `The worker process most likely terminated before completeRun().`,
+        },
+      ]),
+    ],
+  );
+  if (result.rowCount > 0) {
+    console.warn(
+      `Reaped ${result.rowCount} abandoned ingestion run(s): ` +
+        result.rows.map((r) => `${r.source_name}#${r.id}`).join(", "),
+    );
+  }
+  return result.rows;
+};
+
 const createRun = async ({ sourceName, collectionName, options = {} }) => {
+  // Best-effort: never let cleanup prevent a new run from starting.
+  await reapStaleRuns().catch((error) =>
+    console.warn(`Stale ingestion-run reap skipped: ${error.message}`),
+  );
   const result = await query(
     `INSERT INTO ingestion_runs (
        source_name, collection_name, options, counters_json, errors_json
@@ -1292,6 +1340,7 @@ const repairCrossTypeIndiaCodeMerges = async () => {
 
 module.exports = {
   completeRun,
+  reapStaleRuns,
   createRun,
   findExistingDocument,
   findCandidates,
