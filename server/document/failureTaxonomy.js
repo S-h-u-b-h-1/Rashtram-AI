@@ -157,6 +157,22 @@ const classifyFailureCode = (input = {}) => {
   const status = statusCodeFrom(input);
   const message = messageFrom(input);
 
+  // An explicitly-reported stage is authoritative; the message patterns
+  // below are only a heuristic fallback for callers that supply no stage.
+  //
+  // Without this, OCR failures get misfiled. A real production example:
+  // "OpenAI OCR is disabled because Gemini is the configured AI provider"
+  // reached the generic /summary|gemini|openai|model|generation/ branch
+  // and was recorded as SUMMARY_PROVIDER_ERROR for 326 documents. That
+  // reads as a benign summary problem (summaries do not gate readiness),
+  // while the truth was that OCR never ran and those documents could
+  // never become research-ready. Trusting the stage the pipeline already
+  // knows avoids that whole class of misdiagnosis.
+  const declaredStage = String(input.failureStage || "").trim().toLowerCase();
+  if (declaredStage === "ocr" && !/scanned|ocr required/.test(message)) {
+    return FAILURE_CODES.OCR_UNAVAILABLE;
+  }
+
   if (!input.hasPdf && !input.hasAccessibleResource && /missing_pdf|source only|no verified pdf|no accessible/.test(message)) {
     return FAILURE_CODES.DOWNLOAD_URL_MISSING;
   }

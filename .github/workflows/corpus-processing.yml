@@ -38,11 +38,31 @@ jobs:
       DATABASE_URL: ${{ secrets.DATABASE_URL }}
       OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
       PINECONE_API_KEY: ${{ secrets.PINECONE_API_KEY }}
+      # AI_PROVIDER was previously unset here. That silently broke OCR for
+      # every scanned PDF: extractTextWithOcr() only takes the Gemini path
+      # when GEMINI_API_KEY is present, and getOpenAI() refuses to run
+      # unless AI_PROVIDER is explicitly "openai". With neither set, all
+      # 326 OCR-requiring documents failed and could never become
+      # research-ready.
+      AI_PROVIDER: gemini
+      GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+      GEMINI_MODEL: gemini-2.5-flash
+      GEMINI_FALLBACK_MODEL: gemini-2.5-flash
+      GEMINI_OCR_MODEL: gemini-2.5-flash
+      GEMINI_EMBEDDING_MODEL: gemini-embedding-001
       OPENAI_MODEL: gpt-5.4-mini
       OPENAI_FALLBACK_MODEL: gpt-4.1-mini
       OPENAI_OCR_MODEL: gpt-5.4-mini
       OPENAI_EMBEDDING_MODEL: text-embedding-3-large
-      EMBEDDING_PROVIDER: openai
+      # Was "openai" while production runs Gemini-first. Because
+      # VECTOR_NAMESPACE falls back to `${EMBEDDING_MODEL}-${DIM}-v1` when
+      # PINECONE_NAMESPACE is unset, that combination derives
+      # "text-embedding-3-large-768-v1" here while the API reads
+      # "gemini-embedding-001-768-v1" — vectors written into a namespace
+      # production never queries. Align the provider AND pin the namespace
+      # from the same secret the API uses so the two cannot drift again.
+      EMBEDDING_PROVIDER: gemini
+      PINECONE_NAMESPACE: ${{ secrets.PINECONE_NAMESPACE }}
       PINECONE_INDEX_NAME: rashtram-bills
       PINECONE_ACT_INDEX_NAME: rashtram-acts
       PROCESSING_CONCURRENCY: "3"

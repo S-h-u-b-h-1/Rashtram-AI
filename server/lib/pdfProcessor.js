@@ -304,10 +304,19 @@ class PDFProcessor {
       throw error;
     }
     if (String(process.env.AI_PROVIDER || "").toLowerCase() !== "openai") {
+      // The old wording here ("disabled because Gemini is the configured
+      // AI provider") was actively misleading: this branch is reached
+      // precisely when Gemini is NOT usable — extractTextWithOcr only
+      // falls through to OpenAI when GEMINI_API_KEY is absent. It sent
+      // 326 production OCR failures to the wrong diagnosis. State the
+      // real condition instead.
       const error = new Error(
-        "OpenAI OCR is disabled because Gemini is the configured AI provider.",
+        "OCR is unavailable: no Gemini API key is configured, and the OpenAI " +
+          "OCR path requires AI_PROVIDER=openai to be set explicitly. " +
+          "Set GEMINI_API_KEY, or set AI_PROVIDER=openai with OPENAI_API_KEY.",
       );
       error.status = 422;
+      error.failureStage = "ocr";
       throw error;
     }
     if (!process.env.OPENAI_API_KEY) {
