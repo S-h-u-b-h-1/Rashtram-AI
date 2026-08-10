@@ -95,4 +95,12 @@ module.exports = [
     name: "024_shared_artifact_object_keys.js",
     migration: require("./024_shared_artifact_object_keys"),
   },
+  {
+    name: "025_remove_unused_schema_mirrors.js",
+    migration: require("./025_remove_unused_schema_mirrors"),
+  },
+  {
+    name: "026_restore_dedupe_candidates.js",
+    migration: require("./026_restore_dedupe_candidates"),
+  },
 ];

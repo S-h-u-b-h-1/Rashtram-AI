@@ -98,11 +98,11 @@ const checks = [
     ) AS passed`,
   },
   {
-    name: "latest migration is 024",
+    name: "latest migration is 026",
     sql: `SELECT (
       SELECT migration_name FROM schema_migrations
       ORDER BY applied_at DESC, migration_name DESC LIMIT 1
-    ) = '024_shared_artifact_object_keys.js' AS passed`,
+    ) = '026_restore_dedupe_candidates.js' AS passed`,
   },
   {
     name: "migration 022 columns complete",
@@ -146,6 +146,26 @@ const checks = [
         AND tablename = 'document_artifact_objects'
         AND indexname = 'document_artifact_objects_object_key_idx'
     ) AS passed`,
+  },
+  {
+    name: "migration 025 unused schema removed",
+    sql: `SELECT NOT EXISTS (
+      SELECT 1
+      FROM UNNEST(ARRAY[
+        'source_snapshots',
+        'source_connectors',
+        'contact_submissions',
+        'topic_taxonomy',
+        'document_topics',
+        'document_relationship_quarantine',
+        'system_events'
+      ]) AS removed(table_name)
+      WHERE TO_REGCLASS('public.' || removed.table_name) IS NOT NULL
+    ) AS passed`,
+  },
+  {
+    name: "migration 026 dedupe review queue restored",
+    sql: `SELECT TO_REGCLASS('public.dedupe_candidates') IS NOT NULL AS passed`,
   },
 ];
 

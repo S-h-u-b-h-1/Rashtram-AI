@@ -73,7 +73,6 @@ Exact predicates:
 - Successful ingestion detail rows: `status = 'stored'` and older than 30 days. Run summaries, documents, resources, and canonical source provenance remain.
 - Completed/cancelled processing jobs: terminal and older than 30 days; child attempts cascade.
 - Failed/dead-letter processing jobs: terminal and older than 90 days; child attempts cascade.
-- System events: older than 90 days.
 
 There is intentionally no automatic retention for source snapshots, audit logs, canonical data, chats, notes, comparisons, collections, document resources, or derived research text.
 
@@ -97,6 +96,89 @@ Avoid `VACUUM FULL`, `CLUSTER`, and non-concurrent index rebuilds during product
 ## Remaining capacity risk
 
 The outage is recovered, but 90.01% use is only about 51 MiB of headroom. Treat 85% as a warning and 90% as an incident threshold. Move to a Neon plan with at least 1 GiB logical storage before the next bulk ingestion or derived-data rebuild; target at least 25% steady-state free space. Retention protects operational growth but cannot offset growth in essential documents, resources, provenance, and research artifacts.
+
+## Schema decommission audit — 2026-08-10
+
+The production `public` schema was audited table by table using exact row
+counts, heap/index/TOAST size, cumulative access statistics, foreign keys,
+triggers, view/function dependencies, migration ownership, and runtime source
+references. A no-compute Neon rollback branch,
+`backup-pre-migration-025-20260810` (`br-little-firefly-ahhdgfk8`), was created
+at LSN `2/23965320` before migration 025 and expires on 2026-08-17.
+
+The audit also found that `schema_migrations` and two empty object-storage
+checkpoint tables had disappeared after 03:30 UTC even though migration 024
+had previously been applied. A point-in-time read-only branch recovered all 24
+original migration names, checksums, and timestamps. Those exact records were
+restored transactionally; `artifact_storage_migration_runs` and
+`artifact_storage_migration_items` were recreated only after confirming both
+held zero rows at the recovery point. The normal migrator then completed with
+zero pending migrations before the cleanup was applied.
+
+Migration `025_remove_unused_schema_mirrors.js` removed audited tables without
+`CASCADE`. Post-migration verification identified that the already-empty
+`dedupe_candidates` table is still read by the quality refresh path; migration
+026 immediately restored its exact empty schema before any document quality
+refresh ran. Seven tables remain decommissioned:
+
+| Removed table | Rows at recovery point | Relation bytes | Evidence |
+| --- | ---: | ---: | --- |
+| `source_snapshots` | 1,654 | 1,007,616 | Exact ID/content parity with active `source_collection_snapshots`; no runtime reads; obsolete one-way mirror trigger removed. |
+| `source_connectors` | 28 | 81,920 immediately before cleanup | No runtime reads; all configuration JSON was empty; enabled values matched `source_registry`; no orphan or unique configuration remained. |
+| `contact_submissions` | 0 | 24,576 | Empty one-time normalized copy; production contact writes use `contact_requests`. |
+| `topic_taxonomy` | 0 | 24,576 | Empty and no runtime reader/writer. |
+| `document_topics` | 0 | 16,384 | Empty and no runtime reader/writer. |
+| `document_relationship_quarantine` | 0 | 16,384 | Previously archived and truncated; no runtime reads; already absent at the initial live audit. |
+| `system_events` | 0 | 24,576 | Empty, no runtime reader/writer; already absent at the initial live audit. |
+
+The seven permanently retired relations represented 1,196,032 bytes at the
+recovery point. The measured live database moved from 491,372,544 bytes
+(91.53%) to 490,561,536
+bytes (91.37%), a net reduction of 811,008 bytes after restoring the required
+migration/checkpoint relations, restoring the dedupe queue, and running full
+quality verification. Headroom increased from 45,498,368 to 46,309,376 bytes.
+This cleanup is structurally useful but is not
+a capacity fix; processing remains paused and the safe bulk-processing limit
+remains zero.
+
+All 61 remaining tables were retained in these verified groups:
+
+- Canonical document/provenance/retrieval: `documents`, `document_sources`,
+  `document_resources`, `document_metadata`, `document_text_chunks`,
+  `document_text_artifacts`, `document_processing_state`,
+  `document_relationships`, `source_registry`, `source_health`,
+  `source_directory_entries`, `source_collection_snapshots`,
+  `intelligence_events`, and `recommendations`.
+- Processing and ingestion operations: `document_processing_jobs`,
+  `document_processing_attempts`, `document_processing_workers`,
+  `document_processing_audit_log`, `document_retry_domain_state`,
+  `document_catalogue_audit_checkpoints`, `catalog_match_reviews`,
+  `dedupe_candidates`,
+  `ingestion_runs`, `ingestion_run_items`, and `dashboard_metrics`.
+- User-owned and product data: `users`, `user_sessions`, `user_profiles`,
+  `user_preferences`, `user_research_preferences`, `user_activity_events`,
+  `user_document_interactions`, `research_chats`, `research_messages`,
+  `research_notes`, `research_collections`, `research_collection_items`,
+  `document_chats`, `document_chat_feedback`, `document_comparisons`,
+  `multi_document_chats`, `bookmarks`, `saved_content`, `saved_searches`,
+  `saved_graph_paths`, `audit_logs`, `contact_requests`, `feedback_submissions`,
+  and `bug_reports`.
+- Active compatibility: `legislative_documents`,
+  `legislative_document_resources`, `bill_chats`, `act_chats`,
+  `egazette_chats`, `policy_chats`, and `related_bills`. Empty chat tables were
+  retained because live models/routes still use them; the two legislative
+  mirrors remain heavily read and written.
+- Schema and object-storage control plane: `application_schema_versions`,
+  `schema_migrations`, `document_artifact_objects`,
+  `artifact_storage_migration_runs`, and `artifact_storage_migration_items`.
+
+No canonical document, citation chunk, full-text artifact, source/resource
+provenance, graph relationship, user record, chat, note, comparison,
+collection, active recommendation, or active processing row was deleted. A dry-run
+identified and the bounded retention policy removed 91 explicitly expired
+recommendations and 78 completed/cancelled processing jobs older than 30 days.
+Ordinary `VACUUM (ANALYZE)` made those pages reusable; `VACUUM FULL` was not
+run.
 ## Storage projection validation — 2026-08-01
 
 The post-migration-023 production baseline is **483,434,496 bytes

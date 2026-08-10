@@ -48,7 +48,6 @@ const OPERATIONAL_TABLES = new Set([
   "document_processing_jobs",
   "ingestion_run_items",
   "ingestion_runs",
-  "system_events",
   "user_sessions",
 ]);
 
@@ -101,14 +100,6 @@ const RETENTION_POLICIES = Object.freeze([
     predicate: "status IN ('failed', 'dead_letter') AND completed_at < NOW() - INTERVAL '90 days'",
     retention: "90 days for failure diagnosis; attempts cascade",
   },
-  {
-    name: "system events",
-    table: "system_events",
-    idColumn: "id",
-    orderColumn: "created_at",
-    predicate: "created_at < NOW() - INTERVAL '90 days'",
-    retention: "90 days",
-  },
 ]);
 
 const MAINTENANCE_TABLES = Object.freeze([
@@ -116,7 +107,6 @@ const MAINTENANCE_TABLES = Object.freeze([
   "document_processing_jobs",
   "ingestion_run_items",
   "recommendations",
-  "system_events",
   "user_sessions",
 ]);
 
@@ -232,10 +222,15 @@ const storageReport = async (pool) => {
       WHERE n.nspname = 'public'
       ORDER BY bytes DESC, i.relname
     `);
-    const migrations = await client.query(
-      `SELECT migration_name, applied_at
-       FROM schema_migrations ORDER BY applied_at, migration_name`,
+    const migrationTable = await client.query(
+      `SELECT TO_REGCLASS('public.schema_migrations') IS NOT NULL AS exists`,
     );
+    const migrations = migrationTable.rows[0]?.exists
+      ? await client.query(
+          `SELECT migration_name, applied_at
+           FROM schema_migrations ORDER BY applied_at, migration_name`,
+        )
+      : { rows: [] };
     await client.query("COMMIT");
     const databaseBytes = Number(database.rows[0].bytes);
     const maxBytes = Number(database.rows[0].max_cluster_size_bytes || 0);
@@ -249,6 +244,7 @@ const storageReport = async (pool) => {
         pooledConnection: isPooledConnectionString(process.env.DATABASE_URL || ""),
       },
       migrations: migrations.rows,
+      migrationTrackingPresent: Boolean(migrationTable.rows[0]?.exists),
       tables,
       indexes: indexes.rows.map((index) => ({
         ...index,

@@ -36,6 +36,30 @@ test("database migrations are versioned and ordered", () => {
   assert.ok(files.includes("015_normalize_failure_pipeline_stage.js"));
   assert.ok(files.includes("016_processing_audit_log.js"));
   assert.ok(files.includes("017_normalize_download_failure_codes.js"));
+  assert.equal(files.at(-1), "026_restore_dedupe_candidates.js");
+});
+
+test("dedupe review queue is restored after cleanup dependency verification", () => {
+  const migration = fs.readFileSync(
+    path.join(__dirname, "../migrations/026_restore_dedupe_candidates.js"),
+    "utf8",
+  );
+  assert.match(migration, /CREATE TABLE IF NOT EXISTS dedupe_candidates/);
+  assert.match(migration, /CHECK \(document_id <> candidate_document_id\)/);
+  assert.match(migration, /UNIQUE \(document_id, candidate_document_id, match_type\)/);
+});
+
+test("unused-schema cleanup is explicit and never cascades", () => {
+  const migration = fs.readFileSync(
+    path.join(__dirname, "../migrations/025_remove_unused_schema_mirrors.js"),
+    "utf8",
+  );
+  assert.match(migration, /DROP TRIGGER IF EXISTS source_collection_snapshots_sync_v2/);
+  assert.match(migration, /DROP TABLE IF EXISTS source_snapshots/);
+  assert.match(migration, /DROP TABLE IF EXISTS document_relationship_quarantine/);
+  assert.doesNotMatch(migration, /CASCADE/i);
+  assert.doesNotMatch(migration, /legislative_documents/);
+  assert.doesNotMatch(migration, /document_text_(chunks|artifacts)/);
 });
 
 test("quality score rewards provenance and processing evidence", () => {

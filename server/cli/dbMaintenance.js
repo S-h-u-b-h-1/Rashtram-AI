@@ -4,7 +4,11 @@ const path = require("node:path");
 require("dotenv").config({
   path: process.env.ENV_FILE || path.resolve(__dirname, "../.env.local"),
 });
-const { createMaintenancePool, runMaintenance } = require("../lib/database/maintenance");
+const {
+  MAINTENANCE_TABLES,
+  createMaintenancePool,
+  runMaintenance,
+} = require("../lib/database/maintenance");
 
 const maxTablesArg = process.argv.find((arg) => arg.startsWith("--max-tables="));
 
@@ -13,7 +17,9 @@ const main = async () => {
   try {
     const result = await runMaintenance(pool, {
       dryRun: process.argv.includes("--dry-run"),
-      maxTables: maxTablesArg ? Number(maxTablesArg.slice("--max-tables=".length)) : 6,
+      maxTables: maxTablesArg
+        ? Number(maxTablesArg.slice("--max-tables=".length))
+        : MAINTENANCE_TABLES.length,
       onProgress: (progress) =>
         console.error(JSON.stringify({ progress })),
     });
