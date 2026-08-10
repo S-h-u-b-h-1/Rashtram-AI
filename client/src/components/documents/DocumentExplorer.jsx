@@ -104,7 +104,7 @@ export function DocumentExplorer({
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [sortBy, setSortBy] = useState("publicationDate");
+  const [sortBy, setSortBy] = useState("cataloguedAt");
   const [sortDirection, setSortDirection] = useState("desc");
   const {
     addDocument,

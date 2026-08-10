@@ -423,6 +423,7 @@ const DOCUMENT_DATE_EXPRESSION = `COALESCE(
 )`;
 
 const SORT_COLUMNS = {
+  cataloguedAt: "first_seen_at",
   relevance: "search_rank",
   publicationDate: DOCUMENT_DATE_EXPRESSION,
   updatedAt: "updated_at",

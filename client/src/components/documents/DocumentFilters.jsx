@@ -28,7 +28,7 @@ export function DocumentFilters({
   showType = true,
   filterKeys,
   filterLabels = {},
-  sortBy = "publicationDate",
+  sortBy = "cataloguedAt",
   sortDirection = "desc",
   onQueryChange,
   onFilterChange,
@@ -134,6 +134,7 @@ export function DocumentFilters({
               onChange={(event) => onSortChange(event.target.value)}
               className="h-10 w-full rounded-xl border border-[#8f1d2c]/10 bg-white px-3 text-xs text-[#29312d]"
             >
+              <option value="cataloguedAt">Recently catalogued</option>
               <option value="publicationDate">Publication date</option>
               <option value="updatedAt">Recently updated</option>
               <option value="year">Year</option>
