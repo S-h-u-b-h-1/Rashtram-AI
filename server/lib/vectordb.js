@@ -2,6 +2,11 @@ const { Pinecone } = require("@pinecone-database/pinecone");
 const { sanitizeProviderError } = require("./providerErrorSanitizer");
 const { createCircuitBreaker } = require("./circuitBreaker");
 const { checkVectorNamespaces } = require("./vectorNamespaceHealth");
+const {
+  createRateLimitedQueue,
+  isRateLimitError,
+  retryAfterSecondsFrom,
+} = require("./rateLimitedQueue");
 
 const EMBEDDING_DIMENSION = 768;
 const EMBEDDING_BATCH_SIZE = 50;
@@ -199,6 +204,8 @@ const geminiFetch = async (model, action, body, options = {}) => {
       );
       error.status = response.status;
       error.provider = "gemini";
+      error.headers = Object.fromEntries(response.headers.entries());
+      error.payload = payload;
       throw error;
     }
     return options.stream ? response : response.json();
@@ -329,8 +336,12 @@ const isUnavailableModelError = (error) => {
   );
 };
 
-const withOpenAIRetry = async (operation, label, attempts = 3) => {
+const withOpenAIRetry = async (operation, label, attempts = 3, options = {}) => {
   let lastError;
+  const maxRetryAfterMs = Math.max(
+    0,
+    Number(options.maxRetryAfterMs ?? process.env.AI_RATE_LIMIT_MAX_RETRY_WAIT_MS ?? 30_000),
+  );
 
   for (let attempt = 1; attempt <= attempts; attempt += 1) {
     try {
@@ -339,7 +350,16 @@ const withOpenAIRetry = async (operation, label, attempts = 3) => {
       lastError = error;
       if (!isTransientOpenAIError(error) || attempt === attempts) throw error;
 
-      const delay = 1_000 * 2 ** (attempt - 1);
+      const retryAfterSeconds = isRateLimitError(error)
+        ? retryAfterSecondsFrom(error)
+        : 0;
+      if (options.rateLimiter && retryAfterSeconds > 0) {
+        options.rateLimiter.noteRetryAfter(retryAfterSeconds);
+      }
+      const retryAfterMs = retryAfterSeconds > 0
+        ? Math.min(maxRetryAfterMs, Math.ceil(retryAfterSeconds * 1000))
+        : 0;
+      const delay = retryAfterMs || 1_000 * 2 ** (attempt - 1);
       console.warn(
         `${label} temporarily unavailable; retrying in ${delay}ms`,
       );
@@ -560,8 +580,35 @@ const isResponsesApiUnavailable = (error) => {
   );
 };
 
+// Gemini's free tier caps generate_content at ~20 requests per short
+// window. The breaker only reacts once calls already failed; pacing stops
+// the burst that trips the limit in the first place. Configurable so a
+// paid tier can raise it without a code change.
+const generationQueue = createRateLimitedQueue({
+  maxRequests: Number(
+    process.env.GEMINI_GENERATION_MAX_REQUESTS_PER_WINDOW ||
+      process.env.AI_GENERATION_RPM ||
+      18,
+  ),
+  windowMs: Number(process.env.GEMINI_GENERATION_WINDOW_MS || 60_000),
+  safetyFactor: Number(process.env.GEMINI_GENERATION_SAFETY_FACTOR || 0.85),
+});
+
 const runGeneration = (method, contents, options = {}) =>
-  generationBreaker.exec(() => runGenerationInternal(method, contents, options));
+  generationBreaker.exec(() =>
+    generationQueue.schedule(async () => {
+      try {
+        return await runGenerationInternal(method, contents, options);
+      } catch (error) {
+        // Feed the provider's own stated wait back into the pacer so the
+        // next caller doesn't immediately retry into the same limit.
+        if (isRateLimitError(error)) {
+          generationQueue.noteRetryAfter(retryAfterSecondsFrom(error) || 20);
+        }
+        throw error;
+      }
+    }),
+  );
 
 const runGenerationInternal = async (method, contents, options = {}) => {
   const models = generationModels().slice(
@@ -591,6 +638,10 @@ const runGenerationInternal = async (method, contents, options = {}) => {
             ),
           `Gemini model ${model}`,
           attempts,
+          {
+            rateLimiter: generationQueue,
+            maxRetryAfterMs: options.maxRetryAfterMs,
+          },
         );
         return stream ? geminiEventStream(response) : response;
       } catch (error) {
@@ -1125,8 +1176,12 @@ ${context}
   const response = await runGeneration("generateContent", prompt, {
     // Comparisons run in a serverless request. Fail over to the grounded
     // extractive result before the platform timeout instead of hanging the UI.
+    // Gemini may return short-window free-tier retry hints such as
+    // "Please retry in 28s"; honor one bounded retry so normal bursts still
+    // produce a full AI comparison when there is enough request time.
     timeoutMs: Number(process.env.COMPARISON_AI_TIMEOUT_MS || 12_000),
-    attempts: 1,
+    attempts: Number(process.env.COMPARISON_AI_ATTEMPTS || 2),
+    maxRetryAfterMs: Number(process.env.COMPARISON_AI_MAX_RETRY_AFTER_MS || 25_000),
     maxModels: 1,
   });
   return parseJsonResponse(responseText(response));
