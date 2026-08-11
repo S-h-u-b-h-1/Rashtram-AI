@@ -80,6 +80,13 @@ jobs:
       - name: Install backend dependencies
         run: npm ci
 
+      # Runs before migrations and before any job is dequeued. A
+      # misconfigured run is worse than no run: it burns queue attempts,
+      # advances retry counters toward dead-letter, and writes partial
+      # state. This is what was missing when 326 documents failed OCR.
+      - name: Verify processing configuration
+        run: npm run process:verify-config
+
       - name: Apply additive database migrations
         run: npm run db:migrate
 
