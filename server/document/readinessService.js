@@ -211,10 +211,23 @@ const prepareDocument = async (
     );
     Object.assign(job, claimed.rows[0] || {});
   }
-  const queueWaitMs = Math.max(
-    0,
-    new Date(job.claimed_at || Date.now()).getTime() -
-      new Date(job.queued_at || Date.now()).getTime(),
+  // document_processing_attempts.queue_wait_ms is INTEGER, so it overflows
+  // at 2,147,483,647 ms — about 24.9 days. Jobs queued before processing was
+  // paused sat far longer than that, so claiming one raised
+  // "value out of range for type integer" (SQLSTATE 22003) and surfaced to
+  // users as a 500 from Prepare. Clamp instead of widening the column: this
+  // value is diagnostic only, and ALTER TYPE ... BIGINT would rewrite the
+  // table, which needs headroom the database does not currently have.
+  // A clamped reading still says "waited at least 24.9 days", which is all
+  // the metric is used for.
+  const MAX_QUEUE_WAIT_MS = 2_147_483_647;
+  const queueWaitMs = Math.min(
+    MAX_QUEUE_WAIT_MS,
+    Math.max(
+      0,
+      new Date(job.claimed_at || Date.now()).getTime() -
+        new Date(job.queued_at || Date.now()).getTime(),
+    ),
   );
   await query(
     `INSERT INTO document_processing_attempts (
