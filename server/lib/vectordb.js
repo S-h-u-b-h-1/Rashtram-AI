@@ -1,6 +1,7 @@
 const { Pinecone } = require("@pinecone-database/pinecone");
 const { sanitizeProviderError } = require("./providerErrorSanitizer");
 const { createCircuitBreaker } = require("./circuitBreaker");
+const { checkVectorNamespaces } = require("./vectorNamespaceHealth");
 
 const EMBEDDING_DIMENSION = 768;
 const EMBEDDING_BATCH_SIZE = 50;
@@ -464,6 +465,29 @@ const validateAIProvider = async ({ force = false } = {}) => {
     }
   } catch (error) {
     health.errors.streaming = sanitizeProviderError(error);
+  }
+
+  // Namespace occupancy. Reported even when generation and embedding are
+  // healthy, because an orphaned namespace produces no errors at all —
+  // just silently empty vector search. This is what makes switching
+  // embedding provider a visible, verifiable operation instead of a
+  // change that quietly strands the corpus.
+  try {
+    health.vectorNamespace = await checkVectorNamespaces(
+      [
+        { name: "bills", index: getIndex() },
+        { name: "acts", index: getActIndex() },
+      ],
+      VECTOR_NAMESPACE,
+    );
+    if (!health.vectorNamespace.healthy) {
+      const detail = Object.values(health.vectorNamespace.indexes)
+        .map((entry) => entry.message)
+        .filter(Boolean)[0];
+      if (detail) health.errors.vectorNamespace = detail;
+    }
+  } catch (error) {
+    health.errors.vectorNamespace = sanitizeProviderError(error);
   }
 
   aiHealthCache = { ...aiHealthCache, checkedAt: now, result: health };
