@@ -1,4 +1,5 @@
 const { query } = require("../../../db");
+const { findUnseenSourceRecordIds } = require("./catalogRepository");
 const { PoliteFetcher } = require("./fetcher");
 
 const PRODUCTION_CONNECTORS = new Set([
@@ -140,6 +141,31 @@ const probeConnector = async (
         String(error.message || error.error || ""),
       ),
     );
+    // Upstream-vs-local drift. "Last run succeeded" is not evidence of
+    // freshness: a run can complete cleanly, log zero errors, and still be
+    // months behind, which is precisely how PRS Parliament Bills stopped
+    // at June 27 while every indicator read healthy. Ask the only question
+    // that actually detects it — of the records this source is publishing
+    // right now, how many did we never store?
+    let unseenRecordIds = [];
+    let unseenCheckFailed = false;
+    if (shape.valid && discovered > 0 && dependencies.findUnseenSourceRecordIds) {
+      const sampledIds = (collection.records || [])
+        .map((record) => record?.sourceRecordId || record?.sourceDocumentId)
+        .filter(Boolean)
+        .map(String);
+      try {
+        unseenRecordIds = await dependencies.findUnseenSourceRecordIds(
+          connector.name,
+          sampledIds,
+        );
+      } catch (error) {
+        // Never let a freshness lookup failure masquerade as freshness.
+        unseenCheckFailed = true;
+      }
+    }
+    const unseenCount = unseenRecordIds.length;
+
     let status = "connected";
 
     if (!shape.valid) status = "parser changed";
@@ -176,10 +202,30 @@ const probeConnector = async (
       status = "no data found";
     }
 
+    // Applied last, and only over an otherwise-healthy result: a source
+    // that is reachable and parsing correctly but is publishing documents
+    // we never stored is behind, not fine. This is the state that used to
+    // be invisible.
+    if (status === "connected" && unseenCount > 0) {
+      status = "behind upstream";
+    }
+
     return {
       source: connector.name,
       status,
-      displayStatus: displayStatusFor(status, history),
+      displayStatus:
+        status === "behind upstream"
+          ? "Behind Upstream"
+          : displayStatusFor(status, history),
+      // Surfaced explicitly so operators can see drift without inferring
+      // it from a "success" flag that cannot express it.
+      sampleRecordsUnseenLocally: unseenCount,
+      unseenSampleRecordIds: unseenRecordIds.slice(0, 10),
+      freshnessCheck: unseenCheckFailed
+        ? "unavailable"
+        : dependencies.findUnseenSourceRecordIds
+        ? "checked"
+        : "not_checked",
       reachable,
       parserShapeValid: shape.valid,
       parserStatus: shape.valid ? "Valid" : "Changed",
@@ -307,6 +353,10 @@ const runConnectorHealthChecks = async (connectors, options = {}) => {
     reports.push(
       await probeConnector(connector, options, {
         history: history.get(connector.name) || {},
+        // Injected rather than imported so probeConnector stays unit
+        // testable without a database.
+        findUnseenSourceRecordIds:
+          options.findUnseenSourceRecordIds || findUnseenSourceRecordIds,
       }),
     );
   }

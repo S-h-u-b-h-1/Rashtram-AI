@@ -45,6 +45,28 @@ const reapStaleRuns = async (maxHours = STALE_RUN_HOURS) => {
   return result.rows;
 };
 
+// Given the source records a health probe just discovered upstream,
+// return the identifiers that do NOT exist in the local catalogue.
+//
+// This is the signal that "last run succeeded" cannot give us. A run can
+// complete successfully, report zero errors, and still be silently months
+// behind — which is exactly how PRS Parliament Bills stopped at June 27
+// while every dashboard showed the source as healthy. Comparing what the
+// source is publishing right now against what we actually stored turns
+// that invisible drift into a measurable number.
+const findUnseenSourceRecordIds = async (sourceName, sourceRecordIds = []) => {
+  const ids = [...new Set(sourceRecordIds.map(String).filter(Boolean))];
+  if (!sourceName || ids.length === 0) return [];
+  const result = await query(
+    `SELECT source_record_id
+       FROM document_sources
+      WHERE source_name = $1 AND source_record_id = ANY($2::text[])`,
+    [sourceName, ids],
+  );
+  const present = new Set(result.rows.map((row) => String(row.source_record_id)));
+  return ids.filter((id) => !present.has(id));
+};
+
 const createRun = async ({ sourceName, collectionName, options = {} }) => {
   // Best-effort: never let cleanup prevent a new run from starting.
   await reapStaleRuns().catch((error) =>
@@ -1340,6 +1362,7 @@ const repairCrossTypeIndiaCodeMerges = async () => {
 
 module.exports = {
   completeRun,
+  findUnseenSourceRecordIds,
   reapStaleRuns,
   createRun,
   findExistingDocument,
