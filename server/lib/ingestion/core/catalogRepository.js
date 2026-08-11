@@ -1,5 +1,6 @@
 const crypto = require("crypto");
 const { connectDB, getPool, query } = require("../../../db");
+const { sourceNameGroup } = require("./sourceIdentity");
 
 // completeRun() only executes on the happy path, so a run whose process
 // is killed mid-flight (serverless timeout, cancelled CI job, terminated
@@ -57,11 +58,15 @@ const reapStaleRuns = async (maxHours = STALE_RUN_HOURS) => {
 const findUnseenSourceRecordIds = async (sourceName, sourceRecordIds = []) => {
   const ids = [...new Set(sourceRecordIds.map(String).filter(Boolean))];
   if (!sourceName || ids.length === 0) return [];
+  // Match across retired identities for the same upstream source,
+  // otherwise a renamed connector reports every historical document as
+  // "unseen" and a healthy source looks permanently behind.
+  const names = sourceNameGroup(sourceName);
   const result = await query(
     `SELECT source_record_id
        FROM document_sources
-      WHERE source_name = $1 AND source_record_id = ANY($2::text[])`,
-    [sourceName, ids],
+      WHERE source_name = ANY($1::text[]) AND source_record_id = ANY($2::text[])`,
+    [names, ids],
   );
   const present = new Set(result.rows.map((row) => String(row.source_record_id)));
   return ids.filter((id) => !present.has(id));
