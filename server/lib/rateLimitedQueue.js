@@ -34,14 +34,31 @@ const createRateLimitedQueue = ({
     timestamps = timestamps.filter((stamp) => stamp > cutoff);
   };
 
-  const waitForSlot = async () => {
+  const waitForSlot = async ({ maxWaitMs = Infinity } = {}) => {
+    const started = now();
+    const waitOrThrow = async (ms) => {
+      const delay = Math.max(1, ms);
+      if (
+        Number.isFinite(maxWaitMs) &&
+        now() - started + delay > maxWaitMs
+      ) {
+        const error = new Error(
+          `Provider rate limit queue wait exceeded ${maxWaitMs}ms.`,
+        );
+        error.status = 429;
+        error.retryAfter = Math.ceil(delay / 1000);
+        throw error;
+      }
+      await sleep(delay);
+    };
+
     for (;;) {
       const t = now();
 
       // A provider-supplied Retry-After always wins over our own model of
       // the window — it reflects state we cannot see.
       if (retryAfterUntil > t) {
-        await sleep(retryAfterUntil - t);
+        await waitOrThrow(retryAfterUntil - t);
         continue;
       }
 
@@ -53,7 +70,7 @@ const createRateLimitedQueue = ({
 
       // Wait until the oldest request leaves the sliding window.
       const oldest = timestamps[0];
-      await sleep(Math.max(1, oldest + windowMs - t));
+      await waitOrThrow(oldest + windowMs - t);
     }
   };
 
@@ -63,8 +80,8 @@ const createRateLimitedQueue = ({
     if (ms > 0) retryAfterUntil = Math.max(retryAfterUntil, now() + ms);
   };
 
-  const schedule = async (fn) => {
-    const ticket = admission.then(waitForSlot);
+  const schedule = async (fn, options = {}) => {
+    const ticket = admission.then(() => waitForSlot(options));
     // Keep the chain alive even if this admission rejects, so one failure
     // cannot wedge the queue for every later caller.
     admission = ticket.catch(() => undefined);

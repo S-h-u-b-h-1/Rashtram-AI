@@ -442,6 +442,11 @@ const validateAIProvider = async ({ force = false } = {}) => {
     const response = await runGeneration(
       "generateContent",
       "Reply with exactly: OK",
+      {
+        attempts: 1,
+        maxQueueWaitMs: Number(process.env.AI_HEALTH_MAX_QUEUE_WAIT_MS || 5_000),
+        timeoutMs: Number(process.env.AI_HEALTH_REQUEST_TIMEOUT_MS || 8_000),
+      },
     );
     health.generationAvailable = Boolean(responseText(response).trim());
     health.latencyMs.generation = Date.now() - started;
@@ -472,6 +477,11 @@ const validateAIProvider = async ({ force = false } = {}) => {
     const stream = await runGeneration(
       "generateContentStream",
       "Reply with exactly: OK",
+      {
+        attempts: 1,
+        maxQueueWaitMs: Number(process.env.AI_HEALTH_MAX_QUEUE_WAIT_MS || 5_000),
+        timeoutMs: Number(process.env.AI_HEALTH_REQUEST_TIMEOUT_MS || 8_000),
+      },
     );
     for await (const chunk of stream) {
       if (chunk.text) {
@@ -596,18 +606,27 @@ const generationQueue = createRateLimitedQueue({
 
 const runGeneration = (method, contents, options = {}) =>
   generationBreaker.exec(() =>
-    generationQueue.schedule(async () => {
-      try {
-        return await runGenerationInternal(method, contents, options);
-      } catch (error) {
-        // Feed the provider's own stated wait back into the pacer so the
-        // next caller doesn't immediately retry into the same limit.
-        if (isRateLimitError(error)) {
-          generationQueue.noteRetryAfter(retryAfterSecondsFrom(error) || 20);
+    generationQueue.schedule(
+      async () => {
+        try {
+          return await runGenerationInternal(method, contents, options);
+        } catch (error) {
+          // Feed the provider's own stated wait back into the pacer so the
+          // next caller doesn't immediately retry into the same limit.
+          if (isRateLimitError(error)) {
+            generationQueue.noteRetryAfter(retryAfterSecondsFrom(error) || 20);
+          }
+          throw error;
         }
-        throw error;
-      }
-    }),
+      },
+      {
+        maxWaitMs: Number(
+          options.maxQueueWaitMs ??
+            process.env.AI_GENERATION_MAX_QUEUE_WAIT_MS ??
+            30_000,
+        ),
+      },
+    ),
   );
 
 const runGenerationInternal = async (method, contents, options = {}) => {

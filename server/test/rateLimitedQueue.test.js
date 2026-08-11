@@ -78,6 +78,17 @@ test("a provider Retry-After overrides our own window model", async () => {
   );
 });
 
+test("a bounded queue wait fails fast instead of hanging callers", async () => {
+  const h = harness();
+  const q = createRateLimitedQueue({ maxRequests: 20, windowMs: 60_000, now: h.now, sleep: h.sleep });
+  q.noteRetryAfter(17);
+  await assert.rejects(
+    () => q.schedule(async () => "too-late", { maxWaitMs: 5_000 }),
+    /queue wait exceeded 5000ms/,
+  );
+  assert.equal(h.sleeps.length, 0, "bounded callers should fail before sleeping");
+});
+
 test("parses Gemini's retryDelay and standard Retry-After", () => {
   assert.equal(
     retryAfterSecondsFrom({ message: 'RESOURCE_EXHAUSTED ... "retryDelay":"17s"' }),
