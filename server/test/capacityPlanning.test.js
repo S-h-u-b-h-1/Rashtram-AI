@@ -18,6 +18,7 @@ const {
 } = require("../lib/storage/objectStorage");
 const {
   artifactKindForRow,
+  clearMigratedInlineArtifacts,
   migrateArtifacts,
 } = require("../lib/storage/artifactMigration");
 const {
@@ -313,6 +314,45 @@ test("artifact migration records a reference only after object verification", as
   assert.ok(events.indexOf("database-reference") > events.indexOf("read-verify"));
   assert.equal(artifactKindForRow({ extraction_method: "source_html" }), "source-html");
   assert.equal(artifactKindForRow({ extraction_method: "gemini_ocr" }), "ocr-text");
+});
+
+test("inline artifact cleanup requires explicit upload-checksum trust", async () => {
+  const pool = {
+    query: async () => {
+      throw new Error("cleanup should not query without explicit trust");
+    },
+  };
+  await assert.rejects(
+    clearMigratedInlineArtifacts(pool, { trustUploadChecksum: false }),
+    (error) => error.code === "INLINE_ARTIFACT_CLEAR_REQUIRES_TRUST",
+  );
+});
+
+test("inline artifact cleanup only clears verified migrated payloads", async () => {
+  const queries = [];
+  const pool = {
+    query: async (sql, params) => {
+      queries.push({ sql, params });
+      assert.match(sql, /JOIN document_artifact_objects object/);
+      assert.match(sql, /object\.status = 'verified'/);
+      assert.match(sql, /originalTextExternalized/);
+      assert.deepEqual(params, [2]);
+      return {
+        rowCount: 2,
+        rows: [{ cleared_bytes: "11" }, { cleared_bytes: "7" }],
+      };
+    },
+  };
+  const result = await clearMigratedInlineArtifacts(pool, {
+    limit: 2,
+    trustUploadChecksum: true,
+  });
+  assert.equal(queries.length, 1);
+  assert.deepEqual(result, {
+    clearedRows: 2,
+    clearedBytes: 18,
+    trustUploadChecksum: true,
+  });
 });
 
 test("backend and Next metadata provide favicon endpoints", () => {

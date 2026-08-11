@@ -105,7 +105,7 @@ const dryRunArtifactMigration = async (pool, { limit = 10 } = {}) => {
 
 const migrateArtifacts = async (
   pool,
-  { limit = 10, env = process.env, storage } = {},
+  { limit = 10, env = process.env, storage, trustUploadChecksum = false } = {},
 ) => {
   const bounded = boundedLimit(limit);
   if (!objectStorageConfig(env).configured && !storage) {
@@ -145,13 +145,35 @@ const migrateArtifacts = async (
         metadata: { processingVersion },
       });
       objectKey = uploaded.key;
-      const head = await objectStorage.headArtifact(uploaded.key);
-      const read = await objectStorage.getArtifact({
-        key: uploaded.key,
-        expectedHash: hash,
-      });
-      if (head.hash !== hash || head.bytes !== body.length || !read.body.equals(body)) {
-        const error = new Error("Uploaded artifact failed byte/checksum verification.");
+      // Read-back verification costs two Class B (download) transactions
+      // per artifact — a HEAD and a GET. On Backblaze's free tier that
+      // allowance is the binding constraint: 1,326 artifacts exhausted the
+      // daily cap and every subsequent read returned
+      // "download bandwidth or transaction (Class B) cap exceeded".
+      //
+      // putArtifact already sends ChecksumSHA256, so B2 recomputes the
+      // SHA-256 server-side during upload and REJECTS the write on
+      // mismatch. A successful PUT is therefore already proof that the
+      // stored bytes hash to `hash`. The read-back re-proves the same
+      // fact at 2x the scarce quota.
+      //
+      // trustUploadChecksum skips the redundant reads. It is opt-in
+      // because read-back additionally proves the object is *retrievable*,
+      // not merely correct — worth keeping as the default.
+      if (!trustUploadChecksum) {
+        const head = await objectStorage.headArtifact(uploaded.key);
+        const read = await objectStorage.getArtifact({
+          key: uploaded.key,
+          expectedHash: hash,
+        });
+        if (head.hash !== hash || head.bytes !== body.length || !read.body.equals(body)) {
+          const error = new Error("Uploaded artifact failed byte/checksum verification.");
+          error.code = "OBJECT_STORAGE_VERIFICATION_FAILED";
+          throw error;
+        }
+      } else if (uploaded.hash !== hash || uploaded.bytes !== body.length) {
+        // Defensive: the adapter must have hashed the same bytes we sent.
+        const error = new Error("Upload checksum did not match the source artifact.");
         error.code = "OBJECT_STORAGE_VERIFICATION_FAILED";
         throw error;
       }
@@ -260,6 +282,63 @@ const verifyArtifactObjects = async (
   return { checked: result.rows.length, verified: result.rows.length - failures.length, failures };
 };
 
+const clearMigratedInlineArtifacts = async (
+  pool,
+  { limit = 500, trustUploadChecksum = false } = {},
+) => {
+  if (!trustUploadChecksum) {
+    const error = new Error(
+      "Clearing inline artifact payloads requires explicit --trust-upload-checksum.",
+    );
+    error.code = "INLINE_ARTIFACT_CLEAR_REQUIRES_TRUST";
+    throw error;
+  }
+  const bounded = boundedLimit(limit, 500);
+  const result = await pool.query(
+    `WITH candidates AS (
+       SELECT
+         artifact.document_id,
+         artifact.original_text,
+         object.object_key,
+         object.sha256,
+         object.byte_size
+       FROM document_text_artifacts artifact
+       JOIN document_artifact_objects object
+         ON object.document_id = artifact.document_id
+        AND object.status = 'verified'
+        AND object.source_locator = 'document_text_artifacts.original_text'
+       WHERE btrim(artifact.original_text) <> ''
+       ORDER BY artifact.document_id
+       LIMIT $1
+     )
+     UPDATE document_text_artifacts artifact
+     SET original_text = '',
+         metadata_json = COALESCE(artifact.metadata_json, '{}'::jsonb)
+           || jsonb_build_object(
+             'originalTextExternalized', true,
+             'originalTextObjectKey', candidates.object_key,
+             'originalTextSha256', candidates.sha256,
+             'originalTextByteSize', candidates.byte_size,
+             'originalTextClearedAt', NOW()
+           ),
+         updated_at = NOW()
+     FROM candidates
+     WHERE artifact.document_id = candidates.document_id
+     RETURNING
+       artifact.document_id,
+       octet_length(candidates.original_text)::BIGINT AS cleared_bytes`,
+    [bounded],
+  );
+  return {
+    clearedRows: result.rowCount,
+    clearedBytes: result.rows.reduce(
+      (sum, row) => sum + Number(row.cleared_bytes || 0),
+      0,
+    ),
+    trustUploadChecksum,
+  };
+};
+
 const rollbackArtifactMigration = async (pool, runId) => {
   const client = await pool.connect();
   try {
@@ -300,6 +379,7 @@ module.exports = {
   artifactKindForRow,
   auditArtifactStorage,
   boundedLimit,
+  clearMigratedInlineArtifacts,
   dryRunArtifactMigration,
   migrateArtifacts,
   rollbackArtifactMigration,

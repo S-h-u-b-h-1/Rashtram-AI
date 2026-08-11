@@ -6,6 +6,7 @@ const {
   PutObjectCommand,
   S3Client,
 } = require("@aws-sdk/client-s3");
+const { NodeHttpHandler } = require("@smithy/node-http-handler");
 
 const ARTIFACT_KINDS = new Set([
   "pdf",
@@ -33,6 +34,10 @@ const artifactKey = ({ kind, hash, extension = "bin" }) => {
 };
 
 const objectStorageConfig = (env = process.env) => {
+  const requestTimeoutMs = Number.parseInt(
+    env.OBJECT_STORAGE_REQUEST_TIMEOUT_MS || "120000",
+    10,
+  );
   const provider = String(env.OBJECT_STORAGE_PROVIDER || "disabled").trim().toLowerCase();
   const endpoint = env.OBJECT_STORAGE_ENDPOINT || null;
   const bucket = env.OBJECT_STORAGE_BUCKET || null;
@@ -51,6 +56,9 @@ const objectStorageConfig = (env = process.env) => {
     ),
     credentials: configured ? { accessKeyId, secretAccessKey } : null,
     publicBaseUrl: env.OBJECT_STORAGE_PUBLIC_BASE_URL || null,
+    requestTimeoutMs: Number.isFinite(requestTimeoutMs) && requestTimeoutMs > 0
+      ? requestTimeoutMs
+      : 120000,
   };
 };
 
@@ -77,6 +85,10 @@ const createObjectStorage = ({ env = process.env, client } = {}) => {
     region: config.region,
     forcePathStyle: config.forcePathStyle,
     credentials: config.credentials,
+    requestHandler: new NodeHttpHandler({
+      connectionTimeout: Math.min(config.requestTimeoutMs, 15000),
+      socketTimeout: config.requestTimeoutMs,
+    }),
   });
   const bucket = config.bucket || env.OBJECT_STORAGE_BUCKET;
 

@@ -6,6 +6,7 @@ require("dotenv").config({
 });
 const { getPool } = require("../db");
 const {
+  clearMigratedInlineArtifacts,
   dryRunArtifactMigration,
   migrateArtifacts,
   rollbackArtifactMigration,
@@ -15,13 +16,26 @@ const valueArg = (name) => process.argv.find((argument) => argument.startsWith(`
   ?.slice(name.length + 3);
 const limit = Number(valueArg("limit") || 10);
 const rollbackRun = valueArg("rollback-run");
+const clearInline = process.argv.includes("--clear-inline");
+const trustUploadChecksum = process.argv.includes("--trust-upload-checksum");
 const dryRun = process.argv.includes("--dry-run") ||
-  (!process.argv.some((argument) => argument.startsWith("--limit=")) && !rollbackRun);
+  (!process.argv.some((argument) => argument.startsWith("--limit=")) &&
+    !rollbackRun &&
+    !clearInline);
 
 const execute = () => {
   if (rollbackRun) return rollbackArtifactMigration(getPool(), Number(rollbackRun));
+  if (clearInline) {
+    return clearMigratedInlineArtifacts(getPool(), {
+      limit,
+      trustUploadChecksum,
+    });
+  }
   if (dryRun) return dryRunArtifactMigration(getPool(), { limit });
-  return migrateArtifacts(getPool(), { limit });
+  return migrateArtifacts(getPool(), {
+    limit,
+    trustUploadChecksum,
+  });
 };
 
 execute()

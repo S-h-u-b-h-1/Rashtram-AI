@@ -37,6 +37,10 @@ const DocumentRepository = require("./DocumentRepository");
 const {
   fetchArticle,
 } = require("../lib/ingestion/connectors/policyedgeConnector");
+const {
+  createObjectStorage,
+  objectStorageConfig,
+} = require("../lib/storage/objectStorage");
 
 const TYPE_CONFIG = {
   bill: {
@@ -154,6 +158,36 @@ const getTextArtifact = async (documentId) => {
     pdfQuality: row.pdf_quality_json || {},
     updatedAt: row.updated_at,
   };
+};
+
+const loadExternalizedOriginalText = async (documentId) => {
+  const result = await query(
+    `SELECT object_key, sha256
+     FROM document_artifact_objects
+     WHERE document_id = $1
+       AND status = 'verified'
+       AND source_locator = 'document_text_artifacts.original_text'
+     ORDER BY verified_at DESC NULLS LAST, updated_at DESC
+     LIMIT 1`,
+    [documentId],
+  );
+  const object = result.rows[0];
+  if (!object?.object_key || !objectStorageConfig().configured) return "";
+  try {
+    const storage = createObjectStorage();
+    const artifact = await storage.getArtifact({
+      key: object.object_key,
+      expectedHash: object.sha256,
+    });
+    return artifact.body.toString("utf8");
+  } catch (error) {
+    console.warn("Externalized text artifact read failed:", {
+      documentId,
+      code: error.code || null,
+      message: error.message,
+    });
+    return "";
+  }
 };
 
 const saveTextArtifact = async (
@@ -1555,6 +1589,9 @@ const ensureSummary = async (documentType, documentId) => {
       [documentId],
     );
     context = rawResult.rows[0]?.original_text || "";
+  }
+  if (!context) {
+    context = await loadExternalizedOriginalText(documentId);
   }
   if (!context) {
     return {
