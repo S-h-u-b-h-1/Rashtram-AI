@@ -20,7 +20,11 @@ const timeLabel = () =>
     minute: "2-digit",
   });
 
-export function MultiDocumentChat({ documentIds, comparisonId = null }) {
+export function MultiDocumentChat({
+  documentIds,
+  comparisonId = null,
+  draftQuestion = null,
+}) {
   const [documents, setDocuments] = useState([]);
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState("");
@@ -36,6 +40,12 @@ export function MultiDocumentChat({ documentIds, comparisonId = null }) {
     pinToLatest,
     scrollContainerRef,
   } = usePinnedChatScroll(messages);
+
+  useEffect(() => {
+    if (draftQuestion?.text) {
+      setInput(draftQuestion.text);
+    }
+  }, [draftQuestion]);
 
   useEffect(() => {
     let active = true;

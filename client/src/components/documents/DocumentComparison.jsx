@@ -19,6 +19,7 @@ import {
 } from "@/lib/api";
 import { useComparison } from "@/context/ComparisonContext";
 import { RecommendationSection } from "@/components/recommendations/RecommendationSection";
+import { MultiDocumentChat } from "@/components/documents/MultiDocumentChat";
 
 const SECTION_CONFIG = [
   ["similarities", "Similarities"],
@@ -74,7 +75,10 @@ function CitationLinks({ ids, citationMap }) {
 export function DocumentComparison() {
   const searchParams = useSearchParams();
   const router = useRouter();
-  const { documents: selectedDocuments } = useComparison();
+  const {
+    documents: selectedDocuments,
+    clear: clearComparisonSelection,
+  } = useComparison();
   const ids = useMemo(
     () =>
       [
@@ -98,7 +102,9 @@ export function DocumentComparison() {
   const [readinessLoading, setReadinessLoading] = useState(false);
   const [loading, setLoading] = useState(Boolean(comparisonId));
   const [error, setError] = useState("");
+  const [chatDraft, setChatDraft] = useState(null);
   const initialRequest = useRef("");
+  const chatSectionRef = useRef(null);
 
   const readinessKey = ids.join(",");
   const selectionReadinessList = useMemo(
@@ -134,6 +140,7 @@ export function DocumentComparison() {
       setError(selectionNotReadyMessage);
       return;
     }
+    clearComparisonSelection();
     setLoading(true);
     setError("");
     try {
@@ -299,14 +306,32 @@ export function DocumentComparison() {
       ),
     [result?.citations],
   );
-  const chatIds = result?.documents?.length
-    ? result.documents.map((document) => document.id).join(",")
-    : ids.length
-      ? ids.join(",")
-      : selectedDocuments.map((document) => document.id).join(",");
+  const chatDocumentIds = useMemo(() => {
+    if (result?.documents?.length) {
+      return result.documents
+        .map((document) => String(document.id))
+        .filter(Boolean);
+    }
+    if (ids.length) return ids;
+    return selectedDocuments
+      .map((document) => String(document.id))
+      .filter(Boolean);
+  }, [ids, result?.documents, selectedDocuments]);
+  const chatIds = chatDocumentIds.join(",");
   const chatHref = `/app/multi-document-chat?ids=${chatIds}${
     comparison?.id ? `&comparison=${comparison.id}` : ""
   }`;
+  const hasEmbeddedChat = Boolean(result && chatDocumentIds.length >= 2);
+  const focusEmbeddedChat = () => {
+    chatSectionRef.current?.scrollIntoView({
+      behavior: "smooth",
+      block: "start",
+    });
+  };
+  const queueSuggestedQuestion = (question) => {
+    setChatDraft({ id: Date.now(), text: question });
+    window.requestAnimationFrame(focusEmbeddedChat);
+  };
 
   if (!comparison && ids.length === 0 && !comparisonId) {
     return (
@@ -389,13 +414,24 @@ export function DocumentComparison() {
               </button>
             )}
             {chatIds && (
-              <Link
-                href={chatHref}
-                className="inline-flex items-center gap-2 rounded-xl bg-white/10 px-4 py-2 text-xs font-semibold"
-              >
-                <MessageSquareText className="h-4 w-4" />
-                Ask follow-up questions
-              </Link>
+              hasEmbeddedChat ? (
+                <button
+                  type="button"
+                  onClick={focusEmbeddedChat}
+                  className="inline-flex items-center gap-2 rounded-xl bg-white/10 px-4 py-2 text-xs font-semibold transition hover:bg-white/15"
+                >
+                  <MessageSquareText className="h-4 w-4" />
+                  Ask follow-up questions
+                </button>
+              ) : (
+                <Link
+                  href={chatHref}
+                  className="inline-flex items-center gap-2 rounded-xl bg-white/10 px-4 py-2 text-xs font-semibold transition hover:bg-white/15"
+                >
+                  <MessageSquareText className="h-4 w-4" />
+                  Ask follow-up questions
+                </Link>
+              )
             )}
           </div>
           <label className="mt-4 block max-w-3xl">
@@ -650,16 +686,39 @@ export function DocumentComparison() {
               </h3>
               <div className="mt-3 flex flex-wrap gap-2">
                 {result.suggestedQuestions.map((question) => (
-                  <Link
+                  <button
+                    type="button"
                     key={question}
-                    href={chatHref}
-                    className="inline-flex items-center gap-2 rounded-xl bg-[#eee0dc] px-3 py-2 text-xs text-[#514d46]"
+                    onClick={() => queueSuggestedQuestion(question)}
+                    className="inline-flex items-center gap-2 rounded-xl bg-[#eee0dc] px-3 py-2 text-left text-xs text-[#514d46] transition hover:bg-[#e5d4cf]"
                   >
                     <FileText className="h-3.5 w-3.5 text-[#8f1d2c]" />
                     {question}
-                  </Link>
+                  </button>
                 ))}
               </div>
+            </section>
+          )}
+
+          {hasEmbeddedChat && (
+            <section ref={chatSectionRef} className="scroll-mt-24">
+              <div className="mb-3 rounded-2xl border border-[#8f1d2c]/8 bg-[#fffaf0] p-5 shadow-sm sm:p-6">
+                <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-[#874047]">
+                  Comparison chat
+                </p>
+                <h3 className="mt-1 font-serif text-2xl text-[#8f1d2c]">
+                  Ask follow-up questions from this comparison
+                </h3>
+                <p className="mt-2 max-w-3xl text-sm leading-6 text-[#706a61]">
+                  Continue with a grounded multi-document chat. Answers stay
+                  tied to the documents used in this comparison.
+                </p>
+              </div>
+              <MultiDocumentChat
+                documentIds={chatDocumentIds}
+                comparisonId={comparison?.id || comparisonId}
+                draftQuestion={chatDraft}
+              />
             </section>
           )}
 
