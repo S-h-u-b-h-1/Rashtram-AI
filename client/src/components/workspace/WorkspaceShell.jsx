@@ -303,7 +303,7 @@ export function WorkspaceShell({ activeKey, title, children }) {
             hasComparisonTray ? "pb-28 md:pb-32" : "pb-5 sm:pb-6 md:pb-8",
           )}
         >
-          <div className="mx-auto min-h-full w-full min-w-0 max-w-[1440px]">
+          <div className="mx-auto w-full min-w-0 max-w-[1440px]">
             {children}
           </div>
         </main>

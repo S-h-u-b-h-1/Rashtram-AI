@@ -16,37 +16,37 @@ const USE_CASES = [
     icon: Scale,
     title: "Legal and policy research",
     description:
-      "Search Bills, Acts, Gazette records, policies, and their official source material from one consistent workspace.",
+      "Find Bills, Acts, Gazette records, policies and source links from one workspace.",
   },
   {
     icon: Newspaper,
-    title: "Legislative reporting",
+    title: "Legislative tracking",
     description:
-      "Trace dates, ministries, jurisdictions, PDFs, and source links before using a record in reporting.",
+      "Check dates, ministries, jurisdictions, PDFs and source links before using a record.",
   },
   {
     icon: Landmark,
-    title: "Government research",
+    title: "Government research notes",
     description:
-      "Review Parliament and state legislative material while preserving source provenance and document context.",
+      "Turn Parliament and state material into clear notes with source context attached.",
   },
   {
     icon: GraduationCap,
     title: "Teaching and study",
     description:
-      "Build grounded reading lists and ask document-specific questions with citations back to indexed passages.",
+      "Build reading lists and ask document-specific questions with citations.",
   },
   {
     icon: Building2,
-    title: "Institutional monitoring",
+    title: "Institutional memory",
     description:
-      "Use filters, saved searches, collections, and source health to organize recurring public-policy research.",
+      "Save searches, chats and comparisons so teams can continue earlier work.",
   },
   {
     icon: BookOpenText,
     title: "Cross-document analysis",
     description:
-      "Select up to five catalogue records and compare them in a shared, source-grounded research conversation.",
+      "Compare up to five ready documents and ask follow-up questions in one chat.",
   },
 ];
 
@@ -56,15 +56,14 @@ export default function SolutionsPage() {
       <section className="mx-auto max-w-6xl">
         <div className="max-w-3xl">
           <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#874047]">
-            Research workflows
+            Research use cases
           </p>
           <h1 className="mt-4 font-serif text-5xl leading-tight text-[#8f1d2c] sm:text-7xl">
-            Legislative intelligence with a traceable source.
+            Practical tools for policy research teams.
           </h1>
           <p className="mt-6 max-w-2xl text-lg leading-8 text-[#706a61]">
-            Rashtram AI helps researchers move from discovery to document
-            analysis without losing the official public record behind the
-            answer.
+            Rashtram AI helps researchers find public records, understand them
+            quickly, compare them, and keep citations close to the work.
           </p>
           <Link
             href="/signup"
@@ -98,12 +97,12 @@ export default function SolutionsPage() {
           <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-white/55">
             Research method
           </p>
-          <h2 className="mt-3 font-serif text-3xl">Discover. Verify. Research.</h2>
+          <h2 className="mt-3 font-serif text-3xl">Find. Read. Ask. Cite.</h2>
           <p className="mt-4 max-w-3xl text-sm leading-7 text-white/70">
-            Catalogue records retain jurisdiction, authority, dates, document
-            type, PDF availability, and source URL. AI responses use indexed
-            document passages and remain research assistance—not legal advice
-            or a substitute for the official record.
+            Each record keeps useful details like jurisdiction, authority,
+            date, document type, PDF availability and source URL. Rashtram AI is
+            a research assistant, not legal advice or a replacement for the
+            official record.
           </p>
         </section>
       </section>

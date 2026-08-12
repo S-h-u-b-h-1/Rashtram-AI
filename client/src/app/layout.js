@@ -26,7 +26,7 @@ export const metadata = {
     template: "%s | Rashtram AI",
   },
   description:
-    "Research Parliament and State Bills, Acts, Gazette notifications, policies, schemes, guidelines, and public records with source-grounded AI.",
+    "Search Indian laws, Bills, Gazette notifications and policy documents. Get cited summaries, document chat, comparisons and saved research threads.",
   manifest: "/site.webmanifest",
   icons: {
     icon: [
@@ -49,7 +49,7 @@ export const metadata = {
     siteName: "Rashtram AI",
     title: "Rashtram AI",
     description:
-      "Evidence-grounded intelligence for Indian legislation and public policy.",
+      "A research workspace for Indian legislation and public policy documents.",
     images: [
       {
         url: "/opengraph-image.png",
@@ -63,7 +63,7 @@ export const metadata = {
     card: "summary_large_image",
     title: "Rashtram AI",
     description:
-      "Evidence-grounded intelligence for Indian legislation and public policy.",
+      "A research workspace for Indian legislation and public policy documents.",
     images: ["/twitter-image.png"],
   },
   other: {

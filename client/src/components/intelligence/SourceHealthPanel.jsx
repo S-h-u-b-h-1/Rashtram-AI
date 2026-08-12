@@ -47,13 +47,13 @@ export function SourceHealthPanel({ sources, compact = false }) {
     return (
       <section className="surface-card flex flex-wrap items-center justify-between gap-3 px-5 py-4">
         <div>
-          <p className="text-xs font-semibold text-[#29312d]">Official source health</p>
+          <p className="text-xs font-semibold text-[#29312d]">Source status</p>
           <p className="mt-1 text-[11px] text-[#777066]">
             {connected} of {publicSourceGroups.length} source groups connected
           </p>
         </div>
         <p className="text-xs font-semibold text-[#8f1d2c]">
-          {records.toLocaleString("en-IN")} source-backed records
+          {records.toLocaleString("en-IN")} public records
         </p>
       </section>
     );
@@ -62,14 +62,14 @@ export function SourceHealthPanel({ sources, compact = false }) {
     <section className="surface-card p-5 sm:p-6">
       <div>
         <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#874047]">
-          Provenance monitor
+          Source status
         </p>
         <h2 className="mt-2 font-serif text-2xl text-[#8f1d2c]">
-          Verified Public Legislative Sources
+          Public sources we track
         </h2>
         <p className="mt-2 max-w-2xl text-sm leading-6 text-[#777066]">
-          Continuously refreshed public legislative records with update
-          timestamps and internal provenance controls.
+          See which public source groups are fresh, stale, blocked or still
+          waiting to refresh.
         </p>
       </div>
 

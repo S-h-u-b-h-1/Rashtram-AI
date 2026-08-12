@@ -7,7 +7,7 @@ import { useAuth } from "@/context/AuthContext";
 import { BrandMark } from "@/components/BrandMark";
 
 const links = [
-  { href: "/#capabilities", label: "Capabilities" },
+  { href: "/#capabilities", label: "What you get" },
   { href: "/#workflow", label: "How it works" },
   { href: "/product", label: "Product" },
   { href: "/contact", label: "Contact" },

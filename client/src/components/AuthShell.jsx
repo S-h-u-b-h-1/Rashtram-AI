@@ -3,9 +3,9 @@ import { ArrowLeft, CheckCircle2, ShieldCheck } from "lucide-react";
 import { BrandMark } from "@/components/BrandMark";
 
 const assurances = [
-  "Evidence-linked policy answers",
+  "Cited policy answers",
   "Private research workspace",
-  "Legislation, Gazette and policy in one place",
+  "Laws, Gazette and policy in one place",
 ];
 
 export function AuthShell({ eyebrow, title, description, children }) {
@@ -23,11 +23,11 @@ export function AuthShell({ eyebrow, title, description, children }) {
             {eyebrow}
           </p>
           <h2 className="mt-6 font-serif text-5xl leading-[1.04] tracking-[-0.035em] xl:text-6xl">
-            Better policy work starts with better questions.
+            Start policy research from the source.
           </h2>
           <p className="mt-6 max-w-lg text-base leading-7 text-white/62">
-            Move from dense documents to a clear, traceable understanding of
-            purpose, provisions, impact, and implementation.
+            Search documents, read clear summaries, ask follow-up questions and
+            save your research work.
           </p>
 
           <div className="mt-10 grid gap-3">

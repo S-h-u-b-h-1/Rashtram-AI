@@ -14,8 +14,8 @@ import Policies from "@/components/Policies";
 function AllDocuments({ initialQuery = "" }) {
   return (
     <DocumentExplorer
-      title="All legislative documents"
-      description="Search every supported central and state document type through one repository, filter engine, semantic index, and research workspace."
+      title="All documents"
+      description="Search Bills, Acts, Gazette notifications, policies, schemes and reports from one place."
       initialQuery={initialQuery}
     />
   );
@@ -24,7 +24,7 @@ function AllDocuments({ initialQuery = "" }) {
 const VIEWS = {
   documents: {
     activeKey: "documents",
-    title: "Universal Document Catalogue",
+    title: "Document Library",
     content: AllDocuments,
   },
   bills: {
@@ -51,7 +51,7 @@ function WorkspacePage() {
   const selectedView = VIEWS[viewKey];
   const ActiveContent = selectedView?.content || IntelligenceDashboard;
   const activeKey = selectedView?.activeKey || "dashboard";
-  const title = selectedView?.title || "Parliament Intelligence Brief";
+  const title = selectedView?.title || "Research Desk";
   const initialQuery = searchParams.get("q") || "";
   const demoMode = searchParams.get("demo") === "1";
 

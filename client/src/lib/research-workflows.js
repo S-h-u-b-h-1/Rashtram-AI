@@ -88,7 +88,7 @@ Avoid legal jargon unless necessary, and define it when used.`,
   {
     id: "analyse",
     title: "Analyse",
-    description: "Apply policy-research lenses to the grounded evidence.",
+    description: "Use simple policy-research checks on the cited text.",
     workflows: [
       {
         id: "implementation_risks",
@@ -190,7 +190,7 @@ Do not name an institution unless it appears in the retrieved evidence.`,
         id: "policy_brief",
         title: "Policy brief draft",
         shortTitle: "Policy brief",
-        description: "Produce a concise, source-grounded policy brief.",
+        description: "Produce a concise policy brief with source links.",
         prompt: (document) =>
           workflowPrompt(
             document,
@@ -227,7 +227,7 @@ Keep recommendations clearly tied to evidence or label them as next questions.`,
         id: "op_ed_outline",
         title: "Op-ed outline",
         shortTitle: "Op-ed",
-        description: "Create a public-facing argument outline from grounded evidence.",
+        description: "Create a public-facing argument outline from cited evidence.",
         prompt: (document) =>
           workflowPrompt(
             document,

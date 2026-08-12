@@ -94,9 +94,9 @@ export function RelatedDocuments({
                   className="inline-flex items-center gap-1 text-[10px] font-semibold text-[#874047]"
                 >
                   {item.researchReady
-                    ? "Research"
+                    ? "Open research"
                     : item.id && item.pdfUrl
-                      ? "Prepare research"
+                      ? "Prepare first"
                       : item.pdfUrl
                         ? "View PDF"
                         : "View source"}
@@ -114,7 +114,7 @@ export function RelatedDocuments({
                   >
                     <GitCompareArrows className="h-3 w-3" />
                     {isSelected(item.id)
-                      ? "Remove compare"
+                      ? "Remove"
                       : "Add to compare"}
                   </button>
                 )}

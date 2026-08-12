@@ -69,44 +69,44 @@ function ProductPage() {
   const features = [
     {
       icon: MessageSquare,
-      title: "Intelligent Conversations",
+      title: "Ask questions on documents",
       description:
-        "Natural language processing that understands complex policy queries and provides contextual, actionable responses tailored to your needs.",
+        "Chat with Bills, Acts, Gazette notifications and policy papers in plain language.",
       delay: "0ms",
     },
     {
       icon: Database,
-      title: "Comprehensive Data",
+      title: "One public document library",
       description:
-        "Explore a public legislative catalogue refreshed source by source, with freshness and operational limitations tracked explicitly.",
+        "Search supported legal and policy records from one workspace instead of moving across many sites.",
       delay: "100ms",
     },
     {
       icon: FileText,
-      title: "Automatic Citations",
+      title: "Citations and source links",
       description:
-        "Research responses retain document and source context so users can return to the underlying public record.",
+        "Return to the original document behind a summary, answer or comparison wherever a source is available.",
       delay: "200ms",
     },
     {
       icon: Shield,
-      title: "Verified Information",
+      title: "Clear source status",
       description:
-        "Provenance, update timestamps, and duplicate controls make the catalogue auditable without claiming legal authority.",
+        "See whether a source is fresh, stale, blocked or still being prepared.",
       delay: "0ms",
     },
     {
       icon: Layers,
-      title: "Advanced Analytics",
+      title: "Document comparison",
       description:
-        "Catalogue trends appear only when enough source-backed records support the comparison.",
+        "Compare two to five ready records and continue with a shared follow-up chat.",
       delay: "100ms",
     },
     {
       icon: Clock,
-      title: "Source-aware Updates",
+      title: "Saved research threads",
       description:
-        "Refresh status distinguishes fresh, stale, blocked, and not-yet-run public record feeds.",
+        "Keep previous chats, comparisons and notes connected to your account.",
       delay: "200ms",
     },
   ];
@@ -131,21 +131,20 @@ function ProductPage() {
         <section className="pt-20 pb-32 px-4 sm:px-6 lg:px-8 bg-gray-50">
           <div className="max-w-7xl mx-auto text-center">
             <h1 className="text-5xl md:text-7xl lg:text-8xl font-black text-gray-900 mb-8 tracking-tighter leading-tight animate-fade-in-up delay-100">
-              Intelligence{" "}
+              Policy research{" "}
               <span className="relative inline-block">
                 <span className="relative z-10 text-transparent bg-clip-text bg-gradient-to-r from-[#9b2638] to-[#E11D48]">
-                  Verified
+                  with sources
                 </span>
                 <span className="absolute bottom-2 left-0 -z-10 h-3 w-full -rotate-2 rounded-full bg-[#e1c4c6]/55"></span>
               </span>{" "}
               <br />
-              for the Future
+              in one workspace
             </h1>
 
             <p className="text-xl md:text-2xl text-gray-600 mb-12 max-w-3xl mx-auto leading-relaxed animate-fade-in-up delay-200">
-              Rashtram AI transforms policy research with complete transparency.
-              Source-backed records, transparent availability, and grounded
-              document research.
+              Search public documents, get cited summaries, ask follow-up
+              questions, compare records and save your research work.
             </p>
 
             <div className="flex flex-col sm:flex-row gap-5 justify-center animate-fade-in-up delay-300">
@@ -159,7 +158,7 @@ function ProductPage() {
                 href="#features"
                 className="flex items-center justify-center border border-gray-200 bg-white px-10 py-4 text-lg font-bold text-gray-700 shadow-sm transition-all hover:-translate-y-1 hover:border-[#e1c4c6] hover:text-[#9b2638] hover:shadow-md"
               >
-                Explore Features
+                See features
               </Link>
             </div>
           </div>
@@ -168,10 +167,10 @@ function ProductPage() {
         <section className="px-4 -mt-16 sm:px-6 lg:px-8 pb-24 relative z-20">
           <div className="max-w-6xl mx-auto">
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-              <StatBox number="Public" label="Legal Records" />
-              <StatBox number="Traceable" label="Provenance" />
-              <StatBox number="On-demand" label="Document Analysis" />
-              <StatBox number="Consent-first" label="Personalization" />
+              <StatBox number="Public" label="Documents" />
+              <StatBox number="Cited" label="Answers" />
+              <StatBox number="On-demand" label="Summaries" />
+              <StatBox number="Saved" label="Workspace" />
             </div>
           </div>
         </section>
@@ -180,11 +179,11 @@ function ProductPage() {
           <div className="max-w-7xl mx-auto">
             <div className="text-center mb-20">
               <h2 className="text-3xl md:text-4xl font-extrabold text-gray-900 mb-6">
-                Built for Precision
+                Built for research teams
               </h2>
               <p className="text-xl text-gray-500 max-w-2xl mx-auto">
-                Sophisticated tools designed for the rigorous demands of modern
-                policy making.
+                The core tools a researcher needs before writing a brief,
+                report or implementation note.
               </p>
             </div>
 
@@ -202,15 +201,15 @@ function ProductPage() {
             <div className="grid grid-cols-1 lg:grid-cols-5 gap-16">
               <div className="lg:col-span-2 space-y-8">
                 <span className="text-[#9b2638] font-bold tracking-wider uppercase text-sm">
-                  Transparency First
+                  Check the source
                 </span>
                 <h2 className="text-4xl font-black text-gray-900 leading-tight">
-                  Built for <br />
-                  <span className="text-gray-400">verification</span>
+                  Keep the <br />
+                  <span className="text-gray-400">record visible</span>
                 </h2>
                 <p className="text-lg text-gray-600 leading-relaxed">
-                  We preserve the public record context behind legislative
-                  research. Original records remain the final legal reference.
+                  Rashtram AI helps you work faster, but the original public
+                  document remains visible for checking and citation.
                 </p>
                 <Link
                   href="/signup"
@@ -243,24 +242,24 @@ function ProductPage() {
 
               <div className="relative z-10">
                 <h2 className="text-4xl md:text-5xl font-black mb-6 tracking-tight">
-                  Ready to see the difference?
+                  Ready to start researching?
                 </h2>
                 <p className="mx-auto mb-10 max-w-2xl text-xl font-light text-[#eee0dc]">
-                  Join a community of forward-thinking policymakers and
-                  researchers leveraging AI for public good.
+                  Create a workspace for your policy notes, document chats and
+                  comparisons.
                 </p>
                 <div className="flex flex-col sm:flex-row gap-5 justify-center">
                   <Link
                     href="/signup"
                     className="px-10 py-4 bg-white text-[#9b2638] font-bold text-lg rounded-lg hover:bg-gray-100 transition-colors"
                   >
-                    Get Started Free
+                    Get started
                   </Link>
                   <Link
                     href="/contact"
                     className="px-10 py-4 border border-white text-white font-bold text-lg rounded-lg hover:bg-white hover:text-[#9b2638] transition-colors"
                   >
-                    Book a Demo
+                    Contact us
                   </Link>
                 </div>
               </div>

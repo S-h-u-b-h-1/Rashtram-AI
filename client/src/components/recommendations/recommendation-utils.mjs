@@ -7,7 +7,7 @@ export const RECOMMENDATION_FILTERS = [
   { id: "same-year", label: "Same Year" },
   { id: "recent", label: "Recent" },
   { id: "similar-topic", label: "Similar Topic" },
-  { id: "research-ready", label: "Research Ready" },
+  { id: "research-ready", label: "Ready for research" },
 ];
 
 const signalSet = (recommendation) =>

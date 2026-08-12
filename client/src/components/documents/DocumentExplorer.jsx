@@ -48,18 +48,18 @@ const EMPTY_FILTERS = {
 };
 
 const READINESS_LABELS = {
-  research_ready: "Research Ready",
-  comparison_ready: "Research Ready",
-  pdf_available: "PDF Available",
-  processing_failed: "Processing Failed",
-  source_only: "Source Only",
-  missing_pdf: "Missing PDF",
-  processing_pending: "Processing Pending",
-  processing_failed_retriable: "Retry Available",
-  source_extractable_not_processed: "Source Available",
-  processing_failed_permanent: "Processing Unavailable",
-  ocr_required: "OCR Required",
-  unsupported_file_type: "Unsupported File",
+  research_ready: "Ready for research",
+  comparison_ready: "Ready for research",
+  pdf_available: "PDF available",
+  processing_failed: "Could not process",
+  source_only: "Source link only",
+  missing_pdf: "PDF unavailable",
+  processing_pending: "Preparing",
+  processing_failed_retriable: "Can retry",
+  source_extractable_not_processed: "Source available",
+  processing_failed_permanent: "Research unavailable",
+  ocr_required: "Needs OCR",
+  unsupported_file_type: "Unsupported file",
   invalid_or_quarantined: "Quarantined",
 };
 
@@ -89,7 +89,7 @@ export function DocumentExplorer({
   jurisdictionLevel,
   title,
   description,
-  eyebrow = "Universal legislative catalogue",
+  eyebrow = "Document library",
   filterKeys,
   filterLabels,
   dataNote,
@@ -191,9 +191,9 @@ export function DocumentExplorer({
               {description}
             </p>
             <p className="mt-3 max-w-3xl rounded-2xl bg-white/55 px-4 py-3 text-xs leading-5 text-[#706a61]">
-              Simple flow: search or filter → open a document → ask cited
-              questions. Use Compare only when you have selected two or more
-              research-ready records.
+              Simple flow: search or filter, open a document, then ask
+              questions with citations. Use Compare after selecting two or more
+              ready documents.
             </p>
           </div>
           <div className="rounded-2xl bg-[#eee0dc] px-4 py-3 text-right">
@@ -243,7 +243,7 @@ export function DocumentExplorer({
         </button>
       </div>
 
-      <div className="min-h-[460px]">
+      <div>
         {loading ? (
           <div className="grid min-h-[460px] place-items-center">
             <Loader2 className="h-8 w-8 animate-spin text-[#8f1d2c]" />
@@ -325,7 +325,7 @@ export function DocumentExplorer({
                       </span>
                       {document.comparisonReady && (
                         <span className="rounded-full bg-[#e6e1f1] px-2 py-1 text-[9px] font-semibold text-[#554477]">
-                          Comparison Ready
+                          Ready to compare
                         </span>
                       )}
                     </div>
@@ -385,9 +385,9 @@ export function DocumentExplorer({
                           <GitCompareArrows className="h-3.5 w-3.5" />
                         )}
                         {selected
-                          ? "Remove compare"
+                          ? "Remove"
                           : compareDisabled && canPrepareCompare
-                            ? "Prepare & compare"
+                            ? "Prepare first"
                             : "Add to compare"}
                       </button>
                     )}
@@ -407,8 +407,8 @@ export function DocumentExplorer({
                         className="inline-flex items-center gap-1.5 rounded-xl bg-[#8f1d2c] px-3 py-2 text-[10px] font-semibold text-white"
                       >
                         {document.researchReady
-                          ? "Research"
-                          : "Prepare research"}
+                          ? "Open research"
+                          : "Prepare first"}
                         <ArrowRight className="h-3.5 w-3.5" />
                       </Link>
                     ) : !sourceOnlyActions ? (
@@ -421,7 +421,7 @@ export function DocumentExplorer({
                         }
                         className="inline-flex cursor-not-allowed items-center rounded-xl bg-[#ddd5ca] px-3 py-2 text-[10px] font-semibold text-[#81796e]"
                       >
-                        Research unavailable
+                        Research not available
                       </span>
                     ) : null}
                     {shouldShowPdfAction(document) && (
