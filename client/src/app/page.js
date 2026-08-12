@@ -17,26 +17,26 @@ import { PolicyVisual } from "@/components/PolicyVisual";
 const capabilities = [
   {
     icon: FileSearch,
-    eyebrow: "Understand",
-    title: "Turn dense documents into clear briefs",
+    eyebrow: "Find",
+    title: "Find official documents faster",
     description:
-      "Move from hundreds of pages to a structured view of purpose, provisions, timelines, and implementation.",
+      "Search Bills, Acts, Gazette notifications, policies, schemes and reports from one workspace.",
     color: "bg-[#e8d7bc] text-[#814731]",
   },
   {
     icon: MessageSquareText,
-    eyebrow: "Interrogate",
-    title: "Ask questions grounded in the text",
+    eyebrow: "Understand",
+    title: "Get clear, cited summaries",
     description:
-      "Explore legislation and policy conversationally while keeping every answer anchored to original document context.",
+      "See the purpose, key provisions, affected institutions, timelines, risks and gaps before reading the full PDF.",
     color: "bg-[#d8e5df] text-[#285e50]",
   },
   {
     icon: Network,
-    eyebrow: "Connect",
-    title: "See policy in its wider landscape",
+    eyebrow: "Compare",
+    title: "Ask and compare with sources",
     description:
-      "Trace related legislation, recurring themes, and the practical relationships between policy instruments.",
+      "Chat with one document or compare multiple records. Answers stay linked to the source passages where available.",
     color: "bg-[#ecd8d4] text-[#913d31]",
   },
 ];
@@ -44,53 +44,53 @@ const capabilities = [
 const workflow = [
   {
     number: "01",
-    title: "Choose a public record",
+    title: "Search what you are studying",
     description:
-      "Search Parliament and State legislation, Gazette notifications, policies, schemes, and reports.",
+      "Look up a topic, ministry, law, Gazette notification, policy or scheme.",
   },
   {
     number: "02",
-    title: "Build an evidence brief",
+    title: "Open a source-backed record",
     description:
-      "Rashtram AI reads, structures, and indexes the source document.",
+      "Get a simple brief with summary, provisions, institutions, risks and source links.",
   },
   {
     number: "03",
-    title: "Research conversationally",
+    title: "Ask, compare and save",
     description:
-      "Ask precise follow-ups, inspect the summary, and return to the source.",
+      "Ask follow-up questions, compare documents and keep the research thread for later.",
   },
 ];
 
 const useCases = [
-  "Legislative research",
-  "Policy impact analysis",
-  "Implementation planning",
-  "Academic study",
-  "Civic understanding",
+  "Bill tracking",
+  "Policy briefs",
+  "Implementation notes",
+  "Think tank reports",
+  "Literature reviews",
   "Institutional memory",
 ];
 
 const dataTrustPrinciples = [
   {
-    title: "Verified public records",
+    title: "Official and trusted sources",
     description:
-      "Government-verified public legislative data is complemented by trusted legislative references.",
+      "Rashtram AI works with public laws, Bills, Gazette notifications, policies and trusted policy references.",
   },
   {
-    title: "Provenance retained",
+    title: "Citations stay attached",
     description:
-      "Source identity, update timestamps, and original record links are retained for audit and citation.",
+      "Summaries, answers and comparisons keep links to the source record wherever available.",
   },
   {
-    title: "Duplicate-aware catalogue",
+    title: "A cleaner research catalogue",
     description:
-      "Legal identifiers and document fingerprints support reconciliation; unresolved probable matches remain visible to operators for review.",
+      "Related records, repeated documents and document updates are organised so teams can avoid manual tracking.",
   },
   {
-    title: "Original record prevails",
+    title: "The original record remains final",
     description:
-      "Rashtram AI is a research aid, not a legal authority. Original government and public records remain the final reference.",
+      "Rashtram AI helps research teams work faster. Official source documents remain the final reference.",
   },
 ];
 
@@ -103,21 +103,22 @@ export default function Home() {
           <div className="animate-fade-up">
             <div className="inline-flex items-center gap-2 rounded-full border border-[#8f1d2c]/10 bg-white/70 px-3 py-1.5 text-xs font-semibold text-[#59544c] shadow-sm backdrop-blur">
               <Sparkles className="h-3.5 w-3.5 text-[#9b554f]" />
-              Evidence-first public policy intelligence
+              Research workspace for policy teams
             </div>
 
             <h1 className="mt-7 max-w-3xl font-serif text-[clamp(3.5rem,7.4vw,6.9rem)] leading-[0.91] tracking-[-0.055em] text-[#8f1d2c]">
-              Read policy.
+              Find evidence.
               <br />
-              <span className="text-[#8c4548]">Trace impact.</span>
+              <span className="text-[#8c4548]">Ask questions.</span>
               <br />
-              Ask better questions.
+              Build briefs.
             </h1>
 
             <p className="mt-7 max-w-xl text-base leading-7 text-[#69635a] sm:text-lg sm:leading-8">
-              Rashtram AI turns India&apos;s legislation and public policy
-              records into a living research workspace—clear summaries,
-              grounded conversations, and connected institutional context.
+              Rashtram AI helps researchers and think tanks study Indian laws,
+              Bills, Gazette notifications and policy documents. Get cited
+              summaries, document chat, comparisons and saved research threads
+              in one place.
             </p>
 
             <div className="mt-9 flex flex-col gap-3 sm:flex-row">
@@ -125,22 +126,22 @@ export default function Home() {
                 href="/signup"
                 className="inline-flex items-center justify-center gap-2 rounded-full bg-[#8f1d2c] px-6 py-3.5 text-sm font-semibold text-[#fffaf0] shadow-[0_14px_35px_rgba(143, 29, 44,0.18)] transition hover:-translate-y-0.5 hover:bg-[#2c3833]"
               >
-                Explore the workspace
+                Start researching
                 <ArrowRight className="h-4 w-4" />
               </Link>
               <Link
                 href="#workflow"
                 className="inline-flex items-center justify-center gap-2 rounded-full border border-[#8f1d2c]/12 bg-white/65 px-6 py-3.5 text-sm font-semibold text-[#8f1d2c] transition hover:bg-white"
               >
-                See how it works
+                See what you get
               </Link>
             </div>
 
             <div className="mt-10 flex flex-wrap gap-x-6 gap-y-3 text-xs text-[#6f695f]">
               {[
-                "Source-grounded answers",
-                "Legislation, Gazette and policy",
-                "Private workspace",
+                "Cited answers",
+                "Official documents",
+                "Compare records",
               ].map((item) => (
                 <span key={item} className="inline-flex items-center gap-2">
                   <Check className="h-3.5 w-3.5 text-[#39715f]" />
@@ -156,12 +157,13 @@ export default function Home() {
 
       <section className="border-y border-[#8f1d2c]/8 bg-[#f3ede2] px-5 py-5 sm:px-8">
         <div className="mx-auto flex max-w-[1240px] flex-wrap items-center justify-between gap-5 text-xs font-semibold uppercase tracking-[0.16em] text-[#777065]">
-          <span>Built for India&apos;s policy ecosystem</span>
+          <span>Built for researchers, policy teams and think tanks</span>
           <div className="flex flex-wrap gap-x-8 gap-y-3 text-[#3f4742]">
-            <span>Parliament & State law</span>
-            <span>Gazette notifications</span>
-            <span>Policies & schemes</span>
-            <span>Official public records</span>
+            <span>Search</span>
+            <span>Summarise</span>
+            <span>Ask</span>
+            <span>Compare</span>
+            <span>Save</span>
           </div>
         </div>
       </section>
@@ -174,16 +176,15 @@ export default function Home() {
           <div className="grid gap-8 lg:grid-cols-[0.75fr_1.25fr] lg:items-end">
             <div>
               <p className="text-xs font-semibold uppercase tracking-[0.22em] text-[#8c4548]">
-                Built for careful work
+                What you get
               </p>
               <h2 className="mt-4 font-serif text-4xl leading-[1.03] tracking-[-0.035em] text-[#8f1d2c] sm:text-5xl">
-                Policy intelligence without the black box.
+                Less searching. More research.
               </h2>
             </div>
             <p className="max-w-2xl text-base leading-7 text-[#706a61] lg:justify-self-end">
-              The interface is designed around the way researchers actually
-              work: scan the landscape, focus on a source, ask iterative
-              questions, and retain the thread.
+              Rashtram AI gives research teams a faster way to move from a
+              public document to a usable note, briefing point or comparison.
             </p>
           </div>
 
@@ -218,16 +219,16 @@ export default function Home() {
           <div className="grid gap-8 lg:grid-cols-[0.8fr_1.2fr] lg:items-end">
             <div>
               <p className="text-xs font-semibold uppercase tracking-[0.22em] text-[#8c4548]">
-                Data Trust
+                Source trust
               </p>
               <h2 className="mt-4 font-serif text-4xl leading-[1.03] tracking-[-0.035em] text-[#8f1d2c] sm:text-5xl">
-                Trust the record, not a black box.
+                Built around the original record.
               </h2>
             </div>
             <p className="max-w-2xl text-base leading-7 text-[#706a61] lg:justify-self-end">
-              Rashtram AI refreshes supported public sources on monitored schedules,
-              preserves provenance, flags probable duplicate records for review,
-              and separates research assistance from legal authority.
+              The platform is designed for source-based work. It helps you read
+              faster, but keeps the official document visible for checking,
+              citation and review.
             </p>
           </div>
 
@@ -257,10 +258,10 @@ export default function Home() {
         <div className="mx-auto max-w-[1240px]">
           <div className="mx-auto max-w-2xl text-center">
             <p className="text-xs font-semibold uppercase tracking-[0.22em] text-[#8c4548]">
-              From source to insight
+              How it works
             </p>
             <h2 className="mt-4 font-serif text-4xl tracking-[-0.035em] text-[#8f1d2c] sm:text-5xl">
-              A calmer way through complex policy.
+              Start with a document. Leave with a brief.
             </h2>
           </div>
 
@@ -287,21 +288,20 @@ export default function Home() {
         <div className="mx-auto grid max-w-[1240px] gap-14 lg:grid-cols-[0.95fr_1.05fr] lg:items-center">
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.22em] text-[#c1a06f]">
-              One research environment
+              For research teams
             </p>
             <h2 className="mt-5 max-w-xl font-serif text-4xl leading-[1.04] tracking-[-0.035em] sm:text-5xl">
-              Designed for every serious policy question.
+              Turn public records into working notes.
             </h2>
             <p className="mt-6 max-w-xl text-base leading-7 text-white/58">
-              Whether you are comparing statutes or preparing an implementation
-              note, Rashtram keeps the source, analysis, and conversation
-              together.
+              Use Rashtram AI to prepare policy notes, compare legal records,
+              track changes and return to saved research with citations intact.
             </p>
             <Link
               href="/signup"
               className="mt-9 inline-flex items-center gap-2 rounded-full bg-[#fffaf0] px-6 py-3.5 text-sm font-semibold text-[#8f1d2c] transition hover:-translate-y-0.5"
             >
-              Start a research workspace
+              Open your workspace
               <ArrowRight className="h-4 w-4" />
             </Link>
           </div>

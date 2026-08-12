@@ -17,8 +17,9 @@ export default function Footer() {
           <div>
             <BrandMark inverse />
             <p className="mt-6 max-w-md text-sm leading-6 text-white/55">
-              Evidence-first intelligence for understanding India&apos;s bills,
-              acts, and public policy landscape.
+              A research workspace for Indian laws, Bills, Gazette
+              notifications and policy documents—with summaries, chat,
+              comparisons and citations.
             </p>
           </div>
           <div className="grid grid-cols-2 gap-4">
@@ -36,7 +37,7 @@ export default function Footer() {
         </div>
         <div className="flex flex-col gap-3 pt-7 text-xs text-white/35 sm:flex-row sm:items-center sm:justify-between">
           <p>© {new Date().getFullYear()} Rashtram AI</p>
-          <p>Built for careful, accountable policy research.</p>
+          <p>Built for researchers, policy teams and think tanks.</p>
         </div>
       </div>
     </footer>
