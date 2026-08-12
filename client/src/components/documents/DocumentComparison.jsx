@@ -291,6 +291,7 @@ export function DocumentComparison() {
   ]);
 
   const result = comparison?.result;
+  const isFallbackComparison = result?.generationMode === "extractive_fallback";
   const citationMap = useMemo(
     () =>
       new Map(
@@ -421,6 +422,28 @@ export function DocumentComparison() {
           <p role="alert" className="bg-[#f4dfdc] px-5 py-3 text-sm text-[#85434a]">
             {selectionNotReadyMessage}
           </p>
+        )}
+        {isFallbackComparison && (
+          <div
+            role="alert"
+            className="flex flex-col gap-3 bg-[#fff3d7] px-5 py-3 text-sm text-[#754e14] sm:flex-row sm:items-center sm:justify-between"
+          >
+            <span>
+              This saved comparison was generated from retrieved passages only
+              because AI generation was unavailable. Regenerate it to get the
+              full AI-written comparison.
+            </span>
+            {ids.length >= 2 && (
+              <button
+                type="button"
+                disabled={loading || readinessLoading}
+                onClick={runComparison}
+                className="rounded-xl bg-[#8f1d2c] px-4 py-2 text-xs font-semibold text-white disabled:opacity-50"
+              >
+                Regenerate with AI
+              </button>
+            )}
+          </div>
         )}
       </section>
 

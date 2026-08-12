@@ -13,7 +13,7 @@ const sendError = (res, error, context) => {
     const requestId = crypto.randomUUID();
     console.error(`${context} [${requestId}]:`, error);
     return res.status(status).json({
-      error: "Internal server error.",
+      error: error.publicMessage || "Internal server error.",
       requestId,
     });
   }

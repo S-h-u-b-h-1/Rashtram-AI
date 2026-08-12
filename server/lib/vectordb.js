@@ -40,10 +40,10 @@ const normalizeGenerationModel = (value, fallback, provider = AI_PROVIDER) => {
   const model = String(value || "").trim();
   if (provider === "openai" && /^gemini/i.test(model)) return fallback;
   if (provider === "gemini" && /^gpt-/i.test(model)) {
-    return process.env.GEMINI_MODEL || "gemini-2.5-flash";
+    return process.env.GEMINI_MODEL || "gemini-2.5-flash-lite";
   }
   if (provider === "gemini" && /^gemini-1\.5-/i.test(model)) {
-    return "gemini-2.5-flash";
+    return "gemini-2.5-flash-lite";
   }
   return model || fallback;
 };
@@ -64,7 +64,7 @@ const GENERATION_MODEL =
   AI_PROVIDER === "gemini"
     ? normalizeGenerationModel(
         process.env.GEMINI_MODEL || process.env.GEMINI_CHAT_MODEL,
-        "gemini-2.5-flash",
+        "gemini-2.5-flash-lite",
         "gemini",
       )
     : normalizeGenerationModel(
@@ -81,7 +81,15 @@ const FALLBACK_GENERATION_MODEL =
       )
     : normalizeGenerationModel(process.env.OPENAI_FALLBACK_MODEL, "gpt-4o-mini", "openai");
 const DEFAULT_SECONDARY_GENERATION_MODEL =
-  AI_PROVIDER === "gemini" ? "gemini-flash-latest" : "gpt-4o-mini";
+  AI_PROVIDER === "gemini" ? "gemini-2.5-flash" : "gpt-4o-mini";
+const FAST_GENERATION_MODEL =
+  AI_PROVIDER === "gemini"
+    ? normalizeGenerationModel(
+        process.env.GEMINI_FAST_MODEL,
+        "gemini-2.5-flash-lite",
+        "gemini",
+      )
+    : normalizeGenerationModel(process.env.OPENAI_FAST_MODEL, "gpt-4.1-mini", "openai");
 const EMBEDDING_MODEL =
   EMBEDDING_PROVIDER === "local"
     ? "local-hash-v1"
@@ -384,6 +392,20 @@ const generationModels = () =>
     ]),
   ].filter(Boolean);
 
+const taskGenerationModels = (task = "default") => {
+  if (task === "chat" || task === "comparison") {
+    return [
+      ...new Set([
+        FAST_GENERATION_MODEL,
+        GENERATION_MODEL,
+        FALLBACK_GENERATION_MODEL,
+        DEFAULT_SECONDARY_GENERATION_MODEL,
+      ]),
+    ].filter(Boolean);
+  }
+  return generationModels();
+};
+
 const providerCredentialsConfigured = () =>
   AI_PROVIDER === "gemini" ? Boolean(GEMINI_API_KEY) : Boolean(OPENAI_API_KEY);
 
@@ -658,9 +680,14 @@ const runGeneration = (method, contents, options = {}) => {
 };
 
 const runGenerationInternal = async (method, contents, options = {}) => {
-  const models = generationModels().slice(
+  const candidateModels = Array.isArray(options.models) && options.models.length
+    ? options.models
+    : generationModels();
+  const models = [...new Set(candidateModels.map((model) =>
+    normalizeGenerationModel(model, model),
+  ))].filter(Boolean).slice(
     0,
-    Math.max(1, Number(options.maxModels || generationModels().length)),
+    Math.max(1, Number(options.maxModels || candidateModels.length)),
   );
   const attempts = Math.max(1, Number(options.attempts || 3));
   if (AI_PROVIDER === "gemini") {
@@ -680,6 +707,9 @@ const runGenerationInternal = async (method, contents, options = {}) => {
                     parts: [{ text: String(contents || "") }],
                   },
                 ],
+                ...(options.generationConfig
+                  ? { generationConfig: options.generationConfig }
+                  : {}),
               },
               { stream, timeoutMs: options.timeoutMs },
             ),
@@ -717,6 +747,9 @@ const runGenerationInternal = async (method, contents, options = {}) => {
             model,
             input: contents,
             stream,
+            ...(options.generationConfig?.maxOutputTokens
+              ? { max_output_tokens: options.generationConfig.maxOutputTokens }
+              : {}),
           }),
         `OpenAI model ${model}`,
         attempts,
@@ -731,6 +764,9 @@ const runGenerationInternal = async (method, contents, options = {}) => {
                 model,
                 messages: [{ role: "user", content: contents }],
                 stream,
+                ...(options.generationConfig?.maxOutputTokens
+                  ? { max_tokens: options.generationConfig.maxOutputTokens }
+                  : {}),
               }),
             `OpenAI-compatible chat model ${model}`,
             attempts,
@@ -1000,7 +1036,18 @@ ${language}. Preserve quoted source text in its original
 language and explain it in ${language} when needed.
 `;
 
-  return runGeneration("generateContentStream", fullPrompt);
+  return runGeneration("generateContentStream", fullPrompt, {
+    models: taskGenerationModels("chat"),
+    maxModels: Number(process.env.CHAT_AI_MAX_MODELS || 3),
+    timeoutMs: Number(process.env.CHAT_AI_TIMEOUT_MS || 18_000),
+    maxQueueWaitMs: Number(process.env.CHAT_AI_MAX_QUEUE_WAIT_MS || 3_000),
+    maxRetryAfterMs: Number(process.env.CHAT_AI_MAX_RETRY_AFTER_MS || 0),
+    attempts: Number(process.env.CHAT_AI_ATTEMPTS || 1),
+    generationConfig: {
+      temperature: Number(process.env.CHAT_AI_TEMPERATURE || 0.2),
+      maxOutputTokens: Number(process.env.CHAT_AI_MAX_OUTPUT_TOKENS || 900),
+    },
+  });
 };
 
 const SUMMARY_GUIDANCE = {
@@ -1225,13 +1272,20 @@ ${context}
     // extractive result before the platform timeout instead of hanging the
     // UI. Try the primary Gemini model and then a distinct fallback model,
     // but do not wait tens of seconds on a provider retry window.
+    models: taskGenerationModels("comparison"),
     timeoutMs: Number(process.env.COMPARISON_AI_TIMEOUT_MS || 10_000),
     attempts: Number(process.env.COMPARISON_AI_ATTEMPTS || 1),
     maxQueueWaitMs: Number(process.env.COMPARISON_AI_MAX_QUEUE_WAIT_MS || 4_000),
     maxRetryAfterMs: Number(process.env.COMPARISON_AI_MAX_RETRY_AFTER_MS || 0),
     maxModels: Number(
-      process.env.COMPARISON_AI_MAX_MODELS || generationModels().length,
+      process.env.COMPARISON_AI_MAX_MODELS || 3,
     ),
+    generationConfig: {
+      temperature: Number(process.env.COMPARISON_AI_TEMPERATURE || 0.1),
+      maxOutputTokens: Number(
+        process.env.COMPARISON_AI_MAX_OUTPUT_TOKENS || 2_000,
+      ),
+    },
   });
   return parseJsonResponse(responseText(response));
 };

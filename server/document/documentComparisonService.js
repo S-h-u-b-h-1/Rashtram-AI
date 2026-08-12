@@ -170,6 +170,13 @@ const comparisonPassageCharLimit = () => {
   return Math.max(500, Math.min(1_400, Math.floor(configured)));
 };
 
+const allowExtractiveComparisonFallback = () =>
+  ["1", "true", "yes", "on"].includes(
+    String(process.env.COMPARISON_ALLOW_EXTRACTIVE_FALLBACK || "")
+      .trim()
+      .toLowerCase(),
+  );
+
 const mapComparison = (row) => row && ({
   id: String(row.id),
   title: row.title,
@@ -363,6 +370,18 @@ const createComparison = async (userId, payload) => {
     });
     generated.generationMode = generated.generationMode || "ai";
   } catch (error) {
+    if (!allowExtractiveComparisonFallback()) {
+      const generationUnavailable = new Error("Comparison AI generation failed.");
+      generationUnavailable.status = 503;
+      generationUnavailable.publicMessage =
+        "AI comparison generation is temporarily unavailable. Please retry in a moment.";
+      generationUnavailable.details = {
+        retryable: true,
+        generationMode: "ai_required",
+        providerError: sanitizeProviderError(error),
+      };
+      throw generationUnavailable;
+    }
     generated = extractiveComparisonFallback({
       mode,
       language,
