@@ -6,7 +6,7 @@ import {
   Sparkles,
 } from "lucide-react";
 
-const evidence = ["Plain summary", "Affected institutions", "Risks and gaps"];
+const evidence = ["Plain summary", "Key institutions", "Risks and gaps"];
 
 export function PolicyVisual({ compact = false }) {
   return (
@@ -36,10 +36,10 @@ export function PolicyVisual({ compact = false }) {
             </div>
             <div>
               <p className="text-xs uppercase tracking-[0.16em] text-white/45">
-                Research question
+                Your question
               </p>
               <p className="mt-1 text-sm font-medium">
-                What changed, and who is affected?
+                What changed and who is affected?
               </p>
             </div>
           </div>
@@ -57,10 +57,10 @@ export function PolicyVisual({ compact = false }) {
                 </div>
                 <div>
                   <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[#7d7468]">
-                    What you get
+                    Answer
                   </p>
                   <p className="mt-1 text-sm font-semibold">
-                    Cited research brief
+                    Simple cited brief
                   </p>
                 </div>
               </div>
@@ -79,7 +79,7 @@ export function PolicyVisual({ compact = false }) {
             <div className="mt-5 border-t border-[#ddd2c2] pt-4">
               <div className="flex items-center gap-2 text-[11px] text-[#6c655c]">
                 <BookOpenText className="h-3.5 w-3.5" />
-                With source links and citations
+                Includes source links and citations
               </div>
             </div>
           </div>

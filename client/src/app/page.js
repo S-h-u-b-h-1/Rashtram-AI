@@ -18,25 +18,25 @@ const capabilities = [
   {
     icon: FileSearch,
     eyebrow: "Find",
-    title: "Find official documents faster",
+    title: "Find the right document",
     description:
-      "Search Bills, Acts, Gazette notifications, policies, schemes and reports from one workspace.",
+      "Search Bills, Acts, Gazette notifications, policies, schemes and reports without moving across many websites.",
     color: "bg-[#e8d7bc] text-[#814731]",
   },
   {
     icon: MessageSquareText,
     eyebrow: "Understand",
-    title: "Get clear, cited summaries",
+    title: "Understand it quickly",
     description:
-      "See the purpose, key provisions, affected institutions, timelines, risks and gaps before reading the full PDF.",
+      "Get a simple summary, key points, affected institutions, timelines, risks and source links before reading the full PDF.",
     color: "bg-[#d8e5df] text-[#285e50]",
   },
   {
     icon: Network,
     eyebrow: "Compare",
-    title: "Ask and compare with sources",
+    title: "Compare before you write",
     description:
-      "Chat with one document or compare multiple records. Answers stay linked to the source passages where available.",
+      "Ask questions on one document or compare multiple records. Keep citations attached where sources are available.",
     color: "bg-[#ecd8d4] text-[#913d31]",
   },
 ];
@@ -50,9 +50,9 @@ const workflow = [
   },
   {
     number: "02",
-    title: "Open a source-backed record",
+    title: "Open the document",
     description:
-      "Get a simple brief with summary, provisions, institutions, risks and source links.",
+      "See the summary, key provisions, affected institutions, risks and links to the original source.",
   },
   {
     number: "03",
@@ -103,22 +103,22 @@ export default function Home() {
           <div className="animate-fade-up">
             <div className="inline-flex items-center gap-2 rounded-full border border-[#8f1d2c]/10 bg-white/70 px-3 py-1.5 text-xs font-semibold text-[#59544c] shadow-sm backdrop-blur">
               <Sparkles className="h-3.5 w-3.5 text-[#9b554f]" />
-              Research workspace for policy teams
+              For researchers, policy teams and think tanks
             </div>
 
             <h1 className="mt-7 max-w-3xl font-serif text-[clamp(3.5rem,7.4vw,6.9rem)] leading-[0.91] tracking-[-0.055em] text-[#8f1d2c]">
-              Find evidence.
+              Search policy.
               <br />
-              <span className="text-[#8c4548]">Ask questions.</span>
+              <span className="text-[#8c4548]">Get answers.</span>
               <br />
-              Build briefs.
+              Write faster.
             </h1>
 
             <p className="mt-7 max-w-xl text-base leading-7 text-[#69635a] sm:text-lg sm:leading-8">
-              Rashtram AI helps researchers and think tanks study Indian laws,
-              Bills, Gazette notifications and policy documents. Get cited
-              summaries, document chat, comparisons and saved research threads
-              in one place.
+              Rashtram AI helps research teams work with Indian laws, Bills,
+              Gazette notifications, policies and reports. Search documents,
+              ask cited questions, compare records and save your research in
+              one workspace.
             </p>
 
             <div className="mt-9 flex flex-col gap-3 sm:flex-row">
@@ -126,22 +126,22 @@ export default function Home() {
                 href="/signup"
                 className="inline-flex items-center justify-center gap-2 rounded-full bg-[#8f1d2c] px-6 py-3.5 text-sm font-semibold text-[#fffaf0] shadow-[0_14px_35px_rgba(143, 29, 44,0.18)] transition hover:-translate-y-0.5 hover:bg-[#2c3833]"
               >
-                Start researching
+                Open research workspace
                 <ArrowRight className="h-4 w-4" />
               </Link>
               <Link
                 href="#workflow"
                 className="inline-flex items-center justify-center gap-2 rounded-full border border-[#8f1d2c]/12 bg-white/65 px-6 py-3.5 text-sm font-semibold text-[#8f1d2c] transition hover:bg-white"
               >
-                See what you get
+                See how it helps
               </Link>
             </div>
 
             <div className="mt-10 flex flex-wrap gap-x-6 gap-y-3 text-xs text-[#6f695f]">
               {[
                 "Cited answers",
-                "Official documents",
-                "Compare records",
+                "Original source links",
+                "Document comparison",
               ].map((item) => (
                 <span key={item} className="inline-flex items-center gap-2">
                   <Check className="h-3.5 w-3.5 text-[#39715f]" />
@@ -179,12 +179,12 @@ export default function Home() {
                 What you get
               </p>
               <h2 className="mt-4 font-serif text-4xl leading-[1.03] tracking-[-0.035em] text-[#8f1d2c] sm:text-5xl">
-                Less searching. More research.
+                Less manual search. More useful output.
               </h2>
             </div>
             <p className="max-w-2xl text-base leading-7 text-[#706a61] lg:justify-self-end">
-              Rashtram AI gives research teams a faster way to move from a
-              public document to a usable note, briefing point or comparison.
+              Move from a public document to a summary, note, briefing point or
+              comparison without losing the source link.
             </p>
           </div>
 
@@ -219,16 +219,15 @@ export default function Home() {
           <div className="grid gap-8 lg:grid-cols-[0.8fr_1.2fr] lg:items-end">
             <div>
               <p className="text-xs font-semibold uppercase tracking-[0.22em] text-[#8c4548]">
-                Source trust
+                Source clarity
               </p>
               <h2 className="mt-4 font-serif text-4xl leading-[1.03] tracking-[-0.035em] text-[#8f1d2c] sm:text-5xl">
-                Built around the original record.
+                Keep the original source visible.
               </h2>
             </div>
             <p className="max-w-2xl text-base leading-7 text-[#706a61] lg:justify-self-end">
-              The platform is designed for source-based work. It helps you read
-              faster, but keeps the official document visible for checking,
-              citation and review.
+              The platform helps you read faster, but the original public
+              document remains visible for checking, citation and review.
             </p>
           </div>
 
@@ -261,7 +260,7 @@ export default function Home() {
               How it works
             </p>
             <h2 className="mt-4 font-serif text-4xl tracking-[-0.035em] text-[#8f1d2c] sm:text-5xl">
-              Start with a document. Leave with a brief.
+              Start with a document. Leave with a usable note.
             </h2>
           </div>
 
@@ -291,11 +290,11 @@ export default function Home() {
               For research teams
             </p>
             <h2 className="mt-5 max-w-xl font-serif text-4xl leading-[1.04] tracking-[-0.035em] sm:text-5xl">
-              Turn public records into working notes.
+              Turn public documents into research notes.
             </h2>
             <p className="mt-6 max-w-xl text-base leading-7 text-white/58">
-              Use Rashtram AI to prepare policy notes, compare legal records,
-              track changes and return to saved research with citations intact.
+              Prepare policy notes, compare records, track changes and return
+              to saved research with citations intact.
             </p>
             <Link
               href="/signup"

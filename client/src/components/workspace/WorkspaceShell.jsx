@@ -105,7 +105,7 @@ export function WorkspaceShell({ activeKey, title, children }) {
   }, []);
 
   return (
-    <div className="flex h-svh w-full max-w-full overflow-hidden bg-[#e9e3da] supports-[height:100dvh]:h-dvh">
+    <div className="fixed inset-0 flex w-full max-w-full overflow-hidden bg-[#e9e3da]">
       {isMobileMenuOpen && (
         <button
           type="button"
@@ -118,7 +118,7 @@ export function WorkspaceShell({ activeKey, title, children }) {
       <aside
         className={cn(
           "fixed inset-y-0 left-0 z-50 flex w-[280px] flex-col border-r border-white/8 bg-[#8f1d2c] text-white transition-transform duration-300 md:static md:translate-x-0",
-          "h-svh overflow-y-auto overscroll-contain app-scrollbar supports-[height:100dvh]:h-dvh md:shrink-0",
+          "h-full overflow-y-auto overscroll-contain app-scrollbar md:shrink-0",
           isMobileMenuOpen ? "translate-x-0" : "-translate-x-full",
         )}
       >
