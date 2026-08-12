@@ -6,6 +6,7 @@ const DocumentService = require("./DocumentService");
 const DocumentRepository = require("./DocumentRepository");
 const {
   retrievePassages,
+  getTextArtifact,
 } = require("./documentResearchService");
 const { generateResponse } = require("../lib/vectordb");
 const { sanitizeProviderError } = require("../lib/providerErrorSanitizer");
@@ -45,6 +46,28 @@ const selectionKey = (ids) =>
   [...ids].sort((left, right) =>
     left.localeCompare(right, undefined, { numeric: true }),
   ).join(":");
+
+const compactText = (value, maxLength = 1_000) =>
+  String(value || "")
+    .normalize("NFKC")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, maxLength);
+
+const buildDocumentBriefContext = (document, artifact) => {
+  if (!artifact?.englishSummary) return "";
+  const sections = artifact.summarySections || {};
+  return [
+    `[Document brief: ${document.title}]`,
+    compactText(artifact.englishSummary, 1_600),
+    sections.implementation
+      ? `Implementation: ${compactText(sections.implementation, 500)}`
+      : "",
+    sections.affected_authorities
+      ? `Affected authorities: ${compactText(sections.affected_authorities, 500)}`
+      : "",
+  ].filter(Boolean).join("\n");
+};
 
 const buildExtractiveMultiDocumentFallback = (message, sources) => {
   const lines = sources
@@ -219,15 +242,18 @@ router.post("/chat", generationLimiter, async (req, res) => {
       Math.floor(12 / documents.length),
     );
     const passageGroups = await Promise.all(
-      documents.map(async (document) => ({
-        document,
-        passages: await retrievePassages(
-          document.type,
-          document.id,
-          message,
-          passagesPerDocument,
-        ),
-      })),
+      documents.map(async (document) => {
+        const [passages, textArtifact] = await Promise.all([
+          retrievePassages(
+            document.type,
+            document.id,
+            message,
+            passagesPerDocument,
+          ),
+          getTextArtifact(document.id),
+        ]);
+        return { document, passages, textArtifact };
+      }),
     );
     let passageNumber = 0;
     const sources = passageGroups.flatMap(({ document, passages }) =>
@@ -244,8 +270,14 @@ router.post("/chat", generationLimiter, async (req, res) => {
     const context = sources
       .map(
         (source) =>
-          `[Passage ${source.passage}] ${source.documentTitle}\n${source.content}`,
+          `[Passage ${source.passage}] ${source.documentTitle}\n${compactText(source.content, 1_000)}`,
       )
+      .join("\n\n");
+    const briefContext = passageGroups
+      .map(({ document, textArtifact }) =>
+        buildDocumentBriefContext(document, textArtifact),
+      )
+      .filter(Boolean)
       .join("\n\n");
     if (!context) {
       const error = new Error(
@@ -277,7 +309,7 @@ router.post("/chat", generationLimiter, async (req, res) => {
     let generationMode = "ai";
     let providerError = null;
     try {
-      const stream = await generateResponse(message, context, {
+      const stream = await generateResponse(message, [briefContext, context].filter(Boolean).join("\n\n"), {
         responseLanguage,
       });
       for await (const chunk of stream) {

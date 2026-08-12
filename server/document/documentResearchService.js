@@ -289,6 +289,30 @@ const questionsFromSummary = (summarySections) =>
     .filter(Boolean)
     .slice(0, 4);
 
+const normalizeQuestion = (value) =>
+  String(value || "")
+    .normalize("NFKC")
+    .replace(/\s+/g, " ")
+    .trim();
+
+const GENERIC_QUESTION_PATTERNS = [
+  /main policy objectives/i,
+  /which institutions are affected/i,
+  /implementation risks/i,
+  /main obligations or policy changes/i,
+  /who is affected by this document/i,
+  /dates or compliance steps/i,
+  /source passages support/i,
+];
+
+const areGenericQuestions = (questions = []) => {
+  const normalized = questions.map(normalizeQuestion).filter(Boolean);
+  if (!normalized.length) return true;
+  return normalized.every((question) =>
+    GENERIC_QUESTION_PATTERNS.some((pattern) => pattern.test(question)),
+  );
+};
+
 const cleanExcerptLine = (value, maxLength = 420) =>
   String(value || "")
     .normalize("NFKC")
@@ -1560,11 +1584,16 @@ const ensureSummary = async (documentType, documentId) => {
   if (artifact?.englishSummary) {
     const sections = artifact.summarySections || parseSummarySections(artifact.englishSummary);
     const cachedQuestions = await safeSuggestedQuestions(documentType, artifact.englishSummary, sections);
+    const metadataQuestions = Array.isArray(artifact.metadata?.suggestedQuestions)
+      ? artifact.metadata.suggestedQuestions.map(normalizeQuestion).filter(Boolean)
+      : [];
     return {
       summary: artifact.englishSummary,
       summarySections: sections,
       suggestedQuestions:
-        artifact.metadata?.suggestedQuestions || cachedQuestions || [],
+        !areGenericQuestions(metadataQuestions) && metadataQuestions.length
+          ? metadataQuestions.slice(0, 4)
+          : cachedQuestions || [],
       cached: true,
     };
   }

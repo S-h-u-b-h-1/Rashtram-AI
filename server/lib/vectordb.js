@@ -1028,12 +1028,18 @@ ${context}
 User question:
 ${prompt}
 
-Give a comprehensive, accessible answer. Clearly state when the context does
-not contain enough information. Do not invent provisions, dates, or citations.
+Give a concise but useful research answer. Use stated facts first, then clearly
+label any direct implication as "Implication:" when the user asks for risks,
+objectives, affected institutions, or implementation issues that are not named
+as headings in the source. Do not invent provisions, dates, figures, named
+institutions, or citations. If the context gives only partial evidence, answer
+with the partial evidence and say what is not identified.
+
 When the context contains labels such as [Source 1: Document | Page | Section |
-Chunk], cite those exact labels inline for every substantive claim. Respond in
-${language}. Preserve quoted source text in its original
-language and explain it in ${language} when needed.
+Chunk] or [Document brief: Title], cite those exact labels inline for every
+substantive claim. Prefer 3-6 short bullets for analytical questions. Respond
+in ${language}. Preserve quoted source text in its original language and explain
+it in ${language} when needed.
 `;
 
   return runGeneration("generateContentStream", fullPrompt, {
@@ -1171,7 +1177,18 @@ ${content}
 `;
 
   try {
-    const response = await runGeneration("generateContent", prompt);
+    const response = await runGeneration("generateContent", prompt, {
+      models: taskGenerationModels("chat"),
+      maxModels: Number(process.env.SUMMARY_AI_MAX_MODELS || 2),
+      timeoutMs: Number(process.env.SUMMARY_AI_TIMEOUT_MS || 12_000),
+      maxQueueWaitMs: Number(process.env.SUMMARY_AI_MAX_QUEUE_WAIT_MS || 3_000),
+      maxRetryAfterMs: Number(process.env.SUMMARY_AI_MAX_RETRY_AFTER_MS || 0),
+      attempts: Number(process.env.SUMMARY_AI_ATTEMPTS || 1),
+      generationConfig: {
+        temperature: Number(process.env.SUMMARY_AI_TEMPERATURE || 0.1),
+        maxOutputTokens: Number(process.env.SUMMARY_AI_MAX_OUTPUT_TOKENS || 1_200),
+      },
+    });
     return responseText(response);
   } catch (error) {
     console.warn(
@@ -1201,11 +1218,31 @@ const generateSuggestedQuestions = async (documentType, summary) => {
   const response = await runGeneration(
     "generateContent",
     [
-      "Create four concise research questions grounded in this document brief.",
+      "Create four concise research questions that are directly answerable from this document brief.",
       `Document type: ${documentType}.`,
+      "Do not ask about institutions, risks, dates, penalties, or compliance unless the brief identifies evidence for them.",
+      "Prefer specific questions using the document's stated subjects, figures, authorities, objectives, or affected groups.",
       "Return only a JSON array of strings. Do not add Markdown.",
       summary,
     ].join("\n\n"),
+    {
+      models: taskGenerationModels("chat"),
+      maxModels: Number(process.env.SUGGESTED_QUESTIONS_AI_MAX_MODELS || 2),
+      timeoutMs: Number(process.env.SUGGESTED_QUESTIONS_AI_TIMEOUT_MS || 8_000),
+      maxQueueWaitMs: Number(
+        process.env.SUGGESTED_QUESTIONS_AI_MAX_QUEUE_WAIT_MS || 2_000,
+      ),
+      maxRetryAfterMs: Number(
+        process.env.SUGGESTED_QUESTIONS_AI_MAX_RETRY_AFTER_MS || 0,
+      ),
+      attempts: Number(process.env.SUGGESTED_QUESTIONS_AI_ATTEMPTS || 1),
+      generationConfig: {
+        temperature: Number(process.env.SUGGESTED_QUESTIONS_AI_TEMPERATURE || 0.2),
+        maxOutputTokens: Number(
+          process.env.SUGGESTED_QUESTIONS_AI_MAX_OUTPUT_TOKENS || 350,
+        ),
+      },
+    },
   );
   return parseSuggestedQuestions(responseText(response));
 };

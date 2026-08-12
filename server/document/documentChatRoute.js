@@ -3,6 +3,7 @@ const { generationLimiter } = require("../middleware/security");
 const DocumentChat = require("../models/DocumentChat");
 const {
   getDocumentContext,
+  getTextArtifact,
   retrievePassages,
   ensureSummary,
 } = require("./documentResearchService");
@@ -26,6 +27,35 @@ const {
 } = require("../lib/sse");
 
 const router = express.Router();
+
+const compactText = (value, maxLength = 1_200) =>
+  String(value || "")
+    .normalize("NFKC")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, maxLength);
+
+const buildBriefContext = (document, textArtifact) => {
+  const sections = textArtifact?.summarySections || {};
+  const lines = [
+    textArtifact?.englishSummary
+      ? `[Document brief: ${document?.title || "Selected document"}]\n${compactText(textArtifact.englishSummary, 2_400)}`
+      : "",
+    sections.executive_summary
+      ? `[Brief section: Executive Summary]\n${compactText(sections.executive_summary, 900)}`
+      : "",
+    sections.implementation
+      ? `[Brief section: Implementation]\n${compactText(sections.implementation, 900)}`
+      : "",
+    sections.affected_authorities
+      ? `[Brief section: Affected Authorities]\n${compactText(sections.affected_authorities, 700)}`
+      : "",
+    sections.legal_impact
+      ? `[Brief section: Legal Impact]\n${compactText(sections.legal_impact, 700)}`
+      : "",
+  ].filter(Boolean);
+  return lines.join("\n\n");
+};
 
 const buildExtractiveChatFallback = (message, passages, relationshipSources = []) => {
   const sourceLines = passages
@@ -393,16 +423,18 @@ router.post("/", generationLimiter, async (req, res) => {
     if (!message) {
       return res.status(400).json({ error: "Message is required." });
     }
-    const [passages, relationshipContext, document] = await Promise.all([
+    const [passages, relationshipContext, document, textArtifact] = await Promise.all([
       retrievePassages(
         documentType,
         documentId,
         message,
-        6,
+        8,
       ),
       getRelationshipContext(documentId, message),
       DocumentRepository.getById(documentId),
+      getTextArtifact(documentId),
     ]);
+    const briefContext = buildBriefContext(document, textArtifact);
     const passageContext = passages
       .map((item) => {
         const location = [
@@ -420,10 +452,11 @@ router.post("/", generationLimiter, async (req, res) => {
           item.clauseId ? `Clause ${item.clauseId}` : null,
           `Chunk ${item.chunkIndex + 1}`,
         ].filter(Boolean).join(" | ");
-        return `[Source ${item.passage}: ${location}]\n${item.content}`;
+        return `[Source ${item.passage}: ${location}]\n${compactText(item.content, 1_200)}`;
       })
       .join("\n\n");
     const context = [
+      briefContext,
       passageContext,
       relationshipContext.context
         ? `Government knowledge graph:\n${relationshipContext.context}`
