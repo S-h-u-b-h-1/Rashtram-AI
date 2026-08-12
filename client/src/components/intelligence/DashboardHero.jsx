@@ -1,5 +1,11 @@
 import Link from "next/link";
 import {
+  motion,
+  useMotionTemplate,
+  useMotionValue,
+  useSpring,
+} from "framer-motion";
+import {
   ArrowRight,
   BookOpenText,
   Clock3,
@@ -12,14 +18,32 @@ import { formatDate, formatRelativeTime } from "@/lib/document-links";
 
 export function DashboardHero({ data, onSearch }) {
   const [query, setQuery] = useState("");
+  const pointerX = useMotionValue(560);
+  const pointerY = useMotionValue(180);
+  const smoothX = useSpring(pointerX, { stiffness: 90, damping: 28 });
+  const smoothY = useSpring(pointerY, { stiffness: 90, damping: 28 });
+  const cursorGlow = useMotionTemplate`radial-gradient(520px circle at ${smoothX}px ${smoothY}px, rgba(255, 250, 240, 0.13), transparent 58%)`;
+
+  const updatePointer = (event) => {
+    const bounds = event.currentTarget.getBoundingClientRect();
+    pointerX.set(event.clientX - bounds.left);
+    pointerY.set(event.clientY - bounds.top);
+  };
 
   return (
-    <section className="relative overflow-hidden rounded-[1.8rem] bg-[#8f1d2c] p-5 text-white sm:p-7 lg:p-8">
+    <motion.section
+      className="relative overflow-hidden rounded-[1.8rem] bg-[#8f1d2c] p-5 text-white shadow-[0_22px_70px_rgba(78,40,31,0.18)] sm:p-6 lg:p-7"
+      initial={{ opacity: 0, y: 14 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
+      onPointerMove={updatePointer}
+    >
       <div className="policy-grid absolute inset-0 opacity-20" />
+      <motion.div className="absolute inset-0" style={{ background: cursorGlow }} />
       <div className="absolute -right-20 -top-24 h-72 w-72 rounded-full bg-[#a85a52]/18 blur-3xl" />
-      <div className="relative">
-        <div className="flex flex-col gap-6 xl:flex-row xl:items-start xl:justify-between">
-          <div className="max-w-4xl">
+      <div className="relative grid gap-5 xl:grid-cols-[minmax(0,1fr)_420px]">
+        <div className="min-w-0">
+          <div className="max-w-3xl">
             <div className="flex flex-wrap items-center gap-2 text-[11px] text-white/55">
               <span className="rounded-full border border-white/12 bg-white/6 px-3 py-1.5 font-semibold uppercase tracking-[0.14em] text-[#c1a06f]">
                 Research Desk
@@ -71,45 +95,11 @@ export function DashboardHero({ data, onSearch }) {
                 <ArrowRight className="h-3.5 w-3.5" />
               </button>
             </form>
-            <div className="mt-4 grid max-w-3xl gap-2 sm:grid-cols-3">
-              {[
-                {
-                  label: "Search all documents",
-                  hint: "Find the right record first",
-                  href: "/app?view=documents",
-                  icon: FileSearch,
-                },
-                {
-                  label: "Continue reading",
-                  hint: "Pick up recent work",
-                  href: "#continue-research",
-                  icon: BookOpenText,
-                },
-                {
-                  label: "Compare documents",
-                  hint: "Compare two to five records",
-                  href: "/app/compare",
-                  icon: GitCompareArrows,
-                },
-              ].map(({ label, hint, href, icon: Icon }) => (
-                <Link
-                  key={href}
-                  href={href}
-                  className="rounded-2xl border border-white/12 bg-white/[0.06] p-3 text-left transition hover:bg-white/12 hover:text-white"
-                >
-                  <span className="flex items-center gap-2 text-xs font-semibold text-white/82">
-                    <Icon className="h-3.5 w-3.5 text-[#c1a06f]" />
-                    {label}
-                  </span>
-                  <span className="mt-1 block text-[11px] text-white/45">
-                    {hint}
-                  </span>
-                </Link>
-              ))}
-            </div>
           </div>
+        </div>
 
-          <div className="min-w-[230px] rounded-2xl border border-white/10 bg-white/[0.055] p-4">
+        <div className="grid gap-3">
+          <div className="rounded-2xl border border-white/12 bg-white/[0.07] p-4">
             <div className="flex items-center gap-2 text-xs font-semibold text-white/82">
               <Clock3 className="h-4 w-4 text-[#c1a06f]" />
               Source freshness
@@ -124,9 +114,72 @@ export function DashboardHero({ data, onSearch }) {
               {data.briefSummary}
             </p>
           </div>
+
+          <div className="rounded-2xl border border-white/12 bg-white/[0.055] p-4">
+            <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-[#c1a06f]">
+              Simple research flow
+            </p>
+            <div className="mt-3 grid gap-2 text-xs text-white/68">
+              {["Search the record", "Open and ask cited questions", "Compare only research-ready documents"].map(
+                (step, index) => (
+                  <div
+                    key={step}
+                    className="flex items-center gap-2 rounded-xl bg-white/[0.055] px-3 py-2"
+                  >
+                    <span className="grid h-5 w-5 shrink-0 place-items-center rounded-full bg-[#fffaf0] text-[10px] font-bold text-[#8f1d2c]">
+                      {index + 1}
+                    </span>
+                    <span>{step}</span>
+                  </div>
+                ),
+              )}
+            </div>
+          </div>
         </div>
 
+        <div className="grid gap-2 sm:grid-cols-3 xl:col-span-2">
+          {[
+            {
+              label: "Search all documents",
+              hint: "Find the right record first",
+              href: "/app?view=documents",
+              icon: FileSearch,
+            },
+            {
+              label: "Continue reading",
+              hint: "Pick up recent work",
+              href: "#continue-research",
+              icon: BookOpenText,
+            },
+            {
+              label: "Compare documents",
+              hint: "Compare two to five records",
+              href: "/app/compare",
+              icon: GitCompareArrows,
+            },
+          ].map(({ label, hint, href, icon: Icon }) => (
+            <motion.div
+              key={href}
+              whileHover={{ y: -3, scale: 1.01 }}
+              whileTap={{ scale: 0.985 }}
+              transition={{ type: "spring", stiffness: 320, damping: 24 }}
+            >
+              <Link
+                href={href}
+                className="block h-full rounded-2xl border border-white/12 bg-white/[0.065] p-3 text-left transition hover:bg-white/12 hover:text-white"
+              >
+                <span className="flex items-center gap-2 text-xs font-semibold text-white/82">
+                  <Icon className="h-3.5 w-3.5 text-[#c1a06f]" />
+                  {label}
+                </span>
+                <span className="mt-1 block text-[11px] text-white/45">
+                  {hint}
+                </span>
+              </Link>
+            </motion.div>
+          ))}
+        </div>
       </div>
-    </section>
+    </motion.section>
   );
 }
