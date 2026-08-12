@@ -147,6 +147,29 @@ const comparisonQuery = (mode) =>
       "purpose, provisions, similarities, differences, authorities, stakeholders, dates and practical impact",
   })[mode];
 
+const comparisonRetrievalLimit = (mode, documentCount) => {
+  const normalizedMode =
+    MODE_ALIASES[String(mode || "full").toLowerCase()] || "full";
+  const baseLimit = {
+    summary: 4,
+    timeline: 4,
+    clause: 6,
+    impact: 5,
+    compliance: 5,
+    full: 6,
+  }[normalizedMode] || 5;
+  const countAdjustedLimit = Math.floor(
+    16 / Math.max(1, Number(documentCount) || 1),
+  );
+  return Math.max(3, Math.min(6, baseLimit, countAdjustedLimit || baseLimit));
+};
+
+const comparisonPassageCharLimit = () => {
+  const configured = Number(process.env.COMPARISON_PASSAGE_CHAR_LIMIT || 1_000);
+  if (!Number.isFinite(configured)) return 1_000;
+  return Math.max(500, Math.min(1_400, Math.floor(configured)));
+};
+
 const mapComparison = (row) => row && ({
   id: String(row.id),
   title: row.title,
@@ -237,7 +260,8 @@ const createComparison = async (userId, payload) => {
   }
   const readyPayloads = await Promise.all(loaded.map(ensureResearchReady));
   const documents = readyPayloads.map((payload) => payload.document);
-  const topK = Math.max(4, Math.floor(20 / documents.length));
+  const topK = comparisonRetrievalLimit(mode, documents.length);
+  const passageCharLimit = comparisonPassageCharLimit();
   const groups = await Promise.all(
     documents.map(async (document, documentIndex) => {
       const retrieval = await retrieveDocumentContext(
@@ -284,7 +308,7 @@ const createComparison = async (userId, payload) => {
             pdfUrl: document.pdfUrl,
             snippet: passage.content.slice(0, 700),
           });
-          return `[${label}] ${passage.content.slice(0, 2_000)}`;
+          return `[${label}] ${passage.content.slice(0, passageCharLimit)}`;
         }),
       ].join("\n\n");
     })

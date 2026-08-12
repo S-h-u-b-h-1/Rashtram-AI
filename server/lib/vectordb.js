@@ -1,5 +1,8 @@
 const { Pinecone } = require("@pinecone-database/pinecone");
-const { sanitizeProviderError } = require("./providerErrorSanitizer");
+const {
+  classifyProviderError,
+  sanitizeProviderError,
+} = require("./providerErrorSanitizer");
 const { createCircuitBreaker } = require("./circuitBreaker");
 const { checkVectorNamespaces } = require("./vectorNamespaceHealth");
 const {
@@ -73,10 +76,12 @@ const FALLBACK_GENERATION_MODEL =
   AI_PROVIDER === "gemini"
     ? normalizeGenerationModel(
         process.env.GEMINI_FALLBACK_MODEL,
-        "gemini-2.5-flash",
+        "gemini-flash-latest",
         "gemini",
       )
     : normalizeGenerationModel(process.env.OPENAI_FALLBACK_MODEL, "gpt-4o-mini", "openai");
+const DEFAULT_SECONDARY_GENERATION_MODEL =
+  AI_PROVIDER === "gemini" ? "gemini-flash-latest" : "gpt-4o-mini";
 const EMBEDDING_MODEL =
   EMBEDDING_PROVIDER === "local"
     ? "local-hash-v1"
@@ -371,7 +376,13 @@ const withOpenAIRetry = async (operation, label, attempts = 3, options = {}) => 
 };
 
 const generationModels = () =>
-  [...new Set([GENERATION_MODEL, FALLBACK_GENERATION_MODEL])].filter(Boolean);
+  [
+    ...new Set([
+      GENERATION_MODEL,
+      FALLBACK_GENERATION_MODEL,
+      DEFAULT_SECONDARY_GENERATION_MODEL,
+    ]),
+  ].filter(Boolean);
 
 const providerCredentialsConfigured = () =>
   AI_PROVIDER === "gemini" ? Boolean(GEMINI_API_KEY) : Boolean(OPENAI_API_KEY);
@@ -424,6 +435,7 @@ const validateAIProvider = async ({ force = false } = {}) => {
     latencyMs: {},
     checkedAt: new Date().toISOString(),
     errors: {},
+    errorKinds: {},
   };
 
   if (!config.credentialsConfigured) {
@@ -446,12 +458,15 @@ const validateAIProvider = async ({ force = false } = {}) => {
         attempts: 1,
         maxQueueWaitMs: Number(process.env.AI_HEALTH_MAX_QUEUE_WAIT_MS || 5_000),
         timeoutMs: Number(process.env.AI_HEALTH_REQUEST_TIMEOUT_MS || 8_000),
+        useCircuitBreaker: false,
+        useRateLimiter: false,
       },
     );
     health.generationAvailable = Boolean(responseText(response).trim());
     health.latencyMs.generation = Date.now() - started;
   } catch (error) {
     health.errors.generation = sanitizeProviderError(error);
+    health.errorKinds.generation = classifyProviderError(error);
   }
 
   try {
@@ -470,6 +485,7 @@ const validateAIProvider = async ({ force = false } = {}) => {
     }
   } catch (error) {
     health.errors.embedding = sanitizeProviderError(error);
+    health.errorKinds.embedding = classifyProviderError(error);
   }
 
   try {
@@ -481,6 +497,8 @@ const validateAIProvider = async ({ force = false } = {}) => {
         attempts: 1,
         maxQueueWaitMs: Number(process.env.AI_HEALTH_MAX_QUEUE_WAIT_MS || 5_000),
         timeoutMs: Number(process.env.AI_HEALTH_REQUEST_TIMEOUT_MS || 8_000),
+        useCircuitBreaker: false,
+        useRateLimiter: false,
       },
     );
     for await (const chunk of stream) {
@@ -495,6 +513,7 @@ const validateAIProvider = async ({ force = false } = {}) => {
     }
   } catch (error) {
     health.errors.streaming = sanitizeProviderError(error);
+    health.errorKinds.streaming = classifyProviderError(error);
   }
 
   // Namespace occupancy. Reported even when generation and embedding are
@@ -518,6 +537,7 @@ const validateAIProvider = async ({ force = false } = {}) => {
     }
   } catch (error) {
     health.errors.vectorNamespace = sanitizeProviderError(error);
+    health.errorKinds.vectorNamespace = classifyProviderError(error);
   }
 
   aiHealthCache = { ...aiHealthCache, checkedAt: now, result: health };
@@ -604,30 +624,38 @@ const generationQueue = createRateLimitedQueue({
   safetyFactor: Number(process.env.GEMINI_GENERATION_SAFETY_FACTOR || 0.85),
 });
 
-const runGeneration = (method, contents, options = {}) =>
-  generationBreaker.exec(() =>
-    generationQueue.schedule(
-      async () => {
-        try {
-          return await runGenerationInternal(method, contents, options);
-        } catch (error) {
-          // Feed the provider's own stated wait back into the pacer so the
-          // next caller doesn't immediately retry into the same limit.
-          if (isRateLimitError(error)) {
-            generationQueue.noteRetryAfter(retryAfterSecondsFrom(error) || 20);
-          }
-          throw error;
+const scheduleGeneration = (method, contents, options = {}) =>
+  generationQueue.schedule(
+    async () => {
+      try {
+        return await runGenerationInternal(method, contents, options);
+      } catch (error) {
+        // Feed the provider's own stated wait back into the pacer so the
+        // next caller doesn't immediately retry into the same limit.
+        if (isRateLimitError(error)) {
+          generationQueue.noteRetryAfter(retryAfterSecondsFrom(error) || 20);
         }
-      },
-      {
-        maxWaitMs: Number(
-          options.maxQueueWaitMs ??
-            process.env.AI_GENERATION_MAX_QUEUE_WAIT_MS ??
-            30_000,
-        ),
-      },
-    ),
+        throw error;
+      }
+    },
+    {
+      maxWaitMs: Number(
+        options.maxQueueWaitMs ??
+          process.env.AI_GENERATION_MAX_QUEUE_WAIT_MS ??
+          30_000,
+      ),
+    },
   );
+
+const runGeneration = (method, contents, options = {}) => {
+  const execute = () =>
+    options.useRateLimiter === false
+      ? runGenerationInternal(method, contents, options)
+      : scheduleGeneration(method, contents, options);
+  return options.useCircuitBreaker === false
+    ? execute()
+    : generationBreaker.exec(execute);
+};
 
 const runGenerationInternal = async (method, contents, options = {}) => {
   const models = generationModels().slice(
@@ -1194,14 +1222,16 @@ ${context}
 `;
   const response = await runGeneration("generateContent", prompt, {
     // Comparisons run in a serverless request. Fail over to the grounded
-    // extractive result before the platform timeout instead of hanging the UI.
-    // Gemini may return short-window free-tier retry hints such as
-    // "Please retry in 28s"; honor one bounded retry so normal bursts still
-    // produce a full AI comparison when there is enough request time.
-    timeoutMs: Number(process.env.COMPARISON_AI_TIMEOUT_MS || 12_000),
-    attempts: Number(process.env.COMPARISON_AI_ATTEMPTS || 2),
-    maxRetryAfterMs: Number(process.env.COMPARISON_AI_MAX_RETRY_AFTER_MS || 25_000),
-    maxModels: 1,
+    // extractive result before the platform timeout instead of hanging the
+    // UI. Try the primary Gemini model and then a distinct fallback model,
+    // but do not wait tens of seconds on a provider retry window.
+    timeoutMs: Number(process.env.COMPARISON_AI_TIMEOUT_MS || 10_000),
+    attempts: Number(process.env.COMPARISON_AI_ATTEMPTS || 1),
+    maxQueueWaitMs: Number(process.env.COMPARISON_AI_MAX_QUEUE_WAIT_MS || 4_000),
+    maxRetryAfterMs: Number(process.env.COMPARISON_AI_MAX_RETRY_AFTER_MS || 0),
+    maxModels: Number(
+      process.env.COMPARISON_AI_MAX_MODELS || generationModels().length,
+    ),
   });
   return parseJsonResponse(responseText(response));
 };

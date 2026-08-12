@@ -157,6 +157,12 @@ app.get("/health", async (req, res) => {
         aiHealth.streamingAvailable
           ? undefined
           : aiHealth.errors,
+      aiErrorKinds:
+        aiHealth.generationAvailable &&
+        aiHealth.embeddingAvailable &&
+        aiHealth.streamingAvailable
+          ? undefined
+          : aiHealth.errorKinds,
       timestamp: new Date().toISOString(),
     });
   } catch (error) {
