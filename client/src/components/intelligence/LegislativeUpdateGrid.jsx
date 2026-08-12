@@ -1,8 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { ArrowRight, FileText } from "lucide-react";
-import { formatDate, humanize } from "@/lib/document-links";
+import { ArrowRight, BookOpenText, FileText } from "lucide-react";
+import { formatDate } from "@/lib/document-links";
 
 export function LegislativeUpdateGrid({ groups = [] }) {
   const visibleGroups = groups.filter((group) => group.documents?.length);
@@ -11,65 +11,57 @@ export function LegislativeUpdateGrid({ groups = [] }) {
     <section className="surface-card p-5 sm:p-6">
       <div>
         <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#874047]">
-          Verified official records
+          Choose a library
         </p>
         <h2 className="mt-2 font-serif text-2xl text-[#8f1d2c]">
-          Recent legislative updates
+          Start from the document type you need
         </h2>
         <p className="mt-2 text-sm text-[#777066]">
-          Recently published records, grouped by research library.
+          Researchers usually need one source set first. Open a library, then
+          search or filter inside it.
         </p>
       </div>
 
       {visibleGroups.length ? (
-        <div className="mt-5 grid gap-3 lg:grid-cols-2 2xl:grid-cols-3">
+        <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
           {visibleGroups.map((group) => (
-            <article
+            <Link
               key={group.label}
-              className="rounded-2xl border border-[#8f1d2c]/9 bg-[#f6f2eb] p-4"
+              href={group.href || "/app?view=documents"}
+              className="group rounded-2xl border border-[#8f1d2c]/9 bg-[#f6f2eb] p-4 transition hover:-translate-y-0.5 hover:border-[#8f1d2c]/20 hover:shadow-sm"
             >
               <div className="flex items-center justify-between gap-3">
-                <h3 className="text-xs font-bold uppercase tracking-[0.1em] text-[#874047]">
-                  {group.label}
-                </h3>
-                {group.href && (
-                  <Link
-                    href={group.href}
-                    className="inline-flex items-center gap-1 text-[10px] font-semibold text-[#8f1d2c]"
-                  >
-                    View all
-                    <ArrowRight className="h-3 w-3" />
-                  </Link>
-                )}
+                <span className="grid h-10 w-10 place-items-center rounded-xl bg-[#eee0dc] text-[#8f1d2c]">
+                  <BookOpenText className="h-4 w-4" />
+                </span>
+                <ArrowRight className="h-4 w-4 text-[#aaa195] transition group-hover:translate-x-0.5 group-hover:text-[#8f1d2c]" />
               </div>
-              <div className="mt-3 divide-y divide-[#8f1d2c]/8">
-                {group.documents.slice(0, 3).map((document) => (
-                  <Link
-                    key={document.id}
-                    href={`/app/document/${document.id}`}
-                    className="group flex gap-3 py-3 first:pt-0 last:pb-0"
-                  >
-                    <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-[#eee0dc] text-[#8f1d2c]">
-                      <FileText className="h-3.5 w-3.5" />
-                    </span>
-                    <span className="min-w-0">
-                      <span className="line-clamp-2 text-xs font-semibold leading-5 text-[#29312d] group-hover:text-[#8f1d2c]">
-                        {document.title}
-                      </span>
-                      <span className="mt-1 block text-[10px] text-[#81796e]">
-                        {humanize(document.documentType || document.type)} ·{" "}
-                        {formatDate(
-                          document.publicationDate ||
-                            document.introducedDate ||
-                            document.enactedDate,
-                          document.year || "Date unavailable",
-                        )}
-                      </span>
-                    </span>
-                  </Link>
-                ))}
+              <h3 className="mt-4 text-sm font-bold text-[#29312d]">
+                {group.label}
+              </h3>
+              <p className="mt-1 text-xs text-[#81796e]">
+                {group.documents.length.toLocaleString("en-IN")} recent records
+              </p>
+              <div className="mt-4 rounded-xl bg-[#fffaf0] p-3">
+                <div className="flex items-start gap-2">
+                  <FileText className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[#8f1d2c]" />
+                  <div className="min-w-0">
+                    <p className="line-clamp-2 text-xs font-medium leading-5 text-[#514d46]">
+                      {group.documents[0]?.title || "Open library"}
+                    </p>
+                    <p className="mt-1 text-[10px] text-[#8a8277]">
+                      Latest{" "}
+                      {formatDate(
+                        group.documents[0]?.publicationDate ||
+                          group.documents[0]?.introducedDate ||
+                          group.documents[0]?.enactedDate,
+                        group.documents[0]?.year || "date unavailable",
+                      )}
+                    </p>
+                  </div>
+                </div>
               </div>
-            </article>
+            </Link>
           ))}
         </div>
       ) : (

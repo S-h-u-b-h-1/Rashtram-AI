@@ -4,14 +4,11 @@ import Link from "next/link";
 import {
   ChevronDown,
   FileText,
-  BookOpenText,
   LayoutDashboard,
   LogOut,
   Menu,
   PanelLeftClose,
   Search,
-  Scale,
-  ScrollText,
   GitCompareArrows,
   Sparkles,
   X,
@@ -27,55 +24,42 @@ import { useComparison } from "@/context/ComparisonContext";
 const NAVIGATION = [
   {
     key: "dashboard",
-    label: "Dashboard",
+    label: "Research Desk",
     href: "/app",
     icon: LayoutDashboard,
   },
   {
+    key: "documents",
+    label: "Search Documents",
+    href: "/app?view=documents",
+    icon: Search,
+  },
+  {
     key: "bills",
-    label: "Bills",
+    label: "Browse Libraries",
     icon: FileText,
     children: [
       {
         key: "bills",
-        label: "Parliament Bills",
+        label: "Bills",
         href: "/app?view=bills",
       },
       {
-        key: "state-bills",
-        label: "State Bills",
-        href: "/app/state-bills",
-      },
-    ],
-  },
-  {
-    key: "acts",
-    label: "Acts",
-    icon: Scale,
-    children: [
-      {
         key: "acts",
-        label: "Parliament Acts",
+        label: "Acts",
         href: "/app?view=acts",
       },
       {
-        key: "state-acts",
-        label: "State Acts",
-        href: "/app/state-acts",
+        key: "egazette",
+        label: "Gazette",
+        href: "/app/egazette",
+      },
+      {
+        key: "policies",
+        label: "Policies",
+        href: "/app?view=policies",
       },
     ],
-  },
-  {
-    key: "egazette",
-    label: "Gazette",
-    href: "/app/egazette",
-    icon: ScrollText,
-  },
-  {
-    key: "policies",
-    label: "Policies",
-    href: "/app?view=policies",
-    icon: BookOpenText,
   },
   {
     key: "compare",
@@ -85,7 +69,7 @@ const NAVIGATION = [
   },
   {
     key: "recommend",
-    label: "Find Relevant Laws",
+    label: "Suggested Reading",
     href: "/app/recommend",
     icon: Sparkles,
   },
@@ -152,7 +136,7 @@ export function WorkspaceShell({ activeKey, title, children }) {
 
         <div className="px-5 pt-7">
           <p className="px-3 text-[10px] font-semibold uppercase tracking-[0.22em] text-white/35">
-            Legislative workspace
+            Research workspace
           </p>
           <nav className="mt-3 space-y-1.5" aria-label="Workspace navigation">
             {NAVIGATION.map((item) => {
@@ -230,11 +214,11 @@ export function WorkspaceShell({ activeKey, title, children }) {
             <div className="mt-1 h-2 w-2 shrink-0 rounded-full bg-[#c1a06f]" />
             <div>
               <p className="text-xs font-semibold text-white/78">
-                Source-aware research
+                Official-source research
               </p>
               <p className="mt-1 text-[11px] leading-5 text-white/38">
-                Every result retains its official source and availability
-                status.
+                Start with a document. Rashtram AI keeps answers tied to
+                cited passages.
               </p>
             </div>
           </div>
@@ -278,7 +262,7 @@ export function WorkspaceShell({ activeKey, title, children }) {
             <BrandMark compact className="md:hidden" />
             <div>
               <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[#874047]">
-                Rashtram intelligence
+                Rashtram AI
               </p>
               <h1 className="mt-1 text-sm font-semibold text-[#8f1d2c]">
                 {title}

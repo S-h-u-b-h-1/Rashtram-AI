@@ -139,13 +139,9 @@ export function IntelligenceDashboard({ onNavigate }) {
         ]}
       />
 
-      <PlatformCoverageOverview coverage={data.platformCoverage || {}} />
-
-      <KnowledgeNetworkMetrics metrics={data.knowledgeGraph} />
-
-      <ResearchReadinessMetrics metrics={data.processingReadiness} />
-
-      <ContinueResearch chats={data.recentUserChats || []} />
+      <div id="continue-research">
+        <ContinueResearch chats={data.recentUserChats || []} />
+      </div>
 
       {(data.recommendedReading || []).length > 0 && (
         <RecommendationSection
@@ -157,18 +153,36 @@ export function IntelligenceDashboard({ onNavigate }) {
         />
       )}
 
-      <div className="grid gap-5 xl:grid-cols-2">
-        <TrendingMinistries ministries={data.ministryActivity || []} />
-        <DocumentListSection
-          eyebrow="Policies, schemes and consultations"
-          title="Recent policy updates"
-          documents={data.latestPolicies || []}
-          emptyMessage="No recent policy records are available from connected sources."
-          onViewAll={() => onNavigate("policies")}
-        />
-      </div>
+      <DocumentListSection
+        eyebrow="Latest documents"
+        title="Recently added records"
+        documents={[
+          ...(data.activeBills || []).slice(0, 2),
+          ...(data.latestActs || []).slice(0, 2),
+          ...(data.recentGazetteNotifications || []).slice(0, 2),
+          ...(data.latestPolicies || []).slice(0, 2),
+        ]}
+        emptyMessage="No recent records are available from connected sources."
+        onViewAll={() => onNavigate("documents")}
+      />
 
-      <SourceHealthPanel sources={data.sourceHealth || []} compact />
+      <details className="surface-card overflow-hidden">
+        <summary className="cursor-pointer list-none px-5 py-4 text-sm font-semibold text-[#8f1d2c] sm:px-6 [&::-webkit-details-marker]:hidden">
+          Advanced platform details
+          <span className="ml-2 text-xs font-normal text-[#81796e]">
+            Coverage, graph, processing and source health
+          </span>
+        </summary>
+        <div className="space-y-5 border-t border-[#8f1d2c]/8 bg-[#f7f2eb] p-4 sm:p-5">
+          <PlatformCoverageOverview coverage={data.platformCoverage || {}} />
+          <KnowledgeNetworkMetrics metrics={data.knowledgeGraph} />
+          <ResearchReadinessMetrics metrics={data.processingReadiness} />
+          <div className="grid gap-5 xl:grid-cols-2">
+            <TrendingMinistries ministries={data.ministryActivity || []} />
+            <SourceHealthPanel sources={data.sourceHealth || []} compact />
+          </div>
+        </div>
+      </details>
     </div>
   );
 }

@@ -190,13 +190,18 @@ export function DocumentExplorer({
             <p className="mt-2 max-w-3xl text-sm leading-6 text-[#706a61]">
               {description}
             </p>
+            <p className="mt-3 max-w-3xl rounded-2xl bg-white/55 px-4 py-3 text-xs leading-5 text-[#706a61]">
+              Simple flow: search or filter → open a document → ask cited
+              questions. Use Compare only when you have selected two or more
+              research-ready records.
+            </p>
           </div>
           <div className="rounded-2xl bg-[#eee0dc] px-4 py-3 text-right">
             <p className="font-serif text-2xl text-[#8f1d2c]">
               {Number(pagination.total || 0).toLocaleString("en-IN")}
             </p>
             <p className="text-[10px] uppercase tracking-[0.12em] text-[#777066]">
-              Verified records
+              Records found
             </p>
           </div>
         </div>

@@ -57,73 +57,6 @@ export function DocumentFilters({
         />
       </label>
       <div className="flex flex-wrap items-end gap-2">
-        {visibleOptions.map(([key, optionLabel, source]) => (
-          <label key={key} className="min-w-[150px] flex-1 space-y-1">
-            <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[#777066]">
-              {filterLabels[key] || optionLabel}
-            </span>
-            <select
-              value={filters[key] || ""}
-              onChange={(event) => onFilterChange(key, event.target.value)}
-              className="h-10 w-full rounded-xl border border-[#8f1d2c]/10 bg-white px-3 text-xs text-[#29312d] outline-none focus:border-[#a85a52]"
-            >
-              <option value="">All</option>
-              {(options[source] || []).map((option) => (
-                <option key={String(option)} value={String(option)}>
-                  {label(option)}
-                </option>
-              ))}
-            </select>
-          </label>
-        ))}
-        <label className="space-y-1">
-          <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[#777066]">
-            PDF
-          </span>
-          <select
-            value={filters.hasPdf || ""}
-            onChange={(event) =>
-              onFilterChange("hasPdf", event.target.value)
-            }
-            className="h-10 rounded-xl border border-[#8f1d2c]/10 bg-white px-3 text-xs text-[#29312d]"
-          >
-            <option value="">All</option>
-            <option value="true">Available</option>
-            <option value="false">Unavailable</option>
-          </select>
-        </label>
-        {[
-          ["researchReady", "Research"],
-          ["comparisonReady", "Comparison"],
-        ].map(([key, text]) => (
-          <label key={key} className="space-y-1">
-            <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[#777066]">
-              {text}
-            </span>
-            <select
-              value={filters[key] || ""}
-              onChange={(event) => onFilterChange(key, event.target.value)}
-              className="h-10 rounded-xl border border-[#8f1d2c]/10 bg-white px-3 text-xs text-[#29312d]"
-            >
-              <option value="">All</option>
-              <option value="true">Ready only</option>
-              <option value="false">Not ready</option>
-            </select>
-          </label>
-        ))}
-        {["publicationFrom", "publicationTo"].map((key) => (
-          <label key={key} className="space-y-1">
-            <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[#777066]">
-              {key === "publicationFrom" ? "From date" : "To date"}
-            </span>
-            <input
-              type="date"
-              value={filters[key] || ""}
-              onChange={(event) => onFilterChange(key, event.target.value)}
-              className="h-10 rounded-xl border border-[#8f1d2c]/10 bg-white px-3 text-xs text-[#29312d]"
-            />
-          </label>
-        ))}
         {onSortChange && (
           <label className="min-w-[150px] space-y-1">
             <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[#777066]">
@@ -179,11 +112,92 @@ export function DocumentFilters({
             Clear {activeCount}
           </button>
         )}
-        <span className="inline-flex h-10 items-center gap-1.5 px-2 text-[10px] font-semibold uppercase tracking-[0.1em] text-[#777066]">
-          <Filter className="h-3.5 w-3.5" />
-          Universal filters
-        </span>
       </div>
+      <details className="rounded-2xl border border-[#8f1d2c]/8 bg-[#f7f2eb]">
+        <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-xs font-semibold text-[#8f1d2c] [&::-webkit-details-marker]:hidden">
+          <span className="inline-flex items-center gap-1.5">
+            <Filter className="h-3.5 w-3.5" />
+            Advanced filters
+            {activeCount > 0 && (
+              <span className="rounded-full bg-[#eee0dc] px-2 py-0.5 text-[10px]">
+                {activeCount} active
+              </span>
+            )}
+          </span>
+          <span className="text-[10px] font-normal text-[#81796e]">
+            Type, ministry, date, readiness
+          </span>
+        </summary>
+        <div className="grid gap-2 border-t border-[#8f1d2c]/8 p-4 sm:grid-cols-2 xl:grid-cols-4">
+          {visibleOptions.map(([key, optionLabel, source]) => (
+            <label key={key} className="space-y-1">
+              <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[#777066]">
+                {filterLabels[key] || optionLabel}
+              </span>
+              <select
+                value={filters[key] || ""}
+                onChange={(event) => onFilterChange(key, event.target.value)}
+                className="h-10 w-full rounded-xl border border-[#8f1d2c]/10 bg-white px-3 text-xs text-[#29312d] outline-none focus:border-[#a85a52]"
+              >
+                <option value="">All</option>
+                {(options[source] || []).map((option) => (
+                  <option key={String(option)} value={String(option)}>
+                    {label(option)}
+                  </option>
+                ))}
+              </select>
+            </label>
+          ))}
+          <label className="space-y-1">
+            <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[#777066]">
+              PDF
+            </span>
+            <select
+              value={filters.hasPdf || ""}
+              onChange={(event) =>
+                onFilterChange("hasPdf", event.target.value)
+              }
+              className="h-10 w-full rounded-xl border border-[#8f1d2c]/10 bg-white px-3 text-xs text-[#29312d]"
+            >
+              <option value="">All</option>
+              <option value="true">Available</option>
+              <option value="false">Unavailable</option>
+            </select>
+          </label>
+          {[
+            ["researchReady", "Research"],
+            ["comparisonReady", "Comparison"],
+          ].map(([key, text]) => (
+            <label key={key} className="space-y-1">
+              <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[#777066]">
+                {text}
+              </span>
+              <select
+                value={filters[key] || ""}
+                onChange={(event) => onFilterChange(key, event.target.value)}
+                className="h-10 w-full rounded-xl border border-[#8f1d2c]/10 bg-white px-3 text-xs text-[#29312d]"
+              >
+                <option value="">All</option>
+                <option value="true">Ready only</option>
+                <option value="false">Not ready</option>
+              </select>
+            </label>
+          ))}
+          {["publicationFrom", "publicationTo"].map((key) => (
+            <label key={key} className="space-y-1">
+              <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[#777066]">
+                {key === "publicationFrom" ? "From date" : "To date"}
+              </span>
+              <input
+                type="date"
+                value={filters[key] || ""}
+                onChange={(event) => onFilterChange(key, event.target.value)}
+                className="h-10 w-full rounded-xl border border-[#8f1d2c]/10 bg-white px-3 text-xs text-[#29312d]"
+              />
+            </label>
+          ))}
+        </div>
+      </details>
     </div>
   );
 }
