@@ -23,6 +23,7 @@ import { ChatHeader } from "./ChatHeader";
 import { ChatHistory } from "./ChatHistory";
 import { ChatInput } from "./ChatInput";
 import { ChatSidebar } from "./ChatSidebar";
+import { ResearchWorkflowPanel } from "./ResearchWorkflowPanel";
 import { SuggestedQuestions } from "./SuggestedQuestions";
 import { useSmoothMessageStream } from "@/hooks/useSmoothMessageStream";
 import { usePinnedChatScroll } from "@/hooks/usePinnedChatScroll";
@@ -243,13 +244,23 @@ export function DocumentChatLayout({
     [],
   );
 
-  const submitQuestion = async (question) => {
+  const submitQuestion = async (question, options = {}) => {
     const text = String(question || input).trim();
     if (!text || sending || !researchReady) return;
+    const displayText = String(options.displayText || text).trim();
+    const workflow = options.workflow || null;
     const userMessage = {
-      text,
+      text: displayText,
       sender: "user",
       timestamp: timeLabel(),
+      metadata: workflow
+        ? {
+            workflowId: workflow.id,
+            workflowTitle: workflow.title,
+            workflowGroup: workflow.groupTitle,
+            executionPrompt: text,
+          }
+        : undefined,
     };
     const streamId = `stream-${Date.now()}`;
     const controller = new AbortController();
@@ -292,6 +303,13 @@ export function DocumentChatLayout({
         documentType,
         documentId,
         responseLanguage,
+        workflow: workflow
+          ? {
+              id: workflow.id,
+              title: workflow.title,
+              group: workflow.groupTitle,
+            }
+          : undefined,
         signal: controller.signal,
         onChunk: (chunk) => smoothStream.append(streamId, chunk),
       });
@@ -302,7 +320,16 @@ export function DocumentChatLayout({
         sender: "assistant",
         timestamp: timeLabel(),
         sources: result.sources,
-        metadata: result.metadata,
+        metadata: {
+          ...(result.metadata || {}),
+          ...(workflow
+            ? {
+                workflowId: workflow.id,
+                workflowTitle: workflow.title,
+                workflowGroup: workflow.groupTitle,
+              }
+            : {}),
+        },
         isStreaming: false,
       };
       const userSaveError = await userSavePromise;
@@ -339,7 +366,31 @@ export function DocumentChatLayout({
     const lastQuestion = [...messages]
       .reverse()
       .find((message) => message.sender === "user");
-    if (lastQuestion) submitQuestion(lastQuestion.text);
+    if (!lastQuestion) return;
+    const workflow = lastQuestion.metadata?.workflowTitle
+      ? {
+          id: lastQuestion.metadata.workflowId,
+          title: lastQuestion.metadata.workflowTitle,
+          groupTitle: lastQuestion.metadata.workflowGroup,
+        }
+      : null;
+    submitQuestion(
+      lastQuestion.metadata?.executionPrompt || lastQuestion.text,
+      workflow
+        ? {
+            displayText: lastQuestion.text,
+            workflow,
+          }
+        : undefined,
+    );
+  };
+
+  const runWorkflow = (workflow) => {
+    if (!workflow?.prompt) return;
+    submitQuestion(workflow.prompt, {
+      displayText: `Run workflow: ${workflow.title}`,
+      workflow,
+    });
   };
 
   const clear = async () => {
@@ -513,6 +564,15 @@ export function DocumentChatLayout({
             onScroll={handleScroll}
             className="paper-grid app-scrollbar flex-1 overflow-y-auto p-4 sm:p-6"
           >
+            {researchReady && (
+              <div className="mb-4 overflow-hidden rounded-[1.5rem] shadow-sm">
+                <ResearchWorkflowPanel
+                  document={document}
+                  disabled={sending || processing}
+                  onRunWorkflow={runWorkflow}
+                />
+              </div>
+            )}
             <ChatHistory
               messages={messages}
               messagesEndRef={messagesEndRef}

@@ -29,6 +29,17 @@ function ChatMessageComponent({ message, onFeedback }) {
         aria-live={message.isStreaming ? "polite" : undefined}
         aria-busy={message.isStreaming || undefined}
       >
+        {message.metadata?.workflowTitle && (
+          <p
+            className={`mb-2 inline-flex rounded-full px-2 py-1 text-[10px] font-semibold ${
+              isUser
+                ? "bg-white/15 text-white/80"
+                : "bg-[#eee0dc] text-[#8f1d2c]"
+            }`}
+          >
+            Workflow · {message.metadata.workflowTitle}
+          </p>
+        )}
         {message.isStreaming && !message.text ? (
           <div className="flex items-center gap-2 text-sm text-[#706a61]">
             <Loader2 className="h-4 w-4 animate-spin text-[#a85a52]" />

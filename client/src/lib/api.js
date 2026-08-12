@@ -427,6 +427,7 @@ export const sendDocumentChatMessage = async (
     documentId,
     onChunk,
     responseLanguage = "English",
+    workflow,
     signal,
   },
 ) => {
@@ -446,6 +447,7 @@ export const sendDocumentChatMessage = async (
       documentType,
       documentId,
       responseLanguage,
+      workflow,
     }),
     signal,
   });

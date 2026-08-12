@@ -423,6 +423,13 @@ router.post("/", generationLimiter, async (req, res) => {
     if (!message) {
       return res.status(400).json({ error: "Message is required." });
     }
+    const workflow = req.body.workflow && typeof req.body.workflow === "object"
+      ? {
+          id: String(req.body.workflow.id || "").slice(0, 80),
+          title: String(req.body.workflow.title || "").slice(0, 120),
+          group: String(req.body.workflow.group || "").slice(0, 80),
+        }
+      : null;
     const [passages, relationshipContext, document, textArtifact] = await Promise.all([
       retrievePassages(
         documentType,
@@ -489,6 +496,7 @@ router.post("/", generationLimiter, async (req, res) => {
         passageCount: passages.length,
         graphSourceCount: relationshipContext.sources.length,
         graphGrounded: relationshipContext.graphGrounded,
+        workflow,
       },
     });
     if (!context.trim()) {
