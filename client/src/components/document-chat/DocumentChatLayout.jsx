@@ -19,6 +19,7 @@ import {
   trackActivity,
   updateDocumentChatSummary,
 } from "@/lib/api";
+import { canPrepareDocumentForResearch } from "@/lib/document-readiness";
 import { ChatHeader } from "./ChatHeader";
 import { ChatHistory } from "./ChatHistory";
 import { ChatInput } from "./ChatInput";
@@ -489,6 +490,7 @@ export function DocumentChatLayout({
     document.textArtifact?.metadata?.suggestedQuestions?.length > 0
       ? document.textArtifact.metadata.suggestedQuestions
       : QUESTIONS[documentType] || QUESTIONS.default;
+  const canPrepareCurrentDocument = canPrepareDocumentForResearch(document);
 
   return (
     <div className="flex h-dvh flex-col overflow-hidden bg-[#e9e3da]">
@@ -509,14 +511,16 @@ export function DocumentChatLayout({
           <span className="line-clamp-2">
             Processing failed. {processingError}
           </span>
-          <button
-            type="button"
-            onClick={retryProcessing}
-            className="inline-flex shrink-0 items-center gap-1 rounded-lg bg-[#8f1d2c] px-2.5 py-1.5 text-[10px] font-semibold text-white"
-          >
-            <RefreshCw className="h-3 w-3" />
-            Retry
-          </button>
+          {canPrepareCurrentDocument && (
+            <button
+              type="button"
+              onClick={retryProcessing}
+              className="inline-flex shrink-0 items-center gap-1 rounded-lg bg-[#8f1d2c] px-2.5 py-1.5 text-[10px] font-semibold text-white"
+            >
+              <RefreshCw className="h-3 w-3" />
+              Retry
+            </button>
+          )}
         </div>
       )}
       <details className="shrink-0 border-b border-[#8f1d2c]/8 bg-[#f7f2eb] xl:hidden">
@@ -543,11 +547,11 @@ export function DocumentChatLayout({
               <p className="mt-1">
                 {processingError ||
                   document.readinessReason ||
-                  ((document.pdfUrl || document.type === "policy")
+                  (canPrepareCurrentDocument
                     ? "Choose Retry to prepare searchable passages."
-                    : "View the source or PDF when available; grounded chat remains disabled.")}
+                    : "Open the source link when available; grounded research and comparison are disabled for this record.")}
               </p>
-              {(document.pdfUrl || document.type === "policy") && !processingError && (
+              {canPrepareCurrentDocument && !processingError && (
                 <button
                   type="button"
                   onClick={retryProcessing}

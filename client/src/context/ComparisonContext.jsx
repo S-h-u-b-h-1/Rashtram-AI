@@ -10,6 +10,10 @@ import {
 } from "react";
 import { getDocumentReadiness, prepareDocumentForComparison } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
+import {
+  canPrepareDocumentForResearch,
+  isSourceOnlyResearchDocument,
+} from "@/lib/document-readiness";
 
 const LEGACY_STORAGE_KEY = "rashtram-comparison-documents";
 const PREVIOUS_USER_SCOPED_PREFIX = "rashtram-comparison-documents:";
@@ -20,6 +24,11 @@ const ComparisonContext = createContext(null);
 export const comparisonDisabledReason = (document) => {
   if (!document?.id || !document?.title) return "Research workspace unavailable";
   if (document.comparisonReady) return "";
+  if (isSourceOnlyResearchDocument(document)) {
+    return document.sourceUrl
+      ? "Only the source page is available"
+      : "Research source unavailable";
+  }
   if (
     document.processingStatus === "failed" ||
     document.extractionStatus === "failed" ||
@@ -53,24 +62,7 @@ export const comparisonDisabledReason = (document) => {
 };
 
 export const canPrepareForResearch = (document) => {
-  if (!document || document.researchReady) return false;
-  const readiness = document.readinessClass || document.readiness || "";
-  if (
-    [
-      "pdf_available",
-      "pdf_available_not_processed",
-      "source_extractable_not_processed",
-      "processing_failed_retriable",
-      "ocr_required",
-    ].includes(readiness)
-  ) {
-    return true;
-  }
-  return Boolean(document.pdfUrl) || (
-    (document.type === "policy" || document.documentType === "policy") &&
-    String(document.sourceName || document.source || "").toLowerCase().includes("policyedge") &&
-    Boolean(document.sourceUrl)
-  );
+  return canPrepareDocumentForResearch(document);
 };
 
 export function ComparisonProvider({ children }) {

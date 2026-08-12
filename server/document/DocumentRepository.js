@@ -5,7 +5,7 @@ const {
   normalizeTypeList,
 } = require("./documentTypes");
 const { sanitizeProviderError } = require("../lib/providerErrorSanitizer");
-const { classifyFailure } = require("./failureTaxonomy");
+const { classifyFailure, isRetryableFailure } = require("./failureTaxonomy");
 const {
   normalizeNullableString,
   safeDate,
@@ -107,6 +107,11 @@ const mapDocument = (row) => {
   };
   const processingStatus =
     row.schema_processing_status || row.processing_status || null;
+  const failureCode = normalizeNullableString(row.failure_code);
+  const retryEligible =
+    row.retry_eligible == null
+      ? (failureCode ? isRetryableFailure(failureCode) : null)
+      : Boolean(row.retry_eligible);
   const hasAccessibleResource =
     row.has_accessible_resource == null
       ? Boolean(row.pdf_url)
@@ -165,6 +170,9 @@ const mapDocument = (row) => {
     failureReason: sanitizeNullableError(
       row.failure_reason || row.processing_error || null,
     ),
+    failureCode,
+    retryEligible,
+    pipelineStage: row.pipeline_stage || null,
     failureDetails: safeObject(row.failure_details_json),
     readinessClass: row.readiness_class || readiness,
     readinessReason: row.readiness_reason || null,
@@ -492,6 +500,21 @@ const find = async (options = {}) => {
            FROM document_processing_state state
            WHERE state.document_id = legislative_documents.id
          ) AS failure_reason,
+         (
+           SELECT state.failure_code
+           FROM document_processing_state state
+           WHERE state.document_id = legislative_documents.id
+         ) AS failure_code,
+         (
+           SELECT state.retry_eligible
+           FROM document_processing_state state
+           WHERE state.document_id = legislative_documents.id
+         ) AS retry_eligible,
+         (
+           SELECT state.pipeline_stage
+           FROM document_processing_state state
+           WHERE state.document_id = legislative_documents.id
+         ) AS pipeline_stage,
          ${rankExpression} AS search_rank
        FROM legislative_documents
        WHERE ${filters.where}
@@ -632,6 +655,21 @@ const getById = async (id) => {
          FROM document_processing_state state
          WHERE state.document_id = legislative_documents.id
        ) AS failure_reason,
+       (
+         SELECT state.failure_code
+         FROM document_processing_state state
+         WHERE state.document_id = legislative_documents.id
+       ) AS failure_code,
+       (
+         SELECT state.retry_eligible
+         FROM document_processing_state state
+         WHERE state.document_id = legislative_documents.id
+       ) AS retry_eligible,
+       (
+         SELECT state.pipeline_stage
+         FROM document_processing_state state
+         WHERE state.document_id = legislative_documents.id
+       ) AS pipeline_stage,
        (
          SELECT state.failure_details_json
          FROM document_processing_state state

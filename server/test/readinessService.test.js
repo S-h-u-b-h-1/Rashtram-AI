@@ -111,6 +111,31 @@ test("document mapping never infers comparison readiness", () => {
   assert.equal(mapped.readinessReason, "Retrieval verification is pending.");
 });
 
+test("document mapping exposes permanent download failures for source-only UI", () => {
+  const mapped = mapDocument({
+    id: 2,
+    title: "HTML landing page masquerading as PDF",
+    document_type: "bill",
+    canonical_url: "https://example.test/source",
+    pdf_url: "https://example.test/not-a-pdf.pdf",
+    processing_status: "failed",
+    extraction_status: "failed",
+    failure_code: "DOWNLOAD_HTML_RESPONSE",
+    retry_eligible: false,
+    pipeline_stage: "download",
+    failure_reason: "Downloaded response is HTML, not a PDF.",
+    readiness_class: "processing_failed_permanent",
+    readiness_reason: "Downloaded response is HTML, not a PDF.",
+  });
+
+  assert.equal(mapped.researchReady, false);
+  assert.equal(mapped.comparisonReady, false);
+  assert.equal(mapped.failureCode, "DOWNLOAD_HTML_RESPONSE");
+  assert.equal(mapped.retryEligible, false);
+  assert.equal(mapped.pipelineStage, "download");
+  assert.equal(mapped.readinessClass, "processing_failed_permanent");
+});
+
 test("document mapping tolerates malformed JSON and optional child rows", () => {
   const mapped = mapDocument({
     id: 10,

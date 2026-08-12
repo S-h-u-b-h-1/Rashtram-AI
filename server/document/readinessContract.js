@@ -1,9 +1,28 @@
 const { query } = require("../db");
 const DocumentRepository = require("./DocumentRepository");
 const { isExtractableSourceDocument } = require("./documentResearchService");
+const { FAILURE_CODES } = require("./failureTaxonomy");
 
 const READY_STATUSES = new Set(["ready"]);
 const PROCESSING_STATUSES = new Set(["queued", "processing", "running"]);
+const SOURCE_ONLY_FAILURE_CODES = new Set([
+  FAILURE_CODES.DOWNLOAD_URL_MISSING,
+  FAILURE_CODES.DOWNLOAD_URL_INVALID,
+  FAILURE_CODES.DOWNLOAD_ACCESS_DENIED,
+  FAILURE_CODES.DOWNLOAD_NOT_FOUND,
+  FAILURE_CODES.DOWNLOAD_HTML_RESPONSE,
+  FAILURE_CODES.DOWNLOAD_UNSUPPORTED_CONTENT,
+  FAILURE_CODES.DOWNLOAD_ZERO_BYTE,
+  FAILURE_CODES.DOWNLOAD_TRUNCATED,
+  FAILURE_CODES.DOWNLOAD_CHECKSUM_MISMATCH,
+  FAILURE_CODES.INVALID_MIME_TYPE,
+  FAILURE_CODES.PDF_CORRUPT,
+  FAILURE_CODES.PDF_ENCRYPTED,
+  FAILURE_CODES.TEXT_EXTRACTION_EMPTY,
+  FAILURE_CODES.TEXT_EXTRACTION_TOO_SHORT,
+  FAILURE_CODES.TEXT_ENCODING_UNSUPPORTED,
+  FAILURE_CODES.CHUNKING_EMPTY,
+]);
 
 const getDocumentReadiness = async (documentId) => {
   const document = await DocumentRepository.getById(documentId);
@@ -46,10 +65,18 @@ const getDocumentReadiness = async (documentId) => {
     hasChunks;
   const hasLocalTextRetrieval = hasChunks;
   const hasRetrieval = hasVectorRetrieval || hasLocalTextRetrieval;
-  const processableBySource =
-    Boolean(document.pdfUrl) ||
+  const terminalSourceOnlyFailure =
+    SOURCE_ONLY_FAILURE_CODES.has(document.failureCode) ||
+    (
+      document.retryEligible === false &&
+      document.failureCode !== FAILURE_CODES.PDF_SCANNED_OCR_REQUIRED
+    );
+  const hasAlternativeExtractableSource =
     Boolean(resources.has_accessible_resource) ||
     isExtractableSourceDocument(document);
+  const processableBySource =
+    hasAlternativeExtractableSource ||
+    (Boolean(document.pdfUrl) && !terminalSourceOnlyFailure);
   const processingStatus = document.processingStatus || "not_started";
   const extractionReady = document.extractionStatus === "ready";
   const processingReady = READY_STATUSES.has(processingStatus);
@@ -84,13 +111,19 @@ const getDocumentReadiness = async (documentId) => {
     reasonCode = "processing";
     reason = "Document processing is in progress.";
   } else if (failed) {
-    status = "failed";
-    reasonCode = document.failureStage || "processing_failed";
+    status = terminalSourceOnlyFailure && document.sourceUrl
+      ? "source_only"
+      : "failed";
+    reasonCode = terminalSourceOnlyFailure
+      ? "source_only_after_failed_download"
+      : document.failureStage || "processing_failed";
     reason =
       document.failureReason ||
       document.readinessReason ||
       document.processingError ||
-      "Document processing failed.";
+      (terminalSourceOnlyFailure
+        ? "Only the source page is available; the linked file cannot be prepared for research."
+        : "Document processing failed.");
   } else if (!processableBySource) {
     status = document.sourceUrl ? "source_only" : "not_ready";
     reasonCode = document.sourceUrl ? "source_only" : "no_source";
@@ -118,7 +151,11 @@ const getDocumentReadiness = async (documentId) => {
     : hasLocalTextRetrieval
       ? "local_text"
       : null;
-  const canPrepare = !genuinelyReady && processableBySource && !processing;
+  const canPrepare =
+    !genuinelyReady &&
+    processableBySource &&
+    !processing &&
+    !terminalSourceOnlyFailure;
 
   return {
     documentId: document.id,
@@ -133,7 +170,7 @@ const getDocumentReadiness = async (documentId) => {
       hasSource: Boolean(document.sourceUrl || document.pdfUrl),
       hasAccessibleResource: Boolean(
         resources.has_accessible_resource ||
-        document.pdfUrl ||
+        (document.pdfUrl && !terminalSourceOnlyFailure) ||
         isExtractableSourceDocument(document),
       ),
       hasExtractedText: extractionReady && hasChunks,
