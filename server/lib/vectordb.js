@@ -1279,6 +1279,16 @@ the labelled source passages. Never use a document title as evidence. Every
 substantive claim must include one or more citation labels exactly as supplied
 (for example "[D1-C2]"). If evidence is absent, say "Not identified in the
 retrieved text." Keep the documents distinct and do not merge their provisions.
+Do not leave a section empty when the supplied passages contain relevant
+evidence. For each major section, prefer 2-5 concise but informative items.
+Identify stakeholders from cited text such as Government, Council, proper
+officer, Appellate Authority/Tribunal, registered persons, taxable persons,
+manufacturers, suppliers, sectors or institutions. Identify timeline items from
+commencement, ordinance, introduction, notification, Gazette, memorandum, date
+or year evidence. Authority differences should explain how powers, duties,
+rule-making, enforcement, appeal or administration differ between documents.
+Compliance and impact items should explain practical consequences for taxpayers,
+regulated entities, administrators and affected sectors.
 
 Comparison mode: ${mode}
 Response language: ${responseLanguage}

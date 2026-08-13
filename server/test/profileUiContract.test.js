@@ -50,7 +50,8 @@ test("application shells constrain viewport overflow without blocking content sc
 
   assert.match(styles, /html \{[\s\S]*height: 100%/);
   assert.match(styles, /body \{[\s\S]*min-height: 100%/);
-  assert.match(workspace, /h-svh[\s\S]*supports-\[height:100dvh\]:h-dvh/);
+  assert.match(workspace, /fixed inset-0 flex w-full/);
+  assert.match(workspace, /h-full overflow-y-auto overscroll-contain/);
   assert.match(workspace, /overflow-y-auto overflow-x-hidden/);
   assert.match(authShell, /min-h-svh w-full overflow-x-clip/);
 });

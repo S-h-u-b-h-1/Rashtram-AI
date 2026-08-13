@@ -2,6 +2,7 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 
 const {
+  comparisonSectionBackfill,
   normalizeRequest,
   readinessReason,
 } = require("../document/documentComparisonService");
@@ -170,4 +171,96 @@ test("comparison readiness distinguishes pending and unusable text", () => {
     }),
     "No extractable text found",
   );
+});
+
+test("comparison section backfill fills sparse AI output from cited passages", () => {
+  const documents = [
+    {
+      id: "101",
+      type: "bill",
+      title: "The Manipur Goods and Services Tax (Amendment) Bill, 2025",
+      ministry: "Finance",
+      jurisdiction: "India",
+      year: 2025,
+      publicationDate: "2025-07-31",
+    },
+    {
+      id: "102",
+      type: "bill",
+      title: "The Manipur Goods and Services Tax (Second Amendment) Bill, 2025",
+      ministry: "Finance",
+      jurisdiction: "India",
+      year: 2025,
+      publicationDate: "2025-11-27",
+    },
+  ];
+  const groups = [
+    {
+      document: documents[0],
+      documentIndex: 0,
+      passages: [
+        {
+          content:
+            "The Bill seeks to amend section 9 to levy State tax on un-denatured extra neutral alcohol or rectified spirit used for manufacture of alcoholic liquor for human consumption.",
+        },
+        {
+          content:
+            "The taxable person may pay tax with interest and penalty within sixty days of issue of notice, and proceedings shall be deemed to be concluded. The proper officer shall act on such payment.",
+        },
+      ],
+    },
+    {
+      document: documents[1],
+      documentIndex: 1,
+      passages: [
+        {
+          content:
+            "The Government may provide a system for affixation of unique identification marking and electronic storage and access of information for track and trace of certain goods.",
+        },
+        {
+          content:
+            "The Financial Memorandum states that the Bill will not involve expenditure from the Consolidated Fund of the State of Manipur. It was dated the 27th November, 2025.",
+        },
+      ],
+    },
+  ];
+  const citations = groups.flatMap((group) =>
+    group.passages.map((passage, passageIndex) => ({
+      id: `D${group.documentIndex + 1}-C${passageIndex + 1}`,
+      documentId: group.document.id,
+      snippet: passage.content,
+    })),
+  );
+
+  const repaired = comparisonSectionBackfill({
+    documents,
+    groups,
+    citations,
+    generated: {
+      executiveSummary: "Not identified in the retrieved text.",
+      similarities: [],
+      differences: [],
+      stakeholders: [],
+      complianceImpact: [],
+      timeline: [],
+      authorityDifferences: [],
+      impactAssessment: [],
+      keyFindings: [],
+    },
+  });
+
+  assert.ok(repaired.executiveSummary.includes("D1"));
+  assert.ok(repaired.similarities.length >= 2);
+  assert.ok(repaired.differences.length >= 2);
+  assert.ok(repaired.keyClauses.length >= 2);
+  assert.ok(repaired.stakeholders.length >= 2);
+  assert.ok(repaired.complianceImpact.length >= 2);
+  assert.ok(repaired.timeline.length >= 2);
+  assert.ok(repaired.authorityDifferences.length >= 2);
+  assert.ok(repaired.impactAssessment.length >= 2);
+  assert.ok(repaired.keyFindings.length >= 1);
+  assert.ok(
+    repaired.stakeholders.every((item) => Array.isArray(item.citations)),
+  );
+  assert.ok(repaired.quality.backfilled);
 });

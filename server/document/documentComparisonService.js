@@ -28,6 +28,8 @@ const MODE_ALIASES = {
   stakeholder: "impact",
 };
 const LANGUAGES = new Set(["auto", "english", "hindi"]);
+const EMPTY_FIELD_PATTERN =
+  /^(not identified|none identified|not available|no evidence|not found|not specified|n\/a)/i;
 
 const validationError = (message, status = 400) => {
   const error = new Error(message);
@@ -156,12 +158,12 @@ const comparisonRetrievalLimit = (mode, documentCount) => {
     clause: 6,
     impact: 5,
     compliance: 5,
-    full: 6,
+    full: 8,
   }[normalizedMode] || 5;
   const countAdjustedLimit = Math.floor(
-    16 / Math.max(1, Number(documentCount) || 1),
+    24 / Math.max(1, Number(documentCount) || 1),
   );
-  return Math.max(3, Math.min(6, baseLimit, countAdjustedLimit || baseLimit));
+  return Math.max(3, Math.min(8, baseLimit, countAdjustedLimit || baseLimit));
 };
 
 const comparisonPassageCharLimit = () => {
@@ -176,6 +178,399 @@ const allowExtractiveComparisonFallback = () =>
       .trim()
       .toLowerCase(),
   );
+
+const words = (value, max = 80) => {
+  const tokens = String(value || "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .split(" ")
+    .filter(Boolean);
+  return tokens.slice(0, max).join(" ");
+};
+
+const itemTextValue = (item) => {
+  if (typeof item === "string") return item;
+  if (!item || typeof item !== "object") return "";
+  return [
+    item.topic,
+    item.date,
+    item.name,
+    item.clause,
+    item.point,
+    item.event,
+    item.analysis,
+    item.impact,
+  ]
+    .filter(Boolean)
+    .join(" ");
+};
+
+const hasUsefulItems = (items) =>
+  Array.isArray(items) &&
+  items.some((item) => {
+    const value = itemTextValue(item).trim();
+    return value && !EMPTY_FIELD_PATTERN.test(value);
+  });
+
+const sanitizeCitationIds = (ids, validCitationIds) =>
+  [...new Set((Array.isArray(ids) ? ids : []).map(String))]
+    .filter((id) => validCitationIds.has(id))
+    .slice(0, 5);
+
+const normalizeComparisonArray = (items, validCitationIds) =>
+  Array.isArray(items)
+    ? items
+        .filter((item) => item && itemTextValue(item).trim())
+        .filter((item) => !EMPTY_FIELD_PATTERN.test(itemTextValue(item).trim()))
+        .map((item) =>
+          typeof item === "string"
+            ? item
+            : {
+                ...item,
+                citations: sanitizeCitationIds(item.citations, validCitationIds),
+              },
+        )
+    : [];
+
+const citationIdFor = (documentIndex, passageIndex) =>
+  `D${documentIndex + 1}-C${passageIndex + 1}`;
+
+const passageIncludes = (passage, keywords) => {
+  const content = String(passage?.content || "").toLowerCase();
+  return keywords.some((keyword) => content.includes(keyword));
+};
+
+const firstPassages = (group, keywords, limit = 2) => {
+  const matched = group.passages
+    .map((passage, passageIndex) => ({
+      passage,
+      passageIndex,
+      citation: citationIdFor(group.documentIndex, passageIndex),
+    }))
+    .filter(({ passage }) => passageIncludes(passage, keywords));
+  const source = matched.length
+    ? matched
+    : group.passages.slice(0, limit).map((passage, passageIndex) => ({
+        passage,
+        passageIndex,
+        citation: citationIdFor(group.documentIndex, passageIndex),
+      }));
+  return source.slice(0, limit);
+};
+
+const matchingPassages = (group, keywords, limit = 2) =>
+  group.passages
+    .map((passage, passageIndex) => ({
+      passage,
+      passageIndex,
+      citation: citationIdFor(group.documentIndex, passageIndex),
+    }))
+    .filter(({ passage }) => passageIncludes(passage, keywords))
+    .slice(0, limit);
+
+const documentLabel = (documentIndex) => `D${documentIndex + 1}`;
+
+const documentShortTitle = (document) =>
+  String(document?.title || "Selected document")
+    .replace(/^The\s+/i, "")
+    .replace(/\s+/g, " ")
+    .trim();
+
+const buildDocumentFocus = (group) => {
+  const document = group.document;
+  const text = group.passages.map((passage) => passage.content).join(" ").toLowerCase();
+  const themes = [];
+  if (/track and trace|unique identification|marking|electronic storage/.test(text)) {
+    themes.push("track-and-trace compliance");
+  }
+  if (/input tax credit|blocked credit|section 17/.test(text)) {
+    themes.push("input tax credit");
+  }
+  if (/appeal|appellate|tribunal|pre-deposit/.test(text)) {
+    themes.push("appeals and dispute process");
+  }
+  if (/penalty|interest|proceedings|notice|proper officer|section 74/.test(text)) {
+    themes.push("tax demands and settlement");
+  }
+  if (/extra neutral alcohol|rectified spirit|alcoholic liquor|human consumption/.test(text)) {
+    themes.push("alcohol-related GST treatment");
+  }
+  if (/return|statement|furnish|registered person/.test(text)) {
+    themes.push("returns and reporting");
+  }
+  if (/government|council|official gazette|rules|prescribed|notify/.test(text)) {
+    themes.push("government rule-making powers");
+  }
+  return {
+    label: documentLabel(group.documentIndex),
+    title: documentShortTitle(document),
+    themes: [...new Set(themes)].slice(0, 4),
+  };
+};
+
+const comparisonSectionBackfill = ({ documents, groups, citations, generated }) => {
+  const validCitationIds = new Set(citations.map((citation) => citation.id));
+  const normalized = { ...(generated || {}) };
+  const normalizedFields = [
+    "similarities",
+    "differences",
+    "keyClauses",
+    "stakeholders",
+    "complianceImpact",
+    "timeline",
+    "authorityDifferences",
+    "impactAssessment",
+    "keyFindings",
+  ];
+
+  normalizedFields.forEach((field) => {
+    normalized[field] = normalizeComparisonArray(normalized[field], validCitationIds);
+  });
+
+  const focus = groups.map(buildDocumentFocus);
+  const allCitationIds = citations.slice(0, 6).map((citation) => citation.id);
+  const metadataSimilarities = [];
+  const sharedMinistries = [
+    ...new Set(documents.map((document) => document.ministry).filter(Boolean)),
+  ];
+  const sharedJurisdictions = [
+    ...new Set(documents.map((document) => document.jurisdiction || document.state).filter(Boolean)),
+  ];
+  const sharedTypes = [...new Set(documents.map((document) => document.type).filter(Boolean))];
+  if (sharedTypes.length === 1) {
+    metadataSimilarities.push({
+      point: `All selected records are ${sharedTypes[0]} documents and amend or operate within a comparable legal-policy framework.`,
+      citations: allCitationIds.slice(0, Math.min(4, allCitationIds.length)),
+    });
+  }
+  if (sharedMinistries.length === 1) {
+    metadataSimilarities.push({
+      point: `All selected records are connected with ${sharedMinistries[0]}, so the comparison is mainly within the same administrative policy area.`,
+      citations: allCitationIds.slice(0, Math.min(4, allCitationIds.length)),
+    });
+  }
+  if (sharedJurisdictions.length === 1) {
+    metadataSimilarities.push({
+      point: `All selected records share the same jurisdictional context: ${sharedJurisdictions[0]}.`,
+      citations: allCitationIds.slice(0, Math.min(4, allCitationIds.length)),
+    });
+  }
+  if (!hasUsefulItems(normalized.similarities)) {
+    normalized.similarities = metadataSimilarities.slice(0, 3);
+  } else if (normalized.similarities.length < 2) {
+    normalized.similarities = [
+      ...normalized.similarities,
+      ...metadataSimilarities,
+    ].slice(0, 4);
+  }
+
+  const differenceItems = groups.map((group) => {
+    const selected = firstPassages(group, [
+      "seeks to",
+      "salient features",
+      "amend",
+      "insert",
+      "substitute",
+      "track and trace",
+      "input tax credit",
+      "penalty",
+      "appeal",
+      "government",
+    ], 2);
+    const focusItem = focus[group.documentIndex];
+    return {
+      topic: `${focusItem.label}: ${focusItem.title}`,
+      analysis: `${focusItem.label} mainly concerns ${
+        focusItem.themes.length ? focusItem.themes.join(", ") : "the provisions shown in the retrieved passages"
+      }. ${words(selected.map(({ passage }) => passage.content).join(" "), 70)}`,
+      citations: selected.map(({ citation }) => citation),
+    };
+  });
+  if (!hasUsefulItems(normalized.differences)) {
+    normalized.differences = differenceItems;
+  } else if (normalized.differences.length < groups.length) {
+    normalized.differences = [...normalized.differences, ...differenceItems].slice(0, 6);
+  }
+
+  const keyClauseItems = groups.flatMap((group) =>
+    firstPassages(group, [
+      "section",
+      "clause",
+      "shall",
+      "insert",
+      "substitute",
+      "amendment",
+      "financial memorandum",
+      "memorandum regarding delegated legislation",
+    ], 2).map(({ passage, citation }, index) => ({
+      documentId: String(group.document.id),
+      clause: `${documentLabel(group.documentIndex)} key provision ${index + 1}`,
+      analysis: words(passage.content, 60),
+      citations: [citation],
+    })),
+  );
+  if (!hasUsefulItems(normalized.keyClauses)) {
+    normalized.keyClauses = keyClauseItems.slice(0, 8);
+  }
+
+  const stakeholderItems = [];
+  groups.forEach((group) => {
+    const doc = group.document;
+    const government = matchingPassages(group, ["government", "council", "official gazette", "rules", "prescribed", "notify"], 1);
+    if (government.length) {
+      stakeholderItems.push({
+        name: doc.authority || doc.ministry || "Government / tax administration",
+        impact: `${documentLabel(group.documentIndex)} affects rule-making, notification, administration or enforcement powers described in the retrieved passage.`,
+        citations: government.map(({ citation }) => citation),
+      });
+    }
+    const taxpayers = matchingPassages(group, ["taxable person", "registered person", "input tax credit", "return", "appeal", "penalty", "interest"], 1);
+    if (taxpayers.length) {
+      stakeholderItems.push({
+        name: "Registered taxpayers and affected businesses",
+        impact: `${documentLabel(group.documentIndex)} affects taxpayer compliance, credits, appeals, payments, penalties or reporting obligations.`,
+        citations: taxpayers.map(({ citation }) => citation),
+      });
+    }
+    const sector = matchingPassages(group, ["alcohol", "rectified spirit", "unique identification", "track and trace", "goods or packages", "co-insurance", "insurer"], 1);
+    if (sector.length) {
+      stakeholderItems.push({
+        name: "Sector-specific businesses covered by the amendment",
+        impact: `${documentLabel(group.documentIndex)} contains sector-specific provisions that may affect the businesses or goods named in the cited passage.`,
+        citations: sector.map(({ citation }) => citation),
+      });
+    }
+  });
+  if (!hasUsefulItems(normalized.stakeholders)) {
+    normalized.stakeholders = stakeholderItems.slice(0, 8);
+  }
+
+  const complianceItems = groups.flatMap((group) =>
+    matchingPassages(group, [
+      "shall",
+      "furnish",
+      "maintain",
+      "affix",
+      "return",
+      "penalty",
+      "interest",
+      "input tax credit",
+      "appeal",
+      "payment",
+      "registered persons",
+    ], 2).map(({ passage, citation }) => ({
+      point: `${documentLabel(group.documentIndex)} creates or clarifies compliance consequences around ${words(passage.content, 42)}.`,
+      citations: [citation],
+    })),
+  );
+  if (!hasUsefulItems(normalized.complianceImpact)) {
+    normalized.complianceImpact = complianceItems.slice(0, 8);
+  }
+
+  const timelineItems = [];
+  documents.forEach((document, index) => {
+    if (document.publicationDate) {
+      timelineItems.push({
+        date: String(document.publicationDate).slice(0, 10),
+        event: `${documentLabel(index)} publication or catalogue date for ${documentShortTitle(document)}.`,
+        documentId: String(document.id),
+        citations: citations.filter((citation) => citation.documentId === document.id).slice(0, 1).map((citation) => citation.id),
+      });
+    } else if (document.year) {
+      timelineItems.push({
+        date: String(document.year),
+        event: `${documentLabel(index)} belongs to the ${document.year} legislative cycle.`,
+        documentId: String(document.id),
+        citations: citations.filter((citation) => citation.documentId === document.id).slice(0, 1).map((citation) => citation.id),
+      });
+    }
+  });
+  groups.forEach((group) => {
+    const datedPassages = matchingPassages(group, [
+      "commence",
+      "notification",
+      "official gazette",
+      "ordinance",
+      "promulgated",
+      "introduced",
+      "date",
+      "november",
+      "june",
+      "july",
+      "october",
+    ], 2);
+    datedPassages.forEach(({ passage, citation }) => {
+      timelineItems.push({
+        date: "From retrieved text",
+        event: words(passage.content, 45),
+        documentId: String(group.document.id),
+        citations: [citation],
+      });
+    });
+  });
+  if (!hasUsefulItems(normalized.timeline)) {
+    normalized.timeline = timelineItems.slice(0, 8);
+  }
+
+  const authorityItems = groups.map((group) => {
+    const selected = matchingPassages(group, ["government", "council", "authority", "tribunal", "proper officer", "state government", "rules", "prescribed"], 2);
+    return {
+      point: `${documentLabel(group.documentIndex)} authority focus: ${group.document.authority || group.document.ministry || "not specified in metadata"}. ${words(selected.map(({ passage }) => passage.content).join(" "), 45)}`,
+      citations: selected.map(({ citation }) => citation),
+    };
+  });
+  if (!hasUsefulItems(normalized.authorityDifferences)) {
+    normalized.authorityDifferences = authorityItems.filter((item) => item.citations.length).slice(0, 6);
+  }
+
+  const impactItems = focus.map((item, index) => {
+    const group = groups[index];
+    const selected = firstPassages(group, ["tax", "credit", "penalty", "compliance", "government", "track", "appeal", "return", "goods"], 2);
+    return {
+      point: `${item.label} practical effect: ${item.themes.length ? item.themes.join(", ") : "changes identified in the retrieved passages"}. This matters for ${group.document.ministry || group.document.authority || "the relevant public authority"} and affected taxpayers or regulated entities.`,
+      citations: selected.map(({ citation }) => citation),
+    };
+  });
+  if (!hasUsefulItems(normalized.impactAssessment)) {
+    normalized.impactAssessment = impactItems.filter((item) => item.citations.length).slice(0, 6);
+  }
+
+  const keyFindingItems = [
+    {
+      point: `${focus.map((item) => `${item.label} focuses on ${item.themes.length ? item.themes.join(", ") : "different retrieved provisions"}`).join("; ")}.`,
+      citations: allCitationIds.slice(0, 5),
+    },
+    {
+      point: "The comparison should be read as evidence-limited: each finding is grounded in retrieved passages and should be checked against the original source for final legal use.",
+      citations: allCitationIds.slice(0, 5),
+    },
+  ].filter((item) => item.citations.length);
+  if (!hasUsefulItems(normalized.keyFindings)) {
+    normalized.keyFindings = keyFindingItems;
+  } else if (normalized.keyFindings.length < 2) {
+    normalized.keyFindings = [...normalized.keyFindings, ...keyFindingItems].slice(0, 4);
+  }
+
+  if (!normalized.executiveSummary || EMPTY_FIELD_PATTERN.test(String(normalized.executiveSummary).trim())) {
+    normalized.executiveSummary = `${documents.map((document, index) => `${documentLabel(index)} (${documentShortTitle(document)})`).join(" and ")} are compared from retrieved source passages. ${focus.map((item) => `${item.label} mainly covers ${item.themes.length ? item.themes.join(", ") : "the cited provisions"}`).join("; ")}.`;
+  }
+
+  if (!Array.isArray(normalized.suggestedQuestions) || !normalized.suggestedQuestions.length) {
+    normalized.suggestedQuestions = [
+      "Which provisions create the biggest compliance burden?",
+      "Which institutions or authorities receive new powers?",
+      "What changed between these documents in practical terms?",
+      "Which findings are strongest based on the cited passages?",
+    ];
+  }
+
+  normalized.quality = {
+    ...(normalized.quality || {}),
+    backfilled: true,
+    backfilledSections: normalizedFields.filter((field) => hasUsefulItems(normalized[field])),
+  };
+  return normalized;
+};
 
 const mapComparison = (row) => row && ({
   id: String(row.id),
@@ -392,6 +787,12 @@ const createComparison = async (userId, payload) => {
       generationError: error,
     });
   }
+  generated = comparisonSectionBackfill({
+    documents: comparisonDocuments,
+    groups,
+    citations,
+    generated,
+  });
   const recommendedDocuments = [
     ...new Map(
       (
@@ -517,6 +918,7 @@ module.exports = {
   createComparison,
   deleteComparison,
   ensureResearchReady,
+  comparisonSectionBackfill,
   getComparison,
   getComparisons,
   normalizeRequest,
