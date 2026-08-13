@@ -8,6 +8,37 @@ const {
   getSourceHealth,
 } = require("./intelligenceService");
 
+const DASHBOARD_INTELLIGENCE_CACHE_MS = Number(
+  process.env.DASHBOARD_INTELLIGENCE_CACHE_MS || 15_000,
+);
+const SOURCE_HEALTH_CACHE_MS = Number(
+  process.env.SOURCE_HEALTH_CACHE_MS || 60_000,
+);
+const dashboardIntelligenceCache = new Map();
+let sourceHealthCache = null;
+
+const getCachedValue = (cache, key) => {
+  const cached = cache.get(key);
+  if (!cached || cached.expiresAt <= Date.now()) {
+    cache.delete(key);
+    return null;
+  }
+  return cached.value;
+};
+
+const setCachedValue = (cache, key, value, ttl) => {
+  if (!ttl || ttl <= 0) return;
+  cache.set(key, {
+    value,
+    expiresAt: Date.now() + ttl,
+  });
+  if (cache.size > 250) {
+    for (const [entryKey, entry] of cache) {
+      if (entry.expiresAt <= Date.now()) cache.delete(entryKey);
+    }
+  }
+};
+
 
 router.get('/', fetchuser, async (req, res) => {
   try {
@@ -42,7 +73,21 @@ router.get('/', fetchuser, async (req, res) => {
 
 router.get("/intelligence", fetchuser, async (req, res) => {
   try {
+    const cacheKey = String(req.user.id);
+    const cached = getCachedValue(dashboardIntelligenceCache, cacheKey);
+    if (cached) {
+      res.set("X-Rashtram-Cache", "HIT");
+      return res.json(cached);
+    }
+
     const data = await getDashboardIntelligence(req.user.id);
+    setCachedValue(
+      dashboardIntelligenceCache,
+      cacheKey,
+      data,
+      DASHBOARD_INTELLIGENCE_CACHE_MS,
+    );
+    res.set("X-Rashtram-Cache", "MISS");
     return res.json(data);
   } catch (error) {
     console.error("Dashboard intelligence fetch error:", error);
@@ -54,7 +99,18 @@ router.get("/intelligence", fetchuser, async (req, res) => {
 
 router.get("/source-health", fetchuser, async (req, res) => {
   try {
-    return res.json({ sources: await getSourceHealth() });
+    if (sourceHealthCache?.expiresAt > Date.now()) {
+      res.set("X-Rashtram-Cache", "HIT");
+      return res.json(sourceHealthCache.value);
+    }
+
+    const data = { sources: await getSourceHealth() };
+    sourceHealthCache = {
+      value: data,
+      expiresAt: Date.now() + SOURCE_HEALTH_CACHE_MS,
+    };
+    res.set("X-Rashtram-Cache", "MISS");
+    return res.json(data);
   } catch (error) {
     console.error("Dashboard source health fetch error:", error);
     return res

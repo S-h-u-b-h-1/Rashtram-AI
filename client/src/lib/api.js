@@ -3,13 +3,69 @@
 import { consumeSSEStream } from "@/lib/chat-stream";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5001/api';
+const DEFAULT_GET_CACHE_TTL_MS = Number(
+  process.env.NEXT_PUBLIC_API_GET_CACHE_TTL_MS || 15_000,
+);
+const getRequestCache = new Map();
+const pendingGetRequests = new Map();
+const cacheableGetRoutes = [
+  { pattern: /^\/dashboard\/intelligence$/, ttl: 30_000 },
+  { pattern: /^\/dashboard\/source-health$/, ttl: 60_000 },
+  { pattern: /^\/profile(?:\/|$)/, ttl: 20_000 },
+  { pattern: /^\/auth\/me$/, ttl: 10_000 },
+  { pattern: /^\/onboarding$/, ttl: 10_000 },
+  { pattern: /^\/documents(?:\/|\?|$)/, ttl: DEFAULT_GET_CACHE_TTL_MS },
+  { pattern: /^\/document-chat\/document\//, ttl: 60_000 },
+  { pattern: /^\/document-chat\/history(?:\/|\?|$)/, ttl: DEFAULT_GET_CACHE_TTL_MS },
+  { pattern: /^\/documents\/chat\/history(?:\/|\?|$)/, ttl: DEFAULT_GET_CACHE_TTL_MS },
+  { pattern: /^\/graph(?:\/|\?|$)/, ttl: DEFAULT_GET_CACHE_TTL_MS },
+  { pattern: /^\/recommendations(?:\/|\?|$)/, ttl: DEFAULT_GET_CACHE_TTL_MS },
+  { pattern: /^\/activity\/preferences$/, ttl: 20_000 },
+];
+
+const getCacheTtl = (endpoint) => {
+  const route = cacheableGetRoutes.find(({ pattern }) => pattern.test(endpoint));
+  return route?.ttl || 0;
+};
+
+export const clearApiCache = () => {
+  getRequestCache.clear();
+  pendingGetRequests.clear();
+};
+
+let authCapabilitiesCache;
+let pendingAuthCapabilitiesRequest;
 
 export const getAuthCapabilities = async ({ signal } = {}) => {
-  const response = await fetch(`${API_BASE_URL}/auth/capabilities`, { signal });
-  if (!response.ok) {
-    throw new Error("Authentication capabilities are unavailable.");
+  if (!signal && authCapabilitiesCache?.expiresAt > Date.now()) {
+    return authCapabilitiesCache.value;
   }
-  return response.json();
+  if (!signal && pendingAuthCapabilitiesRequest) {
+    return pendingAuthCapabilitiesRequest;
+  }
+
+  const request = fetch(`${API_BASE_URL}/auth/capabilities`, { signal })
+    .then((response) => {
+      if (!response.ok) {
+        throw new Error("Authentication capabilities are unavailable.");
+      }
+      return response.json();
+    })
+    .then((value) => {
+      if (!signal) {
+        authCapabilitiesCache = {
+          value,
+          expiresAt: Date.now() + 60_000,
+        };
+      }
+      return value;
+    })
+    .finally(() => {
+      if (!signal) pendingAuthCapabilitiesRequest = null;
+    });
+
+  if (!signal) pendingAuthCapabilitiesRequest = request;
+  return request;
 };
 
 
@@ -22,6 +78,7 @@ export const clearAuthTokens = () => {
   if (typeof window === "undefined") return;
   localStorage.removeItem("auth-token");
   sessionStorage.removeItem("auth-token");
+  clearApiCache();
 };
 
 export const storeAuthToken = (token, { persistent = false } = {}) => {
@@ -38,32 +95,72 @@ export const apiRequest = async (endpoint, options = {}) => {
     throw new Error('No authentication token found. Please login.');
   }
 
+  const { skipCache, ...fetchOptions } = options;
+  const method = (fetchOptions.method || "GET").toUpperCase();
+  const cacheTtl = getCacheTtl(endpoint);
+  const canUseCache =
+    method === "GET" &&
+    !skipCache &&
+    !fetchOptions.signal &&
+    fetchOptions.cache !== "no-store" &&
+    cacheTtl > 0;
+  const cacheKey = canUseCache ? `${token}:${endpoint}` : null;
+
+  if (cacheKey) {
+    const cached = getRequestCache.get(cacheKey);
+    if (cached?.expiresAt > Date.now()) {
+      return cached.value;
+    }
+    if (pendingGetRequests.has(cacheKey)) {
+      return pendingGetRequests.get(cacheKey);
+    }
+  }
+
   const config = {
-    ...options,
+    ...fetchOptions,
     headers: {
       'Content-Type': 'application/json',
       'auth-token': token,
-      ...options.headers,
+      ...fetchOptions.headers,
     },
   };
 
-  const response = await fetch(`${API_BASE_URL}${endpoint}`, config);
+  const request = fetch(`${API_BASE_URL}${endpoint}`, config)
+    .then(async (response) => {
+      if (!response.ok) {
+        if (response.status === 401) {
 
-  if (!response.ok) {
-    if (response.status === 401) {
+          if (getAuthToken() === token) clearAuthTokens();
+          throw new Error('Session expired. Please login again.');
+        }
+        const error = await response.json().catch(() => ({}));
+        throw new Error(
+          error.message ||
+            error.error ||
+            `Request failed with status ${response.status}`
+        );
+      }
 
-      if (getAuthToken() === token) clearAuthTokens();
-      throw new Error('Session expired. Please login again.');
-    }
-    const error = await response.json().catch(() => ({}));
-    throw new Error(
-      error.message ||
-        error.error ||
-        `Request failed with status ${response.status}`
-    );
+      const value = await response.json();
+      if (cacheKey) {
+        getRequestCache.set(cacheKey, {
+          value,
+          expiresAt: Date.now() + cacheTtl,
+        });
+      } else if (method !== "GET") {
+        clearApiCache();
+      }
+      return value;
+    })
+    .finally(() => {
+      if (cacheKey) pendingGetRequests.delete(cacheKey);
+    });
+
+  if (cacheKey) {
+    pendingGetRequests.set(cacheKey, request);
   }
 
-  return response.json();
+  return request;
 };
 
 export const submitContactRequest = async (payload) => {

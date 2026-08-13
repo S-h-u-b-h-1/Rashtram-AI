@@ -495,7 +495,7 @@ export function DocumentComparison() {
         </section>
       )}
 
-      {ids.length > 0 && (
+      {!comparison && ids.length > 0 && (
         <RecommendationSection
           title="Recommended documents to compare"
           eyebrow={

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import * as api from "@/lib/api";
 import { ContinueResearch } from "./ContinueResearch";
 import { DashboardHero } from "./DashboardHero";
@@ -17,12 +17,16 @@ export function IntelligenceDashboard({ onNavigate }) {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const refreshInFlightRef = useRef(false);
 
   useEffect(() => {
     let active = true;
     let firstLoad = true;
-    const loadDashboard = () =>
-      api
+    const loadDashboard = ({ force = false } = {}) => {
+      if (!force && typeof document !== "undefined" && document.hidden) return;
+      if (refreshInFlightRef.current) return;
+      refreshInFlightRef.current = true;
+      return api
         .getDashboardIntelligence()
         .then((intelligence) => {
           if (!active) return;
@@ -42,16 +46,25 @@ export function IntelligenceDashboard({ onNavigate }) {
           }
         })
         .finally(() => {
+          refreshInFlightRef.current = false;
           if (active && firstLoad) {
             firstLoad = false;
             setLoading(false);
           }
         });
-    loadDashboard();
+    };
+    const refreshVisibleDashboard = () => {
+      if (document.visibilityState === "visible") {
+        loadDashboard({ force: true });
+      }
+    };
+    loadDashboard({ force: true });
     const refreshTimer = window.setInterval(loadDashboard, 60_000);
+    document.addEventListener("visibilitychange", refreshVisibleDashboard);
     return () => {
       active = false;
       window.clearInterval(refreshTimer);
+      document.removeEventListener("visibilitychange", refreshVisibleDashboard);
     };
   }, []);
 
