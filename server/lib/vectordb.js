@@ -1273,7 +1273,7 @@ const generateDocumentComparison = async ({
       : language === "english"
         ? "English"
         : "the language used in the focused question, otherwise English";
-  const prompt = `
+  const buildPrompt = (sourceContext) => `
 Compare the supplied Indian legislative and public-policy documents using only
 the labelled source passages. Never use a document title as evidence. Every
 substantive claim must include one or more citation labels exactly as supplied
@@ -1312,29 +1312,71 @@ Return only valid JSON with this shape:
 }
 
 Source passages:
-${context}
+${sourceContext}
 `;
-  const response = await runGeneration("generateContent", prompt, {
-    // Comparisons run in a serverless request. Fail over to the grounded
-    // extractive result before the platform timeout instead of hanging the
-    // UI. Try the primary Gemini model and then a distinct fallback model,
-    // but do not wait tens of seconds on a provider retry window.
-    models: taskGenerationModels("comparison"),
-    timeoutMs: Number(process.env.COMPARISON_AI_TIMEOUT_MS || 10_000),
-    attempts: Number(process.env.COMPARISON_AI_ATTEMPTS || 1),
-    maxQueueWaitMs: Number(process.env.COMPARISON_AI_MAX_QUEUE_WAIT_MS || 4_000),
-    maxRetryAfterMs: Number(process.env.COMPARISON_AI_MAX_RETRY_AFTER_MS || 0),
-    maxModels: Number(
-      process.env.COMPARISON_AI_MAX_MODELS || 3,
-    ),
-    generationConfig: {
-      temperature: Number(process.env.COMPARISON_AI_TEMPERATURE || 0.1),
-      maxOutputTokens: Number(
-        process.env.COMPARISON_AI_MAX_OUTPUT_TOKENS || 2_000,
-      ),
-    },
-  });
-  return parseJsonResponse(responseText(response));
+  const generate = async (sourceContext, overrides = {}) => {
+    const response = await runGeneration(
+      "generateContent",
+      buildPrompt(sourceContext),
+      {
+        // Comparisons are an interactive product path. Do not let the shared
+        // generation circuit breaker fail them instantly after unrelated burst
+        // errors from chat, health checks, or background jobs. The rate limiter
+        // still protects the Gemini key, and createComparison has a grounded
+        // fallback if every model attempt fails.
+        useCircuitBreaker: false,
+        models: taskGenerationModels("comparison"),
+        timeoutMs: Number(
+          overrides.timeoutMs || process.env.COMPARISON_AI_TIMEOUT_MS || 10_000,
+        ),
+        attempts: Number(process.env.COMPARISON_AI_ATTEMPTS || 1),
+        maxQueueWaitMs: Number(
+          process.env.COMPARISON_AI_MAX_QUEUE_WAIT_MS || 4_000,
+        ),
+        maxRetryAfterMs: Number(
+          process.env.COMPARISON_AI_MAX_RETRY_AFTER_MS || 0,
+        ),
+        maxModels: Number(
+          overrides.maxModels || process.env.COMPARISON_AI_MAX_MODELS || 3,
+        ),
+        generationConfig: {
+          temperature: Number(process.env.COMPARISON_AI_TEMPERATURE || 0.1),
+          maxOutputTokens: Number(
+            overrides.maxOutputTokens ||
+              process.env.COMPARISON_AI_MAX_OUTPUT_TOKENS ||
+              2_000,
+          ),
+        },
+      },
+    );
+    return parseJsonResponse(responseText(response));
+  };
+
+  try {
+    return await generate(context);
+  } catch (error) {
+    const compactLimit = Number(
+      process.env.COMPARISON_COMPACT_CONTEXT_CHAR_LIMIT || 14_000,
+    );
+    const compactContext = String(context || "").slice(0, compactLimit);
+    if (compactContext && compactContext.length < String(context || "").length) {
+      try {
+        return await generate(compactContext, {
+          timeoutMs: Number(
+            process.env.COMPARISON_COMPACT_AI_TIMEOUT_MS || 8_000,
+          ),
+          maxModels: 2,
+          maxOutputTokens: Number(
+            process.env.COMPARISON_COMPACT_AI_MAX_OUTPUT_TOKENS || 1_600,
+          ),
+        });
+      } catch (compactError) {
+        compactError.cause = error;
+        throw compactError;
+      }
+    }
+    throw error;
+  }
 };
 
 const generateDashboardOverview = async (evidence) => {

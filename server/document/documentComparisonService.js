@@ -173,8 +173,8 @@ const comparisonPassageCharLimit = () => {
 };
 
 const allowExtractiveComparisonFallback = () =>
-  ["1", "true", "yes", "on"].includes(
-    String(process.env.COMPARISON_ALLOW_EXTRACTIVE_FALLBACK || "")
+  !["0", "false", "no", "off"].includes(
+    String(process.env.COMPARISON_ALLOW_EXTRACTIVE_FALLBACK || "true")
       .trim()
       .toLowerCase(),
   );
@@ -777,6 +777,10 @@ const createComparison = async (userId, payload) => {
       };
       throw generationUnavailable;
     }
+    console.warn(
+      "Comparison AI generation failed; returning grounded extractive comparison:",
+      sanitizeProviderError(error),
+    );
     generated = extractiveComparisonFallback({
       mode,
       language,
@@ -917,6 +921,7 @@ module.exports = {
   MODES,
   createComparison,
   deleteComparison,
+  allowExtractiveComparisonFallback,
   ensureResearchReady,
   comparisonSectionBackfill,
   getComparison,

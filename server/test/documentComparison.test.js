@@ -2,6 +2,7 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 
 const {
+  allowExtractiveComparisonFallback,
   comparisonSectionBackfill,
   normalizeRequest,
   readinessReason,
@@ -147,6 +148,24 @@ test("comparison accepts the public API contract and legacy aliases", () => {
     }).mode,
     "full",
   );
+});
+
+test("comparison fallback is enabled by default and can be explicitly disabled", () => {
+  const previous = process.env.COMPARISON_ALLOW_EXTRACTIVE_FALLBACK;
+  delete process.env.COMPARISON_ALLOW_EXTRACTIVE_FALLBACK;
+  assert.equal(allowExtractiveComparisonFallback(), true);
+
+  process.env.COMPARISON_ALLOW_EXTRACTIVE_FALLBACK = "false";
+  assert.equal(allowExtractiveComparisonFallback(), false);
+
+  process.env.COMPARISON_ALLOW_EXTRACTIVE_FALLBACK = "true";
+  assert.equal(allowExtractiveComparisonFallback(), true);
+
+  if (previous === undefined) {
+    delete process.env.COMPARISON_ALLOW_EXTRACTIVE_FALLBACK;
+  } else {
+    process.env.COMPARISON_ALLOW_EXTRACTIVE_FALLBACK = previous;
+  }
 });
 
 test("comparison readiness distinguishes pending and unusable text", () => {
