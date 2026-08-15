@@ -223,6 +223,17 @@ const addParameter = (parameters, value) => {
   return `$${parameters.length}`;
 };
 
+const cleanFilterValue = (value) => {
+  const cleaned = String(value ?? "").trim();
+  return cleaned && cleaned !== "All" ? cleaned : null;
+};
+
+const metadataValueExpression = (key) =>
+  `COALESCE(
+    NULLIF(metadata_json ->> '${key}', ''),
+    NULLIF(source_metadata ->> '${key}', '')
+  )`;
+
 const buildFilters = (options = {}) => {
   const parameters = [];
   const conditions = [];
@@ -274,9 +285,10 @@ const buildFilters = (options = {}) => {
     ["jurisdictionLevel", "jurisdiction_level"],
   ];
   for (const [option, column] of exactFilters) {
-    if (options[option] && options[option] !== "All") {
+    const value = cleanFilterValue(options[option]);
+    if (value) {
       conditions.push(
-        `${column} = ${addParameter(parameters, options[option])}`,
+        `${column} = ${addParameter(parameters, value)}`,
       );
     }
   }
@@ -285,11 +297,12 @@ const buildFilters = (options = {}) => {
       `jurisdiction_level = ${addParameter(parameters, "state")}`,
     );
   }
-  if (options.source) {
+  const source = cleanFilterValue(options.source);
+  if (source) {
     conditions.push(
-      `COALESCE(canonical_source, source_name) = ${addParameter(
+      `COALESCE(NULLIF(canonical_source, ''), source_name) = ${addParameter(
         parameters,
-        options.source,
+        source,
       )}`,
     );
   }
@@ -299,20 +312,19 @@ const buildFilters = (options = {}) => {
     ["state", "state"],
   ];
   for (const [option, key] of metadataFilters) {
-    if (options[option] && options[option] !== "All") {
+    const value = cleanFilterValue(options[option]);
+    if (value) {
       conditions.push(
-        `metadata_json ->> '${key}' = ${addParameter(
-          parameters,
-          options[option],
-        )}`,
+        `${metadataValueExpression(key)} = ${addParameter(parameters, value)}`,
       );
     }
   }
-  if (options.year && options.year !== "All") {
+  const year = cleanFilterValue(options.year);
+  if (year) {
     conditions.push(
       `year = ${addParameter(
         parameters,
-        Number.parseInt(options.year, 10),
+        Number.parseInt(year, 10),
       )}`,
     );
   }
@@ -1261,29 +1273,29 @@ const getFilterOptions = async (options = {}) => {
        ARRAY_REMOVE(ARRAY_AGG(DISTINCT jurisdiction ORDER BY jurisdiction), NULL) AS jurisdictions,
        ARRAY_REMOVE(
          ARRAY_AGG(
-           DISTINCT COALESCE(canonical_source, source_name)
-           ORDER BY COALESCE(canonical_source, source_name)
+           DISTINCT COALESCE(NULLIF(canonical_source, ''), source_name)
+           ORDER BY COALESCE(NULLIF(canonical_source, ''), source_name)
          ),
          NULL
        ) AS sources,
        ARRAY_REMOVE(
          ARRAY_AGG(
-           DISTINCT metadata_json ->> 'sourceClassification'
-           ORDER BY metadata_json ->> 'sourceClassification'
+           DISTINCT ${metadataValueExpression("sourceClassification")}
+           ORDER BY ${metadataValueExpression("sourceClassification")}
          ),
          NULL
        ) AS source_types,
        ARRAY_REMOVE(
          ARRAY_AGG(
-           DISTINCT metadata_json ->> 'language'
-           ORDER BY metadata_json ->> 'language'
+           DISTINCT ${metadataValueExpression("language")}
+           ORDER BY ${metadataValueExpression("language")}
          ),
          NULL
        ) AS languages,
        ARRAY_REMOVE(
          ARRAY_AGG(
-           DISTINCT metadata_json ->> 'state'
-           ORDER BY metadata_json ->> 'state'
+           DISTINCT ${metadataValueExpression("state")}
+           ORDER BY ${metadataValueExpression("state")}
          ),
          NULL
        ) AS states

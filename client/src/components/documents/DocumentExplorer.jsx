@@ -9,7 +9,7 @@ import {
   GitCompareArrows,
   Loader2,
 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   fetchDocuments,
   saveSearch,
@@ -110,6 +110,7 @@ export function DocumentExplorer({
   const [error, setError] = useState("");
   const [sortBy, setSortBy] = useState("cataloguedAt");
   const [sortDirection, setSortDirection] = useState("desc");
+  const requestSequence = useRef(0);
   const {
     addDocument,
     prepareAndAddDocument,
@@ -130,6 +131,8 @@ export function DocumentExplorer({
   );
 
   useEffect(() => {
+    const sequence = ++requestSequence.current;
+    const controller = new AbortController();
     const timer = setTimeout(async () => {
       try {
         setLoading(true);
@@ -142,18 +145,32 @@ export function DocumentExplorer({
           limit: 20,
           sortBy,
           sortDirection,
+          signal: controller.signal,
         });
+        // A user can change the query/filter several times before the server
+        // replies. Only the latest request is allowed to update the list.
+        if (sequence !== requestSequence.current) return;
         setDocuments(response.documents || []);
         setPagination(response.pagination || {});
         setFilterOptions(response.filters || {});
       } catch (requestError) {
+        if (
+          controller.signal.aborted ||
+          requestError?.name === "AbortError" ||
+          sequence !== requestSequence.current
+        ) {
+          return;
+        }
         setError(requestError.message || "Unable to load documents.");
         setDocuments([]);
       } finally {
-        setLoading(false);
+        if (sequence === requestSequence.current) setLoading(false);
       }
     }, 250);
-    return () => clearTimeout(timer);
+    return () => {
+      clearTimeout(timer);
+      controller.abort();
+    };
   }, [page, query, requestFilters, sortBy, sortDirection]);
 
   useEffect(() => {

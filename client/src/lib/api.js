@@ -210,7 +210,14 @@ export const getDocumentResearch = async (documentType, documentId) => {
 };
 
 export const fetchDocuments = async (options = {}) => {
-  return apiRequest(`/documents?${toQueryString(options)}`);
+  // Keep transport-only options out of the query string.  In particular,
+  // DocumentExplorer passes an AbortSignal so a newer filter/search request
+  // can cancel an older one instead of allowing stale results to win.
+  const { signal, skipCache, ...queryOptions } = options;
+  return apiRequest(`/documents?${toQueryString(queryOptions)}`, {
+    signal,
+    skipCache,
+  });
 };
 
 export const searchDocuments = async (query, options = {}) => {
