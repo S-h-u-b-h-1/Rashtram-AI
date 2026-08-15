@@ -393,7 +393,19 @@ const generationModels = () =>
   ].filter(Boolean);
 
 const taskGenerationModels = (task = "default") => {
-  if (task === "chat" || task === "comparison") {
+  if (task === "comparison") {
+    return [
+      ...new Set([
+        process.env.GEMINI_COMPARISON_MODEL ||
+          process.env.OPENAI_COMPARISON_MODEL ||
+          DEFAULT_SECONDARY_GENERATION_MODEL,
+        GENERATION_MODEL,
+        FALLBACK_GENERATION_MODEL,
+        FAST_GENERATION_MODEL,
+      ]),
+    ].filter(Boolean);
+  }
+  if (task === "chat") {
     return [
       ...new Set([
         FAST_GENERATION_MODEL,
@@ -1280,7 +1292,10 @@ substantive claim must include one or more citation labels exactly as supplied
 (for example "[D1-C2]"). If evidence is absent, say "Not identified in the
 retrieved text." Keep the documents distinct and do not merge their provisions.
 Do not leave a section empty when the supplied passages contain relevant
-evidence. For each major section, prefer 2-5 concise but informative items.
+evidence. For each major section, produce as many useful non-duplicative cited
+items as the evidence supports; prefer 4-8 items for similarities, differences,
+stakeholders, compliance impact, authority differences, impact assessment and
+key findings, and 2-5 timeline items when dates exist.
 Identify stakeholders from cited text such as Government, Council, proper
 officer, Appellate Authority/Tribunal, registered persons, taxable persons,
 manufacturers, suppliers, sectors or institutions. Identify timeline items from
@@ -1289,6 +1304,10 @@ or year evidence. Authority differences should explain how powers, duties,
 rule-making, enforcement, appeal or administration differ between documents.
 Compliance and impact items should explain practical consequences for taxpayers,
 regulated entities, administrators and affected sectors.
+Be detailed and research-useful: each item should state what changed, who is
+affected, why it matters, and which cited passage supports it. Avoid generic
+phrases such as "processed through Rashtram AI" unless the provider fallback is
+used outside this prompt.
 
 Comparison mode: ${mode}
 Response language: ${responseLanguage}
@@ -1327,7 +1346,7 @@ ${sourceContext}
         useCircuitBreaker: false,
         models: taskGenerationModels("comparison"),
         timeoutMs: Number(
-          overrides.timeoutMs || process.env.COMPARISON_AI_TIMEOUT_MS || 10_000,
+          overrides.timeoutMs || process.env.COMPARISON_AI_TIMEOUT_MS || 22_000,
         ),
         attempts: Number(process.env.COMPARISON_AI_ATTEMPTS || 1),
         maxQueueWaitMs: Number(
@@ -1337,26 +1356,72 @@ ${sourceContext}
           process.env.COMPARISON_AI_MAX_RETRY_AFTER_MS || 0,
         ),
         maxModels: Number(
-          overrides.maxModels || process.env.COMPARISON_AI_MAX_MODELS || 3,
+          overrides.maxModels || process.env.COMPARISON_AI_MAX_MODELS || 1,
         ),
         generationConfig: {
           temperature: Number(process.env.COMPARISON_AI_TEMPERATURE || 0.1),
+          responseMimeType: "application/json",
           maxOutputTokens: Number(
             overrides.maxOutputTokens ||
               process.env.COMPARISON_AI_MAX_OUTPUT_TOKENS ||
-              2_000,
+              3_200,
           ),
         },
       },
     );
+    const rawText = responseText(response);
+    try {
+      return parseJsonResponse(rawText);
+    } catch (error) {
+      error.comparisonJsonParseFailure = true;
+      error.rawComparisonResponse = rawText;
+      throw error;
+    }
+  };
+
+  const repairJson = async (rawText) => {
+    const repairPrompt = `
+Repair the following malformed comparison JSON into valid JSON only.
+Do not add Markdown. Do not explain the repair.
+Preserve the existing comparison content where possible.
+If a field is broken or incomplete, close it safely or use an empty array.
+The output must be one JSON object with these keys:
+executiveSummary, similarities, differences, keyClauses, stakeholders,
+complianceImpact, timeline, authorityDifferences, impactAssessment,
+keyFindings, suggestedQuestions.
+
+Malformed JSON:
+${String(rawText || "").slice(0, 16_000)}
+`;
+    const response = await runGeneration("generateContent", repairPrompt, {
+      useCircuitBreaker: false,
+      models: taskGenerationModels("comparison"),
+      timeoutMs: Number(process.env.COMPARISON_JSON_REPAIR_TIMEOUT_MS || 8_000),
+      attempts: 1,
+      maxQueueWaitMs: Number(
+        process.env.COMPARISON_JSON_REPAIR_MAX_QUEUE_WAIT_MS || 2_000,
+      ),
+      maxRetryAfterMs: 0,
+      maxModels: 1,
+      generationConfig: {
+        temperature: 0,
+        responseMimeType: "application/json",
+        maxOutputTokens: Number(
+          process.env.COMPARISON_JSON_REPAIR_MAX_OUTPUT_TOKENS || 2_400,
+        ),
+      },
+    });
     return parseJsonResponse(responseText(response));
   };
 
   try {
     return await generate(context);
   } catch (error) {
+    if (error.comparisonJsonParseFailure && error.rawComparisonResponse) {
+      return repairJson(error.rawComparisonResponse);
+    }
     const compactLimit = Number(
-      process.env.COMPARISON_COMPACT_CONTEXT_CHAR_LIMIT || 14_000,
+      process.env.COMPARISON_COMPACT_CONTEXT_CHAR_LIMIT || 18_000,
     );
     const compactContext = String(context || "").slice(0, compactLimit);
     if (compactContext && compactContext.length < String(context || "").length) {
@@ -1367,10 +1432,16 @@ ${sourceContext}
           ),
           maxModels: 2,
           maxOutputTokens: Number(
-            process.env.COMPARISON_COMPACT_AI_MAX_OUTPUT_TOKENS || 1_600,
+            process.env.COMPARISON_COMPACT_AI_MAX_OUTPUT_TOKENS || 2_400,
           ),
         });
       } catch (compactError) {
+        if (
+          compactError.comparisonJsonParseFailure &&
+          compactError.rawComparisonResponse
+        ) {
+          return repairJson(compactError.rawComparisonResponse);
+        }
         compactError.cause = error;
         throw compactError;
       }
