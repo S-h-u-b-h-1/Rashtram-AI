@@ -9,7 +9,7 @@ const POLICY_VIEWS = [
   {
     key: "all",
     label: "All Reports",
-    type: "policy",
+    type: "policy,report",
     source: "policyedge",
     title: "PolicyEdge Policy Reports",
     description:
@@ -18,7 +18,7 @@ const POLICY_VIEWS = [
   {
     key: "governance",
     label: "Governance",
-    type: "policy",
+    type: "policy,report",
     source: "policyedge",
     category: "Governance",
     title: "Governance Reports",
@@ -28,7 +28,7 @@ const POLICY_VIEWS = [
   {
     key: "economy",
     label: "Economy & Finance",
-    type: "policy",
+    type: "policy,report",
     source: "policyedge",
     category: "Economy",
     title: "Economy & Finance Reports",
@@ -38,7 +38,7 @@ const POLICY_VIEWS = [
   {
     key: "health",
     label: "Health",
-    type: "policy",
+    type: "policy,report",
     source: "policyedge",
     category: "Health",
     title: "Health Policy Reports",
@@ -48,7 +48,7 @@ const POLICY_VIEWS = [
   {
     key: "environment",
     label: "Environment & Climate",
-    type: "policy",
+    type: "policy,report",
     source: "policyedge",
     category: "Environment",
     title: "Environment & Climate Reports",

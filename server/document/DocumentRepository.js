@@ -4,6 +4,7 @@ const {
   isGazetteScope,
   normalizeTypeList,
 } = require("./documentTypes");
+const { sourceNameGroup } = require("../lib/ingestion/core/sourceIdentity");
 const { sanitizeProviderError } = require("../lib/providerErrorSanitizer");
 const { classifyFailure, isRetryableFailure } = require("./failureTaxonomy");
 const {
@@ -251,7 +252,19 @@ const buildFilters = (options = {}) => {
     "state-act",
     "state-acts",
   ].includes(rawType);
-  const types = normalizeTypeList(options.type || options.types);
+  const source = cleanFilterValue(options.source);
+  const sourceNames = source ? sourceNameGroup(source) : [];
+  const isPolicyEdgeSource = sourceNames.some((name) =>
+    ["policyedge", "policy-edge"].includes(String(name).toLowerCase()),
+  );
+  const requestedTypes = normalizeTypeList(options.type || options.types);
+  // PolicyEdge records exist in both the legacy `policy` family and the
+  // current connector's `report` family. Keep the public policy library
+  // searchable across both identities without broadening other report lists.
+  const types =
+    isPolicyEdgeSource && requestedTypes.includes("policy")
+      ? [...new Set([...requestedTypes, "report"])]
+      : requestedTypes;
 
   if (options.scope === "gazette") {
     conditions.push(`(
@@ -297,13 +310,12 @@ const buildFilters = (options = {}) => {
       `jurisdiction_level = ${addParameter(parameters, "state")}`,
     );
   }
-  const source = cleanFilterValue(options.source);
   if (source) {
     conditions.push(
-      `COALESCE(NULLIF(canonical_source, ''), source_name) = ${addParameter(
+      `COALESCE(NULLIF(canonical_source, ''), source_name) = ANY(${addParameter(
         parameters,
-        source,
-      )}`,
+        sourceNames,
+      )}::TEXT[])`,
     );
   }
   const metadataFilters = [
