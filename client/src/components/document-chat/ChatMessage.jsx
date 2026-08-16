@@ -1,19 +1,45 @@
 "use client";
 
-import { Check, Copy, Loader2, ThumbsDown, ThumbsUp } from "lucide-react";
+import {
+  Check,
+  Copy,
+  FileDown,
+  Loader2,
+  ThumbsDown,
+  ThumbsUp,
+} from "lucide-react";
 import { memo, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { CitationCard } from "./CitationCard";
 
-function ChatMessageComponent({ message, onFeedback }) {
+function ChatMessageComponent({ message, onDownloadPdf, onFeedback }) {
   const [copied, setCopied] = useState(false);
+  const [downloading, setDownloading] = useState(false);
   const isUser = message.sender === "user";
+  const messageLength = String(message.text || "").trim().length;
+  const canDownloadPdf = !isUser
+    && !message.isStreaming
+    && !message.isError
+    && (messageLength >= 180 || Boolean(message.metadata?.exportMessageId))
+    && Boolean(message._id || message.id || message.metadata?.exportMessageId);
 
   const copy = async () => {
     await navigator.clipboard.writeText(message.text || "");
     setCopied(true);
     setTimeout(() => setCopied(false), 1_500);
+  };
+
+  const downloadPdf = async () => {
+    if (!onDownloadPdf || downloading) return;
+    setDownloading(true);
+    try {
+      await onDownloadPdf(message);
+    } catch {
+      // The parent workspace presents the actionable download error.
+    } finally {
+      setDownloading(false);
+    }
   };
 
   return (
@@ -96,6 +122,22 @@ function ChatMessageComponent({ message, onFeedback }) {
             ) : (
               <Copy className="h-3.5 w-3.5" />
             )}
+          </button>
+        )}
+        {canDownloadPdf && (
+          <button
+            type="button"
+            onClick={downloadPdf}
+            disabled={downloading}
+            aria-label="Download this answer as a cited PDF"
+            className="inline-flex items-center gap-1 rounded-md px-1.5 py-1 font-semibold text-[#874047] hover:bg-[#8f1d2c]/8 disabled:opacity-50"
+          >
+            {downloading ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <FileDown className="h-3.5 w-3.5" />
+            )}
+            Download PDF
           </button>
         )}
         {!isUser &&

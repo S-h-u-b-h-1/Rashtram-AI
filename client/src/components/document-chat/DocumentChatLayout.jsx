@@ -14,6 +14,7 @@ import {
   createDocumentChatSession,
   deleteDocumentNote,
   exportDocumentChat,
+  exportDocumentChatReport,
   getDocumentChatHistory,
   getDocumentResearch,
   getResearchSources,
@@ -467,6 +468,19 @@ export function DocumentChatLayout({
     });
   };
 
+  const downloadMessagePdf = useCallback(async (message) => {
+    const messageId = message.metadata?.exportMessageId
+      || message._id
+      || message.id;
+    try {
+      setError("");
+      await exportDocumentChatReport(documentType, documentId, messageId);
+    } catch (downloadError) {
+      setError(downloadError.message || "The PDF could not be downloaded.");
+      throw downloadError;
+    }
+  }, [documentId, documentType]);
+
   const retryProcessing = async () => {
     const result = await prepareDocument(document);
     if (!result?.researchReady) return;
@@ -657,6 +671,7 @@ export function DocumentChatLayout({
             <ChatHistory
               messages={messages}
               messagesEndRef={messagesEndRef}
+              onDownloadPdf={downloadMessagePdf}
               onFeedback={feedback}
             />
           </div>

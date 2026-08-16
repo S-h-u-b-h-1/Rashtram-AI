@@ -705,6 +705,20 @@ export const exportDocumentChat = (documentType, documentId) =>
     `rashtram-${documentType}-${documentId}.md`,
   );
 
+export const exportDocumentChatReport = (
+  documentType,
+  documentId,
+  messageId,
+) =>
+  downloadAuthenticatedFile(
+    `/document-chat/export/report?${toQueryString({
+      documentType,
+      documentId,
+      messageId,
+    })}`,
+    `rashtram-${documentType}-${documentId}-brief.pdf`,
+  );
+
 
 export const getDashboardData = async () => {
   try {

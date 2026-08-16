@@ -1,7 +1,12 @@
 import { Sparkles } from "lucide-react";
 import { ChatMessage } from "./ChatMessage";
 
-export function ChatHistory({ messages, messagesEndRef, onFeedback }) {
+export function ChatHistory({
+  messages,
+  messagesEndRef,
+  onDownloadPdf,
+  onFeedback,
+}) {
   if (!messages.length) {
     return (
       <div className="grid min-h-full place-items-center py-14 text-center">
@@ -24,6 +29,7 @@ export function ChatHistory({ messages, messagesEndRef, onFeedback }) {
         <ChatMessage
           key={message._id || message.id || `${message.sender}-${index}`}
           message={message}
+          onDownloadPdf={onDownloadPdf}
           onFeedback={onFeedback}
         />
       ))}

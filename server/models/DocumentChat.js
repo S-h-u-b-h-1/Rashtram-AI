@@ -98,7 +98,7 @@ const addMessage = async (
   messageData,
 ) => {
   const message = {
-    _id: messageData._id || crypto.randomUUID(),
+    _id: String(messageData._id || messageData.id || crypto.randomUUID()).slice(0, 120),
     text: String(messageData.text),
     sender: messageData.sender,
     timestamp: messageData.timestamp || new Date().toISOString(),

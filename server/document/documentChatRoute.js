@@ -26,6 +26,12 @@ const {
   sendSSE,
   startSSE,
 } = require("../lib/sse");
+const {
+  createResearchBriefPdf,
+  isExportableReportMessage,
+  isPdfExportRequest,
+  safeFilePart,
+} = require("./reportPdfService");
 
 const router = express.Router();
 
@@ -416,12 +422,89 @@ router.get("/export", async (req, res) => {
   }
 });
 
+router.get("/export/report", async (req, res) => {
+  try {
+    const { documentType, documentId } = identity(req);
+    const chat = await DocumentChat.findOne(
+      req.user.id,
+      documentType,
+      documentId,
+    );
+    if (!chat) return res.status(404).json({ error: "Chat not found." });
+    const assistantMessages = chat.messages.filter(
+      (message) => message.sender === "assistant" && String(message.text || "").trim(),
+    );
+    const requestedId = String(req.query.messageId || "").trim();
+    const report = requestedId
+      ? assistantMessages.find((message) =>
+          String(message._id || message.id) === requestedId)
+      : assistantMessages.at(-1);
+    if (!report) {
+      return res.status(404).json({ error: "The requested report was not found." });
+    }
+    const pdf = await createResearchBriefPdf({
+      title: chat.title,
+      documentType: chat.documentType,
+      reportText: report.text,
+      sources: report.sources,
+    });
+    const filename = `rashtram-${safeFilePart(chat.title)}-brief.pdf`;
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader("Content-Length", String(pdf.length));
+    res.setHeader("Cache-Control", "private, no-store");
+    res.setHeader(
+      "Content-Disposition",
+      `attachment; filename="${filename}"`,
+    );
+    return res.send(pdf);
+  } catch (error) {
+    return sendError(res, error, "Research brief PDF export failed");
+  }
+});
+
 router.post("/", generationLimiter, async (req, res) => {
   try {
     const { documentType, documentId } = identity(req);
     const message = String(req.body.message || "").trim();
     if (!message) {
       return res.status(400).json({ error: "Message is required." });
+    }
+    if (isPdfExportRequest(message)) {
+      const chat = await DocumentChat.findOne(
+        req.user.id,
+        documentType,
+        documentId,
+      );
+      const report = [...(chat?.messages || [])]
+        .reverse()
+        .find(isExportableReportMessage);
+      startSSE(res);
+      if (!report) {
+        sendSSE(res, {
+          type: "content",
+          content: "Create a research answer or brief first, then ask me to export it as a PDF.",
+        });
+        completeSSE(res);
+        return undefined;
+      }
+      sendSSE(res, {
+        type: "meta",
+        documentType,
+        documentId,
+        sources: report.sources || [],
+        metadata: {
+          grounded: true,
+          exportReady: true,
+          exportFormat: "pdf",
+          exportMessageId: String(report._id || report.id),
+        },
+      });
+      sendSSE(res, {
+        type: "content",
+        content: "Your cited PDF brief is ready. Select **Download PDF** below.",
+      });
+      completeSSE(res);
+      return undefined;
     }
     const workflow = req.body.workflow && typeof req.body.workflow === "object"
       ? {
