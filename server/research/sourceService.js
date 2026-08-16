@@ -120,6 +120,38 @@ const extractPdf = async (buffer, url, fileName = null) => {
   };
 };
 
+const fetchPublicSource = async (initialUrl) => {
+  let currentUrl = initialUrl;
+  for (let redirect = 0; redirect <= 3; redirect += 1) {
+    const response = await axios.get(currentUrl.href, {
+      responseType: "arraybuffer",
+      timeout: 45_000,
+      maxContentLength: MAX_SOURCE_BYTES,
+      maxBodyLength: MAX_SOURCE_BYTES,
+      maxRedirects: 0,
+      validateStatus: (status) => status >= 200 && status < 400,
+      headers: {
+        Accept: "text/html, application/pdf;q=0.9, */*;q=0.1",
+        "User-Agent": "RashtramAI-ResearchSource/1.0",
+      },
+    });
+    if (response.status < 300) return { response, url: currentUrl.href };
+    if (redirect === 3) {
+      const error = new Error("The source link redirected too many times.");
+      error.status = 422;
+      throw error;
+    }
+    const location = response.headers.location;
+    if (!location) {
+      const error = new Error("The source link returned an invalid redirect.");
+      error.status = 422;
+      throw error;
+    }
+    currentUrl = await assertPublicUrl(new URL(location, currentUrl.href).href);
+  }
+  throw new Error("The source link could not be fetched.");
+};
+
 const chunkText = (text) => {
   const chunks = pdfProcessor.chunkText(text, 1_800, 240, pdfProcessor.detectLanguage(text).languageCode);
   return chunks.map((content, index) => ({
@@ -218,17 +250,7 @@ const listSources = async (userId) => {
 
 const addUrlSource = async (userId, url) => {
   const parsed = await assertPublicUrl(url);
-  const response = await axios.get(parsed.href, {
-    responseType: "arraybuffer",
-    timeout: 45_000,
-    maxContentLength: MAX_SOURCE_BYTES,
-    maxBodyLength: MAX_SOURCE_BYTES,
-    maxRedirects: 3,
-    validateStatus: (status) => status >= 200 && status < 400,
-    headers: { Accept: "text/html, application/pdf;q=0.9, */*;q=0.1", "User-Agent": "RashtramAI-ResearchSource/1.0" },
-  });
-  const finalUrl = response.request?.res?.responseUrl || parsed.href;
-  await assertPublicUrl(finalUrl);
+  const { response, url: finalUrl } = await fetchPublicSource(parsed);
   const buffer = Buffer.from(response.data);
   const contentType = String(response.headers["content-type"] || "").toLowerCase();
   const isPdf = contentType.includes("application/pdf") || buffer.subarray(0, 4).toString("latin1") === "%PDF";
