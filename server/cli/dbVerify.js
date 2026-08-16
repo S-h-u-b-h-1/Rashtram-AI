@@ -98,11 +98,11 @@ const checks = [
     ) AS passed`,
   },
   {
-    name: "latest migration is 026",
+    name: "latest migration is 027",
     sql: `SELECT (
       SELECT migration_name FROM schema_migrations
       ORDER BY applied_at DESC, migration_name DESC LIMIT 1
-    ) = '026_restore_dedupe_candidates.js' AS passed`,
+    ) = '027_research_sources.js' AS passed`,
   },
   {
     name: "migration 022 columns complete",
@@ -166,6 +166,13 @@ const checks = [
   {
     name: "migration 026 dedupe review queue restored",
     sql: `SELECT TO_REGCLASS('public.dedupe_candidates') IS NOT NULL AS passed`,
+  },
+  {
+    name: "migration 027 research sources complete",
+    sql: `SELECT
+      TO_REGCLASS('public.research_sources') IS NOT NULL
+      AND TO_REGCLASS('public.research_source_chunks') IS NOT NULL
+      AS passed`,
   },
 ];
 
