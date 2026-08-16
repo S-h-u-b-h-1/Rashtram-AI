@@ -98,6 +98,7 @@ export function DocumentExplorer({
   const [query, setQuery] = useState(initialQuery);
   const [filters, setFilters] = useState(EMPTY_FILTERS);
   const [documents, setDocuments] = useState([]);
+  const [suggestions, setSuggestions] = useState([]);
   const [filterOptions, setFilterOptions] = useState({});
   const [pagination, setPagination] = useState({
     page: 1,
@@ -151,6 +152,7 @@ export function DocumentExplorer({
         // replies. Only the latest request is allowed to update the list.
         if (sequence !== requestSequence.current) return;
         setDocuments(response.documents || []);
+        setSuggestions(response.suggestions || []);
         setPagination(response.pagination || {});
         setFilterOptions(response.filters || {});
       } catch (requestError) {
@@ -163,6 +165,7 @@ export function DocumentExplorer({
         }
         setError(requestError.message || "Unable to load documents.");
         setDocuments([]);
+        setSuggestions([]);
       } finally {
         if (sequence === requestSequence.current) setLoading(false);
       }
@@ -270,10 +273,39 @@ export function DocumentExplorer({
             <p className="text-sm text-[#85434a]">{error}</p>
           </div>
         ) : documents.length === 0 ? (
-          <div className="grid min-h-[460px] place-items-center p-8 text-center">
-            <p className="text-sm text-[#706a61]">
-              No recent documents are available for these filters.
-            </p>
+          <div className="min-h-[460px] p-8">
+            <div className="mx-auto max-w-2xl text-center">
+              <p className="text-sm font-semibold text-[#29312d]">
+                {query.trim()
+                  ? `No document found for “${query.trim()}”.`
+                  : "No recent documents are available for these filters."}
+              </p>
+              {query.trim() && suggestions.length > 0 && (
+                <div className="mt-7 text-left">
+                  <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-[#874047]">
+                    Related documents you may be looking for
+                  </p>
+                  <div className="mt-3 divide-y divide-[#8f1d2c]/8 overflow-hidden rounded-2xl border border-[#8f1d2c]/10 bg-white">
+                    {suggestions.map((suggestion) => (
+                      <Link
+                        key={suggestion.id}
+                        href={`/app/document/${suggestion.id}`}
+                        className="block px-4 py-3 transition hover:bg-[#fbf8f2]"
+                      >
+                        <p className="text-sm font-semibold text-[#29312d]">
+                          {suggestion.title}
+                        </p>
+                        <p className="mt-1 text-[11px] text-[#777066]">
+                          {[humanize(suggestion.type), suggestion.suggestionReason]
+                            .filter(Boolean)
+                            .join(" · ")}
+                        </p>
+                      </Link>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
         ) : (
           <div className="divide-y divide-[#8f1d2c]/7">

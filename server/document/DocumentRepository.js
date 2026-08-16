@@ -235,6 +235,20 @@ const metadataValueExpression = (key) =>
     NULLIF(source_metadata ->> '${key}', '')
   )`;
 
+const normalizeSearchText = (value) =>
+  String(value || "")
+    .normalize("NFKC")
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}]+/gu, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+const searchTokens = (value) =>
+  [...new Set(normalizeSearchText(value).split(" ").filter((token) => token.length >= 2))].slice(
+    0,
+    12,
+  );
+
 const buildFilters = (options = {}) => {
   const parameters = [];
   const conditions = [];
@@ -417,16 +431,21 @@ const buildFilters = (options = {}) => {
     )`;
   }
   let semanticCondition = null;
-  if (Array.isArray(options.semanticIds) && options.semanticIds.length) {
+  if (
+    !searchCondition &&
+    Array.isArray(options.semanticIds) &&
+    options.semanticIds.length
+  ) {
     semanticCondition =
       `id::TEXT = ANY(${addParameter(
         parameters,
         options.semanticIds.map(String),
       )}::TEXT[])`;
   }
-  if (searchCondition && semanticCondition) {
-    conditions.push(`(${searchCondition} OR ${semanticCondition})`);
-  } else if (searchCondition) {
+  // Semantic matches are suggestions, not exact catalogue results. Keeping
+  // them out of this predicate prevents a weak vector hit from making a
+  // filtered list look unrelated to the user's search text.
+  if (searchCondition) {
     conditions.push(searchCondition);
   } else if (semanticCondition) {
     conditions.push(semanticCondition);
@@ -464,17 +483,122 @@ const SORT_COLUMNS = {
   ministry: "ministry",
 };
 
+const getSearchSuggestions = async (options, search, limit = 6) => {
+  const baseFilters = buildFilters({
+    ...options,
+    search: "",
+    q: "",
+    semanticIds: [],
+  });
+  const tokens = searchTokens(search);
+  const semanticIds = Array.isArray(options.semanticIds)
+    ? options.semanticIds.map(String).filter(Boolean).slice(0, 40)
+    : [];
+  if (!tokens.length && !semanticIds.length) return [];
+
+  const parameters = [...baseFilters.parameters];
+  const tokenParameter = addParameter(
+    parameters,
+    tokens.map((token) => `%${token}%`),
+  );
+  const semanticParameter = addParameter(parameters, semanticIds);
+  const candidateCondition = `(
+    LOWER(COALESCE(title, '')) ILIKE ANY(${tokenParameter}::TEXT[])
+    OR LOWER(COALESCE(normalized_title, '')) ILIKE ANY(${tokenParameter}::TEXT[])
+    OR LOWER(COALESCE(legal_identifier, '')) ILIKE ANY(${tokenParameter}::TEXT[])
+    OR LOWER(COALESCE(bill_number, '')) ILIKE ANY(${tokenParameter}::TEXT[])
+    OR LOWER(COALESCE(act_number, '')) ILIKE ANY(${tokenParameter}::TEXT[])
+    OR LOWER(COALESCE(gazette_identifier, '')) ILIKE ANY(${tokenParameter}::TEXT[])
+    OR LOWER(COALESCE(ministry, '')) ILIKE ANY(${tokenParameter}::TEXT[])
+    OR LOWER(COALESCE(authority, '')) ILIKE ANY(${tokenParameter}::TEXT[])
+    OR LOWER(COALESCE(category, '')) ILIKE ANY(${tokenParameter}::TEXT[])
+    OR LOWER(COALESCE(metadata_json::TEXT, '')) ILIKE ANY(${tokenParameter}::TEXT[])
+    OR id::TEXT = ANY(${semanticParameter}::TEXT[])
+  )`;
+  const result = await query(
+    `SELECT *,
+       COALESCE((
+         SELECT schema_document.research_ready
+         FROM documents schema_document
+         WHERE schema_document.id = legislative_documents.id
+       ), FALSE) AS research_ready,
+       COALESCE((
+         SELECT schema_document.comparison_ready
+         FROM documents schema_document
+         WHERE schema_document.id = legislative_documents.id
+       ), FALSE) AS comparison_ready,
+       (
+         SELECT schema_document.quality_score
+         FROM documents schema_document
+         WHERE schema_document.id = legislative_documents.id
+       ) AS quality_score,
+       (
+         SELECT schema_document.visibility_status
+         FROM documents schema_document
+         WHERE schema_document.id = legislative_documents.id
+       ) AS visibility_status
+     FROM legislative_documents
+     WHERE ${baseFilters.where}
+       AND ${candidateCondition}
+     ORDER BY
+       CASE WHEN id::TEXT = ANY(${semanticParameter}::TEXT[]) THEN 0 ELSE 1 END,
+       CASE WHEN LOWER(COALESCE(title, '')) ILIKE ANY(${tokenParameter}::TEXT[]) THEN 0 ELSE 1 END,
+       updated_at DESC NULLS LAST,
+       id DESC
+     LIMIT ${addParameter(parameters, limit)}`,
+    parameters,
+  );
+  const semanticSet = new Set(semanticIds);
+  return result.rows.map((row) => ({
+    ...mapDocument(row),
+    suggestionReason: semanticSet.has(String(row.id))
+      ? "Related by meaning"
+      : "Related title or metadata",
+  }));
+};
+
 const find = async (options = {}) => {
   const page = clampInteger(options.page, 1, 1, 100_000);
   const limit = clampInteger(options.limit, 20, 1, 100);
   const offset = (page - 1) * limit;
   const filters = buildFilters(options);
   const search = String(options.search || options.q || "").trim();
+  const whereParameterCount = filters.parameters.length;
   const rankParameter = search
     ? addParameter(filters.parameters, search)
     : null;
+  const normalizedSearchParameter = search
+    ? addParameter(filters.parameters, normalizeSearchText(search))
+    : null;
+  const prefixSearchParameter = search
+    ? addParameter(filters.parameters, `${normalizeSearchText(search)}%`)
+    : null;
+  const phraseSearchParameter = search
+    ? addParameter(filters.parameters, `%${search}%`)
+    : null;
+  const tokenPatternsParameter = search
+    ? addParameter(
+        filters.parameters,
+        searchTokens(search).map((token) => `%${token}%`),
+      )
+    : null;
   const rankExpression = rankParameter
-    ? `ts_rank(search_vector, websearch_to_tsquery('english', ${rankParameter}))`
+    ? `(
+        CASE
+          WHEN LOWER(COALESCE(title, '')) = LOWER(${rankParameter}) THEN 1000
+          WHEN LOWER(REGEXP_REPLACE(COALESCE(title, ''), '[^[:alnum:]]+', ' ', 'g')) = ${normalizedSearchParameter} THEN 950
+          WHEN LOWER(REGEXP_REPLACE(COALESCE(title, ''), '[^[:alnum:]]+', ' ', 'g')) LIKE ${prefixSearchParameter} THEN 900
+          WHEN title ILIKE ${phraseSearchParameter} THEN 800
+          WHEN COALESCE(legal_identifier, '') ILIKE ${phraseSearchParameter}
+            OR COALESCE(bill_number, '') ILIKE ${phraseSearchParameter}
+            OR COALESCE(act_number, '') ILIKE ${phraseSearchParameter}
+            OR COALESCE(gazette_identifier, '') ILIKE ${phraseSearchParameter} THEN 700
+          WHEN LOWER(COALESCE(title, '')) ILIKE ANY(${tokenPatternsParameter}::TEXT[]) THEN 600
+          WHEN search_vector @@ websearch_to_tsquery('english', ${rankParameter}) THEN 500
+          ELSE 100
+        END
+        + (ts_rank(search_vector, websearch_to_tsquery('english', ${rankParameter})) * 100)
+      )`
     : "0";
   const sortBy = SORT_COLUMNS[options.sortBy] || (
     search ? SORT_COLUMNS.relevance : SORT_COLUMNS.publicationDate
@@ -552,10 +676,18 @@ const find = async (options = {}) => {
       `SELECT COUNT(*)::INTEGER AS total
        FROM legislative_documents
        WHERE ${filters.where}`,
-      filters.parameters.slice(0, -(rankParameter ? 3 : 2)),
+      filters.parameters.slice(0, whereParameterCount),
     ),
   ]);
   const total = count.rows[0]?.total || 0;
+  let suggestions = [];
+  if (search && page === 1 && documents.rows.length === 0) {
+    try {
+      suggestions = await getSearchSuggestions(options, search);
+    } catch (error) {
+      console.warn("Document search suggestions unavailable:", error.message);
+    }
+  }
   return {
     documents: documents.rows.map(mapDocument),
     pagination: {
@@ -565,6 +697,8 @@ const find = async (options = {}) => {
       totalPages: Math.ceil(total / limit),
       hasMore: offset + limit < total,
     },
+    search: search || null,
+    suggestions,
   };
 };
 

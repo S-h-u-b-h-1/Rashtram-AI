@@ -125,9 +125,27 @@ test("universal repository filters remain parameterized across all fields", () =
   assert.equal(filters.where.includes("tax' OR TRUE"), false);
   assert.match(filters.where, /document_type = ANY/);
   assert.match(filters.where, /search_vector/);
-  assert.match(filters.where, /id::TEXT = ANY/);
+  assert.doesNotMatch(
+    filters.where,
+    /id::TEXT = ANY/,
+    "semantic matches must remain suggestions when lexical search is present",
+  );
   assert.match(filters.where, /pdf_url IS NOT NULL/);
   assert.deepEqual(filters.parameters[0], ["committee_report"]);
+
+  const semanticOnly = buildFilters({ semanticIds: ["12", "13"] });
+  assert.match(semanticOnly.where, /id::TEXT = ANY/);
+});
+
+test("policy search accepts legacy and current PolicyEdge source identities", () => {
+  const filters = buildFilters({
+    type: "policy",
+    source: "policyedge",
+    search: "data protection",
+  });
+  assert.match(filters.where, /document_type = ANY/);
+  assert.match(filters.where, /= ANY\(/);
+  assert.deepEqual(filters.parameters[0], ["policy", "report"]);
 });
 
 test("policy libraries separate national and state records without new tables", () => {
