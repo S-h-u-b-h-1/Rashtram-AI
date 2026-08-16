@@ -5,6 +5,7 @@ const path = require("node:path");
 const axios = require("axios");
 const { FAILURE_CODES } = require("../document/failureTaxonomy");
 const { validateDownloadedFile } = require("./documentFileValidator");
+const { httpsAgentForUrl } = require("./ingestion/core/tlsTrust");
 
 const DEFAULT_USER_AGENT =
   "RashtramAI-DocumentAcquisition/1.0 (+https://rashtram-ai.vercel.app; contact=rashtram.ai@rishihood.edu.in)";
@@ -139,6 +140,7 @@ const downloadAndValidateDocument = async (
         responseType: "stream",
         timeout: connectTimeoutMs + responseTimeoutMs,
         maxRedirects,
+        httpsAgent: httpsAgentForUrl(parsed),
         validateStatus: (status) => status >= 200 && status < 400,
         headers: {
           Accept: accept,
