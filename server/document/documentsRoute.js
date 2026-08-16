@@ -5,9 +5,13 @@ const { query } = require("../db");
 const DocumentService = require("./DocumentService");
 const DocumentRepository = require("./DocumentRepository");
 const {
-  retrievePassages,
+  retrieveDocumentContext,
   getTextArtifact,
 } = require("./documentResearchService");
+const { planQuery } = require("../retrieval/queryPlanner");
+const { retrievalConfig } = require("../retrieval/retrievalConfig");
+const { selectContextPassages } = require("../retrieval/contextBuilder");
+const { getRelationshipContext } = require("../graph/knowledgeGraphService");
 const { generateResponse } = require("../lib/vectordb");
 const { sanitizeProviderError } = require("../lib/providerErrorSanitizer");
 const {
@@ -245,18 +249,54 @@ router.post("/chat", generationLimiter, async (req, res) => {
       2,
       Math.floor(12 / documents.length),
     );
+    const plan = planQuery(message, {
+      documentCount: documents.length,
+      comparison: documents.length > 1,
+    });
+    const settings = retrievalConfig();
     const passageGroups = await Promise.all(
       documents.map(async (document) => {
-        const [passages, textArtifact] = await Promise.all([
-          retrievePassages(
+        let graphLatencyMs = 0;
+        const relationshipPromise = plan.useGraph
+          ? (async () => {
+              const startedAt = Date.now();
+              try {
+                return await getRelationshipContext(
+                  document.id,
+                  message,
+                  settings.graphCandidates,
+                );
+              } finally {
+                graphLatencyMs = Date.now() - startedAt;
+              }
+            })()
+          : Promise.resolve({ context: "", sources: [], graphGrounded: false });
+        const [retrieval, textArtifact, relationshipContext] = await Promise.all([
+          retrieveDocumentContext(
             document.type,
             document.id,
             message,
-            passagesPerDocument,
+            { topK: passagesPerDocument, plan, document },
           ),
           getTextArtifact(document.id),
+          relationshipPromise,
         ]);
-        return { document, passages, textArtifact };
+        return {
+          document,
+          passages: selectContextPassages(retrieval.passages, {
+            tokenBudget: Math.floor(settings.contextTokenBudget / documents.length),
+            perPassageChars: 1_400,
+          }),
+          textArtifact,
+          relationshipContext,
+          retrieval: {
+            ...retrieval.diagnostics,
+            timings: {
+              ...retrieval.diagnostics.timings,
+              graphMs: graphLatencyMs,
+            },
+          },
+        };
       }),
     );
     let passageNumber = 0;
@@ -282,8 +322,23 @@ router.post("/chat", generationLimiter, async (req, res) => {
           `[Passage ${source.passage}] ${source.documentTitle}\n${compactText(source.content, 1_000)}`,
       )
       .join("\n\n");
+    const graphContext = passageGroups
+      .map(({ document, relationshipContext }) => relationshipContext.context
+        ? `Verified relationships for ${document.title}:\n${relationshipContext.context}`
+        : "")
+      .filter(Boolean)
+      .join("\n\n");
+    const graphSources = passageGroups.flatMap(({ document, relationshipContext }) =>
+      relationshipContext.sources.map((source) => ({
+        ...source,
+        passage: ++passageNumber,
+        documentId: source.documentId || document.id,
+        documentTitle: source.documentTitle || document.title,
+      })),
+    );
     const combinedContext = [
       context,
+      graphContext,
       userSourceContext.context,
     ].filter(Boolean).join("\n\n");
     const briefContext = passageGroups
@@ -300,6 +355,7 @@ router.post("/chat", generationLimiter, async (req, res) => {
       throw error;
     }
 
+    graphSources.forEach((source) => sources.push(source));
     userSourceContext.sources.forEach((source) => sources.push(source));
 
     startSSE(res);
@@ -318,6 +374,11 @@ router.post("/chat", generationLimiter, async (req, res) => {
         grounded: true,
         documentCount: documents.length,
         selectedSourceCount: userSourceContext.sources.length,
+        graphSourceCount: graphSources.length,
+        retrieval: passageGroups.map(({ document, retrieval }) => ({
+          documentId: document.id,
+          ...retrieval,
+        })),
       },
     });
     const responseLanguage = req.body.responseLanguage || "Auto";

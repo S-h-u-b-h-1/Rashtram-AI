@@ -648,16 +648,19 @@ const getKnowledgeGraphMetrics = async () => {
 
 const getRelationshipContext = async (documentId, question, limit = 12) => {
   if (
-    !/(relat|amend|replace|repeal|implement|notif|under|issued|similar|equivalent|govern|clarif)/i
+    !/(relat|amend|replace|repeal|implement|notif|under|issued|similar|equivalent|govern|clarif|timeline|chronolog|commence|effective)/i
       .test(String(question || ""))
   ) {
     return { context: "", sources: [], graphGrounded: false };
   }
   const { relationships } = await getRelationships(documentId, {
-    limit,
+    limit: Math.min(100, Math.max(limit * 3, 24)),
     minimumConfidence: 0.35,
   });
-  const context = relationships.map((relationship, index) =>
+  const verifiedRelationships = relationships
+    .filter((relationship) => relationship.isVerified)
+    .slice(0, limit);
+  const context = verifiedRelationships.map((relationship, index) =>
     [
       `[GRAPH-${index + 1}]`,
       `Relationship: ${relationship.relationshipType}`,
@@ -673,8 +676,8 @@ const getRelationshipContext = async (documentId, question, limit = 12) => {
   ).join("\n\n");
   return {
     context,
-    graphGrounded: relationships.length > 0,
-    sources: relationships.map((relationship, index) => ({
+    graphGrounded: verifiedRelationships.length > 0,
+    sources: verifiedRelationships.map((relationship, index) => ({
       passage: `GRAPH-${index + 1}`,
       content:
         relationship.explanation ||

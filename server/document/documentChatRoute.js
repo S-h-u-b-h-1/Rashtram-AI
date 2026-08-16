@@ -4,7 +4,7 @@ const DocumentChat = require("../models/DocumentChat");
 const {
   getDocumentContext,
   getTextArtifact,
-  retrievePassages,
+  retrieveDocumentContext,
   ensureSummary,
 } = require("./documentResearchService");
 const { generateResponse } = require("../lib/vectordb");
@@ -20,6 +20,9 @@ const {
 const { getDocumentReadiness } = require("./readinessContract");
 const DocumentRepository = require("./DocumentRepository");
 const { getSourceContext } = require("../research/sourceService");
+const { planQuery } = require("../retrieval/queryPlanner");
+const { retrievalConfig } = require("../retrieval/retrievalConfig");
+const { selectContextPassages } = require("../retrieval/contextBuilder");
 const {
   completeSSE,
   errorSSE,
@@ -516,17 +519,37 @@ router.post("/", generationLimiter, async (req, res) => {
     const sourceIds = Array.isArray(req.body.sourceIds)
       ? req.body.sourceIds.slice(0, 20)
       : [];
-    const [passages, relationshipContext, document, textArtifact] = await Promise.all([
-      retrievePassages(
-        documentType,
-        documentId,
-        message,
-        8,
-      ),
-      getRelationshipContext(documentId, message),
-      DocumentRepository.getById(documentId),
+    const document = await DocumentRepository.getById(documentId);
+    const plan = planQuery(message);
+    const settings = retrievalConfig();
+    let graphLatencyMs = 0;
+    const relationshipPromise = plan.useGraph
+      ? (async () => {
+          const startedAt = Date.now();
+          try {
+            return await getRelationshipContext(
+              documentId,
+              message,
+              settings.graphCandidates,
+            );
+          } finally {
+            graphLatencyMs = Date.now() - startedAt;
+          }
+        })()
+      : Promise.resolve({ context: "", sources: [], graphGrounded: false });
+    const [retrieval, relationshipContext, textArtifact] = await Promise.all([
+      retrieveDocumentContext(documentType, documentId, message, {
+        topK: settings.finalPassages,
+        plan,
+        document,
+      }),
+      relationshipPromise,
       getTextArtifact(documentId),
     ]);
+    const passages = selectContextPassages(retrieval.passages, {
+      tokenBudget: settings.contextTokenBudget,
+      perPassageChars: plan.queryType === "EXACT_REFERENCE" ? 2_400 : 1_600,
+    });
     const userSourceContext = await getSourceContext(
       req.user.id,
       sourceIds,
@@ -548,9 +571,9 @@ router.post("/", generationLimiter, async (req, res) => {
             item.sectionId ? `Section ${item.sectionId}` : null
           ),
           item.clauseId ? `Clause ${item.clauseId}` : null,
-          `Chunk ${item.chunkIndex + 1}`,
+          typeof item.chunkIndex === "number" ? `Chunk ${item.chunkIndex + 1}` : null,
         ].filter(Boolean).join(" | ");
-        return `[Source ${item.passage}: ${location}]\n${compactText(item.content, 1_200)}`;
+        return `[Source ${item.passage}: ${location}]\n${compactText(item.content, 1_600)}`;
       })
       .join("\n\n");
     const context = [
@@ -571,7 +594,7 @@ router.post("/", generationLimiter, async (req, res) => {
         page: item.pageStart,
         section: item.sectionTitle || item.sectionId,
         clause: item.clauseId,
-        chunk: item.chunkIndex + 1,
+        chunk: typeof item.chunkIndex === "number" ? item.chunkIndex + 1 : null,
         sourceUrl: item.sourceUrl || document?.sourceUrl || null,
         pdfUrl: item.pdfUrl || document?.pdfUrl || null,
         content: item.content.slice(0, 360),
@@ -592,6 +615,13 @@ router.post("/", generationLimiter, async (req, res) => {
         graphSourceCount: relationshipContext.sources.length,
         graphGrounded: relationshipContext.graphGrounded,
         selectedSourceCount: userSourceContext.sources.length,
+        retrieval: {
+          ...retrieval.diagnostics,
+          timings: {
+            ...retrieval.diagnostics.timings,
+            graphMs: graphLatencyMs,
+          },
+        },
         workflow,
       },
     });

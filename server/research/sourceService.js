@@ -443,7 +443,17 @@ const getSourceContext = async (userId, sourceIds = [], search = "") => {
     remaining -= content.length;
     selected.push(`[User source: ${row.title} | Passage ${Number(row.chunk_index) + 1}]\n${content}`);
     if (!sources.some((source) => source.sourceId === String(row.id))) {
-      sources.push({ sourceId: String(row.id), documentTitle: row.title, sourceUrl: row.source_url, fileName: row.file_name, sourceType: row.source_type, content: content.slice(0, 360), passage: Number(row.chunk_index) + 1 });
+      sources.push({
+        sourceId: String(row.id),
+        documentTitle: row.title,
+        sourceUrl: row.source_url,
+        fileName: row.file_name,
+        sourceType: row.source_type,
+        content: content.slice(0, 360),
+        passage: Number(row.chunk_index) + 1,
+        userSource: true,
+        authorityClass: "USER_SOURCE",
+      });
     }
   }
   return { context: selected.join("\n\n"), sources, chunks: selected.length };

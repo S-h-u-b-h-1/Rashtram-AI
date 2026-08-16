@@ -41,6 +41,9 @@ const {
   createObjectStorage,
   objectStorageConfig,
 } = require("../lib/storage/objectStorage");
+const { planQuery } = require("../retrieval/queryPlanner");
+const { retrievalConfig } = require("../retrieval/retrievalConfig");
+const { reciprocalRankFusion } = require("../retrieval/rankFusion");
 
 const TYPE_CONFIG = {
   bill: {
@@ -1339,11 +1342,9 @@ const identifierBoost = (passage, identifiers) => {
   return 0;
 };
 
-// Combines vector similarity, fresh lexical overlap, full-text rank, and a
-// legal-identifier match into one deterministic score. No external API call
-// — safe to run on every retrieval. Vector similarity stays the dominant
-// signal (weight 0.45) so reranking nudges results rather than overriding
-// what Pinecone already found relevant.
+// Bounded deterministic reranking over the fused candidate set. Relevance
+// remains dominant; the source-authority contribution was already gated by
+// relevance in reciprocalRankFusion and is intentionally small.
 const rerankPassages = (passages, message, { topK = 6 } = {}) => {
   const queryTokens = tokenizeForLocalRetrieval(message);
   const identifiers = extractIdentifiers(String(message || ""));
@@ -1358,9 +1359,26 @@ const rerankPassages = (passages, message, { topK = 6 } = {}) => {
     const lexicalScore = tokenOverlapScore(passage.content, queryTokens);
     const ftsScore = Number(passage.ftsScore ?? 0);
     const boost = identifierBoost(passage, identifiers);
+    const fusionScore = Math.min(1, Number(passage.rrfScore || 0) * 30);
+    const authorityBoost = Number(passage.authorityBoost || 0);
     const finalScore =
-      0.45 * vectorScore + 0.3 * lexicalScore + 0.15 * ftsScore + 0.1 * boost;
-    return { ...passage, vectorScore, lexicalScore, ftsScore, identifierBoost: boost, finalScore };
+      0.32 * vectorScore + 0.28 * lexicalScore + 0.15 * ftsScore +
+      0.12 * boost + 0.1 * fusionScore + authorityBoost;
+    const rankingReasons = [...new Set([
+      ...(passage.rankingReasons || []),
+      boost > 0 ? "exact_identifier" : null,
+      authorityBoost > 0 ? `authority:${passage.authorityClass}` : null,
+    ].filter(Boolean))];
+    return {
+      ...passage,
+      vectorScore,
+      lexicalScore,
+      ftsScore,
+      identifierBoost: boost,
+      fusionScore,
+      finalScore,
+      rankingReasons,
+    };
   });
 
   return scored
@@ -1511,79 +1529,168 @@ const retrieveLocalTextPassages = async (documentId, message, topK = 6) => {
     .map((passage, index) => ({ ...passage, passage: index + 1 }));
 };
 
+const retrieveMetadataPassages = async (documentId, documentValue = null) => {
+  const document = documentValue || await DocumentRepository.getById(documentId);
+  if (!document) return [];
+  const fields = [
+    ["Title", document.title],
+    ["Document type", document.type],
+    ["Status", document.status],
+    ["Year", document.year],
+    ["Publication date", document.publicationDate],
+    ["Introduced date", document.introducedDate],
+    ["Enacted date", document.enactedDate],
+    ["Effective date", document.effectiveDate],
+    ["Ministry", document.ministry],
+    ["Department", document.department],
+    ["Authority", document.authority],
+    ["Jurisdiction", document.jurisdiction],
+    ["Source", document.source || document.sourceName],
+  ].filter(([, value]) => value != null && String(value).trim());
+  if (!fields.length) return [];
+  return [{
+    passage: 1,
+    score: 1,
+    lexicalScore: 1,
+    documentId: String(documentId),
+    chunkIndex: "metadata",
+    content: fields.map(([label, value]) => `${label}: ${value}`).join("\n"),
+    source: document.source || document.sourceName || "Catalogue metadata",
+    sourceUrl: document.sourceUrl || null,
+    pdfUrl: document.pdfUrl || null,
+    structuralType: "metadata",
+    retrievalMode: "metadata",
+    authority: document.authority || null,
+  }];
+};
+
 const retrieveDocumentContext = async (
   documentType,
   documentId,
   message,
   options = {},
 ) => {
-  const topK = Math.max(1, Number(options.topK || 6));
-  // Widen the candidate pool before reranking so reranking has real
-  // choices to make, rather than just re-ordering the final 6.
-  const candidatePoolSize = Math.min(Math.max(topK * 3, 12), 25);
-  const config = typeConfig(documentType);
+  const startedAt = Date.now();
+  const settings = retrievalConfig();
+  const plan = options.plan || planQuery(message, options);
+  const topK = Math.min(10, Math.max(1, Number(options.topK || settings.finalPassages)));
+  const adapters = options.adapters || {};
+  const ftsSearch = adapters.ftsSearch || retrieveFtsPassages;
+  const localSearch = adapters.localSearch || retrieveLocalTextPassages;
+  const metadataSearch = adapters.metadataSearch || retrieveMetadataPassages;
+  const vectorSearch = adapters.vectorSearch || (async (limit) => {
+    const config = typeConfig(documentType);
+    const matches = await config.search(message, documentId, limit);
+    return matches.map(passageFromVectorMatch)
+      .filter((passage) => passage.content.trim())
+      .map((passage) => ({ ...passage, vectorScore: passage.score }));
+  });
 
-  // Vector search and full-text search always run together — FTS is not
-  // gated behind "vector search was weak." Each is caught independently so
-  // one failing doesn't lose the other.
-  const [vectorOutcome, ftsPassages] = await Promise.all([
-    config
-      .search(message, documentId, candidatePoolSize)
-      .then((matches) => ({
-        passages: matches
-          .map(passageFromVectorMatch)
-          .filter((passage) => passage.content.trim())
-          .map((passage) => ({ ...passage, vectorScore: passage.score })),
-        error: null,
-      }))
-      .catch((error) => ({ passages: [], error })),
-    retrieveFtsPassages(documentId, message, candidatePoolSize),
+  const timings = {};
+  const timed = async (name, operation) => {
+    const at = Date.now();
+    try { return await operation(); }
+    finally { timings[`${name}Ms`] = Date.now() - at; }
+  };
+  const metadataPromise = plan.useMetadata
+    ? timed("metadata", () => metadataSearch(documentId, options.document))
+    : Promise.resolve([]);
+  const lexicalLimit = plan.queryType === "EXACT_REFERENCE"
+    ? settings.exactCandidates
+    : settings.lexicalCandidates;
+  const lexicalPromise = plan.useLexical
+    ? timed("lexical", () => ftsSearch(documentId, message, lexicalLimit))
+    : Promise.resolve([]);
+  const eagerVectorPromise = plan.useVector === true
+    ? timed("vector", () => vectorSearch(settings.vectorCandidates))
+      .then((passages) => ({ passages, error: null }))
+      .catch((error) => ({ passages: [], error }))
+    : null;
+  const [metadataPassages, ftsPassages, eagerVectorOutcome] = await Promise.all([
+    metadataPromise,
+    lexicalPromise,
+    eagerVectorPromise || Promise.resolve(null),
   ]);
 
-  const vectorError = vectorOutcome.error;
-  const vectorPassages = vectorOutcome.passages;
-
-  if (vectorPassages.length > 0 || ftsPassages.length > 0) {
-    const merged = mergePassagesByChunk(vectorPassages, ftsPassages);
-    const reranked = rerankPassages(merged, message, { topK });
-    if (reranked.length > 0) {
-      return {
-        documentId: String(documentId),
-        retrievalMode: vectorError
-          ? "fts"
-          : ftsPassages.length > 0
-          ? "hybrid"
-          : "vector",
-        retrievalVerified: true,
-        vectorError: vectorError?.message || null,
-        passages: reranked,
-      };
+  let localPassages = [];
+  if (plan.useLexical && ftsPassages.length < settings.minimumLexicalEvidence) {
+    localPassages = await timed("local", () => localSearch(documentId, message, settings.lexicalCandidates));
+  }
+  const lexicalEvidence = reciprocalRankFusion(
+    [ftsPassages, localPassages],
+    { documentId, k: settings.rrfK, limit: settings.fusedCandidates },
+  );
+  const shouldUseVector = plan.useVector === true ||
+    (plan.useVector === "if_insufficient" && lexicalEvidence.length < settings.minimumLexicalEvidence);
+  let vectorPassages = eagerVectorOutcome?.passages || [];
+  let vectorError = eagerVectorOutcome?.error || null;
+  if (shouldUseVector && !eagerVectorOutcome) {
+    try {
+      vectorPassages = await timed("vector", () => vectorSearch(settings.vectorCandidates));
+    } catch (error) {
+      vectorError = error;
+      timings.vectorMs = timings.vectorMs || 0;
     }
   }
 
-  const localPassages = await retrieveLocalTextPassages(
-    documentId,
-    message,
-    candidatePoolSize,
+  const fused = reciprocalRankFusion(
+    [metadataPassages, ftsPassages, localPassages, vectorPassages],
+    { documentId, k: settings.rrfK, limit: settings.fusedCandidates },
   );
-  if (localPassages.length > 0) {
-    const merged = mergePassagesByChunk(localPassages, ftsPassages);
-    const reranked = rerankPassages(merged, message, { topK });
-    return {
-      documentId: String(documentId),
-      retrievalMode: vectorError ? "local_text" : "hybrid",
-      retrievalVerified: true,
-      vectorError: vectorError?.message || null,
-      passages: reranked,
-    };
-  }
-
-  if (vectorError) throw vectorError;
+  const rerankStartedAt = Date.now();
+  const reranked = rerankPassages(fused, message, { topK });
+  timings.rerankMs = Date.now() - rerankStartedAt;
+  const hasLexical = ftsPassages.length > 0 || localPassages.length > 0;
+  const retrievalMode = vectorPassages.length > 0 && (hasLexical || metadataPassages.length > 0)
+    ? "hybrid"
+    : vectorPassages.length > 0
+      ? "vector"
+      : hasLexical
+        ? ftsPassages.length > 0 ? "fts" : "local_text"
+        : metadataPassages.length > 0
+          ? "metadata"
+          : "none";
+  const diagnostics = {
+    queryType: plan.queryType,
+    strategy: {
+      metadata: Boolean(plan.useMetadata),
+      lexical: Boolean(plan.useLexical),
+      vector: shouldUseVector,
+      graph: Boolean(plan.useGraph),
+    },
+    candidateCounts: {
+      metadata: metadataPassages.length,
+      lexical: ftsPassages.length,
+      local: localPassages.length,
+      vector: vectorPassages.length,
+      fused: fused.length,
+      final: reranked.length,
+    },
+    authorityDistribution: reranked.reduce((counts, passage) => ({
+      ...counts,
+      [passage.authorityClass || "UNKNOWN"]: (counts[passage.authorityClass || "UNKNOWN"] || 0) + 1,
+    }), {}),
+    topScores: reranked.slice(0, 5).map((passage) => Number(
+      Number(passage.finalScore || passage.score || 0).toFixed(4),
+    )),
+    timings: { ...timings, totalMs: Date.now() - startedAt },
+    versions: {
+      ...settings.versions,
+      embedding: providerConfig().embeddingModel,
+      vectorNamespace: providerConfig().vectorNamespace,
+    },
+    plannerVersion: plan.plannerVersion,
+    vectorDegraded: Boolean(vectorError),
+  };
+  console.info("[retrieval-v3]", JSON.stringify({ documentId: String(documentId), ...diagnostics }));
   return {
     documentId: String(documentId),
-    retrievalMode: "none",
-    retrievalVerified: false,
-    passages: [],
+    retrievalMode,
+    retrievalVerified: reranked.length > 0,
+    vectorError: vectorError?.message || null,
+    passages: reranked,
+    plan,
+    diagnostics,
   };
 };
 
@@ -1749,6 +1856,7 @@ module.exports = {
   retrieveDocumentContext,
   retrieveFtsPassages,
   retrieveLocalTextPassages,
+  retrieveMetadataPassages,
   retrievePassages,
   rerankPassages,
   mergePassagesByChunk,

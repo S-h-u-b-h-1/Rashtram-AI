@@ -12,6 +12,9 @@ const {
 } = require("../graph/knowledgeGraphService");
 const { generateDocumentComparison } = require("../lib/vectordb");
 const { sanitizeProviderError } = require("../lib/providerErrorSanitizer");
+const { planQuery } = require("../retrieval/queryPlanner");
+const { retrievalConfig } = require("../retrieval/retrievalConfig");
+const { selectContextPassages } = require("../retrieval/contextBuilder");
 
 const MODES = new Set([
   "summary",
@@ -748,15 +751,23 @@ const createComparison = async (userId, payload) => {
   const documents = readyPayloads.map((payload) => payload.document);
   const topK = comparisonRetrievalLimit(mode, documents.length);
   const passageCharLimit = comparisonPassageCharLimit();
+  const settings = retrievalConfig();
+  const retrievalPlan = planQuery(userQuestion || comparisonQuery(mode), {
+    comparison: true,
+    documentCount: documents.length,
+  });
   const groups = await Promise.all(
     documents.map(async (document, documentIndex) => {
       const retrieval = await retrieveDocumentContext(
         document.type,
         document.id,
         userQuestion || comparisonQuery(mode),
-        { topK },
+        { topK, plan: retrievalPlan, document },
       );
-      const passages = retrieval.passages || [];
+      const passages = selectContextPassages(retrieval.passages || [], {
+        tokenBudget: Math.floor(settings.contextTokenBudget / documents.length),
+        perPassageChars: passageCharLimit,
+      });
       if (!passages.some((passage) => passage.content.trim())) {
         throw validationError(`${document.title}: No extractable text.`, 422);
       }
@@ -765,6 +776,7 @@ const createComparison = async (userId, payload) => {
         passages: passages.filter((passage) => passage.content.trim()),
         documentIndex,
         retrievalMode: retrieval.retrievalMode,
+        retrievalDiagnostics: retrieval.diagnostics,
       };
     }),
   );
@@ -800,7 +812,9 @@ const createComparison = async (userId, payload) => {
     })
     .join("\n\n");
 
+  const graphStartedAt = Date.now();
   const graphIntelligence = await getComparisonGraphOverlap(documentIds);
+  const graphLatencyMs = Date.now() - graphStartedAt;
   const sourceVerifiedGraphRelationships = graphIntelligence.relationships
     .filter((relationship) => relationship.isVerified);
   const graphContext = sourceVerifiedGraphRelationships.length
@@ -935,10 +949,17 @@ const createComparison = async (userId, payload) => {
       }),
     ),
     citations,
-    retrieval: groups.map(({ document, retrievalMode, passages }) => ({
+    retrieval: groups.map(({ document, retrievalMode, passages, retrievalDiagnostics }) => ({
       documentId: document.id,
       retrievalMode,
       passages: passages.length,
+      diagnostics: {
+        ...retrievalDiagnostics,
+        timings: {
+          ...retrievalDiagnostics.timings,
+          graphMs: graphLatencyMs,
+        },
+      },
     })),
     relationshipIntelligence: graphIntelligence,
     recommendedDocuments,
