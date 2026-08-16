@@ -98,11 +98,11 @@ const checks = [
     ) AS passed`,
   },
   {
-    name: "latest migration is 028",
+    name: "latest migration is 029",
     sql: `SELECT (
       SELECT migration_name FROM schema_migrations
       ORDER BY applied_at DESC, migration_name DESC LIMIT 1
-    ) = '028_policy_drafts.js' AS passed`,
+    ) = '029_processing_stage_capabilities.js' AS passed`,
   },
   {
     name: "migration 022 columns complete",
@@ -177,6 +177,35 @@ const checks = [
   {
     name: "migration 028 policy drafts complete",
     sql: `SELECT TO_REGCLASS('public.policy_drafts') IS NOT NULL AS passed`,
+  },
+  {
+    name: "migration 029 processing stages complete",
+    sql: `SELECT
+      TO_REGCLASS('public.document_processing_stages') IS NOT NULL
+      AND EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_schema = 'public'
+          AND table_name = 'document_processing_state'
+          AND column_name = 'search_ready'
+      )
+      AND EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_schema = 'public'
+          AND table_name = 'document_processing_state'
+          AND column_name = 'semantic_ready'
+      )
+      AND EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_schema = 'public'
+          AND table_name = 'document_text_artifacts'
+          AND column_name = 'extracted_text_sha256'
+      )
+      AND EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_schema = 'public'
+          AND table_name = 'document_text_chunks'
+          AND column_name = 'embedding_input_sha256'
+      ) AS passed`,
   },
 ];
 

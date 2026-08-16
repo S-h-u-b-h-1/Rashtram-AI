@@ -218,6 +218,18 @@ test("processing audit log migration records corrective actions", () => {
   assert.match(source, /evidence_json/);
 });
 
+test("processing V3 migration adds stages, capabilities, and hashes", () => {
+  const migration = fs.readFileSync(
+    path.join(__dirname, "../migrations/029_processing_stage_capabilities.js"),
+    "utf8",
+  );
+  assert.match(migration, /CREATE TABLE IF NOT EXISTS document_processing_stages/);
+  assert.match(migration, /search_ready BOOLEAN/);
+  assert.match(migration, /semantic_ready BOOLEAN/);
+  assert.match(migration, /extracted_text_sha256/);
+  assert.match(migration, /embedding_input_sha256/);
+});
+
 test("download failure normalization migration uses download-specific codes", () => {
   const source = fs.readFileSync(
     path.join(
