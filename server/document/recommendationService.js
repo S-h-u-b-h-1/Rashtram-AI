@@ -482,6 +482,14 @@ const getProblemRecommendations = async (userId, payload) => {
     input.topic,
     ...input.states,
   ].filter(Boolean).join(" ");
+  let semanticIds = [];
+  try {
+    semanticIds = (await searchAcrossIndexedDocuments(searchText, Math.max(input.limit * 3, 30)))
+      .map((id) => Number(id))
+      .filter((id) => Number.isSafeInteger(id) && id > 0);
+  } catch (error) {
+    console.warn("Semantic problem recommendation signal unavailable:", error.message);
+  }
   const result = await query(
     `SELECT legacy.*, candidate.state AS schema_state,
        candidate.research_ready, candidate.quality_score,
@@ -499,6 +507,7 @@ const getProblemRecommendations = async (userId, payload) => {
            OR candidate.metadata_json::TEXT ILIKE '%' || $3 || '%'
          )
        ) AS industry_match
+       ,candidate.id = ANY($6::BIGINT[]) AS semantic_match
      FROM documents candidate
      JOIN legislative_documents legacy ON legacy.id = candidate.id
      WHERE candidate.visibility_status = 'public'
@@ -516,8 +525,10 @@ const getProblemRecommendations = async (userId, payload) => {
            candidate.category ILIKE '%' || $3 || '%'
            OR candidate.title ILIKE '%' || $3 || '%'
          ))
+         OR candidate.id = ANY($6::BIGINT[])
        )
-     ORDER BY problem_rank DESC,
+     ORDER BY semantic_match DESC,
+       problem_rank DESC,
        state_match DESC,
        industry_match DESC,
        candidate.quality_score DESC,
@@ -529,6 +540,7 @@ const getProblemRecommendations = async (userId, payload) => {
       input.industry,
       input.documentTypes,
       Math.max(input.limit * 3, 30),
+      semanticIds,
     ],
   );
   const recommendations = result.rows
@@ -538,6 +550,7 @@ const getProblemRecommendations = async (userId, payload) => {
         sameState: Boolean(row.state_match),
         sameCategory: Boolean(row.industry_match),
         titleMatch: Number(row.problem_rank || 0) > 0,
+        semanticMatch: Boolean(row.semantic_match),
         researchReady: true,
         qualityScore: Number(row.quality_score || 0),
         recent:
@@ -554,6 +567,7 @@ const getProblemRecommendations = async (userId, payload) => {
           Number(row.problem_rank || 0) > 0
             ? "its indexed catalogue text matches the problem"
             : "",
+          row.semantic_match ? "its indexed passages are semantically related" : "",
         ].filter(Boolean).join(" and ")}.`,
       };
     })
