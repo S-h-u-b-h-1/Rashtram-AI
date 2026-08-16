@@ -6,6 +6,7 @@ import {
   FileText,
   Link2,
   Loader2,
+  PanelLeftClose,
   Plus,
   Trash2,
   Upload,
@@ -22,6 +23,7 @@ export function StudySourcesPanel({
   onAddUrl,
   onAddPdf,
   onDelete,
+  onCollapse,
 }) {
   const [url, setUrl] = useState("");
   const [adding, setAdding] = useState(false);
@@ -62,14 +64,25 @@ export function StudySourcesPanel({
     <section className="flex h-full min-h-0 flex-col bg-[#f8f6f1]">
       <div className="border-b border-[#8f1d2c]/10 px-4 py-4">
         <div className="flex items-center justify-between gap-2">
-          <div>
-            <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-[#874047]">
-              Sources
-            </p>
-            <h2 className="mt-1 text-lg font-semibold text-[#29312d]">
-              Your study shelf
-            </h2>
-          </div>
+          <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-[#874047]">
+            Sources
+          </p>
+          {onCollapse && (
+            <button
+              type="button"
+              onClick={onCollapse}
+              className="hidden h-8 w-8 place-items-center rounded-lg border border-[#8f1d2c]/12 bg-white text-[#874047] transition hover:bg-[#eee0dc] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#8f1d2c]/30 lg:grid"
+              aria-label="Collapse sources"
+              title="Collapse sources"
+            >
+              <PanelLeftClose className="h-4 w-4" />
+            </button>
+          )}
+        </div>
+        <div className="mt-1 flex items-center justify-between gap-2">
+          <h2 className="text-lg font-semibold text-[#29312d]">
+            Your study shelf
+          </h2>
           <span className="rounded-full bg-[#eee0dc] px-2 py-1 text-[10px] font-bold text-[#8f1d2c]">
             {selectedIds.length} selected
           </span>

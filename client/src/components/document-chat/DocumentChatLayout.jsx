@@ -2,9 +2,7 @@
 
 import {
   Loader2,
-  PanelLeftClose,
   PanelLeftOpen,
-  PanelRightClose,
   PanelRightOpen,
   RefreshCw,
 } from "lucide-react";
@@ -581,6 +579,7 @@ export function DocumentChatLayout({
             onAddUrl={addUrlSource}
             onAddPdf={addPdfSource}
             onDelete={removeStudySource}
+            onCollapse={() => setSourcesOpen(false)}
           />
         </aside>}
         <main id="research-chat" className="flex min-h-0 flex-col">
@@ -590,12 +589,12 @@ export function DocumentChatLayout({
               <p className="mt-1 truncate text-xs text-[#706a61]">Ask questions across the selected sources and this document.</p>
             </div>
             <div className="ml-3 flex shrink-0 items-center gap-1.5">
-              <button type="button" onClick={() => setSourcesOpen((open) => !open)} className="hidden h-8 w-8 place-items-center rounded-lg border border-[#8f1d2c]/12 bg-white text-[#874047] transition hover:bg-[#eee0dc] lg:grid" aria-label={sourcesOpen ? "Collapse sources" : "Expand sources"} title={sourcesOpen ? "Collapse sources" : "Expand sources"}>
-                {sourcesOpen ? <PanelLeftClose className="h-4 w-4" /> : <PanelLeftOpen className="h-4 w-4" />}
-              </button>
-              <button type="button" onClick={() => setStudioOpen((open) => !open)} className="hidden h-8 w-8 place-items-center rounded-lg border border-[#8f1d2c]/12 bg-white text-[#874047] transition hover:bg-[#eee0dc] lg:grid" aria-label={studioOpen ? "Collapse studio" : "Expand studio"} title={studioOpen ? "Collapse studio" : "Expand studio"}>
-                {studioOpen ? <PanelRightClose className="h-4 w-4" /> : <PanelRightOpen className="h-4 w-4" />}
-              </button>
+              {!sourcesOpen && <button type="button" onClick={() => setSourcesOpen(true)} className="hidden h-8 w-8 place-items-center rounded-lg border border-[#8f1d2c]/12 bg-white text-[#874047] transition hover:bg-[#eee0dc] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#8f1d2c]/30 lg:grid" aria-label="Expand sources" title="Expand sources">
+                <PanelLeftOpen className="h-4 w-4" />
+              </button>}
+              {!studioOpen && <button type="button" onClick={() => setStudioOpen(true)} className="hidden h-8 w-8 place-items-center rounded-lg border border-[#8f1d2c]/12 bg-white text-[#874047] transition hover:bg-[#eee0dc] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#8f1d2c]/30 lg:grid" aria-label="Expand research tools" title="Expand research tools">
+                <PanelRightOpen className="h-4 w-4" />
+              </button>}
               <span className="rounded-full border border-[#8f1d2c]/12 bg-white px-2.5 py-1 text-[10px] font-semibold text-[#874047]">{selectedSourceIds.length + (researchReady ? 1 : 0)} sources in context</span>
             </div>
           </div>
@@ -688,6 +687,7 @@ export function DocumentChatLayout({
             onDeleteNote={removeNote}
             disabled={sending || processing}
             onRunWorkflow={runWorkflow}
+            onCollapse={() => setStudioOpen(false)}
           />
         </aside>}
       </div>

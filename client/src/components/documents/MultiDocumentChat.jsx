@@ -3,7 +3,6 @@
 import {
   FileText,
   Loader2,
-  PanelLeftClose,
   PanelLeftOpen,
   PanelRightClose,
   PanelRightOpen,
@@ -227,6 +226,7 @@ export function MultiDocumentChat({
           onAddUrl={addUrlSource}
           onAddPdf={addPdfSource}
           onDelete={removeStudySource}
+          onCollapse={() => setSourcesOpen(false)}
         />
       </aside>}
       <div className="flex min-h-0 min-w-0 flex-col">
@@ -237,8 +237,8 @@ export function MultiDocumentChat({
             <h2 className="mt-2 font-serif text-2xl text-[#8f1d2c]">One conversation, multiple legal records</h2>
           </div>
           <div className="hidden shrink-0 items-center gap-1.5 lg:flex">
-            <button type="button" onClick={() => setSourcesOpen((open) => !open)} className="grid h-8 w-8 place-items-center rounded-lg border border-[#8f1d2c]/12 bg-white text-[#874047] transition hover:bg-[#eee0dc]" aria-label={sourcesOpen ? "Collapse sources" : "Expand sources"} title={sourcesOpen ? "Collapse sources" : "Expand sources"}>{sourcesOpen ? <PanelLeftClose className="h-4 w-4" /> : <PanelLeftOpen className="h-4 w-4" />}</button>
-            <button type="button" onClick={() => setStudioOpen((open) => !open)} className="grid h-8 w-8 place-items-center rounded-lg border border-[#8f1d2c]/12 bg-white text-[#874047] transition hover:bg-[#eee0dc]" aria-label={studioOpen ? "Collapse studio" : "Expand studio"} title={studioOpen ? "Collapse studio" : "Expand studio"}>{studioOpen ? <PanelRightClose className="h-4 w-4" /> : <PanelRightOpen className="h-4 w-4" />}</button>
+            {!sourcesOpen && <button type="button" onClick={() => setSourcesOpen(true)} className="grid h-8 w-8 place-items-center rounded-lg border border-[#8f1d2c]/12 bg-white text-[#874047] transition hover:bg-[#eee0dc]" aria-label="Expand sources" title="Expand sources"><PanelLeftOpen className="h-4 w-4" /></button>}
+            {!studioOpen && <button type="button" onClick={() => setStudioOpen(true)} className="grid h-8 w-8 place-items-center rounded-lg border border-[#8f1d2c]/12 bg-white text-[#874047] transition hover:bg-[#eee0dc]" aria-label="Expand comparison tools" title="Expand comparison tools"><PanelRightOpen className="h-4 w-4" /></button>}
           </div>
         </div>
         <div className="mt-3 flex flex-wrap gap-2">
@@ -293,7 +293,10 @@ export function MultiDocumentChat({
       </div>
       {studioOpen && <aside className="hidden min-h-0 overflow-y-auto border-l border-[#8f1d2c]/10 bg-[#f8f6f1] p-4 lg:block">
         <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-[#874047]">Studio</p>
-        <h3 className="mt-1 text-lg font-semibold text-[#29312d]">Comparison chat</h3>
+        <div className="mt-1 flex items-center justify-between gap-2">
+          <h3 className="text-lg font-semibold text-[#29312d]">Comparison chat</h3>
+          <button type="button" onClick={() => setStudioOpen(false)} className="grid h-8 w-8 shrink-0 place-items-center rounded-lg border border-[#8f1d2c]/12 bg-white text-[#874047] transition hover:bg-[#eee0dc]" aria-label="Collapse comparison tools" title="Collapse comparison tools"><PanelRightClose className="h-4 w-4" /></button>
+        </div>
         <p className="mt-2 text-xs leading-5 text-[#706a61]">Ask for a difference table, implementation risk scan, or a plain-language briefing across the selected records.</p>
         <div className="mt-4 space-y-2">
           {documents.map((document) => (
