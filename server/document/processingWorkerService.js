@@ -1,7 +1,10 @@
 const os = require("node:os");
 const crypto = require("node:crypto");
 const { getPool, query } = require("../db");
-const { assertBulkProcessingSafe } = require("../lib/database/capacity");
+const {
+  assertBulkProcessingSafe,
+  readStorageStatus,
+} = require("../lib/database/capacity");
 const {
   enqueueProcessing,
   normalizeBatchType,
@@ -25,6 +28,101 @@ const isTransientDatabaseError = (error) =>
     .test(String(error?.message || error || ""));
 
 const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+const boundedCapacity = (value) => {
+  const number = Number(value);
+  return Number.isFinite(number) ? Math.max(0, number) : Number.POSITIVE_INFINITY;
+};
+
+const effectiveBatchSize = ({
+  requested,
+  safe,
+  providerCapacity = Number.POSITIVE_INFINITY,
+  workerCapacity = Number.POSITIVE_INFINITY,
+}) => Math.max(
+  0,
+  Math.floor(Math.min(
+    Number(requested) || 0,
+    Number(safe) || 0,
+    boundedCapacity(providerCapacity),
+    boundedCapacity(workerCapacity),
+  )),
+);
+
+const runCapacityBoundedGroups = async ({
+  requested,
+  initialStorage,
+  groupSize = 5,
+  readCapacity,
+  processGroup,
+  logger = console,
+}) => {
+  const initialEffective = effectiveBatchSize({
+    requested,
+    safe: initialStorage.safeBatchSize,
+  });
+  const groups = [];
+  let processed = 0;
+  let latestStorage = initialStorage;
+  let stopReason = null;
+  logger.info?.("Processing capacity plan", {
+    requestedBatchSize: requested,
+    safeBatchSize: initialStorage.safeBatchSize,
+    effectiveBatchSize: initialEffective,
+    capacityBeforeBatch: initialStorage,
+  });
+
+  while (processed < initialEffective) {
+    latestStorage = processed === 0
+      ? initialStorage
+      : await readCapacity();
+    const remaining = initialEffective - processed;
+    const allowed = effectiveBatchSize({
+      requested: Math.min(remaining, groupSize),
+      safe: latestStorage.safeBatchSize,
+    });
+    if (!latestStorage.bulkProcessingAllowed || allowed <= 0) {
+      stopReason = latestStorage.reason || "capacity_guard_reduced_safe_batch_to_zero";
+      logger.warn?.("Processing stopped by capacity guard", {
+        processed,
+        remaining,
+        reason: stopReason,
+        capacityAfterBatch: latestStorage,
+      });
+      break;
+    }
+    if (allowed < Math.min(remaining, groupSize)) {
+      logger.warn?.("Processing group throttled by capacity guard", {
+        requestedGroupSize: Math.min(remaining, groupSize),
+        effectiveGroupSize: allowed,
+        reason: "safe_batch_reduced",
+      });
+    }
+    const result = await processGroup({
+      offset: processed,
+      limit: allowed,
+      storage: latestStorage,
+    });
+    groups.push(result);
+    processed += allowed;
+  }
+
+  if (processed > 0) latestStorage = await readCapacity();
+  logger.info?.("Processing capacity result", {
+    requestedBatchSize: requested,
+    effectiveBatchSize: initialEffective,
+    processedSlots: processed,
+    capacityAfterBatch: latestStorage,
+    stopReason,
+  });
+  return {
+    effectiveBatchSize: initialEffective,
+    processedSlots: processed,
+    groups,
+    latestStorage,
+    stopReason,
+  };
+};
 
 const workerIdentifier = (index = 0) =>
   `${os.hostname()}:${process.pid}:${index}:${crypto
@@ -535,8 +633,30 @@ const runWorkerPool = async (options = {}) => {
 };
 
 const runProcessingBatch = async (options = {}) => {
-  const storage = await assertBulkProcessingSafe(getPool());
-  const maxJobs = clamp(options.limit, 100, 1, 5_000);
+  const readCapacity = options.capacityReader || (() =>
+    readStorageStatus(getPool()));
+  const storage = options.capacityReader
+    ? await options.capacityReader()
+    : await assertBulkProcessingSafe(getPool());
+  const requestedJobs = clamp(options.limit, 100, 1, 5_000);
+  const maxJobs = effectiveBatchSize({
+    requested: requestedJobs,
+    safe: storage.safeBatchSize,
+  });
+  if (maxJobs <= 0) {
+    return {
+      requested: requestedJobs,
+      effective: 0,
+      enqueued: 0,
+      processed: 0,
+      ready: 0,
+      failed: 0,
+      paused: 1,
+      results: [],
+      storage,
+      stopReason: storage.reason || "capacity_guard_reduced_safe_batch_to_zero",
+    };
+  }
   const enqueued = options.resume
     ? { selected: 0, jobs: [] }
     : await enqueueCandidateBatch({
@@ -550,7 +670,8 @@ const runProcessingBatch = async (options = {}) => {
     : enqueued.jobs.map((job) => Number(job.document_id)).filter(Boolean);
   if (options.enqueueOnly) {
     return {
-      requested: maxJobs,
+      requested: requestedJobs,
+      effective: maxJobs,
       enqueued: enqueued.selected,
       processed: 0,
       ready: 0,
@@ -559,15 +680,41 @@ const runProcessingBatch = async (options = {}) => {
       storage,
     };
   }
-  const processed = await runWorkerPool({
-    ...options,
-    maxJobs,
-    allowedDocumentIds,
+  const bounded = await runCapacityBoundedGroups({
+    requested: requestedJobs,
+    initialStorage: storage,
+    groupSize: clamp(options.capacityCheckInterval, 5, 1, 25),
+    readCapacity,
+    processGroup: ({ offset, limit }) => runWorkerPool({
+      ...options,
+      maxJobs: limit,
+      allowedDocumentIds: allowedDocumentIds
+        ? allowedDocumentIds.slice(offset, offset + limit)
+        : null,
+    }),
   });
+  const groupResults = bounded.groups.flatMap((group) => group.results || []);
+  const processed = {
+    concurrency: clamp(
+      options.concurrency,
+      Number(process.env.PROCESSING_CONCURRENCY) || 3,
+      1,
+      8,
+    ),
+    recovered: bounded.groups.reduce((sum, group) => sum + Number(group.recovered || 0), 0),
+    processed: bounded.groups.reduce((sum, group) => sum + Number(group.processed || 0), 0),
+    ready: bounded.groups.reduce((sum, group) => sum + Number(group.ready || 0), 0),
+    failed: bounded.groups.reduce((sum, group) => sum + Number(group.failed || 0), 0),
+    paused: bounded.groups.reduce((sum, group) => sum + Number(group.paused || 0), 0),
+    results: groupResults,
+  };
   return {
-    requested: maxJobs,
+    requested: requestedJobs,
+    effective: bounded.effectiveBatchSize,
     enqueued: enqueued.selected,
     storage,
+    storageAfter: bounded.latestStorage,
+    stopReason: bounded.stopReason,
     ...processed,
   };
 };
@@ -575,7 +722,9 @@ const runProcessingBatch = async (options = {}) => {
 module.exports = {
   claimNextJob,
   enqueueCandidateBatch,
+  effectiveBatchSize,
   recoverStaleJobs,
+  runCapacityBoundedGroups,
   runProcessingBatch,
   runWorkerPool,
 };

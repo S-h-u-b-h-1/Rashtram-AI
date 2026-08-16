@@ -36,7 +36,7 @@ test("database migrations are versioned and ordered", () => {
   assert.ok(files.includes("015_normalize_failure_pipeline_stage.js"));
   assert.ok(files.includes("016_processing_audit_log.js"));
   assert.ok(files.includes("017_normalize_download_failure_codes.js"));
-  assert.equal(files.at(-1), "028_policy_drafts.js");
+  assert.equal(files.at(-1), "029_processing_stage_capabilities.js");
 });
 
 test("dedupe review queue is restored after cleanup dependency verification", () => {

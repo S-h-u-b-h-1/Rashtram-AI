@@ -132,6 +132,7 @@ const getTextArtifact = async (documentId) => {
        summary_json,
        pdf_quality_class,
        pdf_quality_json,
+       extracted_text_sha256,
        updated_at
      FROM document_text_artifacts
      WHERE document_id = $1
@@ -156,6 +157,7 @@ const getTextArtifact = async (documentId) => {
     summarySections: row.summary_json || {},
     pdfQualityClass: row.pdf_quality_class || null,
     pdfQuality: row.pdf_quality_json || {},
+    extractedTextSha256: row.extracted_text_sha256 || null,
     updatedAt: row.updated_at,
   };
 };
@@ -204,6 +206,7 @@ const saveTextArtifact = async (
     metadata = {},
   },
 ) => {
+  const extractedTextSha256 = computeChunkContentHash(originalText);
   await query(
     `INSERT INTO document_text_artifacts (
        document_id,
@@ -219,11 +222,11 @@ const saveTextArtifact = async (
        metadata_json,
        summary_json,
        pdf_quality_class,
-       pdf_quality_json
+       pdf_quality_json, extracted_text_sha256
      )
      VALUES (
        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11::jsonb,
-       $12::jsonb, $13, $14::jsonb
+       $12::jsonb, $13, $14::jsonb, $15
      )
      ON CONFLICT (document_id)
      DO UPDATE SET
@@ -240,6 +243,7 @@ const saveTextArtifact = async (
        summary_json = EXCLUDED.summary_json,
        pdf_quality_class = EXCLUDED.pdf_quality_class,
        pdf_quality_json = EXCLUDED.pdf_quality_json,
+       extracted_text_sha256 = EXCLUDED.extracted_text_sha256,
        updated_at = NOW()`,
     [
       documentId,
@@ -256,6 +260,7 @@ const saveTextArtifact = async (
       JSON.stringify(summaryJson || {}),
       pdfQuality?.qualityClass || null,
       JSON.stringify(pdfQuality || {}),
+      extractedTextSha256,
     ],
   );
   for (const key of contextCache.keys()) {
@@ -541,9 +546,10 @@ const saveNormalizedChunks = async (documentId, chunks, languageCode) => {
       `INSERT INTO document_text_chunks (
          document_id, chunk_index, original_text, translated_text,
          language, token_count, vector_reference, metadata_json,
-         content_hash, embedding_namespace
+         content_hash, embedding_namespace, chunk_sha256,
+         embedding_input_sha256
        )
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb, $9, $10)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb, $9, $10, $9, $11)
        ON CONFLICT (document_id, chunk_index)
        DO UPDATE SET
          original_text = EXCLUDED.original_text,
@@ -554,6 +560,8 @@ const saveNormalizedChunks = async (documentId, chunks, languageCode) => {
          metadata_json = EXCLUDED.metadata_json,
          content_hash = EXCLUDED.content_hash,
          embedding_namespace = EXCLUDED.embedding_namespace,
+         chunk_sha256 = EXCLUDED.chunk_sha256,
+         embedding_input_sha256 = EXCLUDED.embedding_input_sha256,
          updated_at = NOW()`,
       [
         documentId,
@@ -566,12 +574,17 @@ const saveNormalizedChunks = async (documentId, chunks, languageCode) => {
         JSON.stringify(postgresChunkMetadata(chunk.metadata)),
         contentHash,
         currentNamespace,
+        computeChunkContentHash(chunk.embeddingText || content),
       ],
     );
   }
 
   return { unchangedChunkIds, cacheHits, cacheMisses };
 };
+
+const hashChunkSet = (chunks) => computeChunkContentHash(
+  chunks.map((chunk) => computeChunkContentHash(chunk.content)).join(":"),
+);
 
 const loadLocalChunks = async (documentId, limit = 500) => {
   const result = await query(
@@ -988,6 +1001,34 @@ const processDocument = async (documentType, documentId) => {
         },
       });
     }
+    let vectorStorageError = null;
+    let vectorMetrics = { embeddingsMs: 0, pineconeMs: 0 };
+    try {
+      const retryChunks = localChunks.map((chunk, index) => ({
+        ...chunk,
+        id: chunk.id || `${documentType}-${documentId}-chunk-${index}`,
+        [config.idField]: String(documentId),
+        billId: String(documentId),
+        policyId: String(documentId),
+        actId: String(documentId),
+        gazetteId: String(documentId),
+        title: document.title,
+        embeddingText: chunk.content,
+      }));
+      const stored = await config.store(retryChunks, {
+        unchangedChunkIds: new Set(),
+      });
+      vectorMetrics = stored.metrics || vectorMetrics;
+    } catch (error) {
+      vectorStorageError = error;
+      console.warn(
+        `Semantic retry unavailable for document ${documentId}; keeping PostgreSQL lexical readiness: ${error.message}`,
+      );
+    }
+    const chunkSetSha256 = hashChunkSet(localChunks);
+    const embeddingInputSha256 = computeChunkContentHash(
+      localChunks.map((chunk) => chunk.content).join("\n\f\n"),
+    );
     return {
       alreadyProcessed: true,
       summary: summaryResult.summary,
@@ -1003,15 +1044,22 @@ const processDocument = async (documentType, documentId) => {
         indexCheckMs,
         vectorCheckFailed: Boolean(indexCheckError),
         localChunkCount: localChunks.length,
+        embeddingsMs: Number(vectorMetrics.embeddingsMs || 0),
+        pineconeMs: Number(vectorMetrics.pineconeMs || 0),
+        vectorStorageFailed: Boolean(vectorStorageError),
         totalMs: Date.now() - totalStartedAt,
       },
+      chunkSetSha256,
+      embeddingInputSha256,
       usage: {
         estimated: true,
         generationInputTokens: Math.ceil(context.length / 4),
-        generationOutputTokens: Math.ceil(summaryResult.summary.length / 4),
+        generationOutputTokens: summaryResult.summary
+          ? Math.ceil(summaryResult.summary.length / 4)
+          : 0,
         embeddingInputTokens: 0,
         ocrUsed: Boolean(storedArtifact?.ocrUsed),
-        retrievalMode: "local_text",
+        retrievalMode: vectorStorageError ? "local_text" : "hybrid",
         summaryFallback: summaryResult.fallback,
       },
     };
@@ -1142,6 +1190,10 @@ const processDocument = async (documentType, documentId) => {
       sum + Math.ceil(String(chunk.embeddingText || chunk.content).length / 4),
     0,
   );
+  const chunkSetSha256 = hashChunkSet(chunks);
+  const embeddingInputSha256 = computeChunkContentHash(
+    chunks.map((chunk) => chunk.embeddingText || chunk.content).join("\n\f\n"),
+  );
   return {
     alreadyProcessed: false,
     summary,
@@ -1154,6 +1206,10 @@ const processDocument = async (documentType, documentId) => {
     ocrUsed: processed.ocrUsed,
     ocrRequired: processed.ocrRequired,
     pdfQuality: processed.pdfQuality,
+    processedPdfUrl: processed.processedPdfUrl,
+    extractedTextSha256: computeChunkContentHash(processed.originalText),
+    chunkSetSha256,
+    embeddingInputSha256,
     stageMetrics: {
       indexCheckMs,
       ...(processed.stageMetrics || {}),

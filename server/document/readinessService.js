@@ -8,6 +8,12 @@ const {
   retryDecisionForFailure,
   retryDelaySeconds,
 } = require("./sourceRetryPolicy");
+const {
+  recordCompletedPipeline,
+  recordStage,
+  stageForPipelineFailure,
+  syncCapabilities,
+} = require("./processingStageService");
 
 const RETRIABLE_FAILURE_PATTERN =
   /timeout|timed out|429|rate limit|temporar|network|econn|reset|503|502|504|unavailable|dns|enotfound/i;
@@ -262,6 +268,21 @@ const prepareDocument = async (
       readinessReason: "Document processing is in progress.",
     },
   );
+  await recordStage({
+    documentId: document.id,
+    jobId: job.id,
+    stage: "DISCOVERED",
+    status: "completed",
+    outputHash: document.contentFingerprintSha256 || null,
+    metadata: { reason, documentType: document.type },
+  });
+  await recordStage({
+    documentId: document.id,
+    jobId: job.id,
+    stage: "RESOURCE_VERIFIED",
+    status: "running",
+    inputHash: document.contentFingerprintSha256 || null,
+  });
   try {
     const { processDocument } = require("./documentResearchService");
     const result = await processDocument(document.type, document.id);
@@ -333,6 +354,40 @@ const prepareDocument = async (
         readinessClass: "comparison_ready",
       },
     );
+    const semanticReady = retrieval.retrievalMode !== "local_text" &&
+      !result.stageMetrics?.vectorStorageFailed;
+    await recordCompletedPipeline({
+      documentId: document.id,
+      jobId: job.id,
+      result,
+    });
+    await syncCapabilities(document.id, {
+      catalogued: true,
+      resourceReady: true,
+      textReady: true,
+      searchReady: true,
+      semanticReady,
+      chatReady: true,
+      comparisonReady: true,
+    });
+    const resourceHash = result.stageMetrics?.downloadChecksumSha256;
+    const processedUrl = result.stageMetrics?.downloadFinalUrl || result.processedPdfUrl;
+    if (resourceHash && processedUrl) {
+      await query(
+        `UPDATE document_resources
+         SET hash_sha256 = COALESCE(hash_sha256, $3),
+             file_size = COALESCE(file_size, $4),
+             last_checked_at = NOW(), updated_at = NOW()
+         WHERE document_id = $1 AND url IN ($2, $5)`,
+        [
+          document.id,
+          processedUrl,
+          resourceHash,
+          Number(result.pdfQuality?.fileSizeBytes || 0) || null,
+          document.pdfUrl || processedUrl,
+        ],
+      );
+    }
     await query(
       `UPDATE document_processing_jobs
        SET status = 'completed', completed_at = NOW(),
@@ -458,6 +513,16 @@ const prepareDocument = async (
     const effectiveReadinessReason = retryExhausted
       ? `${failure.readinessReason} Retry horizon exhausted; deferred for source review.`
       : failure.readinessReason;
+    await recordStage({
+      documentId: document.id,
+      jobId: job.id,
+      stage: stageForPipelineFailure(failure.pipelineStage || failure.failureStage),
+      status: "failed",
+      failureCategory: failure.failureCode,
+      failureReason: failure.failureReason,
+      retryable: effectiveRetryEligible,
+      metadata: failure.details || {},
+    });
     await DocumentRepository.updateProcessingStatus(
       document.id,
       "failed",
@@ -816,6 +881,55 @@ const runReadinessAudit = async () => {
         document.research_ready IS DISTINCT FROM state.research_ready
         OR document.comparison_ready IS DISTINCT FROM state.comparison_ready
       )
+  `);
+  await query(`
+    UPDATE document_processing_state state
+    SET catalogued = TRUE,
+        resource_ready = EXISTS (
+          SELECT 1 FROM document_resources resource
+          WHERE resource.document_id = state.document_id
+            AND resource.resource_type IN ('pdf', 'text', 'html')
+            AND resource.is_accessible
+        ),
+        text_ready = state.extraction_status = 'ready'
+          AND state.chunks_count > 0,
+        search_ready = state.chunking_status = 'ready'
+          AND state.chunks_count > 0,
+        semantic_ready = state.embedding_status = 'ready'
+          AND state.embeddings_count >= state.chunks_count
+          AND state.chunks_count > 0,
+        chat_ready = state.chunking_status = 'ready'
+          AND state.chunks_count > 0
+          AND state.retrieval_verified,
+        capability_comparison_ready = state.comparison_ready,
+        capabilities_updated_at = NOW(),
+        updated_at = NOW()
+    WHERE ROW(
+      state.catalogued,
+      state.resource_ready,
+      state.text_ready,
+      state.search_ready,
+      state.semantic_ready,
+      state.chat_ready,
+      state.capability_comparison_ready
+    ) IS DISTINCT FROM ROW(
+      TRUE,
+      EXISTS (
+        SELECT 1 FROM document_resources resource
+        WHERE resource.document_id = state.document_id
+          AND resource.resource_type IN ('pdf', 'text', 'html')
+          AND resource.is_accessible
+      ),
+      state.extraction_status = 'ready' AND state.chunks_count > 0,
+      state.chunking_status = 'ready' AND state.chunks_count > 0,
+      state.embedding_status = 'ready'
+        AND state.embeddings_count >= state.chunks_count
+        AND state.chunks_count > 0,
+      state.chunking_status = 'ready'
+        AND state.chunks_count > 0
+        AND state.retrieval_verified,
+      state.comparison_ready
+    )
   `);
   const sanitizedFailures = await query(`
     WITH unsafe AS (

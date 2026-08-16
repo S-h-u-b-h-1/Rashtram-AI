@@ -468,7 +468,10 @@ const initializeSchema = async () => {
     ALTER TABLE document_text_artifacts
       ADD CONSTRAINT document_text_artifacts_extraction_method_check
       CHECK (
-        extraction_method IN ('pdf_text', 'gemini_ocr', 'openai_ocr', 'source_html')
+        extraction_method IN (
+          'pdf_text', 'pdf_text_with_page_ocr', 'gemini_ocr', 'openai_ocr',
+          'source_html', 'local_text_chunks'
+        )
       );
 
     CREATE TABLE IF NOT EXISTS source_collection_snapshots (

@@ -20,10 +20,11 @@ const ocrBreaker = createCircuitBreaker("ocr", {
 });
 
 class PDFProcessor {
-  constructor({ ocrExtractor } = {}) {
+  constructor({ ocrExtractor, pageBufferExtractor } = {}) {
     this.chunkSize = 4500;
     this.overlap = 450;
     this.ocrExtractor = ocrExtractor;
+    this.pageBufferExtractor = pageBufferExtractor;
     this.openAIClientPromise = null;
   }
 
@@ -68,7 +69,7 @@ class PDFProcessor {
     return String(text || "")
       .normalize("NFC")
       .replace(/\u00ad/g, "")
-      .replace(/[\x00-\x08\x0b\x0c\x0e-\x1f\x7f-\x9f]/g, "")
+      .replace(/[\x00-\x08\x0b\x0e-\x1f\x7f-\x9f]/g, "")
       .replace(/[ \t]+/g, " ")
       .replace(/\s+([\u093a-\u094d\u0951-\u0957])/gu, "$1")
       .replace(/([क-ह])\s+([़])/gu, "$1$2")
@@ -115,14 +116,14 @@ class PDFProcessor {
           )
           .join("\n"),
       )
-      .join("\n\n");
+      .join("\f");
   }
 
   cleanText(text, languageCode = "und") {
     const normalized = this.cleanPageArtifacts(text)
       .normalize("NFC")
       .replace(/\u00ad/g, "")
-      .replace(/[\x00-\x08\x0b\x0c\x0e-\x1f\x7f-\x9f]/g, "")
+      .replace(/[\x00-\x08\x0b\x0e-\x1f\x7f-\x9f]/g, "")
       .replace(/\r\n?/g, "\n")
       .replace(/[ \t]+/g, " ")
       .replace(/\n[ \t]+/g, "\n")
@@ -139,6 +140,32 @@ class PDFProcessor {
     const letters = (value.match(LETTER_PATTERN) || []).length;
     const requiredLetters = Math.max(80, Number(numPages || 1) * 25);
     return letters >= requiredLetters;
+  }
+
+  pageExtractionQuality(text) {
+    const value = String(text || "");
+    const characters = value.length;
+    const nonWhitespace = (value.match(/\S/gu) || []).length;
+    const printable = (value.match(/[\p{L}\p{M}\p{N}\p{P}\p{S}\s]/gu) || []).length;
+    const alphabetic = (value.match(LETTER_PATTERN) || []).length;
+    const replacements = (value.match(/\uFFFD/gu) || []).length;
+    const words = value.trim() ? value.trim().split(/\s+/u).length : 0;
+    const printableRatio = characters ? printable / characters : 0;
+    const alphabeticRatio = nonWhitespace ? alphabetic / nonWhitespace : 0;
+    const replacementRatio = characters ? replacements / characters : 0;
+    const usable = alphabetic >= 40 && printableRatio >= 0.85 &&
+      alphabeticRatio >= 0.25 && replacementRatio <= 0.02 && words >= 8;
+    return {
+      characters,
+      nonWhitespace,
+      alphabetic,
+      words,
+      printableRatio: Number(printableRatio.toFixed(3)),
+      alphabeticRatio: Number(alphabeticRatio.toFixed(3)),
+      replacementRatio: Number(replacementRatio.toFixed(3)),
+      nativeTextAvailable: characters > 0,
+      usable,
+    };
   }
 
   classifyPdfQuality({
@@ -285,13 +312,44 @@ class PDFProcessor {
   }
 
   async parsePDFBuffer(buffer) {
-    const pdfData = await pdf(buffer);
+    const pages = [];
+    const pagerender = async (pageData) => {
+      const content = await pageData.getTextContent({
+        normalizeWhitespace: false,
+        disableCombineTextItems: false,
+      });
+      let previousY = null;
+      let pageText = "";
+      for (const item of content.items || []) {
+        const y = item.transform?.[5];
+        if (previousY != null && y !== previousY) pageText += "\n";
+        else if (pageText && !pageText.endsWith("\n")) pageText += " ";
+        pageText += item.str || "";
+        previousY = y;
+      }
+      pages.push(pageText);
+      return pageText;
+    };
+    const pdfData = await pdf(buffer, { pagerender });
     return {
-      fullText: pdfData.text || "",
+      fullText: pages.length ? pages.join("\f") : pdfData.text || "",
+      pages,
       numPages: pdfData.numpages || 0,
       info: pdfData.info,
       metadata: pdfData.metadata,
     };
+  }
+
+  async extractSinglePageBuffer(buffer, pageIndex) {
+    if (this.pageBufferExtractor) {
+      return this.pageBufferExtractor(buffer, pageIndex);
+    }
+    const { PDFDocument } = require("pdf-lib");
+    const source = await PDFDocument.load(buffer, { ignoreEncryption: false });
+    const target = await PDFDocument.create();
+    const [page] = await target.copyPages(source, [pageIndex]);
+    target.addPage(page);
+    return Buffer.from(await target.save({ useObjectStreams: true }));
   }
 
   async getOpenAI() {
@@ -492,8 +550,36 @@ class PDFProcessor {
     let ocrUsed = false;
     let ocrRequired = false;
     let ocrMs = 0;
+    let pageExtraction = (native.pages || []).map((text, index) => ({
+      page: index + 1,
+      method: "native",
+      ...this.pageExtractionQuality(text),
+    }));
+    const unusablePages = pageExtraction
+      .filter((page) => !page.usable)
+      .map((page) => page.page - 1);
 
-    if (!this.hasUsableText(fullText, native.numPages)) {
+    if (unusablePages.length > 0 && unusablePages.length < native.numPages) {
+      ocrRequired = true;
+      const ocrStartedAt = Date.now();
+      const mergedPages = [...native.pages];
+      for (const pageIndex of unusablePages) {
+        const pageBuffer = await this.extractSinglePageBuffer(buffer, pageIndex);
+        const ocrText = await this.extractTextWithOcr(pageBuffer);
+        if (this.hasUsableText(ocrText, 1)) {
+          mergedPages[pageIndex] = ocrText;
+          pageExtraction[pageIndex] = {
+            page: pageIndex + 1,
+            method: "ocr",
+            ...this.pageExtractionQuality(ocrText),
+          };
+        }
+      }
+      fullText = mergedPages.join("\f");
+      ocrMs = Date.now() - ocrStartedAt;
+      extractionMethod = "pdf_text_with_page_ocr";
+      ocrUsed = pageExtraction.some((page) => page.method === "ocr");
+    } else if (!this.hasUsableText(fullText, native.numPages)) {
       ocrRequired = true;
       const ocrStartedAt = Date.now();
       fullText = await this.extractTextWithOcr(buffer);
@@ -503,6 +589,11 @@ class PDFProcessor {
           ? "openai_ocr"
           : "gemini_ocr";
       ocrUsed = true;
+      pageExtraction = [{
+        page: 1,
+        method: "ocr_document_fallback",
+        ...this.pageExtractionQuality(fullText),
+      }];
     }
     if (!this.hasUsableText(fullText, native.numPages)) {
       const error = new Error(
@@ -523,6 +614,9 @@ class PDFProcessor {
       ocrUsed,
       language,
     });
+    pdfQuality.pageExtraction = pageExtraction;
+    pdfQuality.nativePages = pageExtraction.filter((page) => page.method === "native").length;
+    pdfQuality.ocrPages = pageExtraction.filter((page) => page.method === "ocr").length;
     return {
       ...native,
       fullText: cleanedText,

@@ -2,6 +2,7 @@ const { query } = require("../db");
 const DocumentRepository = require("./DocumentRepository");
 const { isExtractableSourceDocument } = require("./documentResearchService");
 const { FAILURE_CODES } = require("./failureTaxonomy");
+const { deriveCapabilities } = require("./processingStageService");
 
 const READY_STATUSES = new Set(["ready"]);
 const PROCESSING_STATUSES = new Set(["queued", "processing", "running"]);
@@ -156,12 +157,25 @@ const getDocumentReadiness = async (documentId) => {
     processableBySource &&
     !processing &&
     !terminalSourceOnlyFailure;
+  const capabilities = deriveCapabilities({
+    catalogued: true,
+    resourceReady: processableBySource,
+    textReady: extractionReady && hasChunks,
+    chunksCount: chunkCount,
+    lexicalReady: hasLocalTextRetrieval,
+    semanticReady: hasVectorRetrieval,
+    retrievalVerified: Boolean(
+      hasRetrieval && (document.retrievalVerified || hasLocalTextRetrieval),
+    ),
+    comparisonEligible: genuinelyReady,
+  });
 
   return {
     documentId: document.id,
     status,
     researchReady: genuinelyReady,
     comparisonReady: genuinelyReady,
+    capabilities,
     canPrepare,
     reasonCode,
     reason,

@@ -111,4 +111,8 @@ module.exports = [
     name: "028_policy_drafts.js",
     migration: require("./028_policy_drafts"),
   },
+  {
+    name: "029_processing_stage_capabilities.js",
+    migration: require("./029_processing_stage_capabilities"),
+  },
 ];
