@@ -209,6 +209,37 @@ export const getDocumentResearch = async (documentType, documentId) => {
   );
 };
 
+export const getResearchSources = async () =>
+  apiRequest("/research-sources");
+
+export const addResearchUrlSource = async (url) =>
+  apiRequest("/research-sources/url", {
+    method: "POST",
+    body: JSON.stringify({ url }),
+  });
+
+export const addResearchPdfSource = async (file) => {
+  const contentBase64 = await new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || "").split(",").pop() || "");
+    reader.onerror = () => reject(new Error("The PDF could not be read."));
+    reader.readAsDataURL(file);
+  });
+  return apiRequest("/research-sources/upload", {
+    method: "POST",
+    body: JSON.stringify({
+      fileName: file.name,
+      mimeType: file.type || "application/pdf",
+      contentBase64,
+    }),
+  });
+};
+
+export const deleteResearchSource = async (sourceId) =>
+  apiRequest(`/research-sources/${encodeURIComponent(sourceId)}`, {
+    method: "DELETE",
+  });
+
 export const fetchDocuments = async (options = {}) => {
   // Keep transport-only options out of the query string.  In particular,
   // DocumentExplorer passes an AbortSignal so a newer filter/search request
@@ -350,6 +381,7 @@ export const sendCrossDocumentChat = async (
     onChunk,
     responseLanguage = "English",
     comparisonId = null,
+    sourceIds = [],
     signal,
   },
 ) => {
@@ -369,6 +401,7 @@ export const sendCrossDocumentChat = async (
       documentIds,
       responseLanguage,
       comparisonId,
+      sourceIds,
     }),
     signal,
   });
@@ -531,6 +564,7 @@ export const sendDocumentChatMessage = async (
     documentId,
     onChunk,
     responseLanguage = "English",
+    sourceIds = [],
     workflow,
     signal,
   },
@@ -551,6 +585,7 @@ export const sendDocumentChatMessage = async (
       documentType,
       documentId,
       responseLanguage,
+      sourceIds,
       workflow,
     }),
     signal,

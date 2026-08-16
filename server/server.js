@@ -31,6 +31,7 @@ const contactRouter = require("./contact/route");
 const internalCronRouter = require("./internal/cronRoute");
 const recommendationsRouter = require("./recommendation/recommendationsRoute");
 const graphRouter = require("./graph/route");
+const researchSourceRouter = require("./research/sourceRoute");
 const { connectDB } = require("./db");
 const { validateAIProvider } = require("./lib/vectordb");
 const cors = require("cors");
@@ -78,7 +79,7 @@ app.use(
   })
 );
 
-app.use(express.json({ limit: "10mb" }));
+app.use(express.json({ limit: "28mb" }));
 app.use(express.urlencoded({ extended: true }));
 
 app.get("/favicon.ico", (req, res) => {
@@ -115,6 +116,7 @@ app.use("/api/document-chat", fetchUser, documentChatRouter);
 app.use("/api/documents", fetchUser, documentsRouter);
 app.use("/api/recommendations", fetchUser, recommendationsRouter);
 app.use("/api/graph", graphRouter);
+app.use("/api/research-sources", fetchUser, researchSourceRouter);
 app.use("/api/dashboard", dashboardRouter);
 app.use("/api/profile", profileRouter);
 app.use("/api/onboarding", onboardingRouter);

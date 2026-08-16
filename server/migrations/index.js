@@ -103,4 +103,8 @@ module.exports = [
     name: "026_restore_dedupe_candidates.js",
     migration: require("./026_restore_dedupe_candidates"),
   },
+  {
+    name: "027_research_sources.js",
+    migration: require("./027_research_sources"),
+  },
 ];

@@ -11,6 +11,10 @@ import {
   exportDocumentChat,
   getDocumentChatHistory,
   getDocumentResearch,
+  getResearchSources,
+  addResearchUrlSource,
+  addResearchPdfSource,
+  deleteResearchSource,
   pinDocumentChat,
   processDocumentResearch,
   saveContent,
@@ -23,8 +27,8 @@ import { canPrepareDocumentForResearch } from "@/lib/document-readiness";
 import { ChatHeader } from "./ChatHeader";
 import { ChatHistory } from "./ChatHistory";
 import { ChatInput } from "./ChatInput";
-import { ChatSidebar } from "./ChatSidebar";
-import { ResearchWorkflowPanel } from "./ResearchWorkflowPanel";
+import { StudySourcesPanel } from "./StudySourcesPanel";
+import { StudioPanel } from "./StudioPanel";
 import { SuggestedQuestions } from "./SuggestedQuestions";
 import { useSmoothMessageStream } from "@/hooks/useSmoothMessageStream";
 import { usePinnedChatScroll } from "@/hooks/usePinnedChatScroll";
@@ -78,6 +82,8 @@ export function DocumentChatLayout({
   const [isPinned, setIsPinned] = useState(false);
   const [error, setError] = useState("");
   const [responseLanguage, setResponseLanguage] = useState("Auto");
+  const [studySources, setStudySources] = useState([]);
+  const [selectedSourceIds, setSelectedSourceIds] = useState([]);
   const abortControllerRef = useRef(null);
   const smoothStream = useSmoothMessageStream(setMessages);
   const {
@@ -158,8 +164,12 @@ export function DocumentChatLayout({
       try {
         setLoading(true);
         setError("");
-        const detail = await getDocumentResearch(documentType, documentId);
+        const [detail, sourceResponse] = await Promise.all([
+          getDocumentResearch(documentType, documentId),
+          getResearchSources().catch(() => ({ sources: [] })),
+        ]);
         if (cancelled) return;
+        setStudySources(sourceResponse.sources || []);
         const canonical = {
           ...(initialDocument || {}),
           ...(detail.document || {}),
@@ -247,7 +257,8 @@ export function DocumentChatLayout({
 
   const submitQuestion = async (question, options = {}) => {
     const text = String(question || input).trim();
-    if (!text || sending || !researchReady) return;
+    const chatEnabled = researchReady || selectedSourceIds.length > 0;
+    if (!text || sending || !chatEnabled) return;
     const displayText = String(options.displayText || text).trim();
     const workflow = options.workflow || null;
     const userMessage = {
@@ -304,6 +315,7 @@ export function DocumentChatLayout({
         documentType,
         documentId,
         responseLanguage,
+        sourceIds: selectedSourceIds,
         workflow: workflow
           ? {
               id: workflow.id,
@@ -458,6 +470,32 @@ export function DocumentChatLayout({
     ).catch(() => undefined);
   };
 
+  const addUrlSource = async (url) => {
+    const result = await addResearchUrlSource(url);
+    const source = result.source;
+    setStudySources((current) => [source, ...current.filter((item) => item.id !== source.id)]);
+    setSelectedSourceIds((current) => current.includes(String(source.id)) ? current : [...current, String(source.id)]);
+  };
+
+  const addPdfSource = async (file) => {
+    const result = await addResearchPdfSource(file);
+    const source = result.source;
+    setStudySources((current) => [source, ...current.filter((item) => item.id !== source.id)]);
+    setSelectedSourceIds((current) => current.includes(String(source.id)) ? current : [...current, String(source.id)]);
+  };
+
+  const toggleStudySource = (sourceId) => {
+    setSelectedSourceIds((current) => current.includes(String(sourceId))
+      ? current.filter((id) => id !== String(sourceId))
+      : [...current, String(sourceId)]);
+  };
+
+  const removeStudySource = async (sourceId) => {
+    await deleteResearchSource(sourceId);
+    setStudySources((current) => current.filter((source) => String(source.id) !== String(sourceId)));
+    setSelectedSourceIds((current) => current.filter((id) => id !== String(sourceId)));
+  };
+
   if (loading) {
     return (
       <div className="grid h-dvh place-items-center bg-[#e9e3da]">
@@ -492,6 +530,8 @@ export function DocumentChatLayout({
       : QUESTIONS[documentType] || QUESTIONS.default;
   const canPrepareCurrentDocument = canPrepareDocumentForResearch(document);
 
+  const chatEnabled = researchReady || selectedSourceIds.length > 0;
+
   return (
     <div className="flex h-dvh flex-col overflow-hidden bg-[#e9e3da]">
       <ChatHeader
@@ -523,22 +563,52 @@ export function DocumentChatLayout({
           )}
         </div>
       )}
-      <details className="shrink-0 border-b border-[#8f1d2c]/8 bg-[#f7f2eb] xl:hidden">
-        <summary className="cursor-pointer px-4 py-3 text-xs font-semibold text-[#874047]">
-          Document brief, sources, relationships, and notes
-        </summary>
-        <div className="app-scrollbar max-h-[55vh] overflow-y-auto p-4">
-          <ChatSidebar
-            document={document}
-            summary={summary}
-            notes={notes}
-            onAddNote={addNote}
-            onDeleteNote={removeNote}
+      <div className="grid min-h-0 flex-1 lg:grid-cols-[280px_minmax(0,1fr)_340px]">
+        <aside className="hidden min-h-0 overflow-hidden border-r border-[#8f1d2c]/10 lg:block">
+          <StudySourcesPanel
+            sources={studySources}
+            selectedIds={selectedSourceIds}
+            onToggle={toggleStudySource}
+            onAddUrl={addUrlSource}
+            onAddPdf={addPdfSource}
+            onDelete={removeStudySource}
           />
-        </div>
-      </details>
-      <div className="grid min-h-0 flex-1 xl:grid-cols-[minmax(0,1fr)_380px]">
+        </aside>
         <main id="research-chat" className="flex min-h-0 flex-col">
+          <div className="flex shrink-0 items-center justify-between border-b border-[#8f1d2c]/8 bg-[#f7f2eb] px-4 py-3 sm:px-6">
+            <div>
+              <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-[#874047]">Chat</p>
+              <p className="mt-1 text-xs text-[#706a61]">Ask questions across the selected sources and this document.</p>
+            </div>
+            <span className="rounded-full border border-[#8f1d2c]/12 bg-white px-2.5 py-1 text-[10px] font-semibold text-[#874047]">{selectedSourceIds.length + (researchReady ? 1 : 0)} sources in context</span>
+          </div>
+          <details className="shrink-0 border-b border-[#8f1d2c]/8 bg-[#f7f2eb] lg:hidden">
+            <summary className="cursor-pointer px-4 py-3 text-xs font-semibold text-[#874047]">Sources and study context</summary>
+            <div className="max-h-[55vh] overflow-hidden">
+              <StudySourcesPanel
+                sources={studySources}
+                selectedIds={selectedSourceIds}
+                onToggle={toggleStudySource}
+                onAddUrl={addUrlSource}
+                onAddPdf={addPdfSource}
+                onDelete={removeStudySource}
+              />
+            </div>
+          </details>
+          <details className="shrink-0 border-b border-[#8f1d2c]/8 bg-[#f7f2eb] lg:hidden">
+            <summary className="cursor-pointer px-4 py-3 text-xs font-semibold text-[#874047]">Studio and research outputs</summary>
+            <div className="max-h-[60vh] overflow-hidden">
+              <StudioPanel
+                document={document}
+                summary={summary}
+                notes={notes}
+                onAddNote={addNote}
+                onDeleteNote={removeNote}
+                disabled={sending || processing}
+                onRunWorkflow={runWorkflow}
+              />
+            </div>
+          </details>
           {!researchReady && !processing && (
             <div className="border-b border-[#8f1d2c]/8 bg-[#fffaf0] px-4 py-3 text-xs text-[#706a61]">
               <p className="font-semibold text-[#8f1d2c]">
@@ -568,15 +638,6 @@ export function DocumentChatLayout({
             onScroll={handleScroll}
             className="paper-grid app-scrollbar flex-1 overflow-y-auto p-4 sm:p-6"
           >
-            {researchReady && (
-              <div className="mb-4 overflow-hidden rounded-[1.5rem] shadow-sm">
-                <ResearchWorkflowPanel
-                  document={document}
-                  disabled={sending || processing}
-                  onRunWorkflow={runWorkflow}
-                />
-              </div>
-            )}
             <ChatHistory
               messages={messages}
               messagesEndRef={messagesEndRef}
@@ -585,14 +646,14 @@ export function DocumentChatLayout({
           </div>
           <SuggestedQuestions
             questions={suggestedQuestions}
-            disabled={!researchReady || sending}
+            disabled={!chatEnabled || sending}
             onSelect={(question) => submitQuestion(question)}
           />
           <ChatInput
             input={input}
             setInput={setInput}
             sending={sending}
-            disabled={!researchReady}
+            disabled={!chatEnabled}
             onSend={submitQuestion}
             onStop={stopGeneration}
             onRegenerate={regenerate}
@@ -601,13 +662,15 @@ export function DocumentChatLayout({
             onResponseLanguageChange={setResponseLanguage}
           />
         </main>
-        <aside className="app-scrollbar hidden overflow-y-auto border-l border-[#8f1d2c]/8 bg-[#f7f2eb] p-5 xl:block">
-          <ChatSidebar
+        <aside className="hidden min-h-0 overflow-hidden border-l border-[#8f1d2c]/10 lg:block">
+          <StudioPanel
             document={document}
             summary={summary}
             notes={notes}
             onAddNote={addNote}
             onDeleteNote={removeNote}
+            disabled={sending || processing}
+            onRunWorkflow={runWorkflow}
           />
         </aside>
       </div>

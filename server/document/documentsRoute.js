@@ -25,6 +25,7 @@ const {
   getComparisonRecommendations,
   getDocumentRecommendations,
 } = require("./recommendationService");
+const { getSourceContext } = require("../research/sourceService");
 const {
   enqueueProcessing,
   prepareDocument,
@@ -226,6 +227,9 @@ router.post("/chat", generationLimiter, async (req, res) => {
   try {
     const ids = normalizeChatIds(req.body.documentIds);
     const message = String(req.body.message || "").trim();
+    const sourceIds = Array.isArray(req.body.sourceIds)
+      ? req.body.sourceIds.slice(0, 20)
+      : [];
     if (!ids.length || !message) {
       return res.status(400).json({
         error: "A message and one to five document IDs are required.",
@@ -267,25 +271,36 @@ router.post("/chat", generationLimiter, async (req, res) => {
         pdfUrl: document.pdfUrl,
       })),
     );
+    const userSourceContext = await getSourceContext(
+      req.user.id,
+      sourceIds,
+      message,
+    );
     const context = sources
       .map(
         (source) =>
           `[Passage ${source.passage}] ${source.documentTitle}\n${compactText(source.content, 1_000)}`,
       )
       .join("\n\n");
+    const combinedContext = [
+      context,
+      userSourceContext.context,
+    ].filter(Boolean).join("\n\n");
     const briefContext = passageGroups
       .map(({ document, textArtifact }) =>
         buildDocumentBriefContext(document, textArtifact),
       )
       .filter(Boolean)
       .join("\n\n");
-    if (!context) {
+    if (!combinedContext) {
       const error = new Error(
         "No indexed passages are available for the selected documents.",
       );
       error.status = 422;
       throw error;
     }
+
+    userSourceContext.sources.forEach((source) => sources.push(source));
 
     startSSE(res);
     sendSSE(res, {
@@ -302,6 +317,7 @@ router.post("/chat", generationLimiter, async (req, res) => {
       metadata: {
         grounded: true,
         documentCount: documents.length,
+        selectedSourceCount: userSourceContext.sources.length,
       },
     });
     const responseLanguage = req.body.responseLanguage || "Auto";
@@ -309,7 +325,7 @@ router.post("/chat", generationLimiter, async (req, res) => {
     let generationMode = "ai";
     let providerError = null;
     try {
-      const stream = await generateResponse(message, [briefContext, context].filter(Boolean).join("\n\n"), {
+      const stream = await generateResponse(message, [briefContext, combinedContext].filter(Boolean).join("\n\n"), {
         responseLanguage,
       });
       for await (const chunk of stream) {

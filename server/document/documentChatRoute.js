@@ -19,6 +19,7 @@ const {
 } = require("./readinessService");
 const { getDocumentReadiness } = require("./readinessContract");
 const DocumentRepository = require("./DocumentRepository");
+const { getSourceContext } = require("../research/sourceService");
 const {
   completeSSE,
   errorSSE,
@@ -430,6 +431,9 @@ router.post("/", generationLimiter, async (req, res) => {
           group: String(req.body.workflow.group || "").slice(0, 80),
         }
       : null;
+    const sourceIds = Array.isArray(req.body.sourceIds)
+      ? req.body.sourceIds.slice(0, 20)
+      : [];
     const [passages, relationshipContext, document, textArtifact] = await Promise.all([
       retrievePassages(
         documentType,
@@ -441,6 +445,11 @@ router.post("/", generationLimiter, async (req, res) => {
       DocumentRepository.getById(documentId),
       getTextArtifact(documentId),
     ]);
+    const userSourceContext = await getSourceContext(
+      req.user.id,
+      sourceIds,
+      message,
+    );
     const briefContext = buildBriefContext(document, textArtifact);
     const passageContext = passages
       .map((item) => {
@@ -468,6 +477,9 @@ router.post("/", generationLimiter, async (req, res) => {
       relationshipContext.context
         ? `Government knowledge graph:\n${relationshipContext.context}`
         : "",
+      userSourceContext.context
+        ? `Researcher-selected sources:\n${userSourceContext.context}`
+        : "",
     ].filter(Boolean).join("\n\n");
     const sources = [
       ...passages.map((item) => ({
@@ -483,6 +495,7 @@ router.post("/", generationLimiter, async (req, res) => {
         content: item.content.slice(0, 360),
       })),
       ...relationshipContext.sources,
+      ...userSourceContext.sources,
     ];
 
     startSSE(res);
@@ -496,6 +509,7 @@ router.post("/", generationLimiter, async (req, res) => {
         passageCount: passages.length,
         graphSourceCount: relationshipContext.sources.length,
         graphGrounded: relationshipContext.graphGrounded,
+        selectedSourceCount: userSourceContext.sources.length,
         workflow,
       },
     });
