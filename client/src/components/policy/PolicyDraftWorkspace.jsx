@@ -7,6 +7,10 @@ import {
   Check,
   FileText,
   Loader2,
+  PanelLeftClose,
+  PanelLeftOpen,
+  PanelRightClose,
+  PanelRightOpen,
   PenLine,
   Search,
   Sparkles,
@@ -43,6 +47,8 @@ export function PolicyDraftWorkspace() {
   const [drafting, setDrafting] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [sourcesOpen, setSourcesOpen] = useState(true);
+  const [libraryOpen, setLibraryOpen] = useState(true);
 
   useEffect(() => {
     let active = true;
@@ -138,11 +144,11 @@ export function PolicyDraftWorkspace() {
     </section>
   );
 
-  return <div className="grid min-h-[calc(100dvh-8rem)] overflow-hidden rounded-[1.5rem] border border-[#8f1d2c]/10 bg-[#f7f2eb] shadow-sm lg:grid-cols-[280px_minmax(0,1fr)_320px]">
-    <aside className="hidden min-h-0 overflow-hidden border-r border-[#8f1d2c]/10 lg:block"><StudySourcesPanel sources={sources} selectedIds={selectedSourceIds} onToggle={toggleSource} onAddUrl={async (url) => addSource((await addResearchUrlSource(url)).source)} onAddPdf={async (file) => addSource((await addResearchPdfSource(file)).source)} onDelete={async (id) => { await deleteResearchSource(id); setSources((current) => current.filter((source) => String(source.id) !== String(id))); setSelectedSourceIds((current) => current.filter((sourceId) => sourceId !== String(id))); }} /></aside>
+  return <div className={`grid min-h-[calc(100dvh-8rem)] overflow-hidden rounded-[1.5rem] border border-[#8f1d2c]/10 bg-[#f7f2eb] shadow-sm ${sourcesOpen && libraryOpen ? "lg:grid-cols-[280px_minmax(0,1fr)_320px]" : sourcesOpen ? "lg:grid-cols-[280px_minmax(0,1fr)]" : libraryOpen ? "lg:grid-cols-[minmax(0,1fr)_320px]" : "lg:grid-cols-1"}`}>
+    {sourcesOpen && <aside className="hidden min-h-0 overflow-hidden border-r border-[#8f1d2c]/10 lg:block"><StudySourcesPanel sources={sources} selectedIds={selectedSourceIds} onToggle={toggleSource} onAddUrl={async (url) => addSource((await addResearchUrlSource(url)).source)} onAddPdf={async (file) => addSource((await addResearchPdfSource(file)).source)} onDelete={async (id) => { await deleteResearchSource(id); setSources((current) => current.filter((source) => String(source.id) !== String(id))); setSelectedSourceIds((current) => current.filter((sourceId) => sourceId !== String(id))); }} /></aside>}
     <main className="app-scrollbar min-h-0 overflow-y-auto p-4 sm:p-6">
       <div className="mx-auto max-w-3xl">
-        <div className="flex items-start gap-3"><span className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-[#8f1d2c] text-white"><PenLine className="h-5 w-5" /></span><div><p className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#874047]">Policy drafting studio</p><h1 className="mt-1 font-serif text-3xl text-[#8f1d2c]">Draft from evidence, not a blank page</h1><p className="mt-2 max-w-2xl text-sm leading-6 text-[#706a61]">Bring together Rashtram documents, public research, and your own PDFs or links. The draft keeps evidence and recommendations clearly separated.</p></div></div>
+        <div className="flex items-start gap-3"><span className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-[#8f1d2c] text-white"><PenLine className="h-5 w-5" /></span><div className="min-w-0 flex-1"><p className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#874047]">Policy drafting studio</p><h1 className="mt-1 font-serif text-3xl text-[#8f1d2c]">Draft from evidence, not a blank page</h1><p className="mt-2 max-w-2xl text-sm leading-6 text-[#706a61]">Bring together Rashtram documents, public research, and your own PDFs or links. The draft keeps evidence and recommendations clearly separated.</p></div><div className="hidden shrink-0 items-center gap-1.5 lg:flex"><button type="button" onClick={() => setSourcesOpen((open) => !open)} className="grid h-8 w-8 place-items-center rounded-lg border border-[#8f1d2c]/12 bg-white text-[#874047] transition hover:bg-[#eee0dc]" aria-label={sourcesOpen ? "Collapse sources" : "Expand sources"} title={sourcesOpen ? "Collapse sources" : "Expand sources"}>{sourcesOpen ? <PanelLeftClose className="h-4 w-4" /> : <PanelLeftOpen className="h-4 w-4" />}</button><button type="button" onClick={() => setLibraryOpen((open) => !open)} className="grid h-8 w-8 place-items-center rounded-lg border border-[#8f1d2c]/12 bg-white text-[#874047] transition hover:bg-[#eee0dc]" aria-label={libraryOpen ? "Collapse policy references" : "Expand policy references"} title={libraryOpen ? "Collapse policy references" : "Expand policy references"}>{libraryOpen ? <PanelRightClose className="h-4 w-4" /> : <PanelRightOpen className="h-4 w-4" />}</button></div></div>
         <div className="mt-5 flex flex-wrap gap-2 text-[10px] font-semibold text-[#874047]"><span className="rounded-full bg-[#eee0dc] px-3 py-1.5">{selectedDocumentIds.length + selectedSourceIds.length} sources selected</span><span className="rounded-full bg-[#e9eee7] px-3 py-1.5">Citations retained</span><span className="rounded-full bg-[#eee7f3] px-3 py-1.5">Government and independent research labelled</span></div>
         <form onSubmit={handleDraft} className="mt-6 space-y-4 rounded-3xl border border-[#8f1d2c]/10 bg-white p-4 shadow-sm sm:p-6">
           <div><label className="mb-1.5 block text-xs font-semibold text-[#514d46]" htmlFor="draft-title">Working title <span className="font-normal text-[#8a8277]">(optional)</span></label><input id="draft-title" value={brief.title} onChange={(event) => updateBrief("title", event.target.value)} className={fieldClass} placeholder="For example: National urban heat resilience policy" /></div>
@@ -156,7 +162,7 @@ export function PolicyDraftWorkspace() {
         {citations.length > 0 && <section className="mt-5 rounded-3xl border border-[#8f1d2c]/10 bg-white p-4 sm:p-6"><div className="flex items-center gap-2"><BookOpen className="h-4 w-4 text-[#8f1d2c]" /><h2 className="text-sm font-semibold text-[#29312d]">Evidence used in this draft</h2></div><div className="mt-3 grid gap-2 sm:grid-cols-2">{citations.map((citation, index) => <div key={`${citation.sourceId || citation.documentId || "source"}-${index}`} className="rounded-xl bg-[#f7f2eb] px-3 py-2.5"><p className="line-clamp-2 text-xs font-semibold text-[#29312d]">{citation.title}</p><p className="mt-1 text-[10px] uppercase tracking-[0.08em] text-[#8a8277]">{citation.sourceType === "catalogue" ? `${citation.documentType || "document"} · ${citation.authority || "Rashtram catalogue"}` : "Your study source"}</p></div>)}</div></section>}
       </div>
     </main>
-    <aside className="hidden min-h-0 overflow-hidden border-l border-[#8f1d2c]/10 lg:block">{libraryPanel}</aside>
+    {libraryOpen && <aside className="hidden min-h-0 overflow-hidden border-l border-[#8f1d2c]/10 lg:block">{libraryPanel}</aside>}
     <details className="border-t border-[#8f1d2c]/10 bg-[#f7f2eb] lg:hidden"><summary className="cursor-pointer px-4 py-3 text-xs font-semibold text-[#874047]">Add websites and PDFs</summary><div className="max-h-[55vh] overflow-hidden"><StudySourcesPanel sources={sources} selectedIds={selectedSourceIds} onToggle={toggleSource} onAddUrl={async (url) => addSource((await addResearchUrlSource(url)).source)} onAddPdf={async (file) => addSource((await addResearchPdfSource(file)).source)} onDelete={async (id) => { await deleteResearchSource(id); setSources((current) => current.filter((source) => String(source.id) !== String(id))); setSelectedSourceIds((current) => current.filter((sourceId) => sourceId !== String(id))); }} /></div></details>
     <details className="border-t border-[#8f1d2c]/10 bg-[#f7f2eb] lg:hidden"><summary className="cursor-pointer px-4 py-3 text-xs font-semibold text-[#874047]">Choose Rashtram documents</summary><div className="max-h-[55vh] overflow-hidden">{libraryPanel}</div></details>
   </div>;

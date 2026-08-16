@@ -1,6 +1,13 @@
 "use client";
 
-import { Loader2, RefreshCw } from "lucide-react";
+import {
+  Loader2,
+  PanelLeftClose,
+  PanelLeftOpen,
+  PanelRightClose,
+  PanelRightOpen,
+  RefreshCw,
+} from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   addDocumentChatMessage,
@@ -84,6 +91,8 @@ export function DocumentChatLayout({
   const [responseLanguage, setResponseLanguage] = useState("Auto");
   const [studySources, setStudySources] = useState([]);
   const [selectedSourceIds, setSelectedSourceIds] = useState([]);
+  const [sourcesOpen, setSourcesOpen] = useState(true);
+  const [studioOpen, setStudioOpen] = useState(true);
   const abortControllerRef = useRef(null);
   const smoothStream = useSmoothMessageStream(setMessages);
   const {
@@ -563,8 +572,8 @@ export function DocumentChatLayout({
           )}
         </div>
       )}
-      <div className="grid min-h-0 flex-1 lg:grid-cols-[280px_minmax(0,1fr)_340px]">
-        <aside className="hidden min-h-0 overflow-hidden border-r border-[#8f1d2c]/10 lg:block">
+      <div className={`grid min-h-0 flex-1 ${sourcesOpen && studioOpen ? "lg:grid-cols-[280px_minmax(0,1fr)_340px]" : sourcesOpen ? "lg:grid-cols-[280px_minmax(0,1fr)]" : studioOpen ? "lg:grid-cols-[minmax(0,1fr)_340px]" : "lg:grid-cols-1"}`}>
+        {sourcesOpen && <aside className="hidden min-h-0 overflow-hidden border-r border-[#8f1d2c]/10 lg:block">
           <StudySourcesPanel
             sources={studySources}
             selectedIds={selectedSourceIds}
@@ -573,14 +582,22 @@ export function DocumentChatLayout({
             onAddPdf={addPdfSource}
             onDelete={removeStudySource}
           />
-        </aside>
+        </aside>}
         <main id="research-chat" className="flex min-h-0 flex-col">
           <div className="flex shrink-0 items-center justify-between border-b border-[#8f1d2c]/8 bg-[#f7f2eb] px-4 py-3 sm:px-6">
-            <div>
+            <div className="min-w-0">
               <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-[#874047]">Chat</p>
-              <p className="mt-1 text-xs text-[#706a61]">Ask questions across the selected sources and this document.</p>
+              <p className="mt-1 truncate text-xs text-[#706a61]">Ask questions across the selected sources and this document.</p>
             </div>
-            <span className="rounded-full border border-[#8f1d2c]/12 bg-white px-2.5 py-1 text-[10px] font-semibold text-[#874047]">{selectedSourceIds.length + (researchReady ? 1 : 0)} sources in context</span>
+            <div className="ml-3 flex shrink-0 items-center gap-1.5">
+              <button type="button" onClick={() => setSourcesOpen((open) => !open)} className="hidden h-8 w-8 place-items-center rounded-lg border border-[#8f1d2c]/12 bg-white text-[#874047] transition hover:bg-[#eee0dc] lg:grid" aria-label={sourcesOpen ? "Collapse sources" : "Expand sources"} title={sourcesOpen ? "Collapse sources" : "Expand sources"}>
+                {sourcesOpen ? <PanelLeftClose className="h-4 w-4" /> : <PanelLeftOpen className="h-4 w-4" />}
+              </button>
+              <button type="button" onClick={() => setStudioOpen((open) => !open)} className="hidden h-8 w-8 place-items-center rounded-lg border border-[#8f1d2c]/12 bg-white text-[#874047] transition hover:bg-[#eee0dc] lg:grid" aria-label={studioOpen ? "Collapse studio" : "Expand studio"} title={studioOpen ? "Collapse studio" : "Expand studio"}>
+                {studioOpen ? <PanelRightClose className="h-4 w-4" /> : <PanelRightOpen className="h-4 w-4" />}
+              </button>
+              <span className="rounded-full border border-[#8f1d2c]/12 bg-white px-2.5 py-1 text-[10px] font-semibold text-[#874047]">{selectedSourceIds.length + (researchReady ? 1 : 0)} sources in context</span>
+            </div>
           </div>
           <details className="shrink-0 border-b border-[#8f1d2c]/8 bg-[#f7f2eb] lg:hidden">
             <summary className="cursor-pointer px-4 py-3 text-xs font-semibold text-[#874047]">Sources and study context</summary>
@@ -662,7 +679,7 @@ export function DocumentChatLayout({
             onResponseLanguageChange={setResponseLanguage}
           />
         </main>
-        <aside className="hidden min-h-0 overflow-hidden border-l border-[#8f1d2c]/10 lg:block">
+        {studioOpen && <aside className="hidden min-h-0 overflow-hidden border-l border-[#8f1d2c]/10 lg:block">
           <StudioPanel
             document={document}
             summary={summary}
@@ -672,7 +689,7 @@ export function DocumentChatLayout({
             disabled={sending || processing}
             onRunWorkflow={runWorkflow}
           />
-        </aside>
+        </aside>}
       </div>
     </div>
   );

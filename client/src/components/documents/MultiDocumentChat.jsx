@@ -1,6 +1,13 @@
 "use client";
 
-import { FileText, Loader2 } from "lucide-react";
+import {
+  FileText,
+  Loader2,
+  PanelLeftClose,
+  PanelLeftOpen,
+  PanelRightClose,
+  PanelRightOpen,
+} from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import {
   fetchDocument,
@@ -39,6 +46,8 @@ export function MultiDocumentChat({
   const [responseLanguage, setResponseLanguage] = useState("Auto");
   const [studySources, setStudySources] = useState([]);
   const [selectedSourceIds, setSelectedSourceIds] = useState([]);
+  const [sourcesOpen, setSourcesOpen] = useState(true);
+  const [studioOpen, setStudioOpen] = useState(true);
   const abortControllerRef = useRef(null);
   const smoothStream = useSmoothMessageStream(setMessages);
   const {
@@ -209,8 +218,8 @@ export function MultiDocumentChat({
   }
 
   return (
-    <section className="surface-card grid h-[calc(100dvh-10rem)] min-h-[420px] min-w-0 overflow-hidden lg:grid-cols-[280px_minmax(0,1fr)_300px]">
-      <aside className="hidden min-h-0 overflow-hidden border-r border-[#8f1d2c]/10 lg:block">
+    <section className={`surface-card grid h-[calc(100dvh-10rem)] min-h-[420px] min-w-0 overflow-hidden ${sourcesOpen && studioOpen ? "lg:grid-cols-[280px_minmax(0,1fr)_300px]" : sourcesOpen ? "lg:grid-cols-[280px_minmax(0,1fr)]" : studioOpen ? "lg:grid-cols-[minmax(0,1fr)_300px]" : "lg:grid-cols-1"}`}>
+      {sourcesOpen && <aside className="hidden min-h-0 overflow-hidden border-r border-[#8f1d2c]/10 lg:block">
         <StudySourcesPanel
           sources={studySources}
           selectedIds={selectedSourceIds}
@@ -219,15 +228,19 @@ export function MultiDocumentChat({
           onAddPdf={addPdfSource}
           onDelete={removeStudySource}
         />
-      </aside>
+      </aside>}
       <div className="flex min-h-0 min-w-0 flex-col">
       <header className="border-b border-[#8f1d2c]/8 bg-[#f7f2eb] p-5">
-        <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-[#874047]">
-          Cross-document research
-        </p>
-        <h2 className="mt-2 font-serif text-2xl text-[#8f1d2c]">
-          One conversation, multiple legal records
-        </h2>
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-[#874047]">Cross-document research</p>
+            <h2 className="mt-2 font-serif text-2xl text-[#8f1d2c]">One conversation, multiple legal records</h2>
+          </div>
+          <div className="hidden shrink-0 items-center gap-1.5 lg:flex">
+            <button type="button" onClick={() => setSourcesOpen((open) => !open)} className="grid h-8 w-8 place-items-center rounded-lg border border-[#8f1d2c]/12 bg-white text-[#874047] transition hover:bg-[#eee0dc]" aria-label={sourcesOpen ? "Collapse sources" : "Expand sources"} title={sourcesOpen ? "Collapse sources" : "Expand sources"}>{sourcesOpen ? <PanelLeftClose className="h-4 w-4" /> : <PanelLeftOpen className="h-4 w-4" />}</button>
+            <button type="button" onClick={() => setStudioOpen((open) => !open)} className="grid h-8 w-8 place-items-center rounded-lg border border-[#8f1d2c]/12 bg-white text-[#874047] transition hover:bg-[#eee0dc]" aria-label={studioOpen ? "Collapse studio" : "Expand studio"} title={studioOpen ? "Collapse studio" : "Expand studio"}>{studioOpen ? <PanelRightClose className="h-4 w-4" /> : <PanelRightOpen className="h-4 w-4" />}</button>
+          </div>
+        </div>
         <div className="mt-3 flex flex-wrap gap-2">
           {documents.map((document) => (
             <span
@@ -278,7 +291,7 @@ export function MultiDocumentChat({
         onResponseLanguageChange={setResponseLanguage}
       />
       </div>
-      <aside className="hidden min-h-0 overflow-y-auto border-l border-[#8f1d2c]/10 bg-[#f8f6f1] p-4 lg:block">
+      {studioOpen && <aside className="hidden min-h-0 overflow-y-auto border-l border-[#8f1d2c]/10 bg-[#f8f6f1] p-4 lg:block">
         <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-[#874047]">Studio</p>
         <h3 className="mt-1 text-lg font-semibold text-[#29312d]">Comparison chat</h3>
         <p className="mt-2 text-xs leading-5 text-[#706a61]">Ask for a difference table, implementation risk scan, or a plain-language briefing across the selected records.</p>
@@ -290,7 +303,7 @@ export function MultiDocumentChat({
             </div>
           ))}
         </div>
-      </aside>
+      </aside>}
     </section>
   );
 }
