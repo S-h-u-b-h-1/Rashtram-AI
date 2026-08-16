@@ -1068,6 +1068,62 @@ it in ${language} when needed.
   });
 };
 
+const generatePolicyDraft = async (
+  prompt,
+  context = "",
+  { responseLanguage = "English" } = {},
+) => {
+  const language = normalizeResponseLanguage(responseLanguage, prompt);
+  const fullPrompt = `
+You are Rashtram AI's policy drafting copilot for researchers and think tanks.
+Draft a practical, evidence-led public policy proposal using only the supplied
+brief and source material. This is a research draft, not legal advice and not
+an official government position. Clearly separate evidence from proposed
+recommendations. Never invent statistics, laws, budgets, institutions, dates,
+or commitments. If evidence is missing, write "To be validated" and add it to
+the open questions section.
+
+Return a polished Markdown policy draft with exactly these sections:
+# Policy Draft
+## Problem and Evidence
+## Policy Objectives
+## Target Groups and Equity Considerations
+## Policy Options
+## Recommended Approach
+## Implementation Plan
+## Institutions and Responsibilities
+## Funding and Delivery Model
+## Monitoring, Evaluation, and Learning
+## Risks and Mitigations
+## Consultation Questions
+## Evidence Notes
+
+Use concise tables or bullets where useful. Cite supplied labels such as
+[Catalogue document: ...] and [User source: ...] inline for every substantive
+evidence claim. Do not present independent research as government policy.
+Write in ${language} while retaining important original-language terms.
+
+Researcher brief:
+${prompt}
+
+Source material:
+${context}
+`;
+
+  return runGeneration("generateContentStream", fullPrompt, {
+    models: taskGenerationModels("chat"),
+    maxModels: Number(process.env.POLICY_DRAFT_AI_MAX_MODELS || 2),
+    timeoutMs: Number(process.env.POLICY_DRAFT_AI_TIMEOUT_MS || 24_000),
+    maxQueueWaitMs: Number(process.env.POLICY_DRAFT_AI_MAX_QUEUE_WAIT_MS || 3_000),
+    maxRetryAfterMs: Number(process.env.POLICY_DRAFT_AI_MAX_RETRY_AFTER_MS || 0),
+    attempts: Number(process.env.POLICY_DRAFT_AI_ATTEMPTS || 1),
+    generationConfig: {
+      temperature: Number(process.env.POLICY_DRAFT_AI_TEMPERATURE || 0.25),
+      maxOutputTokens: Number(process.env.POLICY_DRAFT_AI_MAX_OUTPUT_TOKENS || 2_400),
+    },
+  });
+};
+
 const SUMMARY_GUIDANCE = {
   bill: "purpose, clauses, legislative stage, affected groups, fiscal implications, and implementation questions",
   act: "purpose, operative provisions, rights, duties, authorities, enforcement, penalties, commencement, and amendments",
@@ -1870,6 +1926,7 @@ module.exports = {
   runGeneration,
   estimateEmbeddingTokens,
   generateResponse,
+  generatePolicyDraft,
   generateSuggestedQuestions,
   verifyDocumentRelationship,
   getActIndex,

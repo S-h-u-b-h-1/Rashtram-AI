@@ -107,4 +107,8 @@ module.exports = [
     name: "027_research_sources.js",
     migration: require("./027_research_sources"),
   },
+  {
+    name: "028_policy_drafts.js",
+    migration: require("./028_policy_drafts"),
+  },
 ];

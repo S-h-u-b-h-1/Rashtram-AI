@@ -240,6 +240,68 @@ export const deleteResearchSource = async (sourceId) =>
     method: "DELETE",
   });
 
+export const getPolicyDrafts = async (limit = 20) =>
+  apiRequest(`/policy-drafts?limit=${encodeURIComponent(limit)}`);
+
+export const createPolicyDraft = async ({
+  title,
+  objective,
+  audience,
+  geography,
+  requirements,
+  responseLanguage = "English",
+  documentIds = [],
+  sourceIds = [],
+  onChunk,
+  onMeta,
+  signal,
+}) => {
+  const token = getAuthToken();
+  if (!token) throw new Error("No authentication token found. Please login.");
+  const response = await fetch(`${API_BASE_URL}/policy-drafts/generate`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Accept: "text/event-stream",
+      "auth-token": token,
+    },
+    body: JSON.stringify({
+      title,
+      objective,
+      audience,
+      geography,
+      requirements,
+      responseLanguage,
+      documentIds,
+      sourceIds,
+    }),
+    signal,
+  });
+  if (!response.ok) {
+    const payload = await response.json().catch(() => ({}));
+    throw new Error(payload.error || payload.message || `Request failed with ${response.status}`);
+  }
+  let draftId = null;
+  let citations = [];
+  let fullText = "";
+  await consumeSSEStream(response, {
+    signal,
+    onEvent: (event) => {
+      if (event.type === "meta") {
+        draftId = event.draftId || null;
+        citations = event.citations || [];
+        onMeta?.(event);
+      } else if (event.type === "content") {
+        fullText += event.content || "";
+        onChunk?.(event.content || "");
+      } else if (event.type === "error") {
+        throw new Error(event.error || "Policy drafting was interrupted.");
+      }
+    },
+  });
+  return { draftId, citations, draftText: fullText };
+};
+
 export const fetchDocuments = async (options = {}) => {
   // Keep transport-only options out of the query string.  In particular,
   // DocumentExplorer passes an AbortSignal so a newer filter/search request

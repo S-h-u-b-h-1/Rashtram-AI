@@ -11,6 +11,7 @@ import {
   Search,
   GitCompareArrows,
   Sparkles,
+  PenLine,
   X,
 } from "lucide-react";
 import { useEffect, useState } from "react";
@@ -72,6 +73,12 @@ const NAVIGATION = [
     label: "Suggested Reading",
     href: "/app/recommend",
     icon: Sparkles,
+  },
+  {
+    key: "policy-drafter",
+    label: "Policy Drafter",
+    href: "/app/policy-drafter",
+    icon: PenLine,
   },
 ];
 

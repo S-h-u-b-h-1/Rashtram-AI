@@ -98,11 +98,11 @@ const checks = [
     ) AS passed`,
   },
   {
-    name: "latest migration is 027",
+    name: "latest migration is 028",
     sql: `SELECT (
       SELECT migration_name FROM schema_migrations
       ORDER BY applied_at DESC, migration_name DESC LIMIT 1
-    ) = '027_research_sources.js' AS passed`,
+    ) = '028_policy_drafts.js' AS passed`,
   },
   {
     name: "migration 022 columns complete",
@@ -173,6 +173,10 @@ const checks = [
       TO_REGCLASS('public.research_sources') IS NOT NULL
       AND TO_REGCLASS('public.research_source_chunks') IS NOT NULL
       AS passed`,
+  },
+  {
+    name: "migration 028 policy drafts complete",
+    sql: `SELECT TO_REGCLASS('public.policy_drafts') IS NOT NULL AS passed`,
   },
 ];
 
