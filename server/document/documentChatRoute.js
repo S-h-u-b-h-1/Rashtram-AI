@@ -142,7 +142,6 @@ router.get("/document/:documentType/:documentId", async (req, res) => {
         );
       }
     }
-    return res.json({ document });
     let backgroundPreparation = null;
     if (readiness?.canPrepare && !readiness?.comparisonReady) {
       try {
