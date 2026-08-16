@@ -78,7 +78,7 @@ export function ChatHeader({
             <FileDown className="h-4 w-4" />
           </a>
         )}
-        {sourceOnlyActions && document.sourceUrl && (
+        {document.sourceUrl && (
           <a
             href={document.sourceUrl}
             target="_blank"

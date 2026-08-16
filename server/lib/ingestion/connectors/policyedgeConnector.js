@@ -7,6 +7,8 @@
  * call the Strapi API directly.
  */
 
+const cheerio = require("cheerio");
+
 const API_BASE = "https://api.policyedge.in";
 const TOKEN_URL = "https://www.policyedge.in/api/token";
 const ARTICLE_BASE = "https://www.policyedge.in/p/";
@@ -160,36 +162,90 @@ const stripHTML = (html) =>
     .replace(/\s+/g, " ")
     .trim();
 
-const fetchArticle = async (slug) => {
+const normalizedMatchText = (value) =>
+  String(value || "")
+    .normalize("NFKC")
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}]+/gu, " ")
+    .trim();
+
+const mapApiArticle = (item) => {
+  if (!item) return null;
+  const slug = String(item.slug || "").trim();
+  const bodyText = String(item.plain_content || "").trim() || stripHTML(item.content || "");
+  return {
+    slug,
+    url: slug ? `${ARTICLE_BASE}${slug}` : null,
+    title: String(item.title || item.seoTitle || "").trim(),
+    description: String(item.summary || item.seoDescription || "").trim(),
+    bodyText,
+    sdgTags: (item.tags || []).map((tag) => tag?.name || tag?.title || "").filter(Boolean),
+    institutions: (item.institutions || []).map((institution) => institution?.name || "").filter(Boolean),
+    category: (item.categories || [])[0]?.name || "Reports/Data Releases",
+    publishDate: item.publishDate || item.publishedAt || null,
+    extractionSource: "policyedge_api",
+  };
+};
+
+const fetchArticleFromApi = async (slug, title = "") => {
+  const lookup = async (filters) => {
+    const response = await strapiGet("/api/articles", {
+      ...filters,
+      "filters[state][$eq]": "published",
+      "pagination[pageSize]": "10",
+      populate: "*",
+    });
+    return response?.data || [];
+  };
+
+  let candidates = slug
+    ? await lookup({ "filters[slug][$eq]": slug })
+    : [];
+  if (!candidates.length && title) {
+    candidates = await lookup({ "filters[title][$containsi]": title.slice(0, 180) });
+  }
+  if (!candidates.length) return null;
+
+  const normalizedSlug = normalizedMatchText(slug);
+  const normalizedTitle = normalizedMatchText(title);
+  const selected = candidates.find((item) => normalizedMatchText(item.slug) === normalizedSlug)
+    || candidates.find((item) => normalizedMatchText(item.title) === normalizedTitle)
+    || candidates[0];
+  return mapApiArticle(selected);
+};
+
+const fetchArticleFromHtml = async (slug) => {
   const url = `${ARTICLE_BASE}${slug}`;
-  console.log(`    Fetching article: ${slug}`);
   const html = await fetchHTML(url);
-
-  // Extract body text from article content
-  const contentMatch = html.match(
-    /<div\s+id="single-entry-content"[^>]*>([\s\S]*?)<\/div>\s*<\/div>\s*<\/div>\s*<\/div>/i,
+  const $ = cheerio.load(html);
+  const htmlTitle = stripHTML(
+    $("#article-heading").first().html()
+      || $("meta[property='og:title']").attr("content")
+      || $("h1").first().html()
+      || $("title").first().html()
+      || "",
   );
-  const bodyText = contentMatch ? stripHTML(contentMatch[1]) : "";
-
-  // Extract title from h1
-  const titleMatch = html.match(
-    /<h1[^>]*id="article-heading"[^>]*>([\s\S]*?)<\/h1>/i,
+  const description = stripHTML(
+    $("meta[name='description']").attr("content")
+      || $("meta[property='og:description']").attr("content")
+      || "",
   );
-  const htmlTitle = titleMatch ? stripHTML(titleMatch[1]) : "";
+  $("script, style, noscript, template, nav, header, footer, aside").remove();
+  const bodyText = $("#single-entry-content, article, main, [role='main']")
+    .toArray()
+    .map((element) => stripHTML($(element).html() || ""))
+    .filter((text) => text.length >= 40)
+    .sort((left, right) => right.length - left.length)[0]
+    || stripHTML($("body").html() || "");
 
-  // Fallback description from meta
-  const descMatch = html.match(
-    /<meta\s+name="description"\s+content="([^"]*)"/i,
-  );
-  const description = descMatch
-    ? descMatch[1].replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">")
-    : "";
-
-  // SDG + institution tags
-  const sdgTags = [...html.matchAll(/href="\/sdg\/[^"]*"[^>]*>([^<]+)<\/a>/g)]
-    .map((m) => stripHTML(m[1]));
-  const institutions = [...html.matchAll(/href="\/institution\/[^"]*"[^>]*>([^<]+)<\/a>/g)]
-    .map((m) => stripHTML(m[1]));
+  const sdgTags = $("a[href^='/sdg/']")
+    .toArray()
+    .map((element) => stripHTML($(element).html() || ""))
+    .filter(Boolean);
+  const institutions = $("a[href^='/institution/']")
+    .toArray()
+    .map((element) => stripHTML($(element).html() || ""))
+    .filter(Boolean);
 
   return {
     slug,
@@ -199,7 +255,34 @@ const fetchArticle = async (slug) => {
     bodyText,
     sdgTags,
     institutions,
+    category: "Reports/Data Releases",
+    extractionSource: "policyedge_html",
   };
+};
+
+const fetchArticle = async (slug, options = {}) => {
+  console.log(`    Fetching article: ${slug}`);
+  let apiError = null;
+  try {
+    const apiArticle = await fetchArticleFromApi(slug, options.title || "");
+    if (apiArticle?.bodyText) return apiArticle;
+  } catch (error) {
+    apiError = error;
+    console.warn(`    PolicyEdge API article lookup failed for ${slug}: ${error.message}`);
+  }
+
+  try {
+    return await fetchArticleFromHtml(slug);
+  } catch (htmlError) {
+    if (apiError) {
+      const error = new Error(
+        `PolicyEdge article could not be read through its API or public page: ${htmlError.message}`,
+      );
+      error.cause = apiError;
+      throw error;
+    }
+    throw htmlError;
+  }
 };
 
 // ---------------------------------------------------------------------------
@@ -229,8 +312,11 @@ module.exports = {
   extractListingMeta,
   fetchAllPages,
   fetchArticle,
+  fetchArticleFromApi,
+  fetchArticleFromHtml,
   fetchHTML,
   fetchPage,
+  mapApiArticle,
   stripHTML,
   getApiToken,
   ARTICLE_BASE,

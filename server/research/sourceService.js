@@ -6,6 +6,7 @@ const cheerio = require("cheerio");
 const { query } = require("../db");
 const { pdfProcessor } = require("../lib/pdfProcessor");
 const { createObjectStorage, objectStorageConfig } = require("../lib/storage/objectStorage");
+const { httpsAgentForUrl } = require("../lib/ingestion/core/tlsTrust");
 
 const MAX_SOURCE_BYTES = 20 * 1024 * 1024;
 const MAX_SOURCE_TEXT = 500_000;
@@ -76,14 +77,112 @@ const cleanSourceText = (value) =>
     .trim()
     .slice(0, MAX_SOURCE_TEXT);
 
+const textFromMarkup = (value) => {
+  const fragment = cheerio.load(String(value || ""));
+  fragment("script, style, noscript, template, svg").remove();
+  return cleanSourceText(fragment.root().text());
+};
+
+const structuredHtmlText = ($) => {
+  const candidates = [];
+  $("script[type='application/ld+json']").each((_, element) => {
+    try {
+      const parsed = JSON.parse($(element).html() || "null");
+      const records = Array.isArray(parsed) ? parsed : [parsed];
+      for (const record of records) {
+        const graph = Array.isArray(record?.["@graph"])
+          ? record["@graph"]
+          : [record];
+        for (const item of graph) {
+          for (const field of ["articleBody", "text", "description", "abstract"]) {
+            if (typeof item?.[field] === "string") candidates.push(item[field]);
+          }
+        }
+      }
+    } catch {
+      // Invalid structured data should not block the readable HTML fallback.
+    }
+  });
+
+  const nextData = $("#__NEXT_DATA__").first().html();
+  if (nextData) {
+    try {
+      const visit = (value, key = "", depth = 0) => {
+        if (depth > 10 || value == null) return;
+        if (typeof value === "string") {
+          if (
+            /^(articleBody|plain_content|content|body|description|summary|abstract)$/i.test(key)
+            && value.length >= 40
+          ) candidates.push(value);
+          return;
+        }
+        if (Array.isArray(value)) {
+          value.slice(0, 100).forEach((entry) => visit(entry, key, depth + 1));
+          return;
+        }
+        if (typeof value === "object") {
+          Object.entries(value).forEach(([childKey, child]) =>
+            visit(child, childKey, depth + 1));
+        }
+      };
+      visit(JSON.parse(nextData));
+    } catch {
+      // Some Next.js pages do not serialize valid JSON into this script.
+    }
+  }
+  return candidates.map(textFromMarkup).filter((text) => text.length >= 40);
+};
+
 const extractHtml = (buffer, url) => {
   const html = buffer.toString("utf8");
   const $ = cheerio.load(html);
+  const structured = structuredHtmlText($);
+  const title = cleanSourceText(
+    $("meta[property='og:title']").attr("content")
+      || $("h1").first().text()
+      || $("title").first().text()
+      || new URL(url).hostname,
+  ).slice(0, 300);
+  const description = cleanSourceText(
+    $("meta[name='description']").attr("content")
+      || $("meta[property='og:description']").attr("content")
+      || "",
+  );
   $("script, style, noscript, template, svg, nav, footer, header").remove();
-  const title = $("title").first().text().trim() || new URL(url).hostname;
-  const main = $("main, article, [role='main']").first();
-  const text = cleanSourceText((main.length ? main : $("body")).text());
-  return { title, text, mimeType: "text/html", pageCount: null };
+  const readable = [];
+  for (const selector of [
+    "article",
+    "main",
+    "[role='main']",
+    "#single-entry-content",
+    ".entry-content",
+    ".article-content",
+    ".post-content",
+    "[data-testid*='article']",
+  ]) {
+    $(selector).each((_, element) => {
+      const text = cleanSourceText($(element).text());
+      if (text.length >= 40) readable.push(text);
+    });
+  }
+  const bodyText = cleanSourceText($("body").text());
+  const candidates = [...structured, ...readable];
+  let text = candidates.sort((left, right) => right.length - left.length)[0]
+    || bodyText;
+  if (description && !text.includes(description)) {
+    text = cleanSourceText(`${description}\n\n${text}`);
+  }
+  return {
+    title,
+    text,
+    mimeType: "text/html",
+    pageCount: null,
+    extractionMethod: structured.length
+      ? "structured_html"
+      : readable.length
+        ? "source_html"
+        : "html_body_fallback",
+  };
 };
 
 const extractPdf = async (buffer, url, fileName = null) => {
@@ -129,6 +228,7 @@ const fetchPublicSource = async (initialUrl) => {
       maxContentLength: MAX_SOURCE_BYTES,
       maxBodyLength: MAX_SOURCE_BYTES,
       maxRedirects: 0,
+      httpsAgent: httpsAgentForUrl(currentUrl),
       validateStatus: (status) => status >= 200 && status < 400,
       headers: {
         Accept: "text/html, application/pdf;q=0.9, */*;q=0.1",
@@ -250,14 +350,25 @@ const listSources = async (userId) => {
 
 const addUrlSource = async (userId, url) => {
   const parsed = await assertPublicUrl(url);
+  console.log("[research-source] fetch started", {
+    userId: String(userId),
+    hostname: parsed.hostname,
+  });
   const { response, url: finalUrl } = await fetchPublicSource(parsed);
   const buffer = Buffer.from(response.data);
   const contentType = String(response.headers["content-type"] || "").toLowerCase();
   const isPdf = contentType.includes("application/pdf") || buffer.subarray(0, 4).toString("latin1") === "%PDF";
+  const isHtml = contentType.includes("text/html")
+    || /^\s*<(?:!doctype\s+html|html)\b/i.test(buffer.subarray(0, 512).toString("utf8"));
+  if (!isPdf && !isHtml) {
+    const error = new Error("This link did not return a readable HTML page or PDF.");
+    error.status = 422;
+    throw error;
+  }
   const extracted = isPdf
     ? await extractPdf(buffer, finalUrl)
     : extractHtml(buffer, finalUrl);
-  return persistSource({
+  const source = await persistSource({
     userId,
     title: extracted.title,
     sourceType: "external_url",
@@ -267,6 +378,15 @@ const addUrlSource = async (userId, url) => {
     extracted,
     metadata: { fetchedFrom: parsed.href },
   });
+  console.log("[research-source] fetch completed", {
+    userId: String(userId),
+    hostname: new URL(finalUrl).hostname,
+    sourceId: source.id,
+    mimeType: extracted.mimeType,
+    extractionMethod: extracted.extractionMethod || null,
+    textLength: extracted.text.length,
+  });
+  return source;
 };
 
 const addPdfSource = async (userId, { fileName, mimeType, buffer }) => {
@@ -348,5 +468,6 @@ module.exports = {
   assertPublicUrl,
   deleteSource,
   getSourceContext,
+  extractHtml,
   listSources,
 };

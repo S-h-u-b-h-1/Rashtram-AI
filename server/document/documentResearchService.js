@@ -625,7 +625,7 @@ const processExtractableSourceDocument = async (
   }
 
   const downloadStartedAt = Date.now();
-  const article = await fetchArticle(slug);
+  const article = await fetchArticle(slug, { title: document.title });
   const downloadMs = Date.now() - downloadStartedAt;
   await query(
     `INSERT INTO legislative_document_resources (
