@@ -86,6 +86,12 @@ test("semantic and policy questions use bounded hybrid retrieval", async () => {
   assert.equal(vectorCalls, 1);
   assert.equal(lexicalCalls, 1);
   assert.equal(result.retrievalMode, "hybrid");
+  assert.equal(result.diagnostics.versions.retrievalVersion, "retrieval-v3.0");
+  assert.equal(result.diagnostics.versions.chunkingVersion, "legal-multilingual-chunking-v2");
+  assert.equal(result.diagnostics.versions.rerankerVersion, "deterministic-reranker-v2");
+  assert.equal(result.diagnostics.versions.queryPlannerVersion, "retrieval-query-planner-v3.0");
+  assert.equal(result.diagnostics.versions.authorityConfigVersion, "authority-config-v1");
+  assert.ok(result.diagnostics.versions.embeddingModel);
 });
 
 test("hybrid lexical and vector candidate retrieval starts concurrently", async () => {

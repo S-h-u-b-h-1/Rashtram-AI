@@ -17,8 +17,12 @@ const retrievalConfig = () => ({
   contextTokenBudget: boundedInteger(process.env.RETRIEVAL_CONTEXT_TOKEN_BUDGET, 5000, 1500, 9000),
   versions: {
     retrieval: "retrieval-v3.0",
+    retrievalVersion: "retrieval-v3.0",
     fusion: "rrf-v1",
     reranker: "deterministic-reranker-v2",
+    rerankerVersion: "deterministic-reranker-v2",
+    chunkingVersion: "legal-multilingual-chunking-v2",
+    authorityConfigVersion: "authority-config-v1",
   },
 });
 

@@ -1,0 +1,17 @@
+{
+  "benchmark": "ci-v1",
+  "reviewStatus": "AUTO_GENERATED_DRAFT",
+  "purpose": "Evaluator and retrieval-contract regression only; not a legal-quality claim.",
+  "metrics": {
+    "recallAt10": 1,
+    "mrr": 0.875,
+    "citationPrecision": 1
+  },
+  "policy": {
+    "recallAt10": { "maximumAbsoluteDrop": 0.02, "reason": "Stable deterministic CI fixtures should retain every acceptable document." },
+    "mrr": { "maximumAbsoluteDrop": 0.03, "reason": "Allows harmless tie movement while catching a material ranking regression." },
+    "citationPrecision": { "maximumAbsoluteDrop": 0.02, "reason": "Unsupported citations are a safety regression in deterministic fixtures." }
+  },
+  "updatedManually": true,
+  "automaticBaselineUpdatesAllowed": false
+}

@@ -1,0 +1,31 @@
+{
+  "retrievalResults": {
+    "synthetic-exact-section-001": [{ "documentId": "synthetic-act-a", "chunkId": "chunk-1", "section": "14(2)", "evidenceId": "synthetic-act-a:chunk-1" }],
+    "synthetic-multiple-documents-002": [
+      { "documentId": "synthetic-rule-b", "chunkId": "chunk-2", "section": "8", "evidenceId": "synthetic-rule-b:chunk-2" },
+      { "documentId": "synthetic-rule-a", "chunkId": "chunk-1", "section": "4", "evidenceId": "synthetic-rule-a:chunk-1" }
+    ],
+    "synthetic-unanswerable-003": [],
+    "synthetic-clause-ranking-004": [
+      { "documentId": "irrelevant-document", "chunkId": "chunk-1" },
+      { "documentId": "synthetic-regulation-c", "chunkId": "chunk-3", "section": "9", "clause": "9(3)", "evidenceId": "synthetic-regulation-c:chunk-3" }
+    ],
+    "synthetic-authority-ranking-005": [{ "documentId": "synthetic-circular-d", "chunkId": "metadata", "evidenceId": "synthetic-circular-d:metadata" }]
+  },
+  "answerResults": {
+    "synthetic-exact-section-001": { "citations": ["synthetic-act-a:chunk-1"], "claims": [{ "material": true, "state": "SUPPORTED" }], "abstained": false },
+    "synthetic-multiple-documents-002": { "citations": ["synthetic-rule-a:chunk-1", "synthetic-rule-b:chunk-2"], "claims": [{ "material": true, "state": "SUPPORTED" }, { "material": true, "state": "SUPPORTED" }], "abstained": false },
+    "synthetic-unanswerable-003": { "citations": [], "claims": [], "abstained": true },
+    "synthetic-clause-ranking-004": { "citations": ["synthetic-regulation-c:chunk-3"], "claims": [{ "material": true, "state": "SUPPORTED" }], "abstained": false },
+    "synthetic-authority-ranking-005": { "citations": ["synthetic-circular-d:metadata"], "claims": [{ "material": true, "state": "SUPPORTED" }], "abstained": false }
+  },
+  "versions": {
+    "retrievalVersion": "retrieval-v3.0",
+    "embeddingModel": "fixture-none",
+    "embeddingVersion": "fixture-v1",
+    "chunkingVersion": "synthetic-fixture-v1",
+    "rerankerVersion": "deterministic-reranker-v2",
+    "queryPlannerVersion": "retrieval-query-planner-v3.0",
+    "authorityConfigVersion": "authority-config-v1"
+  }
+}

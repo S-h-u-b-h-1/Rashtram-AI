@@ -1680,7 +1680,10 @@ const retrieveDocumentContext = async (
     versions: {
       ...settings.versions,
       embedding: providerConfig().embeddingModel,
+      embeddingModel: providerConfig().embeddingModel,
+      embeddingVersion: providerConfig().embeddingModel,
       vectorNamespace: providerConfig().vectorNamespace,
+      queryPlannerVersion: plan.plannerVersion,
     },
     plannerVersion: plan.plannerVersion,
     vectorDegraded: Boolean(vectorError),

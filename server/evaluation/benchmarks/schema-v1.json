@@ -1,0 +1,42 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://rashtram.ai/schemas/rag-benchmark-v1.json",
+  "title": "Rashtram RAG Benchmark Case V1",
+  "type": "object",
+  "required": [
+    "id", "question", "query_type", "expected_document_ids",
+    "expected_sections", "expected_clauses", "gold_evidence", "answerable",
+    "expected_authority_class", "difficulty", "jurisdiction",
+    "document_type", "notes", "review_status"
+  ],
+  "properties": {
+    "id": { "type": "string", "minLength": 1 },
+    "question": { "type": "string", "minLength": 1 },
+    "query_type": { "type": "string" },
+    "expected_document_ids": { "type": "array", "items": { "type": "string" }, "uniqueItems": true },
+    "expected_sections": { "type": "array", "items": { "type": "string" }, "uniqueItems": true },
+    "expected_clauses": { "type": "array", "items": { "type": "string" }, "uniqueItems": true },
+    "gold_evidence": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string" },
+          "documentId": { "type": "string" },
+          "chunkId": { "type": "string" },
+          "section": { "type": "string" },
+          "clause": { "type": "string" },
+          "text": { "type": "string" }
+        }
+      }
+    },
+    "answerable": { "type": "boolean" },
+    "expected_authority_class": { "type": "string" },
+    "difficulty": { "enum": ["easy", "medium", "hard"] },
+    "jurisdiction": { "type": "string" },
+    "document_type": { "type": "string" },
+    "notes": { "type": "string" },
+    "review_status": { "enum": ["AUTO_GENERATED_DRAFT", "INTERNAL_REVIEWED", "EXPERT_VERIFIED"] }
+  },
+  "additionalProperties": false
+}

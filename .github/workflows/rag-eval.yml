@@ -1,0 +1,30 @@
+name: RAG evaluation regression
+
+on:
+  pull_request:
+    paths:
+      - "server/evaluation/**"
+      - "server/retrieval/**"
+      - "server/document/documentResearchService.js"
+      - "server/graph/**"
+      - "server/cli/ragEvalV1.js"
+      - "server/test/ragEvalV1.test.js"
+      - ".github/workflows/rag-eval.yml"
+  workflow_dispatch:
+
+jobs:
+  stable-rag-subset:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: server
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: server/package-lock.json
+      - run: npm ci
+      - run: npm run eval:rag:ci
+      - run: node --test test/ragEvalV1.test.js
