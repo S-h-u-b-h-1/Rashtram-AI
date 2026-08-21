@@ -36,7 +36,7 @@ test("database migrations are versioned and ordered", () => {
   assert.ok(files.includes("015_normalize_failure_pipeline_stage.js"));
   assert.ok(files.includes("016_processing_audit_log.js"));
   assert.ok(files.includes("017_normalize_download_failure_codes.js"));
-  assert.equal(files.at(-1), "033_large_document_intelligence.js");
+  assert.equal(files.at(-1), "034_temporal_legal_intelligence_v1.js");
 });
 
 test("database verifier derives the expected latest migration from the registry", () => {
@@ -70,6 +70,17 @@ test("large-document migration preserves ordinary semantic readiness truth", () 
   assert.match(source, /document_chunk_groups/);
   assert.match(source, /hierarchical_semantic_ready/);
   assert.doesNotMatch(source, /SET\s+semantic_ready|DROP|TRUNCATE/i);
+});
+
+test("temporal migration keeps legal date kinds separate", () => {
+  const source = fs.readFileSync(
+    path.join(__dirname, "../migrations/034_temporal_legal_intelligence_v1.js"),
+    "utf8",
+  );
+  for (const field of ["notified_date", "repealed_date", "superseded_date", "amended_date"]) {
+    assert.match(source, new RegExp(field));
+  }
+  assert.doesNotMatch(source, /\b(?:UPDATE|DELETE|TRUNCATE|DROP)\s/i);
 });
 
 test("research observability migration is additive and privacy safe", () => {

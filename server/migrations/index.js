@@ -131,4 +131,8 @@ module.exports = [
     name: "033_large_document_intelligence.js",
     migration: require("./033_large_document_intelligence"),
   },
+  {
+    name: "034_temporal_legal_intelligence_v1.js",
+    migration: require("./034_temporal_legal_intelligence_v1"),
+  },
 ];

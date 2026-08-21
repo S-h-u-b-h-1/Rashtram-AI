@@ -24,11 +24,11 @@ const classifyQuery = (query, options = {}) => {
   )) {
     return QUERY_TYPES.EXACT_REFERENCE;
   }
+  if (matches(text, /\b(timeline|chronolog|before|after|when|commencement|effective date|sequence|history|in force|applied|applicable|which version|as of|during fy)\b/i)) {
+    return QUERY_TYPES.TIMELINE;
+  }
   if (matches(text, /\b(amend|amended|repeal|replace|related|relationship|linked|implements?|implemented by|issued under|supersed|deriv(?:e|ed)|parent act)\b/i)) {
     return QUERY_TYPES.RELATIONSHIP;
-  }
-  if (matches(text, /\b(timeline|chronolog|before|after|when|commencement|effective date|sequence|history)\b/i)) {
-    return QUERY_TYPES.TIMELINE;
   }
   if (matches(text, /\b(compliance|comply|obligation|penalt|licen[cs]|reporting requirement|due diligence|regulatory burden|prohibited|must|shall)\b/i)) {
     return QUERY_TYPES.COMPLIANCE;

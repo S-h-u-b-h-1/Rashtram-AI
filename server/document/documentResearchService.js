@@ -56,6 +56,7 @@ const {
   discoverKnowledgeCandidates,
 } = require("../graph/knowledgeLayerService");
 const { expandLargeDocumentMatches } = require("./largeDocumentService");
+const { retrieveTemporalPassages } = require("./temporalLegalService");
 
 const TYPE_CONFIG = {
   bill: {
@@ -1652,6 +1653,7 @@ const retrieveDocumentContext = async (
   const ftsSearch = adapters.ftsSearch || retrieveFtsPassages;
   const localSearch = adapters.localSearch || retrieveLocalTextPassages;
   const metadataSearch = adapters.metadataSearch || retrieveMetadataPassages;
+  const temporalSearch = adapters.temporalSearch || retrieveTemporalPassages;
   const vectorSearch = adapters.vectorSearch || (async (limit) => {
     const config = typeConfig(documentType);
     const matches = await config.search(message, documentId, limit);
@@ -1673,6 +1675,9 @@ const retrieveDocumentContext = async (
   const metadataPromise = plan.useMetadata
     ? timed("metadata", () => metadataSearch(documentId, options.document))
     : Promise.resolve([]);
+  const temporalPromise = plan.queryType === "TIMELINE"
+    ? timed("temporal", () => temporalSearch(documentId, message))
+    : Promise.resolve([]);
   const lexicalLimit = plan.queryType === "EXACT_REFERENCE"
     ? settings.exactCandidates
     : settings.lexicalCandidates;
@@ -1684,8 +1689,9 @@ const retrieveDocumentContext = async (
       .then((passages) => ({ passages, error: null }))
       .catch((error) => ({ passages: [], error }))
     : null;
-  const [metadataPassages, ftsPassages, eagerVectorOutcome] = await Promise.all([
+  const [metadataPassages, temporalPassages, ftsPassages, eagerVectorOutcome] = await Promise.all([
     metadataPromise,
+    temporalPromise,
     lexicalPromise,
     eagerVectorPromise || Promise.resolve(null),
   ]);
@@ -1714,7 +1720,7 @@ const retrieveDocumentContext = async (
   const fusionStartedAt = Date.now();
   const fusion = flags.rrf ? reciprocalRankFusion : legacyCandidateMerge;
   const fused = fusion(
-    [metadataPassages, ftsPassages, localPassages, vectorPassages],
+    [metadataPassages, temporalPassages, ftsPassages, localPassages, vectorPassages],
     {
       documentId,
       k: settings.rrfK,
@@ -1735,7 +1741,9 @@ const retrieveDocumentContext = async (
       ? "vector"
       : hasLexical
         ? ftsPassages.length > 0 ? "fts" : "local_text"
-        : metadataPassages.length > 0
+        : temporalPassages.length > 0
+          ? "temporal"
+          : metadataPassages.length > 0
           ? "metadata"
           : "none";
   const diagnostics = {
@@ -1748,6 +1756,7 @@ const retrieveDocumentContext = async (
     },
     candidateCounts: {
       metadata: metadataPassages.length,
+      temporal: temporalPassages.length,
       lexical: ftsPassages.length,
       local: localPassages.length,
       vector: vectorPassages.length,

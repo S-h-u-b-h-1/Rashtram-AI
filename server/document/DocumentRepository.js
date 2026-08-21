@@ -146,6 +146,11 @@ const mapDocument = (row) => {
     assentDate: toIso(row.assent_date),
     effectiveDate: toIso(row.effective_date),
     commencementDate: toIso(row.commencement_date),
+    notifiedDate: toIso(row.notified_date),
+    repealedDate: toIso(row.repealed_date),
+    supersededDate: toIso(row.superseded_date),
+    amendedDate: toIso(row.amended_date),
+    temporalMetadata: safeObject(row.temporal_metadata_json),
     year: row.year,
     status: normalizeNullableString(row.status),
     source,
@@ -1328,6 +1333,10 @@ const getTimeline = async (
     ["published", "Published", document.publicationDate],
     ["effective", "Became effective", document.effectiveDate],
     ["commenced", "Commenced", document.commencementDate],
+    ["notified", "Notified", document.notifiedDate],
+    ["amended", "Amended", document.amendedDate],
+    ["repealed", "Repealed", document.repealedDate],
+    ["superseded", "Superseded", document.supersededDate],
   ]
     .filter(([, , date]) => date)
     .map(([type, label, date]) => ({ type, label, date, documentId: String(id) }));
@@ -1361,6 +1370,8 @@ const getTimeline = async (
     "REPLACED_BY",
     "SUPERSEDES",
     "SUPERSEDED_BY",
+    "COMMENCES",
+    "COMMENCED_BY",
   ]);
   events.push(
     ...relationships
