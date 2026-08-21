@@ -44,6 +44,9 @@ const {
 const { planQuery } = require("../retrieval/queryPlanner");
 const { retrievalConfig } = require("../retrieval/retrievalConfig");
 const { reciprocalRankFusion } = require("../retrieval/rankFusion");
+const {
+  discoverKnowledgeCandidates,
+} = require("../graph/knowledgeLayerService");
 
 const TYPE_CONFIG = {
   bill: {
@@ -1706,33 +1709,36 @@ const retrievePassages = async (
   return result.passages;
 };
 
-const searchAcrossIndexedDocuments = async (searchQuery, topK = 40) => {
+const searchAcrossIndexedDocuments = async (searchQuery, topK = 40, options = {}) => {
   const text = String(searchQuery || "").trim();
   if (!text) return [];
-  const vector = await generateEmbedding(text);
-  const matches = await Promise.all(
-    Object.entries(TYPE_CONFIG).map(async ([family, config]) => {
-      const result = await config.index().query({
-        vector,
-        topK,
-        includeMetadata: true,
-      });
-      return (result.matches || []).map((match) => ({
-        id: match.metadata?.[config.idField],
-        family,
-        score: Number(match.score || 0),
-      }));
-    }),
-  );
+  const [knowledge, vectorOutcome] = await Promise.all([
+    discoverKnowledgeCandidates(text, {
+      userId: options.userId,
+      limit: Math.min(30, topK),
+    }).catch(() => ({ documentIds: [] })),
+    generateEmbedding(text).then(async (vector) => Promise.all(
+      Object.entries(TYPE_CONFIG).map(async ([family, config]) => {
+        const result = await config.index().query({ vector, topK, includeMetadata: true });
+        return (result.matches || []).map((match) => ({
+          id: match.metadata?.[config.idField],
+          family,
+          score: Number(match.score || 0),
+        }));
+      }),
+    )).catch(() => []),
+  ]);
   return [
     ...new Set(
-      matches
+      [
+        ...(knowledge.documentIds || []),
+        ...vectorOutcome
         .flat()
         .filter((match) => match.score >= 0.55)
         .sort((left, right) => right.score - left.score)
         .map((match) => match.id)
-        .filter(Boolean)
-        .map(String),
+        .filter(Boolean),
+      ].map(String),
     ),
   ].slice(0, topK);
 };

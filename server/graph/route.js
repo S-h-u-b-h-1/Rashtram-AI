@@ -2,6 +2,8 @@ const express = require("express");
 const fetchuser = require("../middleware/fetchuser");
 const { sendError } = require("../lib/httpResponse");
 const {
+  discoverKnowledgeCandidates,
+  exportKnowledgeNode,
   findPath,
   getKnowledgeGraphMetrics,
   saveGraphPath,
@@ -9,6 +11,29 @@ const {
 } = require("./knowledgeGraphService");
 
 const router = express.Router();
+
+router.get("/knowledge/search", fetchuser, async (req, res) => {
+  try {
+    return res.json(await discoverKnowledgeCandidates(req.query.q, {
+      userId: req.user.id,
+      limit: req.query.limit,
+    }));
+  } catch (error) {
+    return sendError(res, error, "Knowledge discovery failed");
+  }
+});
+
+router.get("/knowledge/:id/export", fetchuser, async (req, res) => {
+  try {
+    const portable = await exportKnowledgeNode(req.params.id, req.user.id);
+    return res
+      .type("text/markdown; charset=utf-8")
+      .set("Content-Disposition", `attachment; filename="rashtram-knowledge-${Number(req.params.id)}.md"`)
+      .send(portable);
+  } catch (error) {
+    return sendError(res, error, "Knowledge export failed");
+  }
+});
 
 router.get("/search", fetchuser, async (req, res) => {
   try {

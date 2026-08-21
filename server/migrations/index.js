@@ -115,4 +115,8 @@ module.exports = [
     name: "029_processing_stage_capabilities.js",
     migration: require("./029_processing_stage_capabilities"),
   },
+  {
+    name: "030_knowledge_layer_v1.js",
+    migration: require("./030_knowledge_layer_v1"),
+  },
 ];

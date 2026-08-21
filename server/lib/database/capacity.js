@@ -30,6 +30,9 @@ const CAPACITY_CATEGORIES = Object.freeze({
   graphRelationships: new Set([
     "document_relationships",
     "intelligence_events",
+    "knowledge_nodes",
+    "knowledge_edges",
+    "knowledge_evidence",
     "saved_graph_paths",
   ]),
   userData: new Set([

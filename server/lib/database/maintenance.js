@@ -19,6 +19,9 @@ const ESSENTIAL_TABLES = new Set([
   "saved_searches",
   "user_profiles",
   "user_preferences",
+  "knowledge_nodes",
+  "knowledge_edges",
+  "knowledge_evidence",
 ]);
 
 const DERIVED_TABLES = new Set([

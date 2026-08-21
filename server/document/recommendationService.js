@@ -306,6 +306,7 @@ const getDocumentRecommendations = async (
           .filter(Boolean)
           .join(" "),
         40,
+        { userId },
       );
     } catch (error) {
       console.warn("Semantic recommendation signal unavailable:", error.message);
@@ -484,7 +485,11 @@ const getProblemRecommendations = async (userId, payload) => {
   ].filter(Boolean).join(" ");
   let semanticIds = [];
   try {
-    semanticIds = (await searchAcrossIndexedDocuments(searchText, Math.max(input.limit * 3, 30)))
+    semanticIds = (await searchAcrossIndexedDocuments(
+      searchText,
+      Math.max(input.limit * 3, 30),
+      { userId },
+    ))
       .map((id) => Number(id))
       .filter((id) => Number.isSafeInteger(id) && id > 0);
   } catch (error) {

@@ -36,7 +36,23 @@ test("database migrations are versioned and ordered", () => {
   assert.ok(files.includes("015_normalize_failure_pipeline_stage.js"));
   assert.ok(files.includes("016_processing_audit_log.js"));
   assert.ok(files.includes("017_normalize_download_failure_codes.js"));
-  assert.equal(files.at(-1), "029_processing_stage_capabilities.js");
+  assert.equal(files.at(-1), "030_knowledge_layer_v1.js");
+});
+
+test("Knowledge Layer V1 migration keeps structured knowledge evidence-backed", () => {
+  const source = fs.readFileSync(
+    path.join(__dirname, "../migrations/030_knowledge_layer_v1.js"),
+    "utf8",
+  );
+  assert.match(source, /CREATE TABLE IF NOT EXISTS knowledge_nodes/);
+  assert.match(source, /CREATE TABLE IF NOT EXISTS knowledge_edges/);
+  assert.match(source, /CREATE TABLE IF NOT EXISTS knowledge_evidence/);
+  assert.match(source, /SOURCE_VERIFIED/);
+  assert.match(source, /QUARANTINED/);
+  assert.match(source, /owner_user_id/);
+  assert.match(source, /enforce_knowledge_node_evidence/);
+  assert.match(source, /enforce_knowledge_edge_evidence/);
+  assert.doesNotMatch(source, /DROP TABLE/);
 });
 
 test("dedupe review queue is restored after cleanup dependency verification", () => {
