@@ -102,17 +102,22 @@ test("retrieveFtsPassages returns [] for an empty query without touching the dat
 });
 
 test("retrieveFtsPassages normalizes fts_score to 0-1 relative to the top result", async () => {
-  queryImpl = async () => ({
-    rows: [
+  let statement;
+  queryImpl = async (sql, params) => {
+    statement = { sql, params };
+    return { rows: [
       { chunk_index: 3, original_text: "top match text", translated_text: null, language: "en", metadata_json: {}, fts_score: 0.8 },
       { chunk_index: 1, original_text: "weaker match text", translated_text: null, language: "en", metadata_json: {}, fts_score: 0.4 },
-    ],
-  });
-  const result = await retrieveFtsPassages("doc-x", "match", 10);
+    ] };
+  };
+  const result = await retrieveFtsPassages("doc-x", "What does Section 5 say about match?", 10);
   assert.equal(result.length, 2);
   assert.equal(result[0].ftsScore, 1);
   assert.equal(result[1].ftsScore, 0.5);
   assert.equal(result[0].retrievalMode, "fts");
+  assert.match(statement.sql, /websearch_to_tsquery/);
+  assert.match(statement.params[0], /section OR match/i);
+  assert.deepEqual(statement.params[3], ["5"]);
 });
 
 test("retrieveFtsPassages fails soft (returns []) if the query throws", async () => {

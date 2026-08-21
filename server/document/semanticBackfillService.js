@@ -340,6 +340,7 @@ const backfillSemanticDocument = async ({
   updateStateFn = updateSemanticState,
   updateChunkMetadataFn = updateChunkEmbeddingMetadata,
   recordStageFn = recordStage,
+  missingVectorIds = new Set(),
 } = {}) => {
   if (!publicBackfillEligible(document)) {
     return { documentId: String(document?.id || ""), status: "skipped", reason: "not_public_backfill_eligible" };
@@ -350,9 +351,13 @@ const backfillSemanticDocument = async ({
   const rows = await loadChunksFn(document.id, queryFn);
   const chunks = buildVectorChunks({ document, rows, family, config });
   if (!chunks.length) return { documentId: String(document.id), status: "skipped", reason: "missing_valid_chunks" };
+  const knownMissingIds = missingVectorIds instanceof Set
+    ? missingVectorIds
+    : new Set(missingVectorIds || []);
   const reusableIds = new Set(chunks.filter((chunk) =>
     chunk.previousNamespace === config.vectorNamespace &&
-    chunk.previousEmbeddingInputHash === chunk.embeddingInputHash).map((chunk) => chunk.id));
+    chunk.previousEmbeddingInputHash === chunk.embeddingInputHash &&
+    !knownMissingIds.has(chunk.id)).map((chunk) => chunk.id));
   const embeddingInputTokens = chunks.reduce((sum, chunk) => sum + estimateEmbeddingTokens(chunk.embeddingText), 0);
   if (dryRun) return {
     documentId: String(document.id), status: "dry_run", family,

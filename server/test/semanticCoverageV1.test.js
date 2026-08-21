@@ -18,6 +18,10 @@ const {
   sha256,
   updateSemanticState,
 } = require("../document/semanticBackfillService");
+const {
+  reconcileSemanticReadinessTruth,
+  semanticReadinessTruth,
+} = require("../document/semanticReconciliationService");
 
 const config = {
   embeddingProvider: "gemini",
@@ -165,6 +169,29 @@ test("valid current vectors reconcile without duplicate embedding calls", async 
   assert.equal(state.verified, true);
 });
 
+test("known missing Pinecone IDs are regenerated despite matching PostgreSQL hashes", async () => {
+  const text = row().original_text;
+  let unchanged = null;
+  const result = await backfillSemanticDocument({
+    document: document(), config,
+    loadChunksFn: async () => [row({
+      embedding_namespace: config.vectorNamespace,
+      embedding_input_sha256: sha256(text),
+    })],
+    missingVectorIds: new Set(["act-7-chunk-0"]),
+    storeOverrides: { act: async (_chunks, options) => {
+      unchanged = options.unchangedChunkIds;
+      return { embeddingCacheHits: 0, embeddingCacheMisses: 1, metrics: {} };
+    } },
+    probeFn: async () => ({ verified: true, attempts: 1, matches: 1 }),
+    updateStateFn: async () => true,
+    ...noOps,
+  });
+  assert.equal(result.status, "indexed");
+  assert.equal(result.embeddingsGenerated, 1);
+  assert.equal(unchanged.size, 0);
+});
+
 test("Pinecone write alone does not imply semantic readiness", async () => {
   const states = [];
   const result = await backfillSemanticDocument({
@@ -247,4 +274,59 @@ test("active embedding metadata stays provider/model/dimension/version consisten
   assert.equal(chunk.metadata.embeddingModel, "gemini-embedding-001");
   assert.equal(chunk.metadata.embeddingDimension, "768");
   assert.equal(chunk.metadata.vectorNamespace, "gemini-embedding-001-768-v1");
+});
+
+test("semantic readiness truth requires current hashes, namespace, vectors, and probe", () => {
+  const text = "A current authoritative provision.";
+  const current = {
+    document_id: 1, chunk_index: 0, title: "Current", document_type: "act",
+    visibility_status: "public", search_ready: true, semantic_ready: false,
+    retrieval_verified: true, retry_eligible: true, original_text: text,
+    translated_text: null, vector_reference: "act-1-chunk-0",
+    embedding_namespace: config.vectorNamespace,
+    embedding_input_sha256: sha256(text),
+  };
+  const stale = {
+    ...current, document_id: 2, title: "Stale", semantic_ready: true,
+    vector_reference: "act-2-chunk-0", embedding_namespace: "old-namespace",
+  };
+  const truth = semanticReadinessTruth({
+    activeNamespace: config.vectorNamespace,
+    missing: [],
+    rows: [current, stale],
+  });
+  assert.equal(truth.flaggedSemanticReady, 1);
+  assert.equal(truth.derivedSemanticReady, 1);
+  assert.equal(truth.difference, 0);
+  assert.deepEqual(truth.mismatches.map((item) => item.documentId), ["1", "2"]);
+});
+
+test("readiness reconciliation changes only mismatched semantic flags", async () => {
+  const text = "Verified active evidence.";
+  const statements = [];
+  const audit = {
+    activeNamespace: config.vectorNamespace,
+    missing: [],
+    rows: [{
+      document_id: 3, chunk_index: 0, title: "Verified", document_type: "act",
+      visibility_status: "public", search_ready: true, semantic_ready: false,
+      retrieval_verified: true, retry_eligible: true, original_text: text,
+      translated_text: null, vector_reference: "act-3-chunk-0",
+      embedding_namespace: config.vectorNamespace,
+      embedding_input_sha256: sha256(text),
+    }],
+  };
+  const result = await reconcileSemanticReadinessTruth({
+    audit,
+    queryFn: async (sql, params) => {
+      statements.push({ sql, params });
+      return { rowCount: 1, rows: [{ document_id: 3, semantic_ready: true }] };
+    },
+  });
+  assert.equal(result.updates.length, 1);
+  assert.deepEqual(JSON.parse(statements[0].params[0]), [
+    { document_id: "3", semantic_ready: true },
+  ]);
+  assert.match(statements[0].sql, /SET semantic_ready = truth\.semantic_ready/);
+  assert.doesNotMatch(statements[0].sql, /search_ready\s*=/);
 });

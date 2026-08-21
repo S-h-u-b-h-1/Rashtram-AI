@@ -41,6 +41,7 @@
     "process:documents": "node cli/processDocuments.js",
     "semantic:audit": "node cli/auditSemanticCoverage.js",
     "semantic:backfill": "node cli/backfillSemanticCoverage.js",
+    "semantic:reconcile": "node cli/reconcileSemanticCoverage.js",
     "document:readiness": "node cli/documentReadiness.js",
     "download:failures": "node cli/downloadFailures.js",
     "download:alternatives": "node cli/downloadAlternatives.js",

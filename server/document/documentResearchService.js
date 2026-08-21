@@ -1299,6 +1299,17 @@ const tokenizeForLocalRetrieval = (value) => [
             "are",
             "was",
             "were",
+            "what",
+            "which",
+            "who",
+            "when",
+            "where",
+            "why",
+            "how",
+            "does",
+            "about",
+            "say",
+            "please",
             "document",
             "policy",
             "bill",
@@ -1414,11 +1425,14 @@ const rerankPassages = (passages, message, { topK = 6 } = {}) => {
 const retrieveFtsPassages = async (documentId, message, limit = 25) => {
   const text = String(message || "").trim();
   if (!text) return [];
+  const keywords = tokenizeForLocalRetrieval(text).slice(0, 12);
+  const ftsQuery = keywords.length ? keywords.join(" OR ") : text;
+  const identifiers = [...extractIdentifiers(text)];
   let result;
   try {
     result = await query(
       `WITH search AS (
-         SELECT plainto_tsquery('simple', $1) AS ts_query
+         SELECT websearch_to_tsquery('simple', $1) AS ts_query
        )
        SELECT
          chunk.chunk_index, chunk.original_text, chunk.translated_text,
@@ -1427,10 +1441,18 @@ const retrieveFtsPassages = async (documentId, message, limit = 25) => {
        FROM document_text_chunks chunk
        CROSS JOIN search
        WHERE chunk.document_id = $2
-         AND to_tsvector('simple', COALESCE(chunk.original_text, '')) @@ search.ts_query
+         AND (
+           to_tsvector('simple', COALESCE(chunk.original_text, '')) @@ search.ts_query
+           OR EXISTS (
+             SELECT 1 FROM unnest($4::TEXT[]) identifier
+             WHERE LOWER(COALESCE(chunk.metadata_json->>'sectionId', '')) LIKE '%' || identifier || '%'
+                OR LOWER(COALESCE(chunk.metadata_json->>'clauseId', '')) LIKE '%' || identifier || '%'
+                OR LOWER(COALESCE(chunk.metadata_json->>'sectionTitle', '')) LIKE '%' || identifier || '%'
+           )
+         )
        ORDER BY fts_score DESC
        LIMIT $3`,
-      [text, documentId, limit],
+      [ftsQuery, documentId, limit, identifiers],
     );
   } catch (error) {
     console.warn(`Full-text retrieval failed for document ${documentId}: ${error.message}`);
