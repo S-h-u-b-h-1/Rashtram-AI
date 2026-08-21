@@ -36,7 +36,19 @@ test("database migrations are versioned and ordered", () => {
   assert.ok(files.includes("015_normalize_failure_pipeline_stage.js"));
   assert.ok(files.includes("016_processing_audit_log.js"));
   assert.ok(files.includes("017_normalize_download_failure_codes.js"));
-  assert.equal(files.at(-1), "031_research_query_observability.js");
+  assert.equal(files.at(-1), "032_semantic_coverage_v1.js");
+});
+
+test("semantic coverage migration adds only bounded audit indexes", () => {
+  const source = fs.readFileSync(
+    path.join(__dirname, "../migrations/032_semantic_coverage_v1.js"),
+    "utf8",
+  );
+  assert.match(source, /document_processing_state_semantic_backlog_idx/);
+  assert.match(source, /document_text_chunks_namespace_document_idx/);
+  assert.match(source, /user_activity_events_document_recent_idx/);
+  assert.match(source, /processing_attempts_semantic_backfill_idx/);
+  assert.doesNotMatch(source, /DROP|DELETE|TRUNCATE|UPDATE\s/i);
 });
 
 test("research observability migration is additive and privacy safe", () => {

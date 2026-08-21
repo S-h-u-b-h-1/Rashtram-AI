@@ -123,4 +123,8 @@ module.exports = [
     name: "031_research_query_observability.js",
     migration: require("./031_research_query_observability"),
   },
+  {
+    name: "032_semantic_coverage_v1.js",
+    migration: require("./032_semantic_coverage_v1"),
+  },
 ];

@@ -5,6 +5,10 @@ const { cacheStats } = require("../retrieval/researchCache");
 const { rolloutConfiguration } = require("../retrieval/featureFlags");
 const { getResearchTelemetrySummary } = require("../retrieval/researchTelemetry");
 const { evaluateRun } = require("../evaluation/ragEvalV1");
+const {
+  getSemanticBackfillMetrics,
+  getSemanticCoverageReport,
+} = require("../document/semanticCoverageService");
 
 const baselinePath = path.resolve(__dirname, "../evaluation/benchmarks/ci-baseline-v1.json");
 const benchmarkPath = path.resolve(__dirname, "../evaluation/benchmarks/ci-v1.json");
@@ -31,14 +35,18 @@ const getResearchQualityStatus = async () => {
 };
 
 const getResearchOperations = async () => {
-  const [processing, queryTelemetry] = await Promise.all([
+  const [processing, queryTelemetry, semanticCoverage, semanticBackfill] = await Promise.all([
     getProcessingStatus(),
     getResearchTelemetrySummary(),
+    getSemanticCoverageReport(),
+    getSemanticBackfillMetrics(),
   ]);
   return {
     generatedAt: new Date().toISOString(),
     processing,
     queryTelemetry,
+    semanticCoverage,
+    semanticBackfill,
     caches: cacheStats(),
     rollout: rolloutConfiguration(),
     notes: {

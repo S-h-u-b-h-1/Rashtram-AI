@@ -54,28 +54,29 @@ This prevents provider-independent readiness from being mistaken for high-qualit
 Use dry-run first:
 
 ```bash
-npm run embeddings:recover --prefix server -- --limit=25 --source=prsindia --dry-run
+npm run semantic:backfill --prefix server -- --limit=25 --source=prsindia --dry-run
 ```
 
 Recover a bounded set:
 
 ```bash
-npm run embeddings:recover --prefix server -- --limit=25 --source=prsindia --provider=gemini --time-limit=900
+npm run semantic:backfill --prefix server -- --limit=25 --source=prsindia
 ```
 
 Recover specific partial documents:
 
 ```bash
-npm run embeddings:recover --prefix server -- --document-id=390 --provider=gemini
+npm run semantic:backfill --prefix server -- --document-id=390 --limit=1
 ```
 
 Useful filters:
 
-- `--only-missing`: chunks without a vector reference.
-- `--only-stale`: chunks whose stored embedding metadata does not match the configured provider/model/dimension.
-- `--all`: re-embed selected documents even if metadata already matches.
-- `--cost-limit=0.25`: stop before exceeding the configured estimate. This requires `EMBEDDING_RECOVERY_COST_PER_1K_TOKENS`.
-- `--time-limit=600`: stop after the bounded runtime.
+- `--priority=P0|P1|P2|P3`: process one deterministic priority tier.
+- `--document-id=390`: explicitly target one public search-ready document.
+- `--source=india-code`: limit selection to a source identity.
+- `--max-chunks=100`: exclude unexpectedly large documents from an automatic batch.
+- `--group-size=5`: recheck capacity between bounded groups.
+- `--dry-run`: estimate chunk reuse and embedding input without writing.
 
 The command operates at document granularity. It does not mark a document recovered after only a subset of chunks.
 
