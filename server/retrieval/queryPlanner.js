@@ -18,7 +18,10 @@ const classifyQuery = (query, options = {}) => {
       matches(text, /\b(compare|comparison|contrast|differences? between|versus|vs\.?)\b/i)) {
     return QUERY_TYPES.COMPARISON;
   }
-  if (matches(text, /\b(section|subsection|sub-section|clause|article|rule|schedule|chapter)\s+[\divxlcdm]+(?:\s*\([\w-]+\))*\b/i)) {
+  if (matches(
+    text,
+    /\b(section|subsection|sub-section|clause|article|rule|schedule|chapter)\s+(?:[\divxlcdm]+(?:\.\d+)*(?:\s*\([\w-]+\))*|(?:\([\w-]+\))+)/i,
+  )) {
     return QUERY_TYPES.EXACT_REFERENCE;
   }
   if (matches(text, /\b(amend|amended|repeal|replace|related|relationship|linked|implements?|implemented by|issued under|supersed|deriv(?:e|ed)|parent act)\b/i)) {

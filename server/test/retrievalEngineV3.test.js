@@ -33,6 +33,9 @@ test("query planner deterministically covers every Retrieval V3 query type", () 
   fixtures.forEach(([query, expected]) => assert.equal(classifyQuery(query), expected));
   assert.equal(classifyQuery("Show the timeline and effective dates"), QUERY_TYPES.TIMELINE);
   assert.equal(classifyQuery("Which authority has compliance obligations?"), QUERY_TYPES.COMPLIANCE);
+  assert.equal(classifyQuery("What does clause (2) state?"), QUERY_TYPES.EXACT_REFERENCE);
+  assert.equal(classifyQuery("Explain clause 2.30"), QUERY_TYPES.EXACT_REFERENCE);
+  assert.equal(classifyQuery("What is section 14(2)(a)?"), QUERY_TYPES.EXACT_REFERENCE);
 });
 
 test("exact section retrieval never invokes vector search", async () => {
