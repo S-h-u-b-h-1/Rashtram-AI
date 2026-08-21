@@ -42,7 +42,7 @@ const {
   objectStorageConfig,
 } = require("../lib/storage/objectStorage");
 const { planQuery } = require("../retrieval/queryPlanner");
-const { retrievalConfig } = require("../retrieval/retrievalConfig");
+const { candidateLimitsFor, retrievalConfig } = require("../retrieval/retrievalConfig");
 const { legacyCandidateMerge, reciprocalRankFusion } = require("../retrieval/rankFusion");
 const {
   applyResearchFlags,
@@ -1605,6 +1605,23 @@ const retrieveMetadataPassages = async (documentId, documentValue = null) => {
   }];
 };
 
+const awaitWithinTimeBudget = async (promise, budgetMs) => {
+  const safeBudget = Math.min(10_000, Math.max(10, Number(budgetMs) || 2_500));
+  let timeout;
+  const timeoutResult = new Promise((resolve) => {
+    timeout = setTimeout(() => resolve({ timedOut: true, value: null }), safeBudget);
+    timeout.unref?.();
+  });
+  try {
+    return await Promise.race([
+      Promise.resolve(promise).then((value) => ({ timedOut: false, value })),
+      timeoutResult,
+    ]);
+  } finally {
+    clearTimeout(timeout);
+  }
+};
+
 const retrieveDocumentContext = async (
   documentType,
   documentId,
@@ -1620,6 +1637,7 @@ const retrieveDocumentContext = async (
     options.plan || planQuery(message, options),
     flags,
   );
+  const candidateLimits = candidateLimitsFor(plan.queryType, settings);
   const topK = Math.min(10, Math.max(1, Number(options.topK || settings.finalPassages)));
   const documentVersion = options.document?.fileHash ||
     options.document?.contentFingerprintSha256 || options.document?.updatedAt || null;
@@ -1660,10 +1678,15 @@ const retrieveDocumentContext = async (
     const expanded = await expandLargeDocumentMatches({
       matches, documentId, message,
     });
-    if (expanded) return expanded;
-    return matches.map(passageFromVectorMatch)
+    if (expanded) {
+      expanded.metrics = matches.metrics;
+      return expanded;
+    }
+    const passages = matches.map(passageFromVectorMatch)
       .filter((passage) => passage.content.trim())
       .map((passage) => ({ ...passage, vectorScore: passage.score }));
+    passages.metrics = matches.metrics;
+    return passages;
   });
 
   const timings = {};
@@ -1680,41 +1703,65 @@ const retrieveDocumentContext = async (
     : Promise.resolve([]);
   const lexicalLimit = plan.queryType === "EXACT_REFERENCE"
     ? settings.exactCandidates
-    : settings.lexicalCandidates;
+    : candidateLimits.lexical;
   const lexicalPromise = plan.useLexical
     ? timed("lexical", () => ftsSearch(documentId, message, lexicalLimit))
     : Promise.resolve([]);
   const eagerVectorPromise = plan.useVector === true
-    ? timed("vector", () => vectorSearch(settings.vectorCandidates))
+    ? timed("vector", () => vectorSearch(candidateLimits.vector))
       .then((passages) => ({ passages, error: null }))
       .catch((error) => ({ passages: [], error }))
     : null;
-  const [metadataPassages, temporalPassages, ftsPassages, eagerVectorOutcome] = await Promise.all([
+  const [metadataPassages, temporalPassages, ftsPassages] = await Promise.all([
     metadataPromise,
     temporalPromise,
     lexicalPromise,
-    eagerVectorPromise || Promise.resolve(null),
   ]);
 
   let localPassages = [];
   if (plan.useLexical && ftsPassages.length < settings.minimumLexicalEvidence) {
-    localPassages = await timed("local", () => localSearch(documentId, message, settings.lexicalCandidates));
+    localPassages = await timed("local", () => localSearch(documentId, message, candidateLimits.lexical));
   }
   const lexicalEvidence = reciprocalRankFusion(
     [ftsPassages, localPassages],
-    { documentId, k: settings.rrfK, limit: settings.fusedCandidates },
+    { documentId, k: settings.rrfK, limit: candidateLimits.fused },
   );
   const shouldUseVector = plan.useVector === true ||
     (plan.useVector === "if_insufficient" && lexicalEvidence.length < settings.minimumLexicalEvidence);
+  let eagerVectorOutcome = null;
+  if (shouldUseVector && eagerVectorPromise) {
+    if (lexicalEvidence.length >= settings.minimumLexicalEvidence) {
+      const waitedAt = Date.now();
+      const waited = await awaitWithinTimeBudget(
+        eagerVectorPromise,
+        options.vectorTimeBudgetMs ?? settings.vectorTimeBudgetMs,
+      );
+      timings.vectorWaitMs = Date.now() - waitedAt;
+      if (waited.timedOut) {
+        const error = new Error("Vector retrieval exceeded the safe wait budget");
+        error.code = "VECTOR_TIME_BUDGET_EXCEEDED";
+        eagerVectorOutcome = { passages: [], error };
+      } else {
+        eagerVectorOutcome = waited.value;
+      }
+    } else {
+      eagerVectorOutcome = await eagerVectorPromise;
+    }
+  }
   let vectorPassages = eagerVectorOutcome?.passages || [];
   let vectorError = eagerVectorOutcome?.error || null;
-  if (shouldUseVector && !eagerVectorOutcome) {
+  if (shouldUseVector && !eagerVectorPromise) {
     try {
-      vectorPassages = await timed("vector", () => vectorSearch(settings.vectorCandidates));
+      vectorPassages = await timed("vector", () => vectorSearch(candidateLimits.vector));
     } catch (error) {
       vectorError = error;
       timings.vectorMs = timings.vectorMs || 0;
     }
+  }
+  if (vectorPassages.metrics) {
+    timings.queryEmbeddingMs = Number(vectorPassages.metrics.queryEmbeddingMs || 0);
+    timings.queryEmbeddingCache = vectorPassages.metrics.queryEmbeddingCache || "unknown";
+    timings.pineconeMs = Number(vectorPassages.metrics.pineconeMs || 0);
   }
 
   const fusionStartedAt = Date.now();
@@ -1724,7 +1771,7 @@ const retrieveDocumentContext = async (
     {
       documentId,
       k: settings.rrfK,
-      limit: settings.fusedCandidates,
+      limit: candidateLimits.fused,
       useAuthority: flags.authorityWeighting,
     },
   );
@@ -1754,6 +1801,7 @@ const retrieveDocumentContext = async (
       vector: shouldUseVector,
       graph: Boolean(plan.useGraph),
     },
+    candidateLimits,
     candidateCounts: {
       metadata: metadataPassages.length,
       temporal: temporalPassages.length,
@@ -1780,6 +1828,7 @@ const retrieveDocumentContext = async (
     },
     plannerVersion: plan.plannerVersion,
     vectorDegraded: Boolean(vectorError),
+    vectorTimedOut: vectorError?.code === "VECTOR_TIME_BUDGET_EXCEEDED",
     flags,
     cache: {
       status: cacheKey ? "miss" : "bypass",
@@ -1796,7 +1845,7 @@ const retrieveDocumentContext = async (
     plan,
     diagnostics,
   };
-  if (cacheKey) caches.retrieval.set(cacheKey, response);
+  if (cacheKey && !vectorError) caches.retrieval.set(cacheKey, response);
   return response;
 };
 
@@ -1957,6 +2006,7 @@ const ensureSummary = async (documentType, documentId) => {
 
 module.exports = {
   TYPE_CONFIG,
+  awaitWithinTimeBudget,
   getDocument,
   getDocumentContext,
   isExtractableSourceDocument,

@@ -5,6 +5,7 @@ const {
 } = require("./providerErrorSanitizer");
 const { createCircuitBreaker } = require("./circuitBreaker");
 const { checkVectorNamespaces } = require("./vectorNamespaceHealth");
+const { getOrCreateQueryEmbedding } = require("../retrieval/researchCache");
 const {
   createRateLimitedQueue,
   isRateLimitError,
@@ -1012,8 +1013,24 @@ const generateEmbeddings = async (
   return vectors;
 };
 
+const generateEmbeddingWithMetrics = async (text) => {
+  const startedAt = Date.now();
+  const result = await getOrCreateQueryEmbedding({
+    query: text,
+    provider: EMBEDDING_PROVIDER,
+    model: EMBEDDING_MODEL,
+    version: VECTOR_NAMESPACE,
+    dimension: EMBEDDING_DIMENSION,
+  }, async () => (await generateEmbeddings([text], "RETRIEVAL_QUERY"))[0]);
+  return {
+    vector: result.embedding,
+    cacheStatus: result.cacheStatus,
+    elapsedMs: Date.now() - startedAt,
+  };
+};
+
 const generateEmbedding = async (text) =>
-  (await generateEmbeddings([text], "RETRIEVAL_QUERY"))[0];
+  (await generateEmbeddingWithMetrics(text)).vector;
 
 const normalizeResponseLanguage = (value, prompt = "") => {
   const requested = String(value || "Auto").trim().toLowerCase();
@@ -1604,15 +1621,16 @@ const generatePolicySummary = (content) =>
   generateDocumentSummary("policy", content);
 
 const searchContent = async (index, idField, id, query, topK = 5) => {
-  const queryEmbedding = await generateEmbedding(query);
+  const queryEmbeddingResult = await generateEmbeddingWithMetrics(query);
+  const pineconeStartedAt = Date.now();
   const searchResults = await index.query({
-    vector: queryEmbedding,
+    vector: queryEmbeddingResult.vector,
     topK,
     filter: { [idField]: { $eq: String(id) } },
     includeMetadata: true,
   });
 
-  return (searchResults.matches || []).map((match) => ({
+  const matches = (searchResults.matches || []).map((match) => ({
     ...match,
     relevanceScore: match.score,
     content: match.metadata?.content || "",
@@ -1622,6 +1640,12 @@ const searchContent = async (index, idField, id, query, topK = 5) => {
       source: match.metadata?.source || "pdf",
     },
   }));
+  matches.metrics = {
+    queryEmbeddingMs: queryEmbeddingResult.elapsedMs,
+    queryEmbeddingCache: queryEmbeddingResult.cacheStatus,
+    pineconeMs: Date.now() - pineconeStartedAt,
+  };
+  return matches;
 };
 
 const searchSimilarContent = (query, billId, topK = 5) =>

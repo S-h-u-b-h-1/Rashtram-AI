@@ -54,6 +54,48 @@ const caches = {
   catalogue: new BoundedVersionedCache({ name: "catalogue", maxEntries: 200, ttlMs: 30_000 }),
   retrieval: new BoundedVersionedCache({ name: "retrieval", maxEntries: 300, ttlMs: 5 * 60_000 }),
   analysis: new BoundedVersionedCache({ name: "safe_repeat_analysis", maxEntries: 100, ttlMs: 10 * 60_000 }),
+  queryEmbedding: new BoundedVersionedCache({ name: "query_embedding", maxEntries: 500, ttlMs: 10 * 60_000 }),
+};
+const queryEmbeddingInflight = new Map();
+const MAX_QUERY_EMBEDDING_INFLIGHT = 100;
+
+const queryEmbeddingCacheKey = ({ query, provider, model, version, dimension } = {}) => {
+  const normalizedQuery = normalize(query);
+  if (!normalizedQuery || !model || !version) return null;
+  return stableHash({
+    kind: "query_embedding",
+    normalizedQueryHash: stableHash(normalizedQuery),
+    provider: String(provider || "unknown"),
+    model: String(model),
+    version: String(version),
+    dimension: Number(dimension || 0),
+  });
+};
+
+const getOrCreateQueryEmbedding = async (options, factory) => {
+  if (typeof factory !== "function") {
+    throw new TypeError("Query embedding factory is required");
+  }
+  const key = queryEmbeddingCacheKey(options);
+  if (!key) {
+    return { embedding: await factory(), cacheStatus: "bypass" };
+  }
+  const cached = caches.queryEmbedding.get(key);
+  if (cached) return { embedding: cached, cacheStatus: "hit" };
+  const inFlight = queryEmbeddingInflight.get(key);
+  if (inFlight) return { embedding: await inFlight, cacheStatus: "coalesced" };
+  if (queryEmbeddingInflight.size >= MAX_QUERY_EMBEDDING_INFLIGHT) {
+    return { embedding: await factory(), cacheStatus: "bypass_capacity" };
+  }
+  const pending = Promise.resolve().then(factory);
+  queryEmbeddingInflight.set(key, pending);
+  try {
+    const embedding = await pending;
+    caches.queryEmbedding.set(key, embedding);
+    return { embedding, cacheStatus: "miss" };
+  } finally {
+    queryEmbeddingInflight.delete(key);
+  }
 };
 
 const privacyScope = ({ userId, privateSourceIds = [] } = {}) => {
@@ -116,8 +158,10 @@ module.exports = {
   analysisCacheKey,
   cacheStats,
   caches,
+  getOrCreateQueryEmbedding,
   normalize,
   privacyScope,
+  queryEmbeddingCacheKey,
   retrievalCacheKey,
   stableHash,
 };
