@@ -134,6 +134,16 @@ test("commercial telemetry is account-owned and excludes raw research content", 
   assert.doesNotMatch(source, /question_text|source_text|raw_question/);
 });
 
+test("database audit uses the canonical lexical-fallback readiness invariant", () => {
+  const source = fs.readFileSync(
+    path.join(__dirname, "../lib/database/audit.js"), "utf8",
+  );
+  assert.match(source, /embedding_status = 'fallback'/);
+  assert.match(source, /retrieval_mode IN \('local_text', 'hybrid'\)/);
+  assert.match(source, /ps\.retrieval_verified/);
+  assert.match(source, /ps\.error_message IS NULL/);
+});
+
 test("research observability migration is additive and privacy safe", () => {
   const source = fs.readFileSync(
     path.join(__dirname, "../migrations/031_research_query_observability.js"),
