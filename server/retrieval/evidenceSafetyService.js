@@ -44,8 +44,8 @@ const safetyConfig = () => ({
   maximumRepairAttempts: Math.min(1, Math.max(0,
     Number.parseInt(process.env.EVIDENCE_MAX_REPAIR_ATTEMPTS || "1", 10) || 0,
   )),
-  version: "evidence-safety-v1.0",
-  claimVerifierVersion: "deterministic-citation-verifier-v1.0",
+  version: "evidence-safety-v1.1",
+  claimVerifierVersion: "deterministic-citation-verifier-v1.1",
 });
 
 const normalize = (value) => String(value || "")
@@ -111,6 +111,41 @@ const authorityValue = (authorityClass) => ({
 
 const numericFacts = (value) => normalize(value).match(/\b\d+(?:\.\d+)?%?\b/g) || [];
 
+const sufficiencyDecision = (level) => ({
+  [SUFFICIENCY_LEVELS.HIGH]: "SUFFICIENT",
+  [SUFFICIENCY_LEVELS.MEDIUM]: "SUFFICIENT",
+  [SUFFICIENCY_LEVELS.LOW]: "LIMITED",
+  [SUFFICIENCY_LEVELS.INSUFFICIENT]: "ABSTAIN",
+  [SUFFICIENCY_LEVELS.CONFLICTING]: "CONFLICT",
+})[level] || "ABSTAIN";
+
+const band = (value, high, medium) => (
+  value >= high ? "HIGH" : value >= medium ? "MEDIUM" : "LOW"
+);
+
+const explainableSignals = ({
+  bestRelevance = 0,
+  bestAlignment = 0,
+  authorityClass = "UNKNOWN",
+  evidenceBreadth = 0,
+  independentSources = 0,
+  exactReference = false,
+  retrievalVerified = false,
+  conflicts = [],
+} = {}) => ({
+  retrievalStrength: band(Math.max(bestRelevance, bestAlignment), 0.65, 0.3),
+  queryEvidenceAlignment: band(bestAlignment, 0.5, 0.18),
+  exactReferenceMatch: Boolean(exactReference),
+  sourceAuthority: authorityClass || "UNKNOWN",
+  sourceDiversity: independentSources >= 2 ? "MULTIPLE" : independentSources === 1 ? "SINGLE" : "NONE",
+  evidenceCoverage: band(evidenceBreadth, 0.8, 0.4),
+  sourceConsistency: conflicts.length ? "CONFLICTING" : "CONSISTENT",
+  documentCapabilities: {
+    retrievalVerified: Boolean(retrievalVerified),
+    searchReady: Boolean(retrievalVerified),
+  },
+});
+
 const detectEvidenceConflicts = (evidence = []) => {
   const conflictTerms = /\b(rate|amount|deadline|effective|commence|date|limit|threshold|penalty|fine|period)\b/i;
   const candidates = evidence.filter((item) =>
@@ -142,9 +177,12 @@ const assessEvidenceSufficiency = (query, evidence = [], options = {}) => {
   const usable = evidence.filter((item) => String(item.content || "").trim());
   const conflicts = detectEvidenceConflicts(usable);
   if (conflicts.length) {
+    const level = SUFFICIENCY_LEVELS.CONFLICTING;
     return {
-      level: SUFFICIENCY_LEVELS.CONFLICTING,
+      level,
+      decision: sufficiencyDecision(level),
       score: 0,
+      signals: explainableSignals({ conflicts, retrievalVerified: options.retrievalVerified }),
       reasons: ["Retrieved sources contain materially inconsistent evidence."],
       missing: [],
       conflicts,
@@ -152,9 +190,12 @@ const assessEvidenceSufficiency = (query, evidence = [], options = {}) => {
     };
   }
   if (!usable.length) {
+    const level = SUFFICIENCY_LEVELS.INSUFFICIENT;
     return {
-      level: SUFFICIENCY_LEVELS.INSUFFICIENT,
+      level,
+      decision: sufficiencyDecision(level),
       score: 0,
+      signals: explainableSignals({ retrievalVerified: options.retrievalVerified }),
       reasons: ["No usable source passage was retrieved."],
       missing: ["Relevant source passages"],
       conflicts: [],
@@ -170,6 +211,10 @@ const assessEvidenceSufficiency = (query, evidence = [], options = {}) => {
   const bestRelevance = Math.min(1, Math.max(...relevance, 0));
   const bestAlignment = Math.min(1, Math.max(...alignments, 0));
   const authority = Math.max(...usable.map((item) => authorityValue(item.authorityClass)), 0.5);
+  const authorityClass = usable
+    .slice()
+    .sort((left, right) => authorityValue(right.authorityClass) - authorityValue(left.authorityClass))[0]
+    ?.authorityClass || "UNKNOWN";
   const independentSources = new Set(usable.map((item) =>
     `${item.documentId || "document"}:${item.sourceUrl || item.source || item.userSource || "source"}`,
   )).size;
@@ -202,7 +247,17 @@ const assessEvidenceSufficiency = (query, evidence = [], options = {}) => {
   if (usable.length < Number(options.minimumEvidence || 2)) missing.push("Additional supporting passages");
   return {
     level,
+    decision: sufficiencyDecision(level),
     score: Number(score.toFixed(4)),
+    signals: explainableSignals({
+      bestRelevance,
+      bestAlignment,
+      authorityClass,
+      evidenceBreadth,
+      independentSources,
+      exactReference,
+      retrievalVerified: options.retrievalVerified !== false,
+    }),
     reasons,
     missing,
     conflicts: [],
@@ -249,6 +304,14 @@ const classifyClaim = (text) => {
   return CLAIM_TYPES.SOURCE_FACT;
 };
 
+const isMaterialFactualClaim = (text) => {
+  const value = String(text || "").trim();
+  if (!value) return false;
+  return numericFacts(value).length > 0 ||
+    /\b(?:act|bill|rule|regulation|notification|order|policy|section|clause|article|schedule|authority|government|ministry|department|court|commission|board|institution|jurisdiction)\b/i.test(value) ||
+    /\b(?:shall|must|required|prohibited|permitted|liable|penalty|fine|deadline|effective|commence|amend|repeal|exempt|obligation|entitlement|power|duty)\b/i.test(value);
+};
+
 const extractCitationLabels = (text) => {
   const labels = [];
   const pattern = /\[((?:Source|Passage)\s+\d+|GRAPH-\d+|D\d+-C\d+|User source:[^\]]+)(?:[^\]]*)\]/gi;
@@ -263,11 +326,15 @@ const extractClaims = (answer) => String(answer || "")
   .split(/\n+/)
   .map((line, index) => ({ raw: line, index, text: line.replace(/^\s*(?:[-*]|\d+[.)])\s*/, "").trim() }))
   .filter((item) => item.text && !/^#{1,6}\s/.test(item.raw))
-  .map((item) => ({
-    ...item,
-    type: classifyClaim(item.text),
-    citations: extractCitationLabels(item.text),
-  }));
+  .map((item) => {
+    const type = classifyClaim(item.text);
+    return {
+      ...item,
+      type,
+      material: type === CLAIM_TYPES.SOURCE_FACT && isMaterialFactualClaim(item.text),
+      citations: extractCitationLabels(item.text),
+    };
+  });
 
 const evidenceMap = (evidence = []) => {
   const map = new Map();
@@ -325,6 +392,14 @@ const validateClaims = (claims, evidence = []) => {
   return claims.map((claim) => {
     if (claim.type !== CLAIM_TYPES.SOURCE_FACT) {
       return { ...claim, state: CLAIM_STATES.SUPPORTED, support: [] };
+    }
+    if (claim.material === false) {
+      return {
+        ...claim,
+        state: CLAIM_STATES.SUPPORTED,
+        support: [],
+        verificationScope: "non_material",
+      };
     }
     if (!claim.citations.length) {
       return { ...claim, state: CLAIM_STATES.UNSUPPORTED, support: [], reason: "No retrieved citation was attached." };
@@ -495,7 +570,10 @@ module.exports = {
   detectEvidenceConflicts,
   extractCitationLabels,
   extractClaims,
+  explainableSignals,
+  isMaterialFactualClaim,
   safetyConfig,
+  sufficiencyDecision,
   summarizeVerification,
   validateClaims,
   verifyAndRepairAnswer,

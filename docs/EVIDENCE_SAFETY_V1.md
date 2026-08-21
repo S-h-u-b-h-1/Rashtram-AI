@@ -29,6 +29,8 @@ The assessment combines:
 
 No single vector or lexical score is treated as truth. A detected material conflict returns `CONFLICTING` rather than silently selecting one source. Possible levels are `HIGH`, `MEDIUM`, `LOW`, `INSUFFICIENT`, and `CONFLICTING`.
 
+Every assessment also returns an explicit decision (`SUFFICIENT`, `LIMITED`, `ABSTAIN`, or `CONFLICT`) and named signals instead of requiring consumers to interpret an opaque number. Signals describe retrieval strength, query/evidence alignment, exact-reference matching, source authority, source diversity, evidence coverage, source consistency, and verified document capabilities. The numeric score remains available for diagnostics, but the decision and signals are the public reasoning contract.
+
 The thresholds are configurable:
 
 ```text
@@ -65,12 +67,14 @@ Grounded prompts require Gemini to:
 
 Claims are classified as:
 
-- `SOURCE_FACT` — strictly citation-checked;
+- `SOURCE_FACT` — material factual and legal claims are strictly citation-checked;
 - `ANALYTICAL_INFERENCE` — must be visibly framed as inference;
 - `RECOMMENDATION` — advice rather than a claimed source fact; or
 - `UNCERTAINTY` — an explicit evidence limitation.
 
 Factual claim states are `SUPPORTED`, `PARTIALLY_SUPPORTED`, `UNSUPPORTED`, or `CONFLICTING`. Validation checks the cited evidence only. It does not search the internet or use unrelated documents. Numeric claims must preserve a number found in the supporting evidence.
+
+Strict verification is scoped to material factual/legal assertions: numbers, legal instruments or provisions, named public bodies, jurisdictions, duties, powers, deadlines, penalties, amendments, exemptions, and similar claims that could affect a research conclusion. Non-material connective or stylistic prose is marked `non_material` and does not fail merely because it has no citation. Manually supplied verifier claims remain strict by default unless they explicitly set `material: false`.
 
 Structured comparisons validate every detailed item and repair an unsupported executive summary with a neutral description of the remaining verified findings.
 
@@ -92,7 +96,7 @@ Researcher-added sources remain selected and queried with `user_id` ownership co
 
 SSE and persisted multi-document messages include:
 
-- evidence sufficiency level, score, reasons, and version;
+- evidence sufficiency level, decision, explainable signals, score, reasons, and version;
 - generation mode;
 - verifier version;
 - unsupported claims before and after repair;

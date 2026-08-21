@@ -43,7 +43,12 @@ test("high-confidence exact section evidence receives a HIGH assessment", () => 
     { queryType: QUERY_TYPES.EXACT_REFERENCE, retrievalVerified: true },
   );
   assert.equal(result.level, SUFFICIENCY_LEVELS.HIGH);
+  assert.equal(result.decision, "SUFFICIENT");
   assert.ok(result.score >= 0.72);
+  assert.equal(result.signals.exactReferenceMatch, true);
+  assert.equal(result.signals.sourceAuthority, "PRIMARY_OFFICIAL");
+  assert.equal(result.signals.sourceConsistency, "CONSISTENT");
+  assert.equal(result.signals.documentCapabilities.searchReady, true);
   assert.match(result.reasons.join(" "), /exact structural reference/i);
 });
 
@@ -54,6 +59,7 @@ test("a low-evidence query is not marked high confidence", () => {
     { queryType: QUERY_TYPES.POLICY_ANALYSIS, retrievalVerified: true },
   );
   assert.ok([SUFFICIENCY_LEVELS.LOW, SUFFICIENCY_LEVELS.INSUFFICIENT].includes(result.level));
+  assert.ok(["LIMITED", "ABSTAIN"].includes(result.decision));
   assert.notEqual(result.level, SUFFICIENCY_LEVELS.HIGH);
 });
 
@@ -61,6 +67,21 @@ test("unsupported generated factual claims are detected", () => {
   const claims = extractClaims("The Bill creates a ₹50 crore grant for hospitals. [Source 1]");
   const [validated] = validateClaims(claims, [evidence()]);
   assert.equal(validated.type, CLAIM_TYPES.SOURCE_FACT);
+  assert.equal(validated.state, CLAIM_STATES.UNSUPPORTED);
+});
+
+test("non-material connective prose does not require a citation", () => {
+  const claims = extractClaims("Taken together, the evidence provides useful context.");
+  const [validated] = validateClaims(claims, [evidence()]);
+  assert.equal(validated.material, false);
+  assert.equal(validated.state, CLAIM_STATES.SUPPORTED);
+  assert.equal(validated.verificationScope, "non_material");
+});
+
+test("material legal claims remain subject to strict citation verification", () => {
+  const claims = extractClaims("The Authority must publish the report by 31 March.");
+  const [validated] = validateClaims(claims, [evidence()]);
+  assert.equal(validated.material, true);
   assert.equal(validated.state, CLAIM_STATES.UNSUPPORTED);
 });
 
@@ -99,7 +120,17 @@ test("closely aligned authoritative sources with different values surface a conf
     evidence({ documentId: "rule-b", content: "The penalty rate for delayed annual filing is 20 percent." }),
   ]);
   assert.equal(assessment.level, SUFFICIENCY_LEVELS.CONFLICTING);
+  assert.equal(assessment.decision, "CONFLICT");
+  assert.equal(assessment.signals.sourceConsistency, "CONFLICTING");
   assert.match(buildAbstentionResponse(assessment), /inconsistent/i);
+});
+
+test("an empty evidence set returns an explainable abstention decision", () => {
+  const result = assessEvidenceSufficiency("What changed?", [], { retrievalVerified: false });
+  assert.equal(result.level, SUFFICIENCY_LEVELS.INSUFFICIENT);
+  assert.equal(result.decision, "ABSTAIN");
+  assert.equal(result.signals.sourceDiversity, "NONE");
+  assert.equal(result.signals.documentCapabilities.searchReady, false);
 });
 
 test("absent page or section metadata is never fabricated in extractive fallback", () => {
