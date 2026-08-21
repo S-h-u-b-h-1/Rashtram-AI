@@ -1,9 +1,11 @@
 "use client";
 
-import { Loader2, Search, ShieldAlert } from "lucide-react";
+import { Bell, Check, Loader2, Search, ShieldAlert } from "lucide-react";
 import { useState } from "react";
 import {
   researchComplianceForProblem,
+  createRegulatoryWatchlist,
+  refreshRegulatoryWatchlists,
   trackActivity,
 } from "@/lib/api";
 import { RecommendationSection } from "./RecommendationSection";
@@ -13,6 +15,23 @@ export function BusinessProblemRecommender() {
   const [result, setResult] = useState(null);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [watching, setWatching] = useState(false);
+  const [watchStatus, setWatchStatus] = useState("");
+
+  const watchProblem = async () => {
+    if (watching || problem.trim().length < 2) return;
+    setWatching(true);
+    setWatchStatus("");
+    try {
+      await createRegulatoryWatchlist({ watchType: "topic", watchValue: problem });
+      const refresh = await refreshRegulatoryWatchlists();
+      setWatchStatus(`Watchlist saved. ${refresh.created || 0} verified alert${refresh.created === 1 ? "" : "s"} found.`);
+    } catch (requestError) {
+      setWatchStatus(requestError.message);
+    } finally {
+      setWatching(false);
+    }
+  };
 
   const submit = async (event) => {
     event.preventDefault();
@@ -103,6 +122,24 @@ export function BusinessProblemRecommender() {
             pagePath="/app/recommend"
             emptyMessage="No research-ready catalogue records matched strongly enough. Add the sector, location, obligation, or affected group to your problem description and try again."
           />
+          <section className="surface-card flex flex-col gap-3 p-5 sm:flex-row sm:items-center sm:justify-between sm:p-6">
+            <div>
+              <h2 className="font-serif text-2xl text-[#8f1d2c]">Track verified updates</h2>
+              <p className="mt-1 text-sm leading-6 text-[#706a61]">
+                Save this problem as a private watchlist. Alerts include the source and explain the exact match.
+              </p>
+              {watchStatus && <p role="status" className="mt-2 text-xs font-semibold text-[#70434a]">{watchStatus}</p>}
+            </div>
+            <button
+              type="button"
+              onClick={watchProblem}
+              disabled={watching}
+              className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl border border-[#8f1d2c]/20 bg-white px-4 py-3 text-xs font-semibold text-[#8f1d2c] disabled:opacity-45"
+            >
+              {watching ? <Loader2 className="h-4 w-4 animate-spin" /> : watchStatus.startsWith("Watchlist saved") ? <Check className="h-4 w-4" /> : <Bell className="h-4 w-4" />}
+              {watching ? "Checking sources…" : "Watch this problem"}
+            </button>
+          </section>
           <div className="grid gap-5 lg:grid-cols-2">
             <section className="surface-card p-5 sm:p-6">
               <h2 className="font-serif text-2xl text-[#8f1d2c]">

@@ -139,4 +139,8 @@ module.exports = [
     name: "035_compliance_copilot_v1.js",
     migration: require("./035_compliance_copilot_v1"),
   },
+  {
+    name: "036_regulatory_watchlists_v1.js",
+    migration: require("./036_regulatory_watchlists_v1"),
+  },
 ];

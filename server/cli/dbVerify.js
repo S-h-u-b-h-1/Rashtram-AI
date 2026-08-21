@@ -294,6 +294,16 @@ const checks = [
         WHERE migration_name = '035_compliance_copilot_v1.js'
       ) AS passed`,
   },
+  {
+    name: "migration 036 regulatory watchlists complete",
+    sql: `SELECT
+      TO_REGCLASS('public.research_watchlists') IS NOT NULL
+      AND TO_REGCLASS('public.regulatory_alerts') IS NOT NULL
+      AND EXISTS (
+        SELECT 1 FROM schema_migrations
+        WHERE migration_name = '036_regulatory_watchlists_v1.js'
+      ) AS passed`,
+  },
 ];
 
 const main = async () => {

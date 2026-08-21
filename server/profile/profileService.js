@@ -732,6 +732,8 @@ const deleteAccount = async (userId, payload = {}) => {
     await deleteOwned("multi_document_chats");
     await deleteOwned("document_comparisons");
     await deleteOwned("compliance_research_runs");
+    await deleteOwned("regulatory_alerts");
+    await deleteOwned("research_watchlists");
     await deleteOwned("document_chat_feedback");
     await deleteOwned("research_notes");
     await deleteOwned("saved_content");

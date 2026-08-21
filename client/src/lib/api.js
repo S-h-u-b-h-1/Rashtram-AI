@@ -395,6 +395,26 @@ export const researchComplianceForProblem = async (payload) => {
   });
 };
 
+export const createRegulatoryWatchlist = async (payload) =>
+  apiRequest("/product-intelligence/watchlists", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+
+export const refreshRegulatoryWatchlists = async () =>
+  apiRequest("/product-intelligence/watchlists/refresh", { method: "POST" });
+
+export const getRegulatoryWatchlists = async () =>
+  apiRequest("/product-intelligence/watchlists");
+
+export const getRegulatoryAlerts = async () =>
+  apiRequest("/product-intelligence/alerts");
+
+export const deleteRegulatoryWatchlist = async (id) =>
+  apiRequest(`/product-intelligence/watchlists/${encodeURIComponent(id)}`, {
+    method: "DELETE",
+  });
+
 export const fetchDocumentTimeline = async (documentId) => {
   return apiRequest(
     `/documents/${encodeURIComponent(documentId)}/timeline`,
