@@ -24,6 +24,14 @@ const { planQuery } = require("../retrieval/queryPlanner");
 const { retrievalConfig } = require("../retrieval/retrievalConfig");
 const { selectContextPassages } = require("../retrieval/contextBuilder");
 const {
+  SUFFICIENCY_LEVELS,
+  assessEvidenceSufficiency,
+  buildAbstentionResponse,
+  buildGroundedExtractiveAnswer,
+  summarizeVerification,
+  verifyAndRepairAnswer,
+} = require("../retrieval/evidenceSafetyService");
+const {
   completeSSE,
   errorSSE,
   sendSSE,
@@ -44,6 +52,26 @@ const compactText = (value, maxLength = 1_200) =>
     .replace(/\s+/g, " ")
     .trim()
     .slice(0, maxLength);
+
+const responseChunks = (value, maximum = 160) => {
+  const text = String(value || "");
+  const chunks = [];
+  let remaining = text;
+  while (remaining) {
+    if (remaining.length <= maximum) {
+      chunks.push(remaining);
+      break;
+    }
+    const boundary = Math.max(
+      remaining.lastIndexOf("\n", maximum),
+      remaining.lastIndexOf(" ", maximum),
+    );
+    const end = boundary >= Math.floor(maximum * 0.55) ? boundary + 1 : maximum;
+    chunks.push(remaining.slice(0, end));
+    remaining = remaining.slice(end);
+  }
+  return chunks;
+};
 
 const buildBriefContext = (document, textArtifact) => {
   const sections = textArtifact?.summarySections || {};
@@ -602,6 +630,16 @@ router.post("/", generationLimiter, async (req, res) => {
       ...relationshipContext.sources,
       ...userSourceContext.sources,
     ];
+    const evidence = [
+      ...passages,
+      ...relationshipContext.sources,
+      ...(userSourceContext.evidence || userSourceContext.sources),
+    ];
+    const sufficiency = assessEvidenceSufficiency(message, evidence, {
+      queryType: plan.queryType,
+      retrievalVerified: retrieval.retrievalVerified,
+      minimumEvidence: plan.queryType === "EXACT_REFERENCE" ? 1 : 2,
+    });
 
     startSSE(res);
     sendSSE(res, {
@@ -615,6 +653,7 @@ router.post("/", generationLimiter, async (req, res) => {
         graphSourceCount: relationshipContext.sources.length,
         graphGrounded: relationshipContext.graphGrounded,
         selectedSourceCount: userSourceContext.sources.length,
+        evidenceSufficiency: sufficiency,
         retrieval: {
           ...retrieval.diagnostics,
           timings: {
@@ -634,19 +673,55 @@ router.post("/", generationLimiter, async (req, res) => {
       completeSSE(res);
       return undefined;
     }
+    if ([
+      SUFFICIENCY_LEVELS.INSUFFICIENT,
+      SUFFICIENCY_LEVELS.CONFLICTING,
+    ].includes(sufficiency.level)) {
+      sendSSE(res, {
+        type: "content",
+        content: buildAbstentionResponse(sufficiency, {
+          documentTitles: [document?.title].filter(Boolean),
+        }),
+      });
+      sendSSE(res, {
+        type: "meta",
+        metadata: {
+          abstained: true,
+          generationMode: "evidence_abstention",
+          evidenceSufficiency: sufficiency,
+        },
+      });
+      completeSSE(res);
+      return undefined;
+    }
     const responseLanguage = req.body.responseLanguage || "Auto";
     try {
       const stream = await generateResponse(message, context, {
         responseLanguage,
       });
+      let generatedAnswer = "";
       for await (const chunk of stream) {
         if (res.destroyed || res.writableEnded) break;
         const content =
           typeof chunk.text === "function" ? chunk.text() : chunk.text || "";
-        if (content) {
-          sendSSE(res, { type: "content", content });
-        }
+        if (content) generatedAnswer += content;
       }
+      const verification = await verifyAndRepairAnswer(generatedAnswer, evidence, {
+        sufficiency,
+        documentTitles: [document?.title].filter(Boolean),
+      });
+      for (const content of responseChunks(verification.answer)) {
+        if (res.destroyed || res.writableEnded) break;
+        sendSSE(res, { type: "content", content });
+      }
+      sendSSE(res, {
+        type: "meta",
+        metadata: {
+          generationMode: verification.abstained ? "verification_abstention" : "ai_verified",
+          verification: summarizeVerification(verification),
+          evidenceSufficiency: sufficiency,
+        },
+      });
     } catch (generationError) {
       const providerError = sanitizeProviderError(generationError);
       console.warn(
@@ -654,17 +729,19 @@ router.post("/", generationLimiter, async (req, res) => {
       );
       sendSSE(res, {
         type: "content",
-        content: buildExtractiveChatFallback(
-          message,
-          passages,
-          relationshipContext.sources,
-        ),
+        content: buildGroundedExtractiveAnswer(message, evidence),
       });
       sendSSE(res, {
         type: "meta",
         metadata: {
           generationMode: "extractive_fallback",
           providerError,
+          evidenceSufficiency: sufficiency,
+          verification: {
+            mode: "direct_extractive_evidence",
+            unsupportedAfterRepair: 0,
+            abstained: false,
+          },
         },
       });
     }

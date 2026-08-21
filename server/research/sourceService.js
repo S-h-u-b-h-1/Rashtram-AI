@@ -415,7 +415,7 @@ const addPdfSource = async (userId, { fileName, mimeType, buffer }) => {
 
 const getSourceContext = async (userId, sourceIds = [], search = "") => {
   const ids = [...new Set((Array.isArray(sourceIds) ? sourceIds : []).map((id) => Number(id)).filter((id) => Number.isSafeInteger(id) && id > 0))].slice(0, 20);
-  if (!ids.length) return { context: "", sources: [], chunks: 0 };
+  if (!ids.length) return { context: "", sources: [], evidence: [], chunks: 0 };
   const result = await query(
     `SELECT s.id, s.title, s.source_url, s.file_name, s.source_type,
             c.chunk_index, c.content
@@ -436,12 +436,26 @@ const getSourceContext = async (userId, sourceIds = [], search = "") => {
   let remaining = MAX_CONTEXT_CHARS;
   const selected = [];
   const sources = [];
+  const evidence = [];
   for (const row of result.rows) {
     if (remaining <= 0) break;
     const content = cleanSourceText(row.content).slice(0, remaining);
     if (!content) continue;
     remaining -= content.length;
     selected.push(`[User source: ${row.title} | Passage ${Number(row.chunk_index) + 1}]\n${content}`);
+    evidence.push({
+      sourceId: String(row.id),
+      documentId: `user-source-${row.id}`,
+      documentTitle: row.title,
+      sourceUrl: row.source_url,
+      fileName: row.file_name,
+      sourceType: row.source_type,
+      chunkIndex: Number(row.chunk_index),
+      content,
+      passage: Number(row.chunk_index) + 1,
+      userSource: true,
+      authorityClass: "USER_SOURCE",
+    });
     if (!sources.some((source) => source.sourceId === String(row.id))) {
       sources.push({
         sourceId: String(row.id),
@@ -456,7 +470,7 @@ const getSourceContext = async (userId, sourceIds = [], search = "") => {
       });
     }
   }
-  return { context: selected.join("\n\n"), sources, chunks: selected.length };
+  return { context: selected.join("\n\n"), sources, evidence, chunks: selected.length };
 };
 
 const deleteSource = async (userId, sourceId) => {

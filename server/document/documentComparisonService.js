@@ -15,6 +15,12 @@ const { sanitizeProviderError } = require("../lib/providerErrorSanitizer");
 const { planQuery } = require("../retrieval/queryPlanner");
 const { retrievalConfig } = require("../retrieval/retrievalConfig");
 const { selectContextPassages } = require("../retrieval/contextBuilder");
+const {
+  SUFFICIENCY_LEVELS,
+  assessEvidenceSufficiency,
+  buildAbstentionResponse,
+  verifyStructuredComparison,
+} = require("../retrieval/evidenceSafetyService");
 
 const MODES = new Set([
   "summary",
@@ -852,49 +858,94 @@ const createComparison = async (userId, payload) => {
     year,
     publicationDate,
   }));
+  const comparisonEvidence = citations.map((citation) => {
+    const passage = groups.find(({ document }) =>
+      String(document.id) === String(citation.documentId))
+      ?.passages.find((item) => item.chunkIndex === citation.chunkIndex);
+    return {
+      ...citation,
+      citationId: citation.id,
+      content: passage?.content || citation.snippet,
+      authorityClass: passage?.authorityClass,
+    };
+  });
+  const sufficiency = assessEvidenceSufficiency(
+    userQuestion || comparisonQuery(mode),
+    comparisonEvidence,
+    {
+      queryType: "COMPARISON",
+      retrievalVerified: groups.every(({ passages }) => passages.length > 0),
+      minimumEvidence: documents.length,
+    },
+  );
   let generated;
-  try {
-    generated = await generateDocumentComparison({
-      mode,
-      language,
-      userQuestion,
-      documents: comparisonDocuments,
-      context: [context, graphContext].filter(Boolean).join("\n\n"),
-    });
-    generated.generationMode = generated.generationMode || "ai";
-  } catch (error) {
-    if (!allowExtractiveComparisonFallback()) {
-      const generationUnavailable = new Error("Comparison AI generation failed.");
-      generationUnavailable.status = 503;
-      generationUnavailable.publicMessage =
-        "AI comparison generation is temporarily unavailable. Please retry in a moment.";
-      generationUnavailable.details = {
-        retryable: true,
-        generationMode: "ai_required",
-        providerError: sanitizeProviderError(error),
-      };
-      throw generationUnavailable;
+  if ([
+    SUFFICIENCY_LEVELS.INSUFFICIENT,
+    SUFFICIENCY_LEVELS.CONFLICTING,
+  ].includes(sufficiency.level)) {
+    generated = {
+      generationMode: "evidence_abstention",
+      executiveSummary: buildAbstentionResponse(sufficiency, {
+        documentTitles: comparisonDocuments.map((document) => document.title),
+      }),
+      similarities: [], differences: [], keyClauses: [], stakeholders: [],
+      complianceImpact: [], timeline: [], authorityDifferences: [],
+      impactAssessment: [], keyFindings: [],
+      suggestedQuestions: [
+        "Which additional official sources should be prepared?",
+        "Can the comparison be narrowed to a specific provision?",
+      ],
+    };
+  } else {
+    try {
+      generated = await generateDocumentComparison({
+        mode,
+        language,
+        userQuestion,
+        documents: comparisonDocuments,
+        context: [context, graphContext].filter(Boolean).join("\n\n"),
+      });
+      generated.generationMode = generated.generationMode || "ai";
+    } catch (error) {
+      if (!allowExtractiveComparisonFallback()) {
+        const generationUnavailable = new Error("Comparison AI generation failed.");
+        generationUnavailable.status = 503;
+        generationUnavailable.publicMessage =
+          "AI comparison generation is temporarily unavailable. Please retry in a moment.";
+        generationUnavailable.details = {
+          retryable: true,
+          generationMode: "ai_required",
+          providerError: sanitizeProviderError(error),
+        };
+        throw generationUnavailable;
+      }
+      console.warn(
+        "Comparison AI generation failed; returning grounded extractive comparison:",
+        sanitizeProviderError(error),
+      );
+      generated = extractiveComparisonFallback({
+        mode,
+        language,
+        userQuestion,
+        documents: comparisonDocuments,
+        groups,
+        citations,
+        generationError: error,
+      });
     }
-    console.warn(
-      "Comparison AI generation failed; returning grounded extractive comparison:",
-      sanitizeProviderError(error),
-    );
-    generated = extractiveComparisonFallback({
-      mode,
-      language,
-      userQuestion,
+  }
+  let claimVerification = { removedUnsupportedItems: 0, verifiedCitationCount: citations.length };
+  if (generated.generationMode !== "evidence_abstention") {
+    generated = comparisonSectionBackfill({
       documents: comparisonDocuments,
       groups,
       citations,
-      generationError: error,
+      generated,
     });
+    const verified = verifyStructuredComparison(generated, comparisonEvidence);
+    generated = verified.generated;
+    claimVerification = verified.report;
   }
-  generated = comparisonSectionBackfill({
-    documents: comparisonDocuments,
-    groups,
-    citations,
-    generated,
-  });
   const recommendedDocuments = [
     ...new Map(
       (
@@ -919,6 +970,8 @@ const createComparison = async (userId, payload) => {
   ].slice(0, 8);
   const result = {
     ...generated,
+    evidenceSufficiency: sufficiency,
+    claimVerification,
     documents: documents.map(
       ({
         id,

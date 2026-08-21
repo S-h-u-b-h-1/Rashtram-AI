@@ -11,6 +11,14 @@ const {
 const { planQuery } = require("../retrieval/queryPlanner");
 const { retrievalConfig } = require("../retrieval/retrievalConfig");
 const { selectContextPassages } = require("../retrieval/contextBuilder");
+const {
+  SUFFICIENCY_LEVELS,
+  assessEvidenceSufficiency,
+  buildAbstentionResponse,
+  buildGroundedExtractiveAnswer,
+  summarizeVerification,
+  verifyAndRepairAnswer,
+} = require("../retrieval/evidenceSafetyService");
 const { getRelationshipContext } = require("../graph/knowledgeGraphService");
 const { generateResponse } = require("../lib/vectordb");
 const { sanitizeProviderError } = require("../lib/providerErrorSanitizer");
@@ -58,6 +66,26 @@ const compactText = (value, maxLength = 1_000) =>
     .replace(/\s+/g, " ")
     .trim()
     .slice(0, maxLength);
+
+const responseChunks = (value, maximum = 160) => {
+  const text = String(value || "");
+  const chunks = [];
+  let remaining = text;
+  while (remaining) {
+    if (remaining.length <= maximum) {
+      chunks.push(remaining);
+      break;
+    }
+    const boundary = Math.max(
+      remaining.lastIndexOf("\n", maximum),
+      remaining.lastIndexOf(" ", maximum),
+    );
+    const end = boundary >= Math.floor(maximum * 0.55) ? boundary + 1 : maximum;
+    chunks.push(remaining.slice(0, end));
+    remaining = remaining.slice(end);
+  }
+  return chunks;
+};
 
 const buildDocumentBriefContext = (document, artifact) => {
   if (!artifact?.englishSummary) return "";
@@ -357,6 +385,15 @@ router.post("/chat", generationLimiter, async (req, res) => {
 
     graphSources.forEach((source) => sources.push(source));
     userSourceContext.sources.forEach((source) => sources.push(source));
+    const verificationEvidence = [
+      ...sources.filter((source) => !source.userSource),
+      ...(userSourceContext.evidence || userSourceContext.sources),
+    ];
+    const sufficiency = assessEvidenceSufficiency(message, verificationEvidence, {
+      queryType: plan.queryType,
+      retrievalVerified: passageGroups.some(({ passages }) => passages.length > 0),
+      minimumEvidence: Math.max(2, documents.length),
+    });
 
     startSSE(res);
     sendSSE(res, {
@@ -375,6 +412,7 @@ router.post("/chat", generationLimiter, async (req, res) => {
         documentCount: documents.length,
         selectedSourceCount: userSourceContext.sources.length,
         graphSourceCount: graphSources.length,
+        evidenceSufficiency: sufficiency,
         retrieval: passageGroups.map(({ document, retrieval }) => ({
           documentId: document.id,
           ...retrieval,
@@ -385,35 +423,61 @@ router.post("/chat", generationLimiter, async (req, res) => {
     let fullResponse = "";
     let generationMode = "ai";
     let providerError = null;
-    try {
-      const stream = await generateResponse(message, [briefContext, combinedContext].filter(Boolean).join("\n\n"), {
-        responseLanguage,
+    let verification = null;
+    if ([
+      SUFFICIENCY_LEVELS.INSUFFICIENT,
+      SUFFICIENCY_LEVELS.CONFLICTING,
+    ].includes(sufficiency.level)) {
+      fullResponse = buildAbstentionResponse(sufficiency, {
+        documentTitles: documents.map((document) => document.title),
       });
-      for await (const chunk of stream) {
-        if (res.destroyed || res.writableEnded) break;
-        const content =
-          typeof chunk.text === "function" ? chunk.text() : chunk.text || "";
-        if (content) {
-          fullResponse += content;
-          sendSSE(res, { type: "content", content });
+      generationMode = "evidence_abstention";
+    } else {
+      try {
+        const stream = await generateResponse(message, [briefContext, combinedContext].filter(Boolean).join("\n\n"), {
+          responseLanguage,
+        });
+        let generatedAnswer = "";
+        for await (const chunk of stream) {
+          if (res.destroyed || res.writableEnded) break;
+          const content =
+            typeof chunk.text === "function" ? chunk.text() : chunk.text || "";
+          if (content) generatedAnswer += content;
         }
+        verification = await verifyAndRepairAnswer(generatedAnswer, verificationEvidence, {
+          sufficiency,
+          documentTitles: documents.map((document) => document.title),
+        });
+        fullResponse = verification.answer;
+        generationMode = verification.abstained ? "verification_abstention" : "ai_verified";
+      } catch (generationError) {
+        providerError = sanitizeProviderError(generationError);
+        console.warn(
+          `Cross-document chat generation unavailable; using extractive fallback: ${providerError}`,
+        );
+        fullResponse = buildGroundedExtractiveAnswer(message, verificationEvidence);
+        generationMode = "extractive_fallback";
       }
-    } catch (generationError) {
-      providerError = sanitizeProviderError(generationError);
-      console.warn(
-        `Cross-document chat generation unavailable; using extractive fallback: ${providerError}`,
-      );
-      fullResponse = buildExtractiveMultiDocumentFallback(message, sources);
-      generationMode = "extractive_fallback";
-      sendSSE(res, { type: "content", content: fullResponse });
-      sendSSE(res, {
-        type: "meta",
-        metadata: {
-          generationMode,
-          providerError,
-        },
-      });
     }
+    for (const content of responseChunks(fullResponse)) {
+      if (res.destroyed || res.writableEnded) break;
+      sendSSE(res, { type: "content", content });
+    }
+    sendSSE(res, {
+      type: "meta",
+      metadata: {
+        generationMode,
+        providerError,
+        evidenceSufficiency: sufficiency,
+        verification: verification
+          ? summarizeVerification(verification)
+          : {
+              mode: generationMode,
+              unsupportedAfterRepair: 0,
+              abstained: generationMode === "evidence_abstention",
+            },
+      },
+    });
     if (res.destroyed || res.writableEnded) return undefined;
     const now = new Date().toISOString();
     const persistedMessages = [
@@ -436,6 +500,10 @@ router.post("/chat", generationLimiter, async (req, res) => {
           responseLanguage,
           generationMode,
           providerError,
+          evidenceSufficiency: sufficiency,
+          verification: verification
+            ? summarizeVerification(verification)
+            : { mode: generationMode },
         },
       },
     ];

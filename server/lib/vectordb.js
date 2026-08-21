@@ -1063,6 +1063,18 @@ Chunk] or [Document brief: Title], cite those exact labels inline for every
 substantive claim. Prefer 3-6 short bullets for analytical questions. Respond
 in ${language}. Preserve quoted source text in its original language and explain
 it in ${language} when needed.
+
+Grounding rules are mandatory:
+1. Treat only the labelled retrieved source passages as factual evidence.
+2. Document briefs, earlier assistant messages, graph inferences, and general
+   model knowledge are not proof of a legal or policy fact.
+3. Attach an exact retrieved citation label to every factual statement.
+4. Clearly prefix interpretation with "Analytical implication:" and state its
+   uncertainty; do not rewrite an inference as a source fact.
+5. If the passages do not support the answer, say that the available sources
+   are insufficient. Never invent a section, date, amendment, legal effect,
+   institution, page, clause, or source relationship.
+6. A page marked estimated must remain described as estimated.
 `;
 
   return runGeneration("generateContentStream", fullPrompt, {
@@ -1375,6 +1387,10 @@ Be detailed and research-useful: each item should state what changed, who is
 affected, why it matters, and which cited passage supports it. Avoid generic
 phrases such as "processed through Rashtram AI" unless the provider fallback is
 used outside this prompt.
+Clearly label analytical inference and uncertainty. Earlier assistant text,
+document summaries, and model knowledge are not evidence. Never invent missing
+pages, sections, dates, amendments, institutions, or legal effects. If sources
+conflict, describe both cited positions and do not silently select one.
 
 Comparison mode: ${mode}
 Response language: ${responseLanguage}
