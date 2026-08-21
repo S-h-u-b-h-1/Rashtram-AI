@@ -388,6 +388,13 @@ export const recommendForProblem = async (payload) => {
   });
 };
 
+export const researchComplianceForProblem = async (payload) => {
+  return apiRequest("/product-intelligence/compliance", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+};
+
 export const fetchDocumentTimeline = async (documentId) => {
   return apiRequest(
     `/documents/${encodeURIComponent(documentId)}/timeline`,

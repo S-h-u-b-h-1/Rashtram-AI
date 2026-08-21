@@ -3,7 +3,7 @@
 import { Loader2, Search, ShieldAlert } from "lucide-react";
 import { useState } from "react";
 import {
-  recommendForProblem,
+  researchComplianceForProblem,
   trackActivity,
 } from "@/lib/api";
 import { RecommendationSection } from "./RecommendationSection";
@@ -24,7 +24,7 @@ export function BusinessProblemRecommender() {
     setLoading(true);
     setError("");
     try {
-      const response = await recommendForProblem({
+      const response = await researchComplianceForProblem({
         problem,
         limit: 20,
       });
@@ -130,6 +130,32 @@ export function BusinessProblemRecommender() {
               </ul>
             </section>
           </div>
+          <section className="surface-card p-5 sm:p-6">
+            <h2 className="font-serif text-2xl text-[#8f1d2c]">What the sources say</h2>
+            <p className="mt-2 text-sm leading-6 text-[#706a61]">
+              These are possible requirements found in the cited documents. Confirm that they apply to your exact business.
+            </p>
+            <div className="mt-4 grid gap-4 lg:grid-cols-2">
+              <div>
+                <h3 className="text-xs font-bold uppercase tracking-[0.14em] text-[#874047]">Possible obligations</h3>
+                <ul className="mt-2 space-y-2 text-sm leading-6 text-[#514d46]">
+                  {(result.evidenceBackedObligations || []).map((item) => (
+                    <li key={`${item.documentId}-${item.citations?.[0]}`} className="rounded-xl bg-[#fffaf0] p-3">
+                      {item.finding} <span className="text-xs font-semibold text-[#8f1d2c]">[{item.citations?.join(", ")}]</span>
+                    </li>
+                  ))}
+                  {!result.evidenceBackedObligations?.length && <li>No explicit obligation passage was found.</li>}
+                </ul>
+              </div>
+              <div>
+                <h3 className="text-xs font-bold uppercase tracking-[0.14em] text-[#874047]">What still needs checking</h3>
+                <ul className="mt-2 space-y-2 text-sm leading-6 text-[#514d46]">
+                  {(result.missingEvidence || []).map((item) => <li key={item}>• {item}</li>)}
+                  {(result.questionsRequiringProfessionalVerification || []).map((item) => <li key={item}>• {item}</li>)}
+                </ul>
+              </div>
+            </div>
+          </section>
           <p className="flex items-center gap-2 rounded-xl bg-[#eee0dc] px-4 py-3 text-xs text-[#70434a]">
             <ShieldAlert className="h-4 w-4" />
             {result.disclaimer}

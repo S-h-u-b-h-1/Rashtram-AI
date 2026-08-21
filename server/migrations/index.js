@@ -135,4 +135,8 @@ module.exports = [
     name: "034_temporal_legal_intelligence_v1.js",
     migration: require("./034_temporal_legal_intelligence_v1"),
   },
+  {
+    name: "035_compliance_copilot_v1.js",
+    migration: require("./035_compliance_copilot_v1"),
+  },
 ];

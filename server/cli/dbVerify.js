@@ -256,6 +256,44 @@ const checks = [
         WHERE migration_name = '032_semantic_coverage_v1.js'
       ) AS passed`,
   },
+  {
+    name: "migration 033 large-document intelligence complete",
+    sql: `SELECT
+      TO_REGCLASS('public.document_chunk_groups') IS NOT NULL
+      AND EXISTS (
+        SELECT 1 FROM schema_migrations
+        WHERE migration_name = '033_large_document_intelligence.js'
+      ) AS passed`,
+  },
+  {
+    name: "migration 034 temporal legal intelligence complete",
+    sql: `SELECT
+      EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_schema = 'public'
+          AND table_name = 'documents'
+          AND column_name = 'temporal_metadata_json'
+      )
+      AND EXISTS (
+        SELECT 1 FROM schema_migrations
+        WHERE migration_name = '034_temporal_legal_intelligence_v1.js'
+      ) AS passed`,
+  },
+  {
+    name: "migration 035 compliance copilot complete",
+    sql: `SELECT
+      TO_REGCLASS('public.compliance_research_runs') IS NOT NULL
+      AND EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_schema = 'public'
+          AND table_name = 'compliance_research_runs'
+          AND column_name = 'evidence_refs_json'
+      )
+      AND EXISTS (
+        SELECT 1 FROM schema_migrations
+        WHERE migration_name = '035_compliance_copilot_v1.js'
+      ) AS passed`,
+  },
 ];
 
 const main = async () => {
