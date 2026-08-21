@@ -415,6 +415,9 @@ export const deleteRegulatoryWatchlist = async (id) =>
     method: "DELETE",
   });
 
+export const getAmendmentTracker = async (documentId) =>
+  apiRequest(`/product-intelligence/amendments/${encodeURIComponent(documentId)}`);
+
 export const fetchDocumentTimeline = async (documentId) => {
   return apiRequest(
     `/documents/${encodeURIComponent(documentId)}/timeline`,

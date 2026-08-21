@@ -5,6 +5,7 @@ const { runComplianceCopilot } = require("./complianceCopilotService");
 const {
   createWatchlist, deleteWatchlist, listAlerts, listWatchlists, refreshWatchlists,
 } = require("./watchlistService");
+const { getAmendmentTracker } = require("./amendmentTrackerService");
 
 const router = express.Router();
 
@@ -39,6 +40,11 @@ router.post("/watchlists/refresh", generationLimiter, async (req, res) => {
 router.get("/alerts", async (req, res) => {
   try { return res.json({ alerts: await listAlerts(req.user.id) }); }
   catch (error) { return sendError(res, error, "Regulatory alert listing failed"); }
+});
+
+router.get("/amendments/:documentId", async (req, res) => {
+  try { return res.json(await getAmendmentTracker(req.params.documentId)); }
+  catch (error) { return sendError(res, error, "Amendment tracker failed"); }
 });
 
 module.exports = router;

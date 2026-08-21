@@ -5,6 +5,7 @@ import { KnowledgeGraph } from "./KnowledgeGraph";
 import { RelatedDocuments } from "./RelatedDocuments";
 import { ResearchNotes } from "./ResearchNotes";
 import { ResearchWorkflowPanel } from "./ResearchWorkflowPanel";
+import { AmendmentTrackerPanel } from "./AmendmentTrackerPanel";
 
 export function StudioPanel({
   document,
@@ -46,6 +47,7 @@ export function StudioPanel({
           relatedChats={document.relatedChats}
         />
         <DocumentTimeline events={document.timeline || []} />
+        <AmendmentTrackerPanel documentId={document.id} />
         <KnowledgeGraph graph={document.graph} />
         <ResearchNotes notes={notes} onAdd={onAddNote} onDelete={onDeleteNote} />
       </div>
