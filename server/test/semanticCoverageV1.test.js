@@ -11,6 +11,7 @@ const {
 const {
   backfillSemanticDocument,
   buildVectorChunks,
+  completeBackfillJob,
   loadBackfillCandidates,
   retryableEmbeddingFailure,
   runSemanticBackfill,
@@ -218,6 +219,26 @@ test("semantic dry run never downloads or repeats OCR", async () => {
   });
   assert.equal(result.downloads, 0);
   assert.equal(result.ocrPages, 0);
+});
+
+test("semantic attempt duration uses one PostgreSQL integer parameter type", async () => {
+  const statements = [];
+  await completeBackfillJob({
+    jobId: 11,
+    document: document(),
+    status: "completed",
+    metrics: { durationMs: 1250, embeddingInputTokens: 42 },
+    queryFn: async (sql, params) => {
+      statements.push({ sql, params });
+      return { rows: [] };
+    },
+  });
+  assert.equal(statements.length, 2);
+  assert.match(
+    statements[1].sql,
+    /NOW\(\) - \(\$8::INTEGER \* INTERVAL '1 millisecond'\)/,
+  );
+  assert.equal(statements[1].params[7], 1250);
 });
 
 test("active embedding metadata stays provider/model/dimension/version consistent", () => {

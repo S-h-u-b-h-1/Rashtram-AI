@@ -39,6 +39,17 @@ test("database migrations are versioned and ordered", () => {
   assert.equal(files.at(-1), "032_semantic_coverage_v1.js");
 });
 
+test("database verifier derives the expected latest migration from the registry", () => {
+  const source = fs.readFileSync(
+    path.join(__dirname, "../cli/dbVerify.js"),
+    "utf8",
+  );
+  assert.match(source, /const migrations = require\("\.\.\/migrations"\)/);
+  assert.match(source, /expectedLatestMigration = migrations\.at\(-1\)\?\.name/);
+  assert.doesNotMatch(source, /latest migration is 029/);
+  assert.match(source, /migration 032 semantic coverage complete/);
+});
+
 test("semantic coverage migration adds only bounded audit indexes", () => {
   const source = fs.readFileSync(
     path.join(__dirname, "../migrations/032_semantic_coverage_v1.js"),

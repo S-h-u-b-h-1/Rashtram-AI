@@ -1,6 +1,6 @@
 # Database Cleanup Plan
 
-Generated from the configured PostgreSQL database at 2026-07-02T18:38:49.294Z.
+Generated from the configured PostgreSQL database at 2026-08-21T07:16:22.713Z.
 
 ## Safety policy
 
@@ -10,31 +10,38 @@ Generated from the configured PostgreSQL database at 2026-07-02T18:38:49.294Z.
 
 ## Legacy compatibility tables
 
-- `act_chats` (2 rows): retain as legacy archive; current compatibility code references: 4.
-- `bill_chats` (3 rows): retain as legacy archive; current compatibility code references: 4.
-- `contact_requests` (0 rows): retain as legacy archive; current compatibility code references: 3.
-- `document_chats` (32 rows): retain as legacy archive; current compatibility code references: 6.
-- `egazette_chats` (1 rows): retain as legacy archive; current compatibility code references: 4.
-- `legislative_document_resources` (18680 rows): retain as legacy archive; current compatibility code references: 6.
-- `legislative_documents` (17744 rows): retain as legacy archive; current compatibility code references: 10.
-- `multi_document_chats` (2 rows): retain as legacy archive; current compatibility code references: 3.
-- `related_bills` (3 rows): retain as legacy archive; current compatibility code references: 3.
+- `act_chats` (0 rows): retain as legacy archive; current compatibility code references: 7.
+- `bill_chats` (0 rows): retain as legacy archive; current compatibility code references: 7.
+- `contact_requests` (0 rows): retain as legacy archive; current compatibility code references: 5.
+- `document_chats` (57 rows): retain as legacy archive; current compatibility code references: 8.
+- `egazette_chats` (1 rows): retain as legacy archive; current compatibility code references: 7.
+- `legislative_document_resources` (20573 rows): retain as legacy archive; current compatibility code references: 11.
+- `legislative_documents` (19949 rows): retain as legacy archive; current compatibility code references: 40.
+- `multi_document_chats` (3 rows): retain as legacy archive; current compatibility code references: 6.
+- `related_bills` (3 rows): retain as legacy archive; current compatibility code references: 5.
 
 ## Empty tables
 
+- `act_chats`: **legacy_archive** — Preserved for backward compatibility while additive triggers mirror data into schema v2.
 - `audit_logs`: **keep** — Normalized schema-v2 feature table; empty until the feature produces data.
+- `bill_chats`: **legacy_archive** — Preserved for backward compatibility while additive triggers mirror data into schema v2.
+- `bookmarks`: **keep** — Normalized schema-v2 feature table; empty until the feature produces data.
 - `bug_reports`: **keep** — Normalized schema-v2 feature table; empty until the feature produces data.
 - `contact_requests`: **legacy_archive** — Preserved for backward compatibility while additive triggers mirror data into schema v2.
-- `contact_submissions`: **keep** — Normalized schema-v2 feature table; empty until the feature produces data.
 - `dedupe_candidates`: **keep** — Normalized schema-v2 feature table; empty until the feature produces data.
-- `document_chat_feedback`: **keep** — Active application or infrastructure table.
-- `document_text_chunks`: **keep** — Normalized schema-v2 feature table; empty until the feature produces data.
-- `document_topics`: **keep** — Normalized schema-v2 feature table; empty until the feature produces data.
+- `document_processing_stages`: **keep** — Active application or infrastructure table.
 - `feedback_submissions`: **keep** — Normalized schema-v2 feature table; empty until the feature produces data.
-- `recommendations`: **keep** — Normalized schema-v2 feature table; empty until the feature produces data.
-- `saved_searches`: **keep** — Normalized schema-v2 feature table; empty until the feature produces data.
-- `system_events`: **keep** — Normalized schema-v2 feature table; empty until the feature produces data.
-- `topic_taxonomy`: **keep** — Normalized schema-v2 feature table; empty until the feature produces data.
+- `knowledge_edges`: **keep** — Normalized schema-v2 feature table; empty until the feature produces data.
+- `knowledge_evidence`: **keep** — Normalized schema-v2 feature table; empty until the feature produces data.
+- `knowledge_nodes`: **keep** — Normalized schema-v2 feature table; empty until the feature produces data.
+- `policy_chats`: **keep** — Active application or infrastructure table.
+- `policy_drafts`: **keep** — Active application or infrastructure table.
+- `research_query_telemetry`: **keep** — Active application or infrastructure table.
+- `research_source_chunks`: **keep** — Active application or infrastructure table.
+- `research_sources`: **keep** — Active application or infrastructure table.
+- `saved_graph_paths`: **keep** — Active application or infrastructure table.
+- `user_activity_events`: **keep** — Active application or infrastructure table.
+- `user_sessions`: **keep** — Normalized schema-v2 feature table; empty until the feature produces data.
 
 ## Future drop candidates
 

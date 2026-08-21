@@ -6,6 +6,9 @@ require("dotenv").config({
 });
 const { getPool, query } = require("../db");
 const { refreshDataQuality } = require("../lib/database/quality");
+const migrations = require("../migrations");
+
+const expectedLatestMigration = migrations.at(-1)?.name;
 
 const checks = [
   {
@@ -27,6 +30,14 @@ const checks = [
   {
     name: "source registry populated",
     sql: `SELECT COUNT(*) >= 25 AS passed FROM source_registry`,
+  },
+  {
+    name: "no orphan normalized sources",
+    sql: `SELECT NOT EXISTS (
+      SELECT 1 FROM document_sources s
+      LEFT JOIN documents d ON d.id = s.document_id
+      WHERE d.id IS NULL
+    ) AS passed`,
   },
   {
     name: "no orphan normalized resources",
@@ -98,11 +109,11 @@ const checks = [
     ) AS passed`,
   },
   {
-    name: "latest migration is 029",
+    name: `latest migration is ${expectedLatestMigration}`,
     sql: `SELECT (
       SELECT migration_name FROM schema_migrations
       ORDER BY applied_at DESC, migration_name DESC LIMIT 1
-    ) = '029_processing_stage_capabilities.js' AS passed`,
+    ) = '${expectedLatestMigration}' AS passed`,
   },
   {
     name: "migration 022 columns complete",
@@ -205,6 +216,44 @@ const checks = [
         WHERE table_schema = 'public'
           AND table_name = 'document_text_chunks'
           AND column_name = 'embedding_input_sha256'
+      ) AS passed`,
+  },
+  {
+    name: "migration 030 knowledge layer complete",
+    sql: `SELECT
+      TO_REGCLASS('public.knowledge_nodes') IS NOT NULL
+      AND TO_REGCLASS('public.knowledge_edges') IS NOT NULL
+      AND TO_REGCLASS('public.knowledge_evidence') IS NOT NULL
+      AND EXISTS (
+        SELECT 1 FROM schema_migrations
+        WHERE migration_name = '030_knowledge_layer_v1.js'
+      ) AS passed`,
+  },
+  {
+    name: "migration 031 research observability complete",
+    sql: `SELECT
+      TO_REGCLASS('public.research_query_telemetry') IS NOT NULL
+      AND EXISTS (
+        SELECT 1 FROM schema_migrations
+        WHERE migration_name = '031_research_query_observability.js'
+      ) AS passed`,
+  },
+  {
+    name: "migration 032 semantic coverage complete",
+    sql: `SELECT
+      EXISTS (
+        SELECT 1 FROM pg_indexes
+        WHERE schemaname = 'public'
+          AND indexname = 'document_processing_state_semantic_backlog_idx'
+      )
+      AND EXISTS (
+        SELECT 1 FROM pg_indexes
+        WHERE schemaname = 'public'
+          AND indexname = 'document_text_chunks_namespace_document_idx'
+      )
+      AND EXISTS (
+        SELECT 1 FROM schema_migrations
+        WHERE migration_name = '032_semantic_coverage_v1.js'
       ) AS passed`,
   },
 ];

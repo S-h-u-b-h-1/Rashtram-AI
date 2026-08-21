@@ -293,7 +293,7 @@ const completeBackfillJob = async ({
        ai_provider, ai_model
      ) VALUES ($1, $2, 'semantic-backfill-v1', 1, $3,
        $4, $5, $6::jsonb, $7::jsonb, $8,
-       NOW() - ($8::TEXT || ' milliseconds')::INTERVAL, NOW(),
+       NOW() - ($8::INTEGER * INTERVAL '1 millisecond'), NOW(),
        'semantic_backfill', $9, $10, '{}'::jsonb, $11, $12)`,
     [jobId, document.id, status === "completed" ? "completed" : "failed",
       error ? "embedding" : null, failureReason, JSON.stringify(metrics),
@@ -503,6 +503,7 @@ const runSemanticBackfill = async ({
 module.exports = {
   backfillSemanticDocument,
   buildVectorChunks,
+  completeBackfillJob,
   loadBackfillCandidates,
   probeSemanticRetrieval,
   queuePriorityForTier,
