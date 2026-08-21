@@ -151,4 +151,8 @@ module.exports = [
     name: "038_research_reports_v1.js",
     migration: require("./038_research_reports_v1"),
   },
+  {
+    name: "039_commercial_pilot_observability.js",
+    migration: require("./039_commercial_pilot_observability"),
+  },
 ];

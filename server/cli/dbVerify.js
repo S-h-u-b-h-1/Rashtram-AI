@@ -322,6 +322,15 @@ const checks = [
         WHERE migration_name = '038_research_reports_v1.js'
       ) AS passed`,
   },
+  {
+    name: "migration 039 commercial pilot observability complete",
+    sql: `SELECT
+      TO_REGCLASS('public.product_usage_telemetry') IS NOT NULL
+      AND EXISTS (
+        SELECT 1 FROM schema_migrations
+        WHERE migration_name = '039_commercial_pilot_observability.js'
+      ) AS passed`,
+  },
 ];
 
 const main = async () => {

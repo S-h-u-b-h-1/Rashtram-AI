@@ -66,6 +66,11 @@ function CitationLinks({ ids, citationMap }) {
             rel="noreferrer"
             title={citation?.snippet}
             className="rounded bg-[#eee0dc] px-1.5 py-0.5 text-[9px] font-bold text-[#8f1d2c]"
+            onClick={() => trackActivity({
+              event_type: "citation_opened", entity_type: "comparison_citation",
+              entity_id: id, document_id: citation?.documentId,
+              page_path: "/app/compare",
+            })}
           >
             {id}
           </a>
@@ -691,6 +696,11 @@ export function DocumentComparison() {
                         target="_blank"
                         rel="noreferrer"
                         aria-label={`Open source ${citation.id}`}
+                        onClick={() => trackActivity({
+                          event_type: "source_opened", entity_type: "comparison_source",
+                          entity_id: citation.id, document_id: citation.documentId,
+                          page_path: "/app/compare",
+                        })}
                       >
                         <ExternalLink className="h-4 w-4 text-[#8f1d2c]" />
                       </a>

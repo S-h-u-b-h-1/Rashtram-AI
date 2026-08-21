@@ -499,6 +499,7 @@ router.post("/chat", generationLimiter, async (req, res) => {
     });
     const diagnostics = passageGroups.map(({ retrieval }) => retrieval);
     await recordResearchTelemetry({
+      userId: req.user.id,
       queryType: plan.queryType,
       queryPlannerVersion: plan.plannerVersion,
       privacyScope: sourceIds.length ? "account_private" : "public",

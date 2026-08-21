@@ -8,6 +8,7 @@ const safeObject = (value) => value && typeof value === "object" && !Array.isArr
 const validUuid = (value) => /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(String(value || ""));
 
 const normalizeTelemetry = (value = {}) => ({
+  userId: /^\d+$/.test(String(value.userId || "")) ? String(value.userId) : null,
   queryId: validUuid(value.queryId) ? String(value.queryId) : crypto.randomUUID(),
   queryType: String(value.queryType || "UNKNOWN").slice(0, 50),
   queryPlannerVersion: String(value.queryPlannerVersion || "unknown").slice(0, 100),
@@ -46,10 +47,10 @@ const recordResearchTelemetry = async (value, writer = query) => {
          source_authority_distribution, top_scores, evidence_sufficiency_level,
          citations_generated, citations_verified, unsupported_claims_removed,
          abstained, fallback_used, tokens_in, tokens_out, model, embedding_model,
-         retrieval_version, cache_status, flags_json
+         retrieval_version, cache_status, flags_json, user_id
        ) VALUES (
          $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,
-         $17::jsonb,$18::jsonb,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31::jsonb
+         $17::jsonb,$18::jsonb,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31::jsonb,$32
        )`,
       [
         item.queryId, item.queryType, item.queryPlannerVersion, item.privacyScope,
@@ -61,6 +62,7 @@ const recordResearchTelemetry = async (value, writer = query) => {
         item.citationsGenerated, item.citationsVerified, item.unsupportedClaimsRemoved,
         item.abstained, item.fallbackUsed, item.tokensIn, item.tokensOut, item.model,
         item.embeddingModel, item.retrievalVersion, item.cacheStatus, JSON.stringify(item.flags),
+        item.userId,
       ],
     );
     writeCount += 1;

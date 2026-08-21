@@ -1094,6 +1094,7 @@ const createComparison = async (userId, payload) => {
   );
   const retrievalDiagnostics = groups.map((group) => group.retrievalDiagnostics);
   await recordResearchTelemetry({
+    userId,
     queryType: "COMPARISON",
     queryPlannerVersion: retrievalPlan.plannerVersion,
     ftsLatency: Math.max(...retrievalDiagnostics.map((item) => item.timings?.lexicalMs || 0), 0),

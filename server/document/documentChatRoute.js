@@ -654,6 +654,7 @@ router.post("/", generationLimiter, async (req, res) => {
       generationLatency = 0, verificationLatency = 0, output = "",
       verification = {}, abstained = false, fallbackUsed = false,
     } = {}) => recordResearchTelemetry({
+      userId: req.user.id,
       queryType: plan.queryType,
       queryPlannerVersion: plan.plannerVersion,
       privacyScope: sourceIds.length ? "account_private" : "public",

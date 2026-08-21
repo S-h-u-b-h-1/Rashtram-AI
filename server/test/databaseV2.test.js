@@ -36,7 +36,7 @@ test("database migrations are versioned and ordered", () => {
   assert.ok(files.includes("015_normalize_failure_pipeline_stage.js"));
   assert.ok(files.includes("016_processing_audit_log.js"));
   assert.ok(files.includes("017_normalize_download_failure_codes.js"));
-  assert.equal(files.at(-1), "038_research_reports_v1.js");
+  assert.equal(files.at(-1), "039_commercial_pilot_observability.js");
 });
 
 test("database verifier derives the expected latest migration from the registry", () => {
@@ -121,6 +121,17 @@ test("research report storage is account-owned and preserves citations", () => {
   assert.match(source, /user_id BIGINT NOT NULL REFERENCES users\(id\) ON DELETE CASCADE/);
   assert.match(source, /evidence_refs_json/);
   assert.match(source, /selected_document_ids BIGINT\[\]/);
+});
+
+test("commercial telemetry is account-owned and excludes raw research content", () => {
+  const source = fs.readFileSync(
+    path.join(__dirname, "../migrations/039_commercial_pilot_observability.js"), "utf8",
+  );
+  assert.match(source, /CREATE TABLE IF NOT EXISTS product_usage_telemetry/);
+  assert.match(source, /user_id BIGINT NOT NULL REFERENCES users\(id\) ON DELETE CASCADE/);
+  assert.match(source, /time_to_first_evidence_ms/);
+  assert.match(source, /citation_opened/);
+  assert.doesNotMatch(source, /question_text|source_text|raw_question/);
 });
 
 test("research observability migration is additive and privacy safe", () => {

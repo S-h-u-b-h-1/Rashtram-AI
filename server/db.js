@@ -970,9 +970,20 @@ const initializeSchema = async () => {
           'chat_message_sent',
           'summary_viewed',
           'source_opened',
+          'citation_opened',
           'profile_viewed',
           'research_continued',
-          'export_clicked'
+          'export_clicked',
+          'comparison_created',
+          'documents_compared',
+          'recommendation_viewed',
+          'recommendation_opened',
+          'recommendation_added_to_compare',
+          'business_problem_searched',
+          'graph_viewed',
+          'graph_node_opened',
+          'graph_path_searched',
+          'graph_path_saved'
         )
       ),
       entity_type TEXT,
@@ -1016,9 +1027,20 @@ const initializeSchema = async () => {
           'chat_message_sent',
           'summary_viewed',
           'source_opened',
+          'citation_opened',
           'profile_viewed',
           'research_continued',
-          'export_clicked'
+          'export_clicked',
+          'comparison_created',
+          'documents_compared',
+          'recommendation_viewed',
+          'recommendation_opened',
+          'recommendation_added_to_compare',
+          'business_problem_searched',
+          'graph_viewed',
+          'graph_node_opened',
+          'graph_path_searched',
+          'graph_path_saved'
         )
       );
 

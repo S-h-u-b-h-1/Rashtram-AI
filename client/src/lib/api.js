@@ -88,6 +88,18 @@ export const storeAuthToken = (token, { persistent = false } = {}) => {
   storage.setItem("auth-token", token);
 };
 
+const getActivitySessionId = () => {
+  if (typeof window === "undefined") return null;
+  const key = "rashtram-activity-session";
+  let sessionId = sessionStorage.getItem(key);
+  if (!sessionId) {
+    sessionId = globalThis.crypto?.randomUUID?.() ||
+      `session-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    sessionStorage.setItem(key, sessionId);
+  }
+  return sessionId;
+};
+
 export const apiRequest = async (endpoint, options = {}) => {
   const token = getAuthToken();
 
@@ -121,6 +133,7 @@ export const apiRequest = async (endpoint, options = {}) => {
     headers: {
       'Content-Type': 'application/json',
       'auth-token': token,
+      'x-research-session': getActivitySessionId(),
       ...fetchOptions.headers,
     },
   };
@@ -437,6 +450,9 @@ export const downloadResearchReportPdf = (id) =>
     `rashtram-research-report-${id}.pdf`,
   );
 
+export const getMyCommercialPilotMetrics = async () =>
+  apiRequest("/product-intelligence/metrics/me", { cache: "no-store" });
+
 export const fetchDocumentTimeline = async (documentId) => {
   return apiRequest(
     `/documents/${encodeURIComponent(documentId)}/timeline`,
@@ -733,7 +749,7 @@ const downloadAuthenticatedFile = async (endpoint, filename) => {
   const token = getAuthToken();
   if (!token) throw new Error("Please sign in again.");
   const response = await fetch(`${API_BASE_URL}${endpoint}`, {
-    headers: { "auth-token": token },
+    headers: { "auth-token": token, "x-research-session": getActivitySessionId() },
   });
   if (!response.ok) throw new Error("Export failed.");
   const blob = await response.blob();
@@ -891,19 +907,6 @@ export const getSourceHealth = async () => {
 
 const recentActivityEvents = new Map();
 let searchActivityTimer = null;
-
-const getActivitySessionId = () => {
-  if (typeof window === "undefined") return null;
-  const key = "rashtram-activity-session";
-  let sessionId = sessionStorage.getItem(key);
-  if (!sessionId) {
-    sessionId =
-      globalThis.crypto?.randomUUID?.() ||
-      `session-${Date.now()}-${Math.random().toString(36).slice(2)}`;
-    sessionStorage.setItem(key, sessionId);
-  }
-  return sessionId;
-};
 
 export const trackActivity = async (event) => {
   if (typeof window === "undefined") return { tracked: false };
