@@ -1,0 +1,26 @@
+[
+  {
+    "id": "replace-with-stable-case-id",
+    "question": "Replace with the reviewed legal or policy research question.",
+    "query_type": "EXACT_REFERENCE",
+    "jurisdiction": "India",
+    "document_type": "act",
+    "expected_document_ids": [],
+    "expected_resource_ids": [],
+    "expected_sections": [],
+    "expected_clauses": [],
+    "gold_evidence": [],
+    "acceptable_evidence_variants": [],
+    "answerable": false,
+    "conflicting_evidence_expected": false,
+    "authority_expectation": "PRIMARY_OFFICIAL",
+    "effective_date_context": null,
+    "difficulty": "medium",
+    "review_status": "AUTO_GENERATED_DRAFT",
+    "reviewer_role": null,
+    "reviewed_at": null,
+    "notes": "Template only. Do not mark reviewed until original sources are checked.",
+    "benchmark_version": "legal-policy-v1",
+    "scenario_tags": ["UNANSWERABLE"]
+  }
+]

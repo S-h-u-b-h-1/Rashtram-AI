@@ -1,7 +1,13 @@
 const crypto = require("node:crypto");
 
 const REVIEW_STATES = new Set([
-  "AUTO_GENERATED_DRAFT", "INTERNAL_REVIEWED", "EXPERT_VERIFIED",
+  "AUTO_GENERATED_DRAFT", "INTERNAL_REVIEWED", "DOMAIN_REVIEWED",
+  "EXPERT_VERIFIED", "REJECTED",
+]);
+
+const REVIEW_DECISIONS = new Set([
+  "CORRECT", "PARTIALLY_CORRECT", "INCORRECT", "INSUFFICIENT_EVIDENCE",
+  "BENCHMARK_CASE_FLAWED",
 ]);
 
 const CONFIGURATIONS = Object.freeze([
@@ -43,6 +49,13 @@ const normalizeEvidence = (value = {}) => ({
   text: String(value.text || value.content || "").trim(),
 });
 
+const optionalIsoDate = (value, field) => {
+  if (value == null || value === "") return null;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) throw new Error(`Invalid ${field}: ${value}`);
+  return date.toISOString();
+};
+
 const normalizeBenchmarkCase = (value = {}) => {
   const id = String(value.id || "").trim();
   const question = String(value.question || "").trim();
@@ -55,6 +68,12 @@ const normalizeBenchmarkCase = (value = {}) => {
       .filter((item) => item.id || item.text)
       .map((item) => [item.id || item.text, item]),
   ).values()];
+  const acceptableEvidenceVariants = [...new Map(
+    (value.acceptableEvidenceVariants || value.acceptable_evidence_variants || [])
+      .map(normalizeEvidence)
+      .filter((item) => item.id || item.text)
+      .map((item) => [item.id || item.text, item]),
+  ).values()];
   const answerable = value.answerable !== false;
   if (answerable && !expectedDocumentIds.length && !goldEvidence.length) {
     throw new Error(`Answerable benchmark ${id} requires expected documents or gold evidence.`);
@@ -64,16 +83,27 @@ const normalizeBenchmarkCase = (value = {}) => {
     question,
     queryType: String(value.queryType || value.query_type || "FACTUAL").toUpperCase(),
     expectedDocumentIds,
+    expectedResourceIds: uniqueStrings(value.expectedResourceIds || value.expected_resource_ids),
     expectedSections: uniqueStrings(value.expectedSections || value.expected_sections),
     expectedClauses: uniqueStrings(value.expectedClauses || value.expected_clauses),
     goldEvidence,
+    acceptableEvidenceVariants,
     answerable,
-    expectedAuthorityClass: String(value.expectedAuthorityClass || value.expected_authority_class || "UNKNOWN"),
+    conflictingEvidenceExpected: Boolean(
+      value.conflictingEvidenceExpected ?? value.conflicting_evidence_expected ?? false),
+    expectedAuthorityClass: String(value.authorityExpectation || value.authority_expectation ||
+      value.expectedAuthorityClass || value.expected_authority_class || "UNKNOWN"),
+    effectiveDateContext: value.effectiveDateContext ?? value.effective_date_context ?? null,
     difficulty: String(value.difficulty || "medium").toLowerCase(),
     jurisdiction: String(value.jurisdiction || "unspecified"),
     documentType: String(value.documentType || value.document_type || "unknown"),
     notes: String(value.notes || ""),
     reviewStatus,
+    reviewerRole: String(value.reviewerRole || value.reviewer_role || "").trim() || null,
+    reviewedAt: optionalIsoDate(value.reviewedAt || value.reviewed_at, "reviewed_at"),
+    benchmarkVersion: String(value.benchmarkVersion || value.benchmark_version || "v1"),
+    scenarioTags: uniqueStrings(value.scenarioTags || value.scenario_tags).map((item) => item.toUpperCase()),
+    answerability: answerable ? "ANSWERABLE" : "UNANSWERABLE",
   };
 };
 
@@ -128,12 +158,21 @@ const evaluateRetrievalCase = (caseValue, rawResults = []) => {
   ].sort((left, right) => right - left).slice(0, 10);
   const ideal = dcg(idealRelevances);
   const directEvidenceFound = benchmark.goldEvidence.length
-    ? benchmark.goldEvidence.some((gold) => results.some((item) =>
+    ? [...benchmark.goldEvidence, ...benchmark.acceptableEvidenceVariants]
+      .some((gold) => results.some((item) =>
         resultIdentity(item) === gold.id || (
           gold.documentId && String(item.documentId) === gold.documentId &&
           (gold.chunkId == null || String(item.chunkId) === gold.chunkId)
         ),
       ))
+    : null;
+  const documentHit = expected.size
+    ? results.some((item) => expected.has(String(item.documentId)))
+    : null;
+  const topExpectedResult = results.find((item) => expected.has(String(item.documentId)));
+  const primarySourcePreferred = benchmark.expectedAuthorityClass === "PRIMARY_OFFICIAL" &&
+    topExpectedResult?.authorityClass
+    ? String(topExpectedResult.authorityClass).toUpperCase() === "PRIMARY_OFFICIAL"
     : null;
   return {
     recallAt1: recallAt(1),
@@ -143,6 +182,11 @@ const evaluateRetrievalCase = (caseValue, rawResults = []) => {
     reciprocalRank: firstDocumentRank >= 0 ? 1 / (firstDocumentRank + 1) : 0,
     ndcgAt10: ideal > 0 ? dcg(relevances) / ideal : null,
     directEvidenceFound,
+    documentHit,
+    exactReferenceHit: benchmark.queryType === "EXACT_REFERENCE"
+      ? Boolean(directEvidenceFound || relevances.some((value) => value >= 2))
+      : null,
+    primarySourcePreferred,
     retrieved: results,
   };
 };
@@ -164,6 +208,12 @@ const evaluateAnswerCase = (caseValue, answer = {}) => {
     ["SUPPORTED", "PARTIALLY_SUPPORTED"].includes(String(claim.state || "").toUpperCase()),
   );
   const abstained = Boolean(answer.abstained);
+  const conflictDetected = typeof answer.conflictDetected === "boolean"
+    ? answer.conflictDetected
+    : typeof answer.conflict_detected === "boolean" ? answer.conflict_detected : null;
+  const temporalCorrect = typeof answer.temporalCorrect === "boolean"
+    ? answer.temporalCorrect
+    : typeof answer.temporal_correct === "boolean" ? answer.temporal_correct : null;
   return {
     citationPrecision,
     citationRecall,
@@ -174,6 +224,9 @@ const evaluateAnswerCase = (caseValue, answer = {}) => {
     abstentionFalsePositive: benchmark.answerable && abstained ? 1 : 0,
     abstentionFalseNegative: !benchmark.answerable && !abstained ? 1 : 0,
     answerable: benchmark.answerable,
+    conflictDetectionCorrect: conflictDetected == null
+      ? null : conflictDetected === benchmark.conflictingEvidenceExpected,
+    temporalAnswerCorrect: benchmark.effectiveDateContext == null ? null : temporalCorrect,
   };
 };
 
@@ -197,6 +250,12 @@ const aggregateEvaluation = (evaluated = [], options = {}) => {
     recallAt10: average(retrieval.map((item) => item.retrieval.recallAt10)),
     mrr: average(retrieval.map((item) => item.retrieval.reciprocalRank)),
     ndcgAt10: average(retrieval.map((item) => item.retrieval.ndcgAt10)),
+    documentHitRate: average(retrieval.map((item) =>
+      item.retrieval.documentHit == null ? null : Number(item.retrieval.documentHit))),
+    exactReferenceHitRate: average(retrieval.map((item) =>
+      item.retrieval.exactReferenceHit == null ? null : Number(item.retrieval.exactReferenceHit))),
+    primarySourcePreferenceRate: average(retrieval.map((item) =>
+      item.retrieval.primarySourcePreferred == null ? null : Number(item.retrieval.primarySourcePreferred))),
     citationPrecision: average(answers.map((item) => item.answer.citationPrecision)),
     citationRecall: average(answers.map((item) => item.answer.citationRecall)),
     unsupportedFactualClaimRate: average(answers.map((item) => item.answer.unsupportedFactualClaimRate)),
@@ -211,6 +270,12 @@ const aggregateEvaluation = (evaluated = [], options = {}) => {
       const falseNegative = unanswerable.reduce((sum, item) => sum + item.answer.abstentionFalseNegative, 0);
       return truePositive + falseNegative ? truePositive / (truePositive + falseNegative) : null;
     })(),
+    conflictDetectionAccuracy: average(answers.map((item) =>
+      item.answer.conflictDetectionCorrect == null
+        ? null : Number(item.answer.conflictDetectionCorrect))),
+    temporalAnswerAccuracy: average(answers.map((item) =>
+      item.answer.temporalAnswerCorrect == null
+        ? null : Number(item.answer.temporalAnswerCorrect))),
   };
   if (options.includeGroups === false) return metrics;
   return {
@@ -220,6 +285,8 @@ const aggregateEvaluation = (evaluated = [], options = {}) => {
     byJurisdiction: groupedMetrics(evaluated, "jurisdiction"),
     byAuthorityClass: groupedMetrics(evaluated, "expectedAuthorityClass"),
     byDifficulty: groupedMetrics(evaluated, "difficulty"),
+    byAnswerability: groupedMetrics(evaluated, "answerability"),
+    byReviewMaturity: groupedMetrics(evaluated, "reviewStatus"),
   };
 };
 
@@ -290,6 +357,7 @@ const compareWithBaseline = (metrics, baseline, policy) => {
 
 module.exports = {
   CONFIGURATIONS,
+  REVIEW_DECISIONS,
   REVIEW_STATES,
   VERSION_FIELDS,
   aggregateEvaluation,

@@ -1,5 +1,29 @@
 # Human Review Guide for Research Benchmark Outputs
 
+For the governed RAG benchmark, create a bounded review pack without exposing
+internal vector scores:
+
+```bash
+npm run eval:review --prefix server -- \
+  --benchmark=evaluation/benchmarks/ci-v1.json \
+  --run=evaluation/benchmarks/ci-run-v1.json \
+  --output=/tmp/rashtram-review-pack.json
+```
+
+Reviewers inspect the question, expected source coordinates, gold evidence,
+retrieved passages, system answer, citations, and abstention decision. They set
+one decision: `CORRECT`, `PARTIALLY_CORRECT`, `INCORRECT`,
+`INSUFFICIENT_EVIDENCE`, or `BENCHMARK_CASE_FLAWED`. Validate the completed
+pack with:
+
+```bash
+npm run eval:review --prefix server -- --input-review=/path/to/completed-review.json
+```
+
+`DOMAIN_REVIEWED` and `EXPERT_VERIFIED` require a reviewer role and review
+timestamp. Do not store a fabricated reviewer name. Rejected/flawed cases stay
+visible as `REJECTED`; they are not silently removed from governance history.
+
 The research benchmark can export a human-review pack:
 
 ```bash

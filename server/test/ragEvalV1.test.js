@@ -10,6 +10,10 @@ const {
   normalizeBenchmarkCase,
   versionManifest,
 } = require("../evaluation/ragEvalV1");
+const {
+  buildReviewPack,
+  validateReviewPack,
+} = require("../evaluation/benchmarkReview");
 
 const benchmark = (overrides = {}) => ({
   id: "case-1",
@@ -126,6 +130,69 @@ test("missing required benchmark data fails explicitly", () => {
     () => normalizeBenchmarkCase(benchmark({ review_status: "EXPERTISH" })),
     /invalid benchmark review status/i,
   );
+});
+
+test("benchmark maturity and legal-review metadata are normalized without identities", () => {
+  const normalized = normalizeBenchmarkCase(benchmark({
+    review_status: "DOMAIN_REVIEWED",
+    reviewer_role: "chartered accountant reviewer",
+    reviewed_at: "2026-08-20T10:00:00Z",
+    expected_resource_ids: ["resource-1"],
+    acceptable_evidence_variants: [{ id: "doc-a:variant", text: "Equivalent passage." }],
+    conflicting_evidence_expected: true,
+    effective_date_context: { as_of: "2025-01-01" },
+    benchmark_version: "legal-policy-v1",
+    scenario_tags: ["multi_version"],
+  }));
+  assert.equal(normalized.reviewStatus, "DOMAIN_REVIEWED");
+  assert.equal(normalized.reviewerRole, "chartered accountant reviewer");
+  assert.equal(normalized.reviewedAt, "2026-08-20T10:00:00.000Z");
+  assert.deepEqual(normalized.expectedResourceIds, ["resource-1"]);
+  assert.equal(normalized.acceptableEvidenceVariants.length, 1);
+  assert.deepEqual(normalized.scenarioTags, ["MULTI_VERSION"]);
+});
+
+test("evaluation reports new metrics and review-maturity segmentation separately", () => {
+  const report = evaluateRun({
+    cases: [benchmark({ review_status: "INTERNAL_REVIEWED" })],
+    retrievalResults: {
+      "case-1": [{
+        documentId: "doc-a", chunkId: "chunk-1", evidenceId: "doc-a:chunk-1",
+        section: "4", clause: "4(1)", authorityClass: "PRIMARY_OFFICIAL",
+      }],
+    },
+    answerResults: { "case-1": { citations: ["doc-a:chunk-1"], claims: [] } },
+  });
+  assert.equal(report.metrics.documentHitRate, 1);
+  assert.equal(report.metrics.exactReferenceHitRate, 1);
+  assert.equal(report.metrics.primarySourcePreferenceRate, 1);
+  assert.equal(report.metrics.byReviewMaturity.INTERNAL_REVIEWED.cases, 1);
+  assert.equal(report.metrics.byAnswerability.ANSWERABLE.cases, 1);
+});
+
+test("review packs expose evidence and enforce governed reviewer decisions", () => {
+  const pack = buildReviewPack({
+    cases: [benchmark()],
+    run: {
+      retrievalResults: { "case-1": [{ documentId: "doc-a", chunkId: "chunk-1" }] },
+      answerResults: { "case-1": { citations: ["doc-a:chunk-1"], abstained: false } },
+    },
+  });
+  assert.equal(pack.cases[0].retrievedPassages.length, 1);
+  assert.deepEqual(pack.cases[0].citations, ["doc-a:chunk-1"]);
+  pack.cases[0].review = {
+    decision: "correct",
+    reviewStatus: "DOMAIN_REVIEWED",
+    reviewerRole: "policy researcher",
+    reviewedAt: "2026-08-20T10:00:00Z",
+    notes: "Verified against the bounded source passage.",
+  };
+  const result = validateReviewPack(pack);
+  assert.equal(result.valid, true);
+  assert.equal(result.byDecision.CORRECT, 1);
+  assert.equal(result.byStatus.DOMAIN_REVIEWED, 1);
+  pack.cases[0].review.reviewerRole = null;
+  assert.throws(() => validateReviewPack(pack), /requires reviewerRole and reviewedAt/i);
 });
 
 test("evaluation is deterministic for identical inputs", () => {

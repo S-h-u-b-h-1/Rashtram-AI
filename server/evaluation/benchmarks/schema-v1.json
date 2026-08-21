@@ -5,15 +5,19 @@
   "type": "object",
   "required": [
     "id", "question", "query_type", "expected_document_ids",
-    "expected_sections", "expected_clauses", "gold_evidence", "answerable",
-    "expected_authority_class", "difficulty", "jurisdiction",
-    "document_type", "notes", "review_status"
+    "expected_resource_ids", "expected_sections", "expected_clauses",
+    "gold_evidence", "acceptable_evidence_variants", "answerable",
+    "conflicting_evidence_expected", "authority_expectation",
+    "effective_date_context", "difficulty", "jurisdiction", "document_type",
+    "notes", "review_status", "reviewer_role", "reviewed_at",
+    "benchmark_version"
   ],
   "properties": {
     "id": { "type": "string", "minLength": 1 },
     "question": { "type": "string", "minLength": 1 },
     "query_type": { "type": "string" },
     "expected_document_ids": { "type": "array", "items": { "type": "string" }, "uniqueItems": true },
+    "expected_resource_ids": { "type": "array", "items": { "type": "string" }, "uniqueItems": true },
     "expected_sections": { "type": "array", "items": { "type": "string" }, "uniqueItems": true },
     "expected_clauses": { "type": "array", "items": { "type": "string" }, "uniqueItems": true },
     "gold_evidence": {
@@ -30,13 +34,47 @@
         }
       }
     },
+    "acceptable_evidence_variants": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/evidence" }
+    },
     "answerable": { "type": "boolean" },
+    "conflicting_evidence_expected": { "type": "boolean" },
+    "authority_expectation": { "type": "string" },
     "expected_authority_class": { "type": "string" },
+    "effective_date_context": {
+      "type": ["object", "string", "null"]
+    },
     "difficulty": { "enum": ["easy", "medium", "hard"] },
     "jurisdiction": { "type": "string" },
     "document_type": { "type": "string" },
     "notes": { "type": "string" },
-    "review_status": { "enum": ["AUTO_GENERATED_DRAFT", "INTERNAL_REVIEWED", "EXPERT_VERIFIED"] }
+    "review_status": {
+      "enum": ["AUTO_GENERATED_DRAFT", "INTERNAL_REVIEWED", "DOMAIN_REVIEWED", "EXPERT_VERIFIED", "REJECTED"]
+    },
+    "reviewer_role": { "type": ["string", "null"] },
+    "reviewed_at": { "type": ["string", "null"], "format": "date-time" },
+    "benchmark_version": { "type": "string", "minLength": 1 },
+    "scenario_tags": {
+      "type": "array",
+      "items": {
+        "enum": ["ANSWERABLE", "UNANSWERABLE", "CONFLICTING_EVIDENCE", "OUTDATED_SOURCE", "MULTI_VERSION", "CROSS_JURISDICTION"]
+      },
+      "uniqueItems": true
+    }
+  },
+  "$defs": {
+    "evidence": {
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "documentId": { "type": "string" },
+        "chunkId": { "type": "string" },
+        "section": { "type": "string" },
+        "clause": { "type": "string" },
+        "text": { "type": "string" }
+      }
+    }
   },
   "additionalProperties": false
 }

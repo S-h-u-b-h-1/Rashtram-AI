@@ -4,19 +4,21 @@ RAG Eval V1 makes retrieval and answer quality measurable. It does not claim tha
 
 ## Benchmark cases
 
-The canonical format is `server/evaluation/benchmarks/schema-v1.json`. Each case records the question, query type, multiple acceptable documents/passages, sections, clauses, answerability, authority class, difficulty, jurisdiction, document type, notes, and review status.
+The canonical format is `server/evaluation/benchmarks/schema-v1.json`. Each case records the question, query type, expected documents/resources and source coordinates, bounded gold and acceptable evidence, answerability/conflict/date context, authority expectation, difficulty, jurisdiction, document type, review governance, notes, and benchmark version.
 
 Review status is mandatory:
 
 - `AUTO_GENERATED_DRAFT` — development only;
-- `INTERNAL_REVIEWED` — checked by the Rashtram team; or
-- `EXPERT_VERIFIED` — checked by a qualified domain reviewer.
+- `INTERNAL_REVIEWED` — checked by the Rashtram team;
+- `DOMAIN_REVIEWED` — checked by an identified reviewer role with relevant domain context;
+- `EXPERT_VERIFIED` — checked by a qualified domain reviewer; or
+- `REJECTED` — retained for audit because the case is flawed or unsuitable.
 
 The repository includes a small synthetic CI subset. It tests the evaluator and retrieval contracts, not legal accuracy. The format and runner support larger 100–500 case datasets without pretending automatically generated answers were reviewed.
 
 ## Metrics
 
-Deterministic metrics include Recall@1/3/5/10, MRR, nDCG@10, citation precision/recall, unsupported material factual-claim rate, evidence faithfulness, and abstention precision/recall. Multiple acceptable documents and evidence passages are supported and duplicate result identities are removed before scoring.
+Deterministic metrics include Recall@1/3/5/10, MRR, nDCG@10, document-hit and exact-reference hit rates, primary-source preference where authority metadata is observable, citation precision/recall, unsupported material factual-claim rate, evidence faithfulness, abstention precision/recall, conflict detection, and temporal accuracy where labelled. Multiple acceptable documents and evidence passages are supported and duplicate result identities are removed before scoring.
 
 Answer scores consume the deterministic claim states produced by Evidence Safety V1. A future model judge may add qualitative fields, but must record its model and prompt version and must remain separate from heuristic metrics.
 
@@ -55,12 +57,12 @@ The checked-in baseline can fail CI only for material drops in Recall@10, MRR, o
 2. Keep new cases `AUTO_GENERATED_DRAFT` until the evidence and acceptable alternatives are checked.
 3. Record why each document/passage is acceptable, including jurisdiction and version.
 4. Promote to `INTERNAL_REVIEWED` only after a second team member checks it.
-5. Promote to `EXPERT_VERIFIED` only when a named qualified reviewer has checked the source evidence.
+5. Promote to `DOMAIN_REVIEWED` or `EXPERT_VERIFIED` only after a qualified reviewer has checked the source evidence and the reviewer role and timestamp are recorded. Do not fabricate reviewer identities.
 6. Never paste copyrighted full documents into the benchmark; store bounded evidence spans and stable source coordinates.
 
 ## Reports and failures
 
-JSON and Markdown reports show overall metrics and breakdowns by document type, query type, jurisdiction, authority class, and difficulty. Per-case failure labels identify missing documents, wrong chunks, unsupported citations/claims, and abstention false positives/negatives.
+JSON and Markdown reports show overall metrics and breakdowns by document type, query type, jurisdiction, authority class, difficulty, answerability, and review maturity. Per-case failure labels identify missing documents, wrong chunks, unsupported citations/claims, and abstention false positives/negatives.
 
 No retrieval improvement should be claimed unless an appropriately reviewed benchmark shows it.
 

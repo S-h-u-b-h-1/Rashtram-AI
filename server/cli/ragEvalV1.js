@@ -25,6 +25,8 @@ const markdownReport = (report) => {
     ["Jurisdiction", metrics.byJurisdiction],
     ["Authority class", metrics.byAuthorityClass],
     ["Difficulty", metrics.byDifficulty],
+    ["Answerability", metrics.byAnswerability],
+    ["Review maturity", metrics.byReviewMaturity],
   ];
   return [
     "# Rashtram RAG Evaluation V1",
@@ -42,12 +44,17 @@ const markdownReport = (report) => {
     `- Recall@10: ${number(metrics.recallAt10)}`,
     `- MRR: ${number(metrics.mrr)}`,
     `- nDCG@10: ${number(metrics.ndcgAt10)}`,
+    `- Document-hit rate: ${number(metrics.documentHitRate)}`,
+    `- Exact-reference hit rate: ${number(metrics.exactReferenceHitRate)}`,
+    `- Primary-source preference rate: ${number(metrics.primarySourcePreferenceRate)}`,
     `- Citation precision: ${number(metrics.citationPrecision)}`,
     `- Citation recall: ${number(metrics.citationRecall)}`,
     `- Unsupported factual claim rate: ${number(metrics.unsupportedFactualClaimRate)}`,
     `- Evidence faithfulness: ${number(metrics.evidenceFaithfulness)}`,
     `- Abstention precision: ${number(metrics.abstentionPrecision)}`,
     `- Abstention recall: ${number(metrics.abstentionRecall)}`,
+    `- Conflict-detection accuracy: ${number(metrics.conflictDetectionAccuracy)}`,
+    `- Temporal-answer accuracy: ${number(metrics.temporalAnswerAccuracy)}`,
     "",
     ...sections.flatMap(([label, groups]) => [
       `## By ${label.toLowerCase()}`,
