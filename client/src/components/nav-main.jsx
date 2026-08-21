@@ -26,8 +26,8 @@ export function NavMain({
     <SidebarGroup>
       <SidebarGroupLabel><MessageSquare className="mx-2"/>Chats</SidebarGroupLabel>
       <SidebarMenu>
-        {items.map((item) => (
-            <SidebarMenuItem>
+        {items.map((item, index) => (
+            <SidebarMenuItem key={item.title || item.label || index}>
               <SidebarMenuSub>
                   {item.items?.map((subItem) => (
                     <SidebarMenuSubItem key={subItem.title} className={'cursor-pointer'}>
