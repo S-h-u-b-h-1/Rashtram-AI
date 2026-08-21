@@ -143,4 +143,8 @@ module.exports = [
     name: "036_regulatory_watchlists_v1.js",
     migration: require("./036_regulatory_watchlists_v1"),
   },
+  {
+    name: "037_cross_state_comparisons_v1.js",
+    migration: require("./037_cross_state_comparisons_v1"),
+  },
 ];

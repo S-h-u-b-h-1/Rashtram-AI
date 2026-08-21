@@ -6,6 +6,7 @@ const {
   createWatchlist, deleteWatchlist, listAlerts, listWatchlists, refreshWatchlists,
 } = require("./watchlistService");
 const { getAmendmentTracker } = require("./amendmentTrackerService");
+const { runCrossStateComparison } = require("./crossStateComparisonService");
 
 const router = express.Router();
 
@@ -45,6 +46,11 @@ router.get("/alerts", async (req, res) => {
 router.get("/amendments/:documentId", async (req, res) => {
   try { return res.json(await getAmendmentTracker(req.params.documentId)); }
   catch (error) { return sendError(res, error, "Amendment tracker failed"); }
+});
+
+router.post("/cross-state-comparison", generationLimiter, async (req, res) => {
+  try { return res.json(await runCrossStateComparison(req.user.id, req.body)); }
+  catch (error) { return sendError(res, error, "Cross-state comparison failed"); }
 });
 
 module.exports = router;

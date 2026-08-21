@@ -304,6 +304,15 @@ const checks = [
         WHERE migration_name = '036_regulatory_watchlists_v1.js'
       ) AS passed`,
   },
+  {
+    name: "migration 037 cross-state comparisons complete",
+    sql: `SELECT
+      TO_REGCLASS('public.cross_state_comparisons') IS NOT NULL
+      AND EXISTS (
+        SELECT 1 FROM schema_migrations
+        WHERE migration_name = '037_cross_state_comparisons_v1.js'
+      ) AS passed`,
+  },
 ];
 
 const main = async () => {

@@ -418,6 +418,11 @@ export const deleteRegulatoryWatchlist = async (id) =>
 export const getAmendmentTracker = async (documentId) =>
   apiRequest(`/product-intelligence/amendments/${encodeURIComponent(documentId)}`);
 
+export const createCrossStateComparison = async (payload) =>
+  apiRequest("/product-intelligence/cross-state-comparison", {
+    method: "POST", body: JSON.stringify(payload),
+  });
+
 export const fetchDocumentTimeline = async (documentId) => {
   return apiRequest(
     `/documents/${encodeURIComponent(documentId)}/timeline`,
