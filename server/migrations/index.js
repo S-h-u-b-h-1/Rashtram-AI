@@ -147,4 +147,8 @@ module.exports = [
     name: "037_cross_state_comparisons_v1.js",
     migration: require("./037_cross_state_comparisons_v1"),
   },
+  {
+    name: "038_research_reports_v1.js",
+    migration: require("./038_research_reports_v1"),
+  },
 ];

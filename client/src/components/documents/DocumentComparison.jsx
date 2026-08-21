@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import {
   ExternalLink,
   FileText,
+  Download,
   GitCompareArrows,
   Loader2,
   MessageSquareText,
@@ -15,6 +16,8 @@ import {
   getDocumentComparison,
   getDocumentReadiness,
   recommendDocumentsForComparison,
+  generateResearchReport,
+  downloadResearchReportPdf,
   trackActivity,
 } from "@/lib/api";
 import { useComparison } from "@/context/ComparisonContext";
@@ -103,6 +106,8 @@ export function DocumentComparison() {
   const [loading, setLoading] = useState(Boolean(comparisonId));
   const [error, setError] = useState("");
   const [chatDraft, setChatDraft] = useState(null);
+  const [reportLoading, setReportLoading] = useState(false);
+  const [reportError, setReportError] = useState("");
   const initialRequest = useRef("");
   const chatSectionRef = useRef(null);
 
@@ -332,6 +337,20 @@ export function DocumentComparison() {
     setChatDraft({ id: Date.now(), text: question });
     window.requestAnimationFrame(focusEmbeddedChat);
   };
+  const createReport = async () => {
+    if (reportLoading || !chatDocumentIds.length) return;
+    setReportLoading(true);
+    setReportError("");
+    try {
+      const report = await generateResearchReport({
+        title: `Research report: ${result?.documents?.map((item) => item.title).join(" and ") || "selected documents"}`,
+        researchQuestion: userQuestion || "What are the principal provisions, differences, timeline, authorities, and potential implications across these documents?",
+        documentIds: chatDocumentIds,
+      });
+      await downloadResearchReportPdf(report.id);
+    } catch (requestError) { setReportError(requestError.message); }
+    finally { setReportLoading(false); }
+  };
 
   if (!comparison && ids.length === 0 && !comparisonId) {
     return (
@@ -525,9 +544,15 @@ export function DocumentComparison() {
       ) : result ? (
         <>
           <section className="surface-card p-5 sm:p-6">
-            <h3 className="font-serif text-2xl text-[#8f1d2c]">
-              Documents compared
-            </h3>
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <h3 className="font-serif text-2xl text-[#8f1d2c]">Documents compared</h3>
+              <button type="button" onClick={createReport} disabled={reportLoading}
+                className="inline-flex items-center justify-center gap-2 rounded-xl border border-[#8f1d2c]/15 bg-white px-4 py-2.5 text-xs font-semibold text-[#8f1d2c] disabled:opacity-45">
+                {reportLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
+                {reportLoading ? "Building cited report…" : "Download research report"}
+              </button>
+            </div>
+            {reportError && <p role="alert" className="mt-3 text-xs text-[#9a2637]">{reportError}</p>}
             <div className="mt-4 grid gap-3 lg:grid-cols-2">
               {(result.documents || []).map((document) => (
                 <article

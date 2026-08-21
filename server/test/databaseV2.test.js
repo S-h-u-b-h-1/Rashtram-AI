@@ -36,7 +36,7 @@ test("database migrations are versioned and ordered", () => {
   assert.ok(files.includes("015_normalize_failure_pipeline_stage.js"));
   assert.ok(files.includes("016_processing_audit_log.js"));
   assert.ok(files.includes("017_normalize_download_failure_codes.js"));
-  assert.equal(files.at(-1), "037_cross_state_comparisons_v1.js");
+  assert.equal(files.at(-1), "038_research_reports_v1.js");
 });
 
 test("database verifier derives the expected latest migration from the registry", () => {
@@ -111,6 +111,16 @@ test("cross-state comparison storage is account-owned and evidence-preserving", 
   assert.match(source, /user_id BIGINT NOT NULL REFERENCES users\(id\) ON DELETE CASCADE/);
   assert.match(source, /evidence_refs_json/);
   assert.doesNotMatch(source, /\b(?:UPDATE|TRUNCATE|DROP)\s|\bDELETE\s+FROM\b/i);
+});
+
+test("research report storage is account-owned and preserves citations", () => {
+  const source = fs.readFileSync(
+    path.join(__dirname, "../migrations/038_research_reports_v1.js"), "utf8",
+  );
+  assert.match(source, /CREATE TABLE IF NOT EXISTS research_reports/);
+  assert.match(source, /user_id BIGINT NOT NULL REFERENCES users\(id\) ON DELETE CASCADE/);
+  assert.match(source, /evidence_refs_json/);
+  assert.match(source, /selected_document_ids BIGINT\[\]/);
 });
 
 test("research observability migration is additive and privacy safe", () => {

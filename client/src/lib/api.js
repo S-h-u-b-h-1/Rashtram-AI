@@ -423,6 +423,20 @@ export const createCrossStateComparison = async (payload) =>
     method: "POST", body: JSON.stringify(payload),
   });
 
+export const generateResearchReport = async (payload) =>
+  apiRequest("/product-intelligence/reports", {
+    method: "POST", body: JSON.stringify(payload),
+  });
+
+export const getResearchReport = async (id) =>
+  apiRequest(`/product-intelligence/reports/${encodeURIComponent(id)}`);
+
+export const downloadResearchReportPdf = (id) =>
+  downloadAuthenticatedFile(
+    `/product-intelligence/reports/${encodeURIComponent(id)}/pdf`,
+    `rashtram-research-report-${id}.pdf`,
+  );
+
 export const fetchDocumentTimeline = async (documentId) => {
   return apiRequest(
     `/documents/${encodeURIComponent(documentId)}/timeline`,

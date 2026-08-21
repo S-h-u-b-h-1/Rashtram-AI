@@ -313,6 +313,15 @@ const checks = [
         WHERE migration_name = '037_cross_state_comparisons_v1.js'
       ) AS passed`,
   },
+  {
+    name: "migration 038 research reports complete",
+    sql: `SELECT
+      TO_REGCLASS('public.research_reports') IS NOT NULL
+      AND EXISTS (
+        SELECT 1 FROM schema_migrations
+        WHERE migration_name = '038_research_reports_v1.js'
+      ) AS passed`,
+  },
 ];
 
 const main = async () => {
