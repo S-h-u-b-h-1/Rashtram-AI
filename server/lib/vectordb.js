@@ -1788,6 +1788,52 @@ const storeContentInChunks = async ({
   };
 };
 
+// Large-document parents are routing representations, not source chunks.
+// They are upserted separately so indexing them can never delete or relabel
+// ordinary child vectors for the same document.
+const storeRoutingRepresentations = async ({
+  representations, index, idField, titleField,
+}) => {
+  if (!Array.isArray(representations) || representations.length === 0 || representations.length > 500) {
+    throw new Error("Routing representation batch must contain between 1 and 500 items.");
+  }
+  let embeddingsMs = 0;
+  let pineconeMs = 0;
+  let stored = 0;
+  for (let start = 0; start < representations.length; start += EMBEDDING_BATCH_SIZE) {
+    const batch = representations.slice(start, start + EMBEDDING_BATCH_SIZE);
+    const embeddingStartedAt = Date.now();
+    const embeddings = await generateEmbeddings(
+      batch.map((item) => item.embeddingText),
+      "RETRIEVAL_DOCUMENT",
+    );
+    embeddingsMs += Date.now() - embeddingStartedAt;
+    const vectors = batch.map((item, indexValue) => ({
+      id: item.id,
+      values: embeddings[indexValue],
+      metadata: Object.fromEntries(Object.entries({
+        [idField]: String(item.documentId),
+        [titleField]: item.title,
+        content: item.embeddingText,
+        chunkIndex: item.groupIndex,
+        totalChunks: representations.length,
+        routingOnly: true,
+        structuralType: "large_document_group",
+        childStart: item.childStart,
+        childEnd: item.childEnd,
+        groupTitle: item.groupTitle,
+        vectorNamespace: VECTOR_NAMESPACE,
+        ...item.metadata,
+      }).filter(([, value]) => value !== null && value !== undefined)),
+    }));
+    const pineconeStartedAt = Date.now();
+    await upsertWithRetry(index, vectors);
+    pineconeMs += Date.now() - pineconeStartedAt;
+    stored += vectors.length;
+  }
+  return { stored, embeddingsMs, pineconeMs };
+};
+
 // Reprocessing a document can produce fewer chunks than the previous run
 // (content shrank, or chunking logic changed). Pinecone upserts only ever
 // add/overwrite by ID, so without this step the old chunk indices beyond
@@ -1976,5 +2022,6 @@ module.exports = {
   storeContentInChunks,
   storeEGazetteContentInChunks,
   storePolicyContentInChunks,
+  storeRoutingRepresentations,
   validateAIProvider,
 };

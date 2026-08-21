@@ -55,6 +55,7 @@ const {
 const {
   discoverKnowledgeCandidates,
 } = require("../graph/knowledgeLayerService");
+const { expandLargeDocumentMatches } = require("./largeDocumentService");
 
 const TYPE_CONFIG = {
   bill: {
@@ -1339,10 +1340,10 @@ const localChunkScore = (chunk, queryTokens) =>
 // section/article/rule/clause that this passage's own structural metadata
 // matches? No extra API call, just a regex extraction over the question text.
 const IDENTIFIER_PATTERNS = [
-  /\b(?:section|sec\.?)\s*([0-9]+[a-z]?)\b/gi,
-  /\b(?:article|art\.?)\s*([0-9]+[a-z]?)\b/gi,
-  /\b(?:clause|sub-clause)\s*([0-9]+[a-z]?)\b/gi,
-  /\b(?:rule)\s*([0-9]+[a-z]?)\b/gi,
+  /\b(?:section|sec\.?)\s*([0-9]+(?:\.[0-9]+)*(?:\([a-z0-9]+\))?[a-z]?)/gi,
+  /\b(?:article|art\.?)\s*([0-9]+(?:\.[0-9]+)*(?:\([a-z0-9]+\))?[a-z]?)/gi,
+  /\b(?:clause|sub-clause)\s*([0-9]+(?:\.[0-9]+)*(?:\([a-z0-9]+\))?[a-z]?)/gi,
+  /\b(?:rule)\s*([0-9]+(?:\.[0-9]+)*(?:\([a-z0-9]+\))?[a-z]?)/gi,
   /\bधारा\s*([0-9]+[क-ह]?)\b/g,
 ];
 
@@ -1390,8 +1391,8 @@ const rerankPassages = (passages, message, { topK = 6 } = {}) => {
     const fusionScore = Math.min(1, Number(passage.rrfScore || 0) * 30);
     const authorityBoost = Number(passage.authorityBoost || 0);
     const finalScore =
-      0.32 * vectorScore + 0.28 * lexicalScore + 0.15 * ftsScore +
-      0.12 * boost + 0.1 * fusionScore + authorityBoost;
+      0.28 * vectorScore + 0.28 * lexicalScore + 0.15 * ftsScore +
+      0.35 * boost + 0.1 * fusionScore + authorityBoost;
     const rankingReasons = [...new Set([
       ...(passage.rankingReasons || []),
       boost > 0 ? "exact_identifier" : null,
@@ -1654,6 +1655,10 @@ const retrieveDocumentContext = async (
   const vectorSearch = adapters.vectorSearch || (async (limit) => {
     const config = typeConfig(documentType);
     const matches = await config.search(message, documentId, limit);
+    const expanded = await expandLargeDocumentMatches({
+      matches, documentId, message,
+    });
+    if (expanded) return expanded;
     return matches.map(passageFromVectorMatch)
       .filter((passage) => passage.content.trim())
       .map((passage) => ({ ...passage, vectorScore: passage.score }));

@@ -36,7 +36,7 @@ test("database migrations are versioned and ordered", () => {
   assert.ok(files.includes("015_normalize_failure_pipeline_stage.js"));
   assert.ok(files.includes("016_processing_audit_log.js"));
   assert.ok(files.includes("017_normalize_download_failure_codes.js"));
-  assert.equal(files.at(-1), "032_semantic_coverage_v1.js");
+  assert.equal(files.at(-1), "033_large_document_intelligence.js");
 });
 
 test("database verifier derives the expected latest migration from the registry", () => {
@@ -60,6 +60,16 @@ test("semantic coverage migration adds only bounded audit indexes", () => {
   assert.match(source, /user_activity_events_document_recent_idx/);
   assert.match(source, /processing_attempts_semantic_backfill_idx/);
   assert.doesNotMatch(source, /DROP|DELETE|TRUNCATE|UPDATE\s/i);
+});
+
+test("large-document migration preserves ordinary semantic readiness truth", () => {
+  const source = fs.readFileSync(
+    path.join(__dirname, "../migrations/033_large_document_intelligence.js"),
+    "utf8",
+  );
+  assert.match(source, /document_chunk_groups/);
+  assert.match(source, /hierarchical_semantic_ready/);
+  assert.doesNotMatch(source, /SET\s+semantic_ready|DROP|TRUNCATE/i);
 });
 
 test("research observability migration is additive and privacy safe", () => {

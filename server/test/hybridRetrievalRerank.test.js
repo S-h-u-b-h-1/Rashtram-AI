@@ -60,6 +60,16 @@ test("a passage matching an explicit section identifier outranks a higher raw ve
   assert.ok(reranked[0].identifierBoost > 0);
 });
 
+test("dotted legal identifiers retain the complete section reference", () => {
+  const ranked = rerankPassages([
+    passage({ chunkIndex: 1, sectionId: "2", content: "Generic section two material.", vectorScore: 0.9 }),
+    passage({ chunkIndex: 2, sectionId: "2.1.4)", content: "The specific production and productivity provision.", vectorScore: 0.4 }),
+  ], "What does section 2.1.4 state?", { topK: 2 });
+
+  assert.equal(ranked[0].chunkIndex, 2);
+  assert.equal(ranked[0].identifierBoost, 1);
+});
+
 test("reranker respects topK and renumbers the passage field", () => {
   const passages = Array.from({ length: 5 }, (_, i) =>
     passage({ chunkIndex: i, content: `chunk ${i}`, vectorScore: 1 - i * 0.1 }),

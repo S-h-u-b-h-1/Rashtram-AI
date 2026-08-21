@@ -30,6 +30,7 @@
     "eval:rag:ci": "node cli/ragEvalV1.js --benchmark=evaluation/benchmarks/ci-v1.json --run=evaluation/benchmarks/ci-run-v1.json --baseline=evaluation/benchmarks/ci-baseline-v1.json",
     "eval:review": "node cli/benchmarkReview.js",
     "corpus:intelligence": "node cli/corpusIntelligence.js",
+    "large-document:index": "node cli/largeDocumentIndex.js",
     "embeddings:recover": "node cli/recoverEmbeddings.js",
     "research:ready-audit": "node cli/researchReadyAudit.js",
     "process:audit": "node cli/processAudit.js",

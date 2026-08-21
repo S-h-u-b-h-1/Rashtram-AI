@@ -127,4 +127,8 @@ module.exports = [
     name: "032_semantic_coverage_v1.js",
     migration: require("./032_semantic_coverage_v1"),
   },
+  {
+    name: "033_large_document_intelligence.js",
+    migration: require("./033_large_document_intelligence"),
+  },
 ];
