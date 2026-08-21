@@ -43,7 +43,15 @@ const {
 } = require("../lib/storage/objectStorage");
 const { planQuery } = require("../retrieval/queryPlanner");
 const { retrievalConfig } = require("../retrieval/retrievalConfig");
-const { reciprocalRankFusion } = require("../retrieval/rankFusion");
+const { legacyCandidateMerge, reciprocalRankFusion } = require("../retrieval/rankFusion");
+const {
+  applyResearchFlags,
+  resolveResearchFlags,
+} = require("../retrieval/featureFlags");
+const {
+  caches,
+  retrievalCacheKey,
+} = require("../retrieval/researchCache");
 const {
   discoverKnowledgeCandidates,
 } = require("../graph/knowledgeLayerService");
@@ -445,12 +453,14 @@ const getDocument = async (documentType, documentId) => {
 
 const getDocumentContext = async (documentType, documentId) => {
   const cacheKey = `${documentType}:${documentId}`;
-  const cached = contextCache.get(cacheKey);
-  if (cached && Date.now() - cached.cachedAt < CONTEXT_CACHE_TTL_MS) {
-    return cached.value;
-  }
   const document = await getDocument(documentType, documentId);
   if (!document) return null;
+  const documentVersion = document.fileHash || document.updatedAt || document.processedAt;
+  const cached = contextCache.get(cacheKey);
+  if (cached && cached.documentVersion === documentVersion &&
+      Date.now() - cached.cachedAt < CONTEXT_CACHE_TTL_MS) {
+    return cached.value;
+  }
   const [resources, relationships, recommendations, textArtifact] =
     await Promise.all([
       DocumentRepository.getResources(documentId),
@@ -476,7 +486,7 @@ const getDocumentContext = async (documentType, documentId) => {
     graph,
     textArtifact,
   };
-  contextCache.set(cacheKey, { cachedAt: Date.now(), value });
+  contextCache.set(cacheKey, { cachedAt: Date.now(), documentVersion, value });
   if (contextCache.size > 500) {
     const oldest = [...contextCache.entries()].sort(
       (left, right) => left[1].cachedAt - right[1].cachedAt,
@@ -824,6 +834,10 @@ const processExtractableSourceDocument = async (
       summaryMs,
       embeddingsMs: Number(stored.metrics?.embeddingsMs || 0),
       pineconeMs: Number(stored.metrics?.pineconeMs || 0),
+      ocrPages: Number(processed.pdfQuality?.ocrPages || 0),
+      totalPages: Number(processed.pdfQuality?.pageCount || processed.totalChunks || 0),
+      chunksStored: Number(stored.chunksStored || 0),
+      embeddingsStored: vectorStorageError ? 0 : Number(stored.chunksStored || 0),
       chunkPersistenceMs,
       totalMs: Date.now() - Number(totalStartedAt || Date.now()),
       vectorStorageFailed: Boolean(vectorStorageError),
@@ -1575,8 +1589,42 @@ const retrieveDocumentContext = async (
 ) => {
   const startedAt = Date.now();
   const settings = retrievalConfig();
-  const plan = options.plan || planQuery(message, options);
+  const flags = options.flags || resolveResearchFlags({
+    actorId: options.accountId || `document:${documentId}`,
+  });
+  const plan = applyResearchFlags(
+    options.plan || planQuery(message, options),
+    flags,
+  );
   const topK = Math.min(10, Math.max(1, Number(options.topK || settings.finalPassages)));
+  const documentVersion = options.document?.fileHash ||
+    options.document?.contentFingerprintSha256 || options.document?.updatedAt || null;
+  const versions = {
+    ...settings.versions,
+    fusion: flags.rrf ? "rrf-v1" : "legacy-candidate-merge-v1",
+    rerankerVersion: flags.reranker ? settings.versions.rerankerVersion : "legacy-rank-order-v1",
+    authorityConfigVersion: flags.authorityWeighting
+      ? settings.versions.authorityConfigVersion
+      : "authority-disabled-v1",
+    embeddingVersion: providerConfig().embeddingModel,
+  };
+  const cacheKey = flags.caching && !options.adapters
+    ? retrievalCacheKey({
+        query: message, documentId, documentType, documentVersion,
+        resourceHash: options.document?.fileHash, topK, plan, versions,
+        userId: options.accountId, privateSourceIds: options.privateSourceIds,
+      })
+    : null;
+  const cached = cacheKey ? caches.retrieval.get(cacheKey) : null;
+  if (cached) {
+    return {
+      ...cached,
+      diagnostics: {
+        ...cached.diagnostics,
+        cache: { status: "hit", version: "versioned-retrieval-cache-v1" },
+      },
+    };
+  }
   const adapters = options.adapters || {};
   const ftsSearch = adapters.ftsSearch || retrieveFtsPassages;
   const localSearch = adapters.localSearch || retrieveLocalTextPassages;
@@ -1636,12 +1684,22 @@ const retrieveDocumentContext = async (
     }
   }
 
-  const fused = reciprocalRankFusion(
+  const fusionStartedAt = Date.now();
+  const fusion = flags.rrf ? reciprocalRankFusion : legacyCandidateMerge;
+  const fused = fusion(
     [metadataPassages, ftsPassages, localPassages, vectorPassages],
-    { documentId, k: settings.rrfK, limit: settings.fusedCandidates },
+    {
+      documentId,
+      k: settings.rrfK,
+      limit: settings.fusedCandidates,
+      useAuthority: flags.authorityWeighting,
+    },
   );
+  timings.fusionMs = Date.now() - fusionStartedAt;
   const rerankStartedAt = Date.now();
-  const reranked = rerankPassages(fused, message, { topK });
+  const reranked = flags.reranker
+    ? rerankPassages(fused, message, { topK })
+    : fused.slice(0, topK).map((passage, index) => ({ ...passage, passage: index + 1 }));
   timings.rerankMs = Date.now() - rerankStartedAt;
   const hasLexical = ftsPassages.length > 0 || localPassages.length > 0;
   const retrievalMode = vectorPassages.length > 0 && (hasLexical || metadataPassages.length > 0)
@@ -1678,18 +1736,22 @@ const retrieveDocumentContext = async (
     )),
     timings: { ...timings, totalMs: Date.now() - startedAt },
     versions: {
-      ...settings.versions,
+      ...versions,
       embedding: providerConfig().embeddingModel,
       embeddingModel: providerConfig().embeddingModel,
-      embeddingVersion: providerConfig().embeddingModel,
       vectorNamespace: providerConfig().vectorNamespace,
       queryPlannerVersion: plan.plannerVersion,
     },
     plannerVersion: plan.plannerVersion,
     vectorDegraded: Boolean(vectorError),
+    flags,
+    cache: {
+      status: cacheKey ? "miss" : "bypass",
+      version: "versioned-retrieval-cache-v1",
+    },
   };
   console.info("[retrieval-v3]", JSON.stringify({ documentId: String(documentId), ...diagnostics }));
-  return {
+  const response = {
     documentId: String(documentId),
     retrievalMode,
     retrievalVerified: reranked.length > 0,
@@ -1698,6 +1760,8 @@ const retrieveDocumentContext = async (
     plan,
     diagnostics,
   };
+  if (cacheKey) caches.retrieval.set(cacheKey, response);
+  return response;
 };
 
 const retrievePassages = async (

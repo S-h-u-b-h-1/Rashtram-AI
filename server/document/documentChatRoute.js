@@ -7,7 +7,7 @@ const {
   retrieveDocumentContext,
   ensureSummary,
 } = require("./documentResearchService");
-const { generateResponse } = require("../lib/vectordb");
+const { generateResponse, providerConfig } = require("../lib/vectordb");
 const { sanitizeProviderError } = require("../lib/providerErrorSanitizer");
 const { sendError } = require("../lib/httpResponse");
 const {
@@ -22,6 +22,8 @@ const DocumentRepository = require("./DocumentRepository");
 const { getSourceContext } = require("../research/sourceService");
 const { planQuery } = require("../retrieval/queryPlanner");
 const { retrievalConfig } = require("../retrieval/retrievalConfig");
+const { applyResearchFlags, resolveResearchFlags } = require("../retrieval/featureFlags");
+const { recordResearchTelemetry } = require("../retrieval/researchTelemetry");
 const { selectContextPassages } = require("../retrieval/contextBuilder");
 const {
   SUFFICIENCY_LEVELS,
@@ -548,7 +550,8 @@ router.post("/", generationLimiter, async (req, res) => {
       ? req.body.sourceIds.slice(0, 20)
       : [];
     const document = await DocumentRepository.getById(documentId);
-    const plan = planQuery(message);
+    const flags = resolveResearchFlags({ actorId: req.user.id });
+    const plan = applyResearchFlags(planQuery(message), flags);
     const settings = retrievalConfig();
     let graphLatencyMs = 0;
     const relationshipPromise = plan.useGraph
@@ -570,6 +573,8 @@ router.post("/", generationLimiter, async (req, res) => {
         topK: settings.finalPassages,
         plan,
         document,
+        flags,
+        accountId: req.user.id,
       }),
       relationshipPromise,
       getTextArtifact(documentId),
@@ -635,10 +640,50 @@ router.post("/", generationLimiter, async (req, res) => {
       ...relationshipContext.sources,
       ...(userSourceContext.evidence || userSourceContext.sources),
     ];
-    const sufficiency = assessEvidenceSufficiency(message, evidence, {
+    const sufficiency = flags.evidenceSufficiency ? assessEvidenceSufficiency(message, evidence, {
       queryType: plan.queryType,
       retrievalVerified: retrieval.retrievalVerified,
       minimumEvidence: plan.queryType === "EXACT_REFERENCE" ? 1 : 2,
+    }) : {
+      level: SUFFICIENCY_LEVELS.MEDIUM,
+      decision: "SUFFICIENT", signals: {},
+      reasons: ["Evidence gate disabled by controlled rollout."],
+      missing: [], conflicts: [], version: "legacy-pass-through-v1",
+    };
+    const emitTelemetry = async ({
+      generationLatency = 0, verificationLatency = 0, output = "",
+      verification = {}, abstained = false, fallbackUsed = false,
+    } = {}) => recordResearchTelemetry({
+      queryType: plan.queryType,
+      queryPlannerVersion: plan.plannerVersion,
+      privacyScope: sourceIds.length ? "account_private" : "public",
+      metadataLatency: retrieval.diagnostics.timings.metadataMs,
+      ftsLatency: retrieval.diagnostics.timings.lexicalMs,
+      vectorLatency: retrieval.diagnostics.timings.vectorMs,
+      graphLatency: graphLatencyMs,
+      fusionLatency: retrieval.diagnostics.timings.fusionMs,
+      rerankLatency: retrieval.diagnostics.timings.rerankMs,
+      generationLatency,
+      verificationLatency,
+      lexicalCandidateCount: retrieval.diagnostics.candidateCounts.lexical,
+      vectorCandidateCount: retrieval.diagnostics.candidateCounts.vector,
+      fusedCandidateCount: retrieval.diagnostics.candidateCounts.fused,
+      finalEvidenceCount: evidence.length,
+      sourceAuthorityDistribution: retrieval.diagnostics.authorityDistribution,
+      topScores: retrieval.diagnostics.topScores,
+      evidenceSufficiencyLevel: sufficiency.level,
+      citationsGenerated: sources.length,
+      citationsVerified: Number(verification.supportedFacts || 0),
+      unsupportedClaimsRemoved: Number(verification.unsupportedBeforeRepair || 0) - Number(verification.unsupportedAfterRepair || 0),
+      abstained,
+      fallbackUsed,
+      tokensIn: Math.ceil((message.length + context.length) / 4),
+      tokensOut: Math.ceil(String(output).length / 4),
+      model: providerConfig().chatModel,
+      embeddingModel: providerConfig().embeddingModel,
+      retrievalVersion: retrieval.diagnostics.versions.retrievalVersion,
+      cacheStatus: retrieval.diagnostics.cache?.status || "bypass",
+      flags,
     });
 
     startSSE(res);
@@ -665,6 +710,7 @@ router.post("/", generationLimiter, async (req, res) => {
       },
     });
     if (!context.trim()) {
+      await emitTelemetry({ abstained: true });
       sendSSE(res, {
         type: "content",
         content:
@@ -677,11 +723,12 @@ router.post("/", generationLimiter, async (req, res) => {
       SUFFICIENCY_LEVELS.INSUFFICIENT,
       SUFFICIENCY_LEVELS.CONFLICTING,
     ].includes(sufficiency.level)) {
+      const abstention = buildAbstentionResponse(sufficiency, {
+        documentTitles: [document?.title].filter(Boolean),
+      });
       sendSSE(res, {
         type: "content",
-        content: buildAbstentionResponse(sufficiency, {
-          documentTitles: [document?.title].filter(Boolean),
-        }),
+        content: abstention,
       });
       sendSSE(res, {
         type: "meta",
@@ -691,11 +738,13 @@ router.post("/", generationLimiter, async (req, res) => {
           evidenceSufficiency: sufficiency,
         },
       });
+      await emitTelemetry({ output: abstention, abstained: true });
       completeSSE(res);
       return undefined;
     }
     const responseLanguage = req.body.responseLanguage || "Auto";
     try {
+      const generationStartedAt = Date.now();
       const stream = await generateResponse(message, context, {
         responseLanguage,
       });
@@ -706,10 +755,19 @@ router.post("/", generationLimiter, async (req, res) => {
           typeof chunk.text === "function" ? chunk.text() : chunk.text || "";
         if (content) generatedAnswer += content;
       }
-      const verification = await verifyAndRepairAnswer(generatedAnswer, evidence, {
-        sufficiency,
-        documentTitles: [document?.title].filter(Boolean),
-      });
+      const generationLatency = Date.now() - generationStartedAt;
+      const verificationStartedAt = Date.now();
+      const verification = flags.citationVerifier
+        ? await verifyAndRepairAnswer(generatedAnswer, evidence, {
+            sufficiency,
+            documentTitles: [document?.title].filter(Boolean),
+          })
+        : {
+            answer: generatedAnswer, claims: [], unsupportedBeforeRepair: 0,
+            unsupportedAfterRepair: 0, supportedFacts: 0, repairAttempts: 0,
+            abstained: false, version: "legacy-unverified-v1",
+          };
+      const verificationLatency = Date.now() - verificationStartedAt;
       for (const content of responseChunks(verification.answer)) {
         if (res.destroyed || res.writableEnded) break;
         sendSSE(res, { type: "content", content });
@@ -722,15 +780,24 @@ router.post("/", generationLimiter, async (req, res) => {
           evidenceSufficiency: sufficiency,
         },
       });
+      await emitTelemetry({
+        generationLatency,
+        verificationLatency,
+        output: verification.answer,
+        verification,
+        abstained: verification.abstained,
+      });
     } catch (generationError) {
       const providerError = sanitizeProviderError(generationError);
       console.warn(
         `Unified document chat generation unavailable; using extractive fallback: ${providerError}`,
       );
+      const fallback = buildGroundedExtractiveAnswer(message, evidence);
       sendSSE(res, {
         type: "content",
-        content: buildGroundedExtractiveAnswer(message, evidence),
+        content: fallback,
       });
+      await emitTelemetry({ output: fallback, fallbackUsed: true });
       sendSSE(res, {
         type: "meta",
         metadata: {

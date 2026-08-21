@@ -36,7 +36,18 @@ test("database migrations are versioned and ordered", () => {
   assert.ok(files.includes("015_normalize_failure_pipeline_stage.js"));
   assert.ok(files.includes("016_processing_audit_log.js"));
   assert.ok(files.includes("017_normalize_download_failure_codes.js"));
-  assert.equal(files.at(-1), "030_knowledge_layer_v1.js");
+  assert.equal(files.at(-1), "031_research_query_observability.js");
+});
+
+test("research observability migration is additive and privacy safe", () => {
+  const source = fs.readFileSync(
+    path.join(__dirname, "../migrations/031_research_query_observability.js"),
+    "utf8",
+  );
+  assert.match(source, /CREATE TABLE IF NOT EXISTS research_query_telemetry/);
+  assert.match(source, /research_query_telemetry_type_created_idx/);
+  assert.doesNotMatch(source, /raw_question|source_text|assistant_answer/i);
+  assert.doesNotMatch(source, /DROP TABLE|DELETE FROM/i);
 });
 
 test("Knowledge Layer V1 migration keeps structured knowledge evidence-backed", () => {

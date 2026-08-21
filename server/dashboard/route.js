@@ -7,6 +7,10 @@ const {
   getDashboardIntelligence,
   getSourceHealth,
 } = require("./intelligenceService");
+const {
+  getResearchOperations,
+  getResearchQualityStatus,
+} = require("./researchOperationsService");
 
 const DASHBOARD_INTELLIGENCE_CACHE_MS = Number(
   process.env.DASHBOARD_INTELLIGENCE_CACHE_MS || 15_000,
@@ -116,6 +120,24 @@ router.get("/source-health", fetchuser, async (req, res) => {
     return res
       .status(500)
       .json({ error: "Unable to load source health right now." });
+  }
+});
+
+router.get("/operations", fetchuser, async (req, res) => {
+  try {
+    return res.json(await getResearchOperations());
+  } catch (error) {
+    console.error("Research operations dashboard failed:", error.message);
+    return res.status(500).json({ error: "Research operations are unavailable." });
+  }
+});
+
+router.get("/research-quality", fetchuser, async (req, res) => {
+  try {
+    return res.json(await getResearchQualityStatus());
+  } catch (error) {
+    console.error("Research quality dashboard failed:", error.message);
+    return res.status(500).json({ error: "Research quality metrics are unavailable." });
   }
 });
 

@@ -10,7 +10,7 @@ const {
 const {
   getComparisonGraphOverlap,
 } = require("../graph/knowledgeGraphService");
-const { generateDocumentComparison } = require("../lib/vectordb");
+const { generateDocumentComparison, providerConfig } = require("../lib/vectordb");
 const { sanitizeProviderError } = require("../lib/providerErrorSanitizer");
 const { planQuery } = require("../retrieval/queryPlanner");
 const { retrievalConfig } = require("../retrieval/retrievalConfig");
@@ -21,6 +21,9 @@ const {
   buildAbstentionResponse,
   verifyStructuredComparison,
 } = require("../retrieval/evidenceSafetyService");
+const { applyResearchFlags, resolveResearchFlags } = require("../retrieval/featureFlags");
+const { analysisCacheKey, caches, stableHash } = require("../retrieval/researchCache");
+const { recordResearchTelemetry } = require("../retrieval/researchTelemetry");
 
 const MODES = new Set([
   "summary",
@@ -745,6 +748,7 @@ const extractiveComparisonFallback = ({
 };
 
 const createComparison = async (userId, payload) => {
+  const startedAt = Date.now();
   const { documentIds, mode, language, userQuestion } =
     normalizeRequest(payload);
   const loaded = await Promise.all(
@@ -758,17 +762,21 @@ const createComparison = async (userId, payload) => {
   const topK = comparisonRetrievalLimit(mode, documents.length);
   const passageCharLimit = comparisonPassageCharLimit();
   const settings = retrievalConfig();
-  const retrievalPlan = planQuery(userQuestion || comparisonQuery(mode), {
-    comparison: true,
-    documentCount: documents.length,
-  });
+  const flags = resolveResearchFlags({ actorId: userId });
+  const retrievalPlan = applyResearchFlags(
+    planQuery(userQuestion || comparisonQuery(mode), {
+      comparison: true,
+      documentCount: documents.length,
+    }),
+    flags,
+  );
   const groups = await Promise.all(
     documents.map(async (document, documentIndex) => {
       const retrieval = await retrieveDocumentContext(
         document.type,
         document.id,
         userQuestion || comparisonQuery(mode),
-        { topK, plan: retrievalPlan, document },
+        { topK, plan: retrievalPlan, document, flags, accountId: userId },
       );
       const passages = selectContextPassages(retrieval.passages || [], {
         tokenBudget: Math.floor(settings.contextTokenBudget / documents.length),
@@ -869,7 +877,7 @@ const createComparison = async (userId, payload) => {
       authorityClass: passage?.authorityClass,
     };
   });
-  const sufficiency = assessEvidenceSufficiency(
+  const sufficiency = flags.evidenceSufficiency ? assessEvidenceSufficiency(
     userQuestion || comparisonQuery(mode),
     comparisonEvidence,
     {
@@ -877,7 +885,31 @@ const createComparison = async (userId, payload) => {
       retrievalVerified: groups.every(({ passages }) => passages.length > 0),
       minimumEvidence: documents.length,
     },
-  );
+  ) : {
+    level: SUFFICIENCY_LEVELS.MEDIUM,
+    decision: "SUFFICIENT",
+    signals: {}, reasons: ["Evidence gate disabled by controlled rollout."],
+    missing: [], conflicts: [], version: "legacy-pass-through-v1",
+  };
+  const model = providerConfig().chatModel;
+  const evidenceHash = stableHash(comparisonEvidence.map((item) => ({
+    id: item.citationId,
+    documentId: item.documentId,
+    chunkIndex: item.chunkIndex,
+    content: item.content,
+  })));
+  const analysisKey = flags.caching ? analysisCacheKey({
+    kind: "comparison", userId, documentIds, mode, language,
+    question: userQuestion || comparisonQuery(mode), model,
+    promptVersion: "document-comparison-v3", evidenceHash,
+    versions: groups[0]?.retrievalDiagnostics?.versions || {
+      ...settings.versions,
+      embeddingVersion: providerConfig().embeddingModel,
+    },
+  }) : null;
+  const cachedAnalysis = analysisKey ? caches.analysis.get(analysisKey) : null;
+  let generationLatencyMs = 0;
+  let verificationLatencyMs = 0;
   let generated;
   if ([
     SUFFICIENCY_LEVELS.INSUFFICIENT,
@@ -896,7 +928,10 @@ const createComparison = async (userId, payload) => {
         "Can the comparison be narrowed to a specific provision?",
       ],
     };
+  } else if (cachedAnalysis) {
+    generated = cachedAnalysis.generated;
   } else {
+    const generationStartedAt = Date.now();
     try {
       generated = await generateDocumentComparison({
         mode,
@@ -932,19 +967,29 @@ const createComparison = async (userId, payload) => {
         citations,
         generationError: error,
       });
+    } finally {
+      generationLatencyMs = Date.now() - generationStartedAt;
     }
   }
-  let claimVerification = { removedUnsupportedItems: 0, verifiedCitationCount: citations.length };
-  if (generated.generationMode !== "evidence_abstention") {
+  let claimVerification = cachedAnalysis?.claimVerification || {
+    removedUnsupportedItems: 0,
+    verifiedCitationCount: citations.length,
+  };
+  if (generated.generationMode !== "evidence_abstention" && !cachedAnalysis) {
     generated = comparisonSectionBackfill({
       documents: comparisonDocuments,
       groups,
       citations,
       generated,
     });
-    const verified = verifyStructuredComparison(generated, comparisonEvidence);
+    const verificationStartedAt = Date.now();
+    const verified = flags.citationVerifier
+      ? verifyStructuredComparison(generated, comparisonEvidence)
+      : { generated, report: claimVerification };
     generated = verified.generated;
     claimVerification = verified.report;
+    verificationLatencyMs = Date.now() - verificationStartedAt;
+    if (analysisKey) caches.analysis.set(analysisKey, { generated, claimVerification });
   }
   const recommendedDocuments = [
     ...new Map(
@@ -1016,6 +1061,14 @@ const createComparison = async (userId, payload) => {
     })),
     relationshipIntelligence: graphIntelligence,
     recommendedDocuments,
+    cache: {
+      status: cachedAnalysis ? "hit" : analysisKey ? "miss" : "bypass",
+      version: "safe-repeat-analysis-v1",
+      evidenceHash: evidenceHash.slice(0, 16),
+      promptVersion: "document-comparison-v3",
+      model,
+    },
+    telemetry: { totalLatencyMs: Date.now() - startedAt },
   };
   const title = `Comparison: ${documents
     .map((document) => document.title)
@@ -1039,6 +1092,40 @@ const createComparison = async (userId, payload) => {
       JSON.stringify(recommendedDocuments),
     ],
   );
+  const retrievalDiagnostics = groups.map((group) => group.retrievalDiagnostics);
+  await recordResearchTelemetry({
+    queryType: "COMPARISON",
+    queryPlannerVersion: retrievalPlan.plannerVersion,
+    ftsLatency: Math.max(...retrievalDiagnostics.map((item) => item.timings?.lexicalMs || 0), 0),
+    vectorLatency: Math.max(...retrievalDiagnostics.map((item) => item.timings?.vectorMs || 0), 0),
+    graphLatency: graphLatencyMs,
+    fusionLatency: Math.max(...retrievalDiagnostics.map((item) => item.timings?.fusionMs || 0), 0),
+    rerankLatency: Math.max(...retrievalDiagnostics.map((item) => item.timings?.rerankMs || 0), 0),
+    generationLatency: generationLatencyMs,
+    verificationLatency: verificationLatencyMs,
+    lexicalCandidateCount: retrievalDiagnostics.reduce((sum, item) => sum + Number(item.candidateCounts?.lexical || 0), 0),
+    vectorCandidateCount: retrievalDiagnostics.reduce((sum, item) => sum + Number(item.candidateCounts?.vector || 0), 0),
+    fusedCandidateCount: retrievalDiagnostics.reduce((sum, item) => sum + Number(item.candidateCounts?.fused || 0), 0),
+    finalEvidenceCount: comparisonEvidence.length,
+    sourceAuthorityDistribution: retrievalDiagnostics.reduce((all, item) => {
+      for (const [key, value] of Object.entries(item.authorityDistribution || {})) all[key] = (all[key] || 0) + value;
+      return all;
+    }, {}),
+    topScores: retrievalDiagnostics.flatMap((item) => item.topScores || []).slice(0, 10),
+    evidenceSufficiencyLevel: sufficiency.level,
+    citationsGenerated: citations.length,
+    citationsVerified: claimVerification.verifiedCitationCount,
+    unsupportedClaimsRemoved: claimVerification.removedUnsupportedItems,
+    abstained: generated.generationMode === "evidence_abstention",
+    fallbackUsed: /fallback/.test(generated.generationMode || ""),
+    tokensIn: Math.ceil((context.length + graphContext.length) / 4),
+    tokensOut: Math.ceil(JSON.stringify(generated).length / 4),
+    model,
+    embeddingModel: providerConfig().embeddingModel,
+    retrievalVersion: settings.versions.retrievalVersion,
+    cacheStatus: cachedAnalysis ? "hit" : analysisKey ? "miss" : "bypass",
+    flags,
+  });
   return mapComparison(inserted.rows[0]);
 };
 

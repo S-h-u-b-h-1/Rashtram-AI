@@ -1,5 +1,6 @@
 const DocumentRepository = require("./DocumentRepository");
 const { searchAcrossIndexedDocuments } = require("./documentResearchService");
+const { caches, stableHash } = require("../retrieval/researchCache");
 
 const filterCache = new Map();
 const FILTER_CACHE_TTL_MS = 5 * 60 * 1_000;
@@ -27,11 +28,31 @@ const withSemanticIds = async (options) => {
   }
 };
 
-const find = async (options) =>
-  DocumentRepository.find(await withSemanticIds(options));
+const catalogueKey = (operation, options = {}) => stableHash({
+  operation,
+  options,
+  catalogueVersion: process.env.CATALOGUE_CACHE_VERSION || "catalogue-v1",
+  freshnessBucket: Math.floor(Date.now() / 30_000),
+});
 
-const search = async (options) =>
-  DocumentRepository.search(await withSemanticIds(options));
+const cachedCatalogueOperation = async (operation, options, loader) => {
+  const key = catalogueKey(operation, options);
+  const cached = caches.catalogue.get(key);
+  if (cached) return { ...cached, cache: { status: "hit", version: "catalogue-v1" } };
+  const value = await loader();
+  caches.catalogue.set(key, value, 30_000);
+  return { ...value, cache: { status: "miss", version: "catalogue-v1" } };
+};
+
+const find = async (options) => {
+  const resolved = await withSemanticIds(options);
+  return cachedCatalogueOperation("find", resolved, () => DocumentRepository.find(resolved));
+};
+
+const search = async (options) => {
+  const resolved = await withSemanticIds(options);
+  return cachedCatalogueOperation("search", resolved, () => DocumentRepository.search(resolved));
+};
 
 const getFilterOptions = async (options = {}) => {
   const key = JSON.stringify({

@@ -119,4 +119,8 @@ module.exports = [
     name: "030_knowledge_layer_v1.js",
     migration: require("./030_knowledge_layer_v1"),
   },
+  {
+    name: "031_research_query_observability.js",
+    migration: require("./031_research_query_observability"),
+  },
 ];

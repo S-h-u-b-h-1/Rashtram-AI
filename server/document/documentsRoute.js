@@ -20,7 +20,7 @@ const {
   verifyAndRepairAnswer,
 } = require("../retrieval/evidenceSafetyService");
 const { getRelationshipContext } = require("../graph/knowledgeGraphService");
-const { generateResponse } = require("../lib/vectordb");
+const { generateResponse, providerConfig } = require("../lib/vectordb");
 const { sanitizeProviderError } = require("../lib/providerErrorSanitizer");
 const {
   completeSSE,
@@ -44,6 +44,8 @@ const {
 } = require("./readinessService");
 const { getDocumentReadiness } = require("./readinessContract");
 const { sendError } = require("../lib/httpResponse");
+const { applyResearchFlags, resolveResearchFlags } = require("../retrieval/featureFlags");
+const { recordResearchTelemetry } = require("../retrieval/researchTelemetry");
 
 const router = express.Router();
 
@@ -277,10 +279,11 @@ router.post("/chat", generationLimiter, async (req, res) => {
       2,
       Math.floor(12 / documents.length),
     );
-    const plan = planQuery(message, {
+    const flags = resolveResearchFlags({ actorId: req.user.id });
+    const plan = applyResearchFlags(planQuery(message, {
       documentCount: documents.length,
       comparison: documents.length > 1,
-    });
+    }), flags);
     const settings = retrievalConfig();
     const passageGroups = await Promise.all(
       documents.map(async (document) => {
@@ -304,7 +307,7 @@ router.post("/chat", generationLimiter, async (req, res) => {
             document.type,
             document.id,
             message,
-            { topK: passagesPerDocument, plan, document },
+            { topK: passagesPerDocument, plan, document, flags, accountId: req.user.id },
           ),
           getTextArtifact(document.id),
           relationshipPromise,
@@ -389,11 +392,15 @@ router.post("/chat", generationLimiter, async (req, res) => {
       ...sources.filter((source) => !source.userSource),
       ...(userSourceContext.evidence || userSourceContext.sources),
     ];
-    const sufficiency = assessEvidenceSufficiency(message, verificationEvidence, {
+    const sufficiency = flags.evidenceSufficiency ? assessEvidenceSufficiency(message, verificationEvidence, {
       queryType: plan.queryType,
       retrievalVerified: passageGroups.some(({ passages }) => passages.length > 0),
       minimumEvidence: Math.max(2, documents.length),
-    });
+    }) : {
+      level: SUFFICIENCY_LEVELS.MEDIUM, decision: "SUFFICIENT", signals: {},
+      reasons: ["Evidence gate disabled by controlled rollout."], missing: [],
+      conflicts: [], version: "legacy-pass-through-v1",
+    };
 
     startSSE(res);
     sendSSE(res, {
@@ -424,6 +431,8 @@ router.post("/chat", generationLimiter, async (req, res) => {
     let generationMode = "ai";
     let providerError = null;
     let verification = null;
+    let generationLatencyMs = 0;
+    let verificationLatencyMs = 0;
     if ([
       SUFFICIENCY_LEVELS.INSUFFICIENT,
       SUFFICIENCY_LEVELS.CONFLICTING,
@@ -434,6 +443,7 @@ router.post("/chat", generationLimiter, async (req, res) => {
       generationMode = "evidence_abstention";
     } else {
       try {
+        const generationStartedAt = Date.now();
         const stream = await generateResponse(message, [briefContext, combinedContext].filter(Boolean).join("\n\n"), {
           responseLanguage,
         });
@@ -444,10 +454,19 @@ router.post("/chat", generationLimiter, async (req, res) => {
             typeof chunk.text === "function" ? chunk.text() : chunk.text || "";
           if (content) generatedAnswer += content;
         }
-        verification = await verifyAndRepairAnswer(generatedAnswer, verificationEvidence, {
-          sufficiency,
-          documentTitles: documents.map((document) => document.title),
-        });
+        generationLatencyMs = Date.now() - generationStartedAt;
+        const verificationStartedAt = Date.now();
+        verification = flags.citationVerifier
+          ? await verifyAndRepairAnswer(generatedAnswer, verificationEvidence, {
+              sufficiency,
+              documentTitles: documents.map((document) => document.title),
+            })
+          : {
+              answer: generatedAnswer, claims: [], unsupportedBeforeRepair: 0,
+              unsupportedAfterRepair: 0, supportedFacts: 0, repairAttempts: 0,
+              abstained: false, version: "legacy-unverified-v1",
+            };
+        verificationLatencyMs = Date.now() - verificationStartedAt;
         fullResponse = verification.answer;
         generationMode = verification.abstained ? "verification_abstention" : "ai_verified";
       } catch (generationError) {
@@ -477,6 +496,41 @@ router.post("/chat", generationLimiter, async (req, res) => {
               abstained: generationMode === "evidence_abstention",
             },
       },
+    });
+    const diagnostics = passageGroups.map(({ retrieval }) => retrieval);
+    await recordResearchTelemetry({
+      queryType: plan.queryType,
+      queryPlannerVersion: plan.plannerVersion,
+      privacyScope: sourceIds.length ? "account_private" : "public",
+      ftsLatency: Math.max(...diagnostics.map((item) => item.timings?.lexicalMs || 0), 0),
+      vectorLatency: Math.max(...diagnostics.map((item) => item.timings?.vectorMs || 0), 0),
+      graphLatency: Math.max(...diagnostics.map((item) => item.timings?.graphMs || 0), 0),
+      fusionLatency: Math.max(...diagnostics.map((item) => item.timings?.fusionMs || 0), 0),
+      rerankLatency: Math.max(...diagnostics.map((item) => item.timings?.rerankMs || 0), 0),
+      generationLatency: generationLatencyMs,
+      verificationLatency: verificationLatencyMs,
+      lexicalCandidateCount: diagnostics.reduce((sum, item) => sum + Number(item.candidateCounts?.lexical || 0), 0),
+      vectorCandidateCount: diagnostics.reduce((sum, item) => sum + Number(item.candidateCounts?.vector || 0), 0),
+      fusedCandidateCount: diagnostics.reduce((sum, item) => sum + Number(item.candidateCounts?.fused || 0), 0),
+      finalEvidenceCount: verificationEvidence.length,
+      sourceAuthorityDistribution: diagnostics.reduce((all, item) => {
+        for (const [key, value] of Object.entries(item.authorityDistribution || {})) all[key] = (all[key] || 0) + value;
+        return all;
+      }, {}),
+      topScores: diagnostics.flatMap((item) => item.topScores || []).slice(0, 10),
+      evidenceSufficiencyLevel: sufficiency.level,
+      citationsGenerated: sources.length,
+      citationsVerified: verification?.supportedFacts || 0,
+      unsupportedClaimsRemoved: Math.max(0, Number(verification?.unsupportedBeforeRepair || 0) - Number(verification?.unsupportedAfterRepair || 0)),
+      abstained: /abstention/.test(generationMode),
+      fallbackUsed: generationMode === "extractive_fallback",
+      tokensIn: Math.ceil((message.length + combinedContext.length + briefContext.length) / 4),
+      tokensOut: Math.ceil(fullResponse.length / 4),
+      model: providerConfig().chatModel,
+      embeddingModel: providerConfig().embeddingModel,
+      retrievalVersion: settings.versions.retrievalVersion,
+      cacheStatus: diagnostics.some((item) => item.cache?.status === "hit") ? "hit" : "miss",
+      flags,
     });
     if (res.destroyed || res.writableEnded) return undefined;
     const now = new Date().toISOString();

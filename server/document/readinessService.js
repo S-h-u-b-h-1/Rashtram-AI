@@ -998,7 +998,7 @@ const runReadinessAudit = async () => {
 };
 
 const getProcessingStatus = async () => {
-  const [counts, totals, latest, jobs, performance, workers] = await Promise.all([
+  const [counts, totals, latest, jobs, performance, workers, failuresByStage, storage, queueByStage] = await Promise.all([
     query(`
       SELECT readiness_class, COUNT(*)::INTEGER AS documents
       FROM document_processing_state
@@ -1008,6 +1008,13 @@ const getProcessingStatus = async () => {
     query(`
       SELECT
         COUNT(*)::INTEGER AS total_documents,
+        COUNT(*) FILTER (WHERE catalogued)::INTEGER AS catalogued,
+        COUNT(*) FILTER (WHERE resource_ready)::INTEGER AS resource_ready,
+        COUNT(*) FILTER (WHERE text_ready)::INTEGER AS text_ready,
+        COUNT(*) FILTER (WHERE search_ready)::INTEGER AS search_ready,
+        COUNT(*) FILTER (WHERE semantic_ready)::INTEGER AS semantic_ready,
+        COUNT(*) FILTER (WHERE chat_ready)::INTEGER AS chat_ready,
+        COUNT(*) FILTER (WHERE capability_comparison_ready)::INTEGER AS capability_comparison_ready,
         COUNT(*) FILTER (WHERE research_ready)::INTEGER AS research_ready,
         COUNT(*) FILTER (WHERE comparison_ready)::INTEGER AS comparison_ready,
         COUNT(*) FILTER (
@@ -1087,6 +1094,12 @@ const getProcessingStatus = async () => {
         COALESCE(SUM(
           NULLIF(usage_json ->> 'embeddingInputTokens', '')::BIGINT
         ), 0)::BIGINT AS embedding_input_tokens,
+        COALESCE(SUM(
+          NULLIF(stage_metrics_json ->> 'ocrPages', '')::BIGINT
+        ) FILTER (WHERE completed_at >= NOW() - INTERVAL '24 hours'), 0)::BIGINT AS ocr_pages_24h,
+        COALESCE(SUM(
+          NULLIF(stage_metrics_json ->> 'embeddingsStored', '')::BIGINT
+        ) FILTER (WHERE completed_at >= NOW() - INTERVAL '24 hours'), 0)::BIGINT AS embeddings_24h,
         ROUND(AVG(
           NULLIF(stage_metrics_json ->> 'downloadMs', '')::NUMERIC
         ))::INTEGER AS average_download_ms,
@@ -1116,6 +1129,33 @@ const getProcessingStatus = async () => {
       ORDER BY heartbeat_at DESC
       LIMIT 20
     `),
+    query(`
+      SELECT COALESCE(pipeline_stage, failure_stage, 'unknown') AS stage,
+        COUNT(*)::INTEGER AS attempts,
+        COUNT(*) FILTER (WHERE status IN ('failed', 'dead_letter'))::INTEGER AS failed,
+        COUNT(*) FILTER (WHERE retry_eligible AND status = 'failed')::INTEGER AS retryable,
+        COUNT(*) FILTER (WHERE NOT retry_eligible OR status = 'dead_letter')::INTEGER AS permanent
+      FROM document_processing_attempts
+      GROUP BY COALESCE(pipeline_stage, failure_stage, 'unknown')
+      ORDER BY attempts DESC, stage
+    `),
+    query(`
+      SELECT pg_database_size(current_database())::BIGINT AS database_bytes,
+        COALESCE((SELECT SUM(byte_size) FROM document_artifact_objects WHERE status IN ('verified', 'active')), 0)::BIGINT AS object_storage_bytes,
+        COALESCE((SELECT SUM(byte_size) FROM document_artifact_objects WHERE status IN ('verified', 'active') AND created_at >= NOW() - INTERVAL '24 hours'), 0)::BIGINT AS object_storage_growth_24h_bytes,
+        COALESCE((SELECT COUNT(*) FROM document_text_chunks WHERE vector_reference IS NOT NULL), 0)::BIGINT AS vector_references
+    `),
+    query(`
+      WITH latest_jobs AS (
+        SELECT status, COALESCE(pipeline_stage, 'queued') AS stage,
+          ROW_NUMBER() OVER (PARTITION BY document_id ORDER BY id DESC) AS job_rank
+        FROM document_processing_jobs
+      )
+      SELECT stage, status, COUNT(*)::INTEGER AS jobs
+      FROM latest_jobs
+      WHERE job_rank = 1 AND status IN ('queued', 'running')
+      GROUP BY stage, status ORDER BY stage, status
+    `),
   ]);
   const row = totals.rows[0] || {};
   const performanceRow = performance.rows[0] || {};
@@ -1131,6 +1171,7 @@ const getProcessingStatus = async () => {
     (completed24h / observedHours).toFixed(2),
   );
   const backlog = Number(row.processable_backlog || 0);
+  const storageRow = storage.rows[0] || {};
   return {
     totalDocuments: Number(row.total_documents || 0),
     researchReady: Number(row.research_ready || 0),
@@ -1138,6 +1179,15 @@ const getProcessingStatus = async () => {
     processableBacklog: Number(row.processable_backlog || 0),
     chunks: Number(row.chunks || 0),
     embeddings: Number(row.embeddings || 0),
+    capabilities: {
+      catalogued: Number(row.catalogued || 0),
+      resourceReady: Number(row.resource_ready || 0),
+      textReady: Number(row.text_ready || 0),
+      searchReady: Number(row.search_ready || 0),
+      semanticReady: Number(row.semantic_ready || 0),
+      chatReady: Number(row.chat_ready || 0),
+      comparisonReady: Number(row.capability_comparison_ready || 0),
+    },
     queue: {
       queued: jobCounts.queued || 0,
       running: jobCounts.running || 0,
@@ -1145,6 +1195,11 @@ const getProcessingStatus = async () => {
       deadLetter: jobCounts.dead_letter || 0,
       completed: jobCounts.completed || 0,
     },
+    queueByStage: queueByStage.rows.map((item) => ({
+      stage: item.stage,
+      status: item.status,
+      jobs: Number(item.jobs || 0),
+    })),
     performance: {
       attempts: Number(performanceRow.attempts || 0),
       completed: Number(performanceRow.completed || 0),
@@ -1164,6 +1219,8 @@ const getProcessingStatus = async () => {
       p95DurationMs: Number(performanceRow.p95_duration_ms || 0),
       completed24h,
       throughputPerHour,
+      ocrPagesPerHour: Number((Number(performanceRow.ocr_pages_24h || 0) / observedHours).toFixed(2)),
+      embeddingsPerHour: Number((Number(performanceRow.embeddings_24h || 0) / observedHours).toFixed(2)),
       estimatedCompletionHours:
         throughputPerHour > 0
           ? Number((backlog / throughputPerHour).toFixed(1))
@@ -1200,6 +1257,22 @@ const getProcessingStatus = async () => {
       failedCount: Number(worker.failed_count || 0),
       heartbeatAt: worker.heartbeat_at,
     })),
+    failuresByStage: failuresByStage.rows.map((item) => ({
+      stage: item.stage,
+      attempts: Number(item.attempts || 0),
+      failed: Number(item.failed || 0),
+      retryable: Number(item.retryable || 0),
+      permanent: Number(item.permanent || 0),
+      failureRate: Number(item.attempts || 0) > 0
+        ? Number((Number(item.failed || 0) / Number(item.attempts)).toFixed(4))
+        : 0,
+    })),
+    storage: {
+      databaseBytes: Number(storageRow.database_bytes || 0),
+      objectStorageBytes: Number(storageRow.object_storage_bytes || 0),
+      objectStorageGrowth24hBytes: Number(storageRow.object_storage_growth_24h_bytes || 0),
+      vectorReferences: Number(storageRow.vector_references || 0),
+    },
     byClassification: counts.rows.map((item) => ({
       classification: item.readiness_class,
       documents: Number(item.documents || 0),
