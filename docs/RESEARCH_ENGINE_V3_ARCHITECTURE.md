@@ -1,5 +1,7 @@
 # Rashtram AI Research Engine V3
 
+PDF extraction quality, selective page repair, corpus audit, and bounded repair operations are documented in [PDF text quality recovery](./PDF_TEXT_QUALITY_RECOVERY.md). This is an extension of Processing V3, not a second retrieval architecture.
+
 Status: **Architecture Complete**
 Production acceptance: 21 August 2026
 

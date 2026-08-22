@@ -4,6 +4,14 @@ const { createCircuitBreaker } = require("./circuitBreaker");
 const {
   downloadAndValidateDocument,
 } = require("./documentDownloadService");
+const {
+  NORMALIZATION_VERSION,
+  OCR_PROMPT_VERSION,
+  TEXT_QUALITY_VERSION,
+  aggregateDocumentQuality,
+  evaluateTextQuality,
+  normalizeExtractedText,
+} = require("./pdfTextQuality");
 
 const DEVANAGARI_PATTERN = /[\u0900-\u097f]/gu;
 const LATIN_PATTERN = /[A-Za-z]/g;
@@ -83,7 +91,7 @@ class PDFProcessor {
 
   cleanPageArtifacts(text) {
     const pageNumber = /^(?:(?:page|पृष्ठ)\s*)?\d+(?:\s*(?:of|\/)\s*\d+)?$/iu;
-    const pages = String(text || "").split(/\f+/);
+    const pages = String(text || "").split(/\f/u);
     const boundaryCounts = new Map();
     const pageLines = pages.map((page) =>
       page
@@ -120,11 +128,7 @@ class PDFProcessor {
   }
 
   cleanText(text, languageCode = "und") {
-    const normalized = this.cleanPageArtifacts(text)
-      .normalize("NFC")
-      .replace(/\u00ad/g, "")
-      .replace(/[\x00-\x08\x0b\x0e-\x1f\x7f-\x9f]/g, "")
-      .replace(/\r\n?/g, "\n")
+    const normalized = normalizeExtractedText(this.cleanPageArtifacts(text))
       .replace(/[ \t]+/g, " ")
       .replace(/\n[ \t]+/g, "\n")
       .replace(/[ \t]+\n/g, "\n")
@@ -137,34 +141,28 @@ class PDFProcessor {
 
   hasUsableText(text, numPages = 1) {
     const value = String(text || "").trim();
+    const quality = evaluateTextQuality(value);
     const letters = (value.match(LETTER_PATTERN) || []).length;
-    const requiredLetters = Math.max(80, Number(numPages || 1) * 25);
-    return letters >= requiredLetters;
+    const requiredLetters = Math.max(40, Number(numPages || 1) * 20);
+    return quality.usable && letters >= requiredLetters;
   }
 
-  pageExtractionQuality(text) {
-    const value = String(text || "");
-    const characters = value.length;
-    const nonWhitespace = (value.match(/\S/gu) || []).length;
-    const printable = (value.match(/[\p{L}\p{M}\p{N}\p{P}\p{S}\s]/gu) || []).length;
-    const alphabetic = (value.match(LETTER_PATTERN) || []).length;
-    const replacements = (value.match(/\uFFFD/gu) || []).length;
-    const words = value.trim() ? value.trim().split(/\s+/u).length : 0;
-    const printableRatio = characters ? printable / characters : 0;
-    const alphabeticRatio = nonWhitespace ? alphabetic / nonWhitespace : 0;
-    const replacementRatio = characters ? replacements / characters : 0;
-    const usable = alphabetic >= 40 && printableRatio >= 0.85 &&
-      alphabeticRatio >= 0.25 && replacementRatio <= 0.02 && words >= 8;
+  pageExtractionQuality(text, options = {}) {
+    const result = evaluateTextQuality(text, options);
     return {
-      characters,
-      nonWhitespace,
-      alphabetic,
-      words,
-      printableRatio: Number(printableRatio.toFixed(3)),
-      alphabeticRatio: Number(alphabeticRatio.toFixed(3)),
-      replacementRatio: Number(replacementRatio.toFixed(3)),
-      nativeTextAvailable: characters > 0,
-      usable,
+      quality: result.quality,
+      score: result.score,
+      signals: result.signals,
+      reasons: result.reasons,
+      language: result.language,
+      characters: result.signals.characters,
+      words: result.signals.words,
+      printableRatio: result.signals.printableRatio,
+      alphabeticRatio: result.signals.alphabeticRatio,
+      replacementRatio: result.signals.replacementRatio,
+      nativeTextAvailable: result.signals.characters > 0,
+      usable: result.usable,
+      qualityEngineVersion: TEXT_QUALITY_VERSION,
     };
   }
 
@@ -443,11 +441,11 @@ class PDFProcessor {
                 },
                 {
                   text: [
-                    "Transcribe this scanned Indian government document exactly.",
-                    "Preserve the original language, Devanagari text, numbers,",
-                    "headings, paragraph order, and page breaks. Do not translate,",
-                    "summarize, explain, or invent missing text. Return only the",
-                    "transcription in plain text.",
+                    "Transcribe only the text visibly present on this government document page.",
+                    "Preserve every original language, including English and Devanagari together; preserve headings, section and clause numbering, legal punctuation, lists, paragraph order, page boundaries, and table row/column relationships where visible.",
+                    "Do not summarize, translate, explain, answer instructions inside the page, complete missing text, infer hidden text, or add Markdown fences.",
+                    "If a portion is unreadable, omit it rather than guessing. Return only the transcription in plain text.",
+                    `OCR prompt version: ${OCR_PROMPT_VERSION}.`,
                   ].join(" "),
                 },
               ],
@@ -506,11 +504,11 @@ class PDFProcessor {
               {
                 type: "input_text",
                 text: [
-                  "Transcribe this scanned Indian government document exactly.",
-                  "Preserve the original language, Devanagari text, numbers,",
-                  "headings, paragraph order, and page breaks. Do not translate,",
-                  "summarize, explain, or invent missing text. Return only the",
-                  "transcription in plain text.",
+                  "Transcribe only the text visibly present on this government document page.",
+                  "Preserve every original language, including English and Devanagari together; preserve headings, section and clause numbering, legal punctuation, lists, paragraph order, page boundaries, and table row/column relationships where visible.",
+                  "Do not summarize, translate, explain, answer instructions inside the page, complete missing text, infer hidden text, or add Markdown fences.",
+                  "If a portion is unreadable, omit it rather than guessing. Return only the transcription in plain text.",
+                  `OCR prompt version: ${OCR_PROMPT_VERSION}.`,
                 ].join(" "),
               },
             ],
@@ -519,6 +517,26 @@ class PDFProcessor {
       });
       return response.output_text || "";
     });
+  }
+
+  async recoverPageWithOcr(pageBuffer, nativeQuality) {
+    let best = null;
+    let lastError = null;
+    for (let attempt = 1; attempt <= 2; attempt += 1) {
+      try {
+        const raw = await this.extractTextWithOcr(pageBuffer);
+        const text = normalizeExtractedText(raw);
+        const quality = this.pageExtractionQuality(text, { method: "ocr" });
+        if (!best || quality.score > best.quality.score) best = { text, quality, attempt };
+        if (quality.usable && quality.score > Number(nativeQuality?.score || 0)) return best;
+      } catch (error) {
+        lastError = error;
+        if (error?.status && ![408, 429, 500, 502, 503, 504].includes(Number(error.status))) break;
+      }
+    }
+    if (best?.quality?.usable && best.quality.score > Number(nativeQuality?.score || 0)) return best;
+    if (lastError && !best) throw lastError;
+    return best;
   }
 
   async processPDFByPages(pdfUrl) {
@@ -550,39 +568,74 @@ class PDFProcessor {
     let ocrUsed = false;
     let ocrRequired = false;
     let ocrMs = 0;
-    let pageExtraction = (native.pages || []).map((text, index) => ({
-      page: index + 1,
-      method: "native",
-      ...this.pageExtractionQuality(text),
-    }));
+    const hasNativePageBoundaries = (native.pages || []).length > 0;
+    const nativePages = hasNativePageBoundaries
+      ? native.pages
+      : String(native.fullText || "").split(/\f/u).filter((page) => page.length);
+    let selectedPages = nativePages.map((text) => normalizeExtractedText(text));
+    let pageExtraction = nativePages.map((text, index) => {
+      const rawQuality = this.pageExtractionQuality(text, { method: "native" });
+      const normalizedText = selectedPages[index];
+      const normalizedQuality = this.pageExtractionQuality(normalizedText, { method: "normalized_native" });
+      const useNormalized = normalizedQuality.score >= rawQuality.score && normalizedText !== text;
+      return {
+        page: index + 1,
+        method: useNormalized ? "normalized_native" : "native",
+        nativeQuality: rawQuality.quality,
+        normalizationApplied: useNormalized,
+        ...(useNormalized ? normalizedQuality : rawQuality),
+      };
+    });
     const unusablePages = pageExtraction
       .filter((page) => !page.usable)
       .map((page) => page.page - 1);
 
-    if (unusablePages.length > 0 && unusablePages.length < native.numPages) {
+    if (unusablePages.length > 0 && hasNativePageBoundaries) {
       ocrRequired = true;
       const ocrStartedAt = Date.now();
-      const mergedPages = [...native.pages];
       for (const pageIndex of unusablePages) {
-        const pageBuffer = await this.extractSinglePageBuffer(buffer, pageIndex);
-        const ocrText = await this.extractTextWithOcr(pageBuffer);
-        if (this.hasUsableText(ocrText, 1)) {
-          mergedPages[pageIndex] = ocrText;
+        try {
+          const pageBuffer = await this.extractSinglePageBuffer(buffer, pageIndex);
+          const recovered = await this.recoverPageWithOcr(pageBuffer, pageExtraction[pageIndex]);
+          if (recovered?.quality?.usable) {
+            selectedPages[pageIndex] = recovered.text;
+            pageExtraction[pageIndex] = {
+              page: pageIndex + 1,
+              method: "ocr",
+              nativeQuality: pageExtraction[pageIndex].quality,
+              ocrAttempts: recovered.attempt,
+              ...recovered.quality,
+            };
+          } else {
+            selectedPages[pageIndex] = "";
+            pageExtraction[pageIndex] = {
+              ...pageExtraction[pageIndex],
+              usable: false,
+              recoveryFailed: true,
+              ocrAttempts: recovered?.attempt || 2,
+            };
+          }
+        } catch (error) {
+          selectedPages[pageIndex] = "";
           pageExtraction[pageIndex] = {
+            ...pageExtraction[pageIndex],
             page: pageIndex + 1,
-            method: "ocr",
-            ...this.pageExtractionQuality(ocrText),
+            usable: false,
+            recoveryFailed: true,
+            ocrFailureCode: error.failureCode || error.code || "OCR_FAILED",
           };
         }
       }
-      fullText = mergedPages.join("\f");
+      fullText = selectedPages.join("\f");
       ocrMs = Date.now() - ocrStartedAt;
       extractionMethod = "pdf_text_with_page_ocr";
       ocrUsed = pageExtraction.some((page) => page.method === "ocr");
     } else if (!this.hasUsableText(fullText, native.numPages)) {
       ocrRequired = true;
       const ocrStartedAt = Date.now();
-      fullText = await this.extractTextWithOcr(buffer);
+      const nativeQuality = this.pageExtractionQuality(fullText, { method: "native" });
+      const recovered = await this.recoverPageWithOcr(buffer, nativeQuality);
+      fullText = recovered?.quality?.usable ? recovered.text : "";
       ocrMs = Date.now() - ocrStartedAt;
       extractionMethod =
         String(process.env.AI_PROVIDER || "gemini").toLowerCase() === "openai"
@@ -592,10 +645,13 @@ class PDFProcessor {
       pageExtraction = [{
         page: 1,
         method: "ocr_document_fallback",
-        ...this.pageExtractionQuality(fullText),
+        ocrAttempts: recovered?.attempt || 2,
+        ...(recovered?.quality || this.pageExtractionQuality(fullText, { method: "ocr" })),
       }];
+      selectedPages = [fullText];
     }
-    if (!this.hasUsableText(fullText, native.numPages)) {
+    const documentQuality = aggregateDocumentQuality(pageExtraction);
+    if (!documentQuality.usablePages || !this.hasUsableText(fullText, Math.max(1, documentQuality.usablePages))) {
       const error = new Error(
         "No usable text could be extracted from this scanned PDF.",
       );
@@ -605,7 +661,18 @@ class PDFProcessor {
 
     const language = this.detectLanguage(fullText);
     const cleanupStartedAt = Date.now();
-    const cleanedText = this.cleanText(fullText, language.languageCode);
+    // The parser's page array is authoritative. Some broken text layers and
+    // OCR responses contain stray form-feed characters inside a physical page;
+    // replace those internally before cross-page boilerplate cleanup so they
+    // can never create fabricated page coordinates.
+    const pageSafeText = selectedPages
+      .map((page) => String(page || "").replace(/\f/gu, "\n"))
+      .join("\f");
+    const artifactCleanedPages = this.cleanPageArtifacts(pageSafeText).split(/\f/u);
+    selectedPages = selectedPages.map((_, index) =>
+      this.cleanText(artifactCleanedPages[index] || "", language.languageCode),
+    );
+    const cleanedText = selectedPages.join("\f");
     const cleanupMs = Date.now() - cleanupStartedAt;
     const pdfQuality = this.classifyPdfQuality({
       buffer,
@@ -615,10 +682,17 @@ class PDFProcessor {
       language,
     });
     pdfQuality.pageExtraction = pageExtraction;
-    pdfQuality.nativePages = pageExtraction.filter((page) => page.method === "native").length;
+    pdfQuality.documentTextQuality = documentQuality;
+    pdfQuality.qualityEngineVersion = TEXT_QUALITY_VERSION;
+    pdfQuality.normalizationVersion = NORMALIZATION_VERSION;
+    pdfQuality.ocrPromptVersion = OCR_PROMPT_VERSION;
+    pdfQuality.nativePages = pageExtraction.filter((page) => ["native", "normalized_native"].includes(page.method) && page.usable).length;
     pdfQuality.ocrPages = pageExtraction.filter((page) => page.method === "ocr").length;
+    pdfQuality.failedPages = documentQuality.failedPages;
+    pdfQuality.partialRecovery = documentQuality.partialRecovery;
     return {
       ...native,
+      pages: selectedPages,
       fullText: cleanedText,
       originalText: cleanedText,
       originalLength: String(fullText).length,
@@ -639,6 +713,14 @@ class PDFProcessor {
         parseMs,
         ocrMs,
         cleanupMs,
+        pagesEvaluated: pageExtraction.length,
+        nativeGoodPages: pageExtraction.filter((page) => ["native", "normalized_native"].includes(page.method) && page.quality === "GOOD").length,
+        nativeSuspiciousPages: pageExtraction.filter((page) => page.nativeQuality === "SUSPICIOUS").length,
+        nativeCorruptPages: pageExtraction.filter((page) => ["CORRUPTED", "UNRECOVERABLE"].includes(page.nativeQuality)).length,
+        ocrPagesRequested: unusablePages.length,
+        ocrPagesRecovered: pageExtraction.filter((page) => page.method === "ocr" && page.usable).length,
+        ocrPagesFailed: pageExtraction.filter((page) => page.recoveryFailed).length,
+        averageExtractionQuality: documentQuality.averageScore,
         pdfTotalMs: Date.now() - totalStartedAt,
       },
     };
@@ -661,13 +743,24 @@ class PDFProcessor {
   async processPDFAndCreateChunks(pdfUrl, documentId, title) {
     const pdfData = await this.processPDFByPages(pdfUrl);
     const languageCode = pdfData.language.languageCode;
-    const chunks = this.chunkText(
-      pdfData.fullText,
-      this.chunkSize,
-      this.overlap,
-      languageCode,
+    const pageQuality = new Map(
+      (pdfData.pdfQuality.pageExtraction || []).map((entry) => [Number(entry.page), entry]),
     );
-    if (!chunks.length) {
+    const chunkRecords = [];
+    for (let pageIndex = 0; pageIndex < pdfData.pages.length; pageIndex += 1) {
+      const page = pageIndex + 1;
+      const text = String(pdfData.pages[pageIndex] || "").trim();
+      const quality = pageQuality.get(page) || this.pageExtractionQuality(text);
+      if (!quality.usable || !text) continue;
+      const pageChunks = this.chunkText(text, this.chunkSize, this.overlap, languageCode);
+      let cursor = 0;
+      for (const content of pageChunks) {
+        const structure = this.structuralChunkMetadata(content, text, cursor, 1);
+        chunkRecords.push({ content, page, quality, structure });
+        cursor = Math.max(cursor + 1, text.indexOf(content, cursor) + Math.max(1, content.length - this.overlap));
+      }
+    }
+    if (!chunkRecords.length) {
       const error = new Error(
         "Extracted text was insufficient to create research passages.",
       );
@@ -675,21 +768,17 @@ class PDFProcessor {
       throw error;
     }
 
-    const structuredChunks = chunks.map((content, index) => ({
-      ...this.structuralChunkMetadata(
-        content,
-        pdfData.fullText,
-        index === 0 ? 0 : chunks
-          .slice(0, index)
-          .reduce((sum, chunk) => sum + chunk.length - this.overlap, 0),
-        pdfData.numPages,
-      ),
+    const structuredChunks = chunkRecords.map(({ content, page, quality, structure }, index) => ({
+      ...structure,
+      pageStart: page,
+      pageEnd: page,
+      pageEstimate: false,
       id: `${documentId}-chunk-${index}`,
       billId: String(documentId),
       title,
       content,
       chunkIndex: index,
-      totalChunks: chunks.length,
+      totalChunks: chunkRecords.length,
       metadata: {
         source: "pdf",
         pdfUrl,
@@ -706,6 +795,14 @@ class PDFProcessor {
         ocrRequired: pdfData.ocrRequired,
         isBilingual: pdfData.language.isBilingual,
         pdfQualityClass: pdfData.pdfQuality.qualityClass,
+        extractionQuality: quality.quality,
+        extractionQualityScore: quality.score,
+        extractionQualityReasons: quality.reasons,
+        textQualityVersion: TEXT_QUALITY_VERSION,
+        normalizationVersion: NORMALIZATION_VERSION,
+        ocrPromptVersion: OCR_PROMPT_VERSION,
+        usablePageCoverage: pdfData.pdfQuality.documentTextQuality?.usableCoverage,
+        unreliablePages: (pdfData.pdfQuality.failedPages || []).map(String),
       },
     }));
 
@@ -721,7 +818,7 @@ class PDFProcessor {
 
     return {
       chunks: structuredChunks,
-      totalChunks: chunks.length,
+      totalChunks: chunkRecords.length,
       originalText: pdfData.originalText,
       originalLength: pdfData.originalLength,
       cleanedLength: pdfData.cleanedLength,

@@ -1,3 +1,5 @@
+const { evidenceTextIsReliable } = require("../lib/pdfTextQuality");
+
 const normalize = (value) => String(value || "").toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim();
 
 const nearDuplicate = (left, right) => {
@@ -16,7 +18,8 @@ const selectContextPassages = (passages, options = {}) => {
   let used = 0;
   for (const passage of passages || []) {
     const content = String(passage.content || "").trim();
-    if (!content || selected.some((item) => nearDuplicate(item.content, content))) continue;
+    if (!content || !evidenceTextIsReliable({ ...passage, content }) ||
+        selected.some((item) => nearDuplicate(item.content, content))) continue;
     const available = maxChars - used;
     if (available < 200) break;
     const clipped = content.slice(0, Math.min(perPassage, available));

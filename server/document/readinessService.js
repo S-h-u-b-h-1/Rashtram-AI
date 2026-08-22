@@ -175,6 +175,7 @@ const prepareDocument = async (
     job: suppliedJob = null,
     workerId = null,
     discoverGraph = true,
+    forcePdfReextract = false,
   } = {},
 ) => {
   const startedAt = Date.now();
@@ -274,7 +275,7 @@ const prepareDocument = async (
     stage: "DISCOVERED",
     status: "completed",
     outputHash: document.contentFingerprintSha256 || null,
-    metadata: { reason, documentType: document.type },
+    metadata: { reason, documentType: document.type, forcePdfReextract },
   });
   await recordStage({
     documentId: document.id,
@@ -285,7 +286,7 @@ const prepareDocument = async (
   });
   try {
     const { processDocument } = require("./documentResearchService");
-    const result = await processDocument(document.type, document.id);
+    const result = await processDocument(document.type, document.id, { forcePdfReextract });
     const chunksCount = Number(
       result.chunksStored || result.totalChunks || 0,
     );

@@ -19,7 +19,7 @@ const PROCESSING_STAGES = Object.freeze([
 const PROCESSOR_VERSION =
   process.env.PROCESSING_PIPELINE_VERSION ||
   process.env.VERCEL_GIT_COMMIT_SHA ||
-  "research-engine-v3-phase-1";
+  "research-engine-v3-pdf-quality-v1";
 
 const sha256 = (value) => crypto
   .createHash("sha256")
@@ -197,7 +197,14 @@ const recordCompletedPipeline = async ({ documentId, jobId, result }) => {
       durationMs: metrics[`${stage.toLowerCase()}Ms`] || null,
       metadata: stage === "OCR" ? {
         pageLevel: Boolean(result.pdfQuality?.pageExtraction),
-        pages: result.pdfQuality?.pageExtraction || [],
+        pagesEvaluated: Number(result.pdfQuality?.documentTextQuality?.totalPages || 0),
+        usablePages: Number(result.pdfQuality?.documentTextQuality?.usablePages || 0),
+        failedPages: result.pdfQuality?.failedPages || [],
+        qualityCounts: result.pdfQuality?.documentTextQuality?.counts || {},
+        averageQuality: result.pdfQuality?.documentTextQuality?.averageScore ?? null,
+        qualityEngineVersion: result.pdfQuality?.qualityEngineVersion || null,
+        normalizationVersion: result.pdfQuality?.normalizationVersion || null,
+        ocrPromptVersion: result.pdfQuality?.ocrPromptVersion || null,
         ...(artifact.extractionMethod === "source_html" ? { skippedForResourceType: "html" } : {}),
       } : ["FETCH", "EXTRACT", "NORMALIZE", "CHUNK", "FTS_INDEX"].includes(stage)
         ? htmlMetadata

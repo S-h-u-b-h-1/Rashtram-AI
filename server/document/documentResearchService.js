@@ -63,6 +63,7 @@ const {
   htmlFailure,
 } = require("./htmlResourceService");
 const { SOURCE_AUTHORITY } = require("../retrieval/sourceAuthority");
+const { evidenceTextIsReliable, evaluateTextQuality } = require("../lib/pdfTextQuality");
 
 const TYPE_CONFIG = {
   bill: {
@@ -986,7 +987,8 @@ const processExtractableSourceDocument = async (
   };
 };
 
-const processDocument = async (documentType, documentId) => {
+const processDocument = async (documentType, documentId, options = {}) => {
+  const forcePdfReextract = Boolean(options.forcePdfReextract);
   const totalStartedAt = Date.now();
   const document = await getDocument(documentType, documentId);
   if (!document) {
@@ -1013,7 +1015,7 @@ const processDocument = async (documentType, documentId) => {
     );
   }
   const indexCheckMs = Date.now() - indexCheckStartedAt;
-  if (existence.exists) {
+  if (existence.exists && !forcePdfReextract) {
     const storedArtifact = await getTextArtifact(documentId);
     const indexedLoadStartedAt = Date.now();
     const matches = await loadIndexedChunks(config, documentId);
@@ -1116,7 +1118,7 @@ const processDocument = async (documentType, documentId) => {
     }
   }
 
-  const localChunks = await loadLocalChunks(documentId);
+  const localChunks = forcePdfReextract ? [] : await loadLocalChunks(documentId);
   if (localChunks.length > 0) {
     const storedArtifact = await getTextArtifact(documentId);
     const context = localChunks.map((chunk) => chunk.content).join("\n\n");
@@ -1368,6 +1370,10 @@ const processDocument = async (documentType, documentId) => {
       embeddingsMs: Number(stored.metrics?.embeddingsMs || 0),
       pineconeMs: Number(stored.metrics?.pineconeMs || 0),
       chunkPersistenceMs,
+      chunksInvalidated: Number(chunkCacheResult.cacheMisses || 0),
+      embeddingsReused: Number(stored.embeddingCacheHits ?? chunkCacheResult.cacheHits ?? 0),
+      embeddingsRegenerated: Number(stored.embeddingCacheMisses ?? chunkCacheResult.cacheMisses ?? 0),
+      staleVectorsRemoved: Number(stored.staleVectorsRemoved || 0),
       totalMs: Date.now() - totalStartedAt,
       vectorStorageFailed: Boolean(vectorStorageError),
     },
@@ -1411,6 +1417,11 @@ const passageFromVectorMatch = (match, index) => ({
   sectionPath: match.metadata?.sectionPath || [],
   sourceAnchor: match.metadata?.sourceAnchor || null,
   authorityClass: match.metadata?.authorityClass || null,
+  extractionQuality: match.metadata?.extractionQuality || null,
+  extractionQualityScore: match.metadata?.extractionQualityScore ?? null,
+  extractionMethod: match.metadata?.extractionMethod || null,
+  textQualityVersion: match.metadata?.textQualityVersion || null,
+  unreliablePages: match.metadata?.unreliablePages || [],
   retrievalMode: "vector",
 });
 
@@ -1527,13 +1538,19 @@ const rerankPassages = (passages, message, { topK = 6 } = {}) => {
     const boost = identifierBoost(passage, identifiers);
     const fusionScore = Math.min(1, Number(passage.rrfScore || 0) * 30);
     const authorityBoost = Number(passage.authorityBoost || 0);
-    const finalScore =
+    const quality = Number.isFinite(Number(passage.extractionQualityScore))
+      ? Number(passage.extractionQualityScore)
+      : evaluateTextQuality(passage.content).score;
+    const reliable = evidenceTextIsReliable(passage);
+    const finalScore = reliable ? (
       0.28 * vectorScore + 0.28 * lexicalScore + 0.15 * ftsScore +
-      0.35 * boost + 0.1 * fusionScore + authorityBoost;
+      0.35 * boost + 0.1 * fusionScore + authorityBoost + 0.04 * quality
+    ) : -1;
     const rankingReasons = [...new Set([
       ...(passage.rankingReasons || []),
       boost > 0 ? "exact_identifier" : null,
       authorityBoost > 0 ? `authority:${passage.authorityClass}` : null,
+      reliable ? `text_quality:${quality.toFixed(2)}` : "text_quality:rejected",
     ].filter(Boolean))];
     return {
       ...passage,
@@ -1543,6 +1560,7 @@ const rerankPassages = (passages, message, { topK = 6 } = {}) => {
       identifierBoost: boost,
       fusionScore,
       finalScore,
+      extractionQualityScore: quality,
       rankingReasons,
     };
   });
@@ -1632,6 +1650,11 @@ const retrieveFtsPassages = async (documentId, message, limit = 25) => {
       sectionPath: metadata.sectionPath || [],
       sourceAnchor: metadata.sourceAnchor || null,
       authorityClass: metadata.authorityClass || null,
+      extractionQuality: metadata.extractionQuality || null,
+      extractionQualityScore: metadata.extractionQualityScore ?? null,
+      extractionMethod: metadata.extractionMethod || null,
+      textQualityVersion: metadata.textQualityVersion || null,
+      unreliablePages: metadata.unreliablePages || [],
       retrievalMode: "fts",
     };
   }).filter((passage) => passage.content);
@@ -1708,6 +1731,11 @@ const retrieveLocalTextPassages = async (documentId, message, topK = 6) => {
         sectionPath: metadata.sectionPath || [],
         sourceAnchor: metadata.sourceAnchor || null,
         authorityClass: metadata.authorityClass || null,
+        extractionQuality: metadata.extractionQuality || null,
+        extractionQualityScore: metadata.extractionQualityScore ?? null,
+        extractionMethod: metadata.extractionMethod || null,
+        textQualityVersion: metadata.textQualityVersion || null,
+        unreliablePages: metadata.unreliablePages || [],
         retrievalMode: queryTokens.length ? "local_text" : "representative",
       };
     })

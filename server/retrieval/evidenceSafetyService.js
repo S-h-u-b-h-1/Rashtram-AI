@@ -1,4 +1,5 @@
 const { QUERY_TYPES } = require("./queryPlanner");
+const { evidenceTextIsReliable } = require("../lib/pdfTextQuality");
 
 const SUFFICIENCY_LEVELS = Object.freeze({
   HIGH: "HIGH",
@@ -44,8 +45,8 @@ const safetyConfig = () => ({
   maximumRepairAttempts: Math.min(1, Math.max(0,
     Number.parseInt(process.env.EVIDENCE_MAX_REPAIR_ATTEMPTS || "1", 10) || 0,
   )),
-  version: "evidence-safety-v1.1",
-  claimVerifierVersion: "deterministic-citation-verifier-v1.1",
+  version: "evidence-safety-v1.2-text-quality",
+  claimVerifierVersion: "deterministic-citation-verifier-v1.2-text-quality",
 });
 
 const normalize = (value) => String(value || "")
@@ -174,7 +175,9 @@ const detectEvidenceConflicts = (evidence = []) => {
 
 const assessEvidenceSufficiency = (query, evidence = [], options = {}) => {
   const config = safetyConfig();
-  const usable = evidence.filter((item) => String(item.content || "").trim());
+  const usable = evidence.filter((item) =>
+    String(item.content || "").trim() && evidenceTextIsReliable(item),
+  );
   const conflicts = detectEvidenceConflicts(usable);
   if (conflicts.length) {
     const level = SUFFICIENCY_LEVELS.CONFLICTING;
@@ -190,14 +193,21 @@ const assessEvidenceSufficiency = (query, evidence = [], options = {}) => {
     };
   }
   if (!usable.length) {
+    const rejectedForQuality = evidence.some((item) =>
+      String(item.content || "").trim() && !evidenceTextIsReliable(item),
+    );
     const level = SUFFICIENCY_LEVELS.INSUFFICIENT;
     return {
       level,
       decision: sufficiencyDecision(level),
       score: 0,
       signals: explainableSignals({ retrievalVerified: options.retrievalVerified }),
-      reasons: ["No usable source passage was retrieved."],
-      missing: ["Relevant source passages"],
+      reasons: [rejectedForQuality
+        ? "Retrieved passages failed deterministic text-quality checks."
+        : "No usable source passage was retrieved."],
+      missing: [rejectedForQuality
+        ? "Reliably extracted source passages"
+        : "Relevant source passages"],
       conflicts: [],
       version: config.version,
     };
@@ -287,6 +297,12 @@ const buildAbstentionResponse = (assessment, options = {}) => {
   const missing = assessment.missing?.length
     ? ` Missing evidence: ${assessment.missing.join("; ")}.`
     : "";
+  if (assessment.missing?.includes("Reliably extracted source passages")) {
+    const original = options.originalSourceUrl
+      ? ` Open the original source: ${options.originalSourceUrl}`
+      : " Open the original PDF to inspect the affected section.";
+    return `This section could not be reliably extracted from the source document.${original}`;
+  }
   return `The available sources do not contain sufficient evidence to answer this reliably.${searched}${missing} Try preparing more documents, selecting another source, or broadening the search.`;
 };
 
@@ -374,6 +390,9 @@ const boundedEvidenceForCitation = (source, evidence = []) => {
 };
 
 const citationSupportsClaim = (claimText, evidence, config = safetyConfig()) => {
+  if (!evidenceTextIsReliable(evidence)) {
+    return { alignment: 0, supported: false, partial: false, unreliable: true };
+  }
   const sourceText = evidenceText(evidence);
   const alignment = lexicalAlignment(claimText, sourceText);
   const claimNumbers = numericFacts(claimText);
@@ -491,7 +510,9 @@ const summarizeVerification = (verification = {}) => ({
 });
 
 const buildGroundedExtractiveAnswer = (query, evidence = []) => {
-  const usable = evidence.filter((item) => String(item.content || "").trim()).slice(0, 4);
+  const usable = evidence.filter((item) =>
+    String(item.content || "").trim() && evidenceTextIsReliable(item),
+  ).slice(0, 4);
   if (!usable.length) {
     return buildAbstentionResponse({
       level: SUFFICIENCY_LEVELS.INSUFFICIENT,
