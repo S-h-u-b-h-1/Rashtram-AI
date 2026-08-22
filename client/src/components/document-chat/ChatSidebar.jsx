@@ -67,6 +67,7 @@ export function ChatSidebar({
       <DocumentSummaryPanel summary={summary} />
       <SourcePanel document={document} />
       <RelatedDocuments
+        sourceDocument={document}
         sourceDocumentType={document.documentType || document.type}
         relationships={document.relationships}
         recommendations={document.recommendations}

@@ -1368,7 +1368,7 @@ const getRelatedChats = async (id, userId = null, limit = 6) => {
      SELECT
        *
      FROM ranked_chats
-     WHERE related_score > 0
+     WHERE related_score >= 6
      ORDER BY related_score DESC,
        is_pinned DESC,
        GREATEST(

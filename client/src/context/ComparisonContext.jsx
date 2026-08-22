@@ -16,6 +16,7 @@ import {
   isResearchReady,
   isSourceOnlyResearchDocument,
 } from "@/lib/document-readiness";
+export { comparisonHrefForDocuments } from "@/lib/comparison-navigation.mjs";
 
 const LEGACY_STORAGE_KEY = "rashtram-comparison-documents";
 const PREVIOUS_USER_SCOPED_PREFIX = "rashtram-comparison-documents:";
@@ -148,45 +149,71 @@ export function ComparisonProvider({ children }) {
 
   const value = useMemo(
     () => {
+      const normalizePreparedDocument = (document) => ({
+        id: String(document.id),
+        title: document.title,
+        type: document.type || document.documentType,
+        documentType: document.type || document.documentType,
+        ministry: document.ministry || null,
+        authority: document.authority || null,
+        state: document.state || null,
+        jurisdiction: document.jurisdiction || null,
+        year: document.year || null,
+        publicationDate: document.publicationDate || null,
+        pdfUrl: document.pdfUrl,
+        processingStatus: document.processingStatus,
+        extractionStatus: document.extractionStatus,
+        embeddingStatus: document.embeddingStatus,
+        chunksCount: document.chunksCount,
+        hasAccessibleResource: document.hasAccessibleResource,
+        researchReady: true,
+        comparisonReady: true,
+      });
       const addPreparedDocument = (document) => {
         const reason = comparisonDisabledReason(document);
         if (reason) return { ok: false, reason };
         if (documents.some((item) => String(item.id) === String(document.id))) {
-          return { ok: true };
+          return { ok: true, documents, added: false };
         }
         if (documents.length >= 5) {
           return { ok: false, reason: "You can compare up to five documents." };
         }
-        setDocuments((current) => [
-          ...current,
-          {
-            id: String(document.id),
-            title: document.title,
-            type: document.type || document.documentType,
-            documentType: document.type || document.documentType,
-            ministry: document.ministry || null,
-            authority: document.authority || null,
-            state: document.state || null,
-            jurisdiction: document.jurisdiction || null,
-            year: document.year || null,
-            publicationDate: document.publicationDate || null,
-            pdfUrl: document.pdfUrl,
-            processingStatus: document.processingStatus,
-            extractionStatus: document.extractionStatus,
-            embeddingStatus: document.embeddingStatus,
-            chunksCount: document.chunksCount,
-            hasAccessibleResource: document.hasAccessibleResource,
-            researchReady: true,
-            comparisonReady: true,
-          },
-        ]);
-        return { ok: true };
+        const preparedDocument = normalizePreparedDocument(document);
+        const nextDocuments = [...documents, preparedDocument];
+        setDocuments(nextDocuments);
+        return { ok: true, documents: nextDocuments, added: true };
       };
       return {
         documents,
         isSelected: (id) =>
           documents.some((document) => String(document.id) === String(id)),
         addDocument: addPreparedDocument,
+        startComparison: (...candidates) => {
+          const uniqueCandidates = candidates.filter(
+            (candidate, index, values) =>
+              candidate?.id &&
+              values.findIndex(
+                (value) => String(value?.id) === String(candidate.id),
+              ) === index,
+          );
+          if (uniqueCandidates.length < 2) {
+            return { ok: false, reason: "Select two different documents." };
+          }
+          const unavailable = uniqueCandidates.find((candidate) =>
+            comparisonDisabledReason(candidate),
+          );
+          if (unavailable) {
+            return {
+              ok: false,
+              reason: comparisonDisabledReason(unavailable),
+            };
+          }
+          const nextDocuments = uniqueCandidates
+            .slice(0, 5)
+            .map(normalizePreparedDocument);
+          setDocuments(nextDocuments);
+          return { ok: true, documents: nextDocuments };
+        },
         prepareAndAddDocument: async (document) => {
           if (!document?.id) {
             return { ok: false, reason: "Document not found." };

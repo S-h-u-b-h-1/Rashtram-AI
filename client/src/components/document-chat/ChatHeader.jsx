@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
   ArrowLeft,
   Bookmark,
@@ -14,6 +15,7 @@ import {
 import { CollectionMenu } from "./CollectionMenu";
 import {
   comparisonDisabledReason,
+  comparisonHrefForDocuments,
   useComparison,
 } from "@/context/ComparisonContext";
 import {
@@ -28,6 +30,7 @@ export function ChatHeader({
   onBookmark,
   onExport,
 }) {
+  const router = useRouter();
   const { addDocument, removeDocument, isSelected } = useComparison();
   const selected = isSelected(document.id);
   const compareDisabled = comparisonDisabledReason(document);
@@ -55,9 +58,17 @@ export function ChatHeader({
             type="button"
             disabled={Boolean(compareDisabled)}
             title={compareDisabled || undefined}
-            onClick={() =>
-              selected ? removeDocument(document.id) : addDocument(document)
-            }
+            onClick={() => {
+              if (selected) {
+                removeDocument(document.id);
+                return;
+              }
+              const result = addDocument(document);
+              const href = result.ok
+                ? comparisonHrefForDocuments(result.documents)
+                : null;
+              if (href) router.push(href);
+            }}
             className="grid h-9 w-9 place-items-center rounded-xl bg-white/8 text-white/70 hover:text-white disabled:cursor-not-allowed disabled:opacity-35"
             aria-label={
               selected

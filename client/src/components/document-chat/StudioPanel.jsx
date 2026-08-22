@@ -41,6 +41,7 @@ export function StudioPanel({
         <ResearchWorkflowPanel document={document} disabled={disabled} onRunWorkflow={onRunWorkflow} />
         <DocumentSummaryPanel summary={summary} />
         <RelatedDocuments
+          sourceDocument={document}
           sourceDocumentType={document.documentType || document.type}
           relationships={document.relationships}
           recommendations={document.recommendations}

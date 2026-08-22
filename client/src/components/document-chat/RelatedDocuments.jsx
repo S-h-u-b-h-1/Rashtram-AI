@@ -6,19 +6,42 @@ import {
   MessageSquareText,
 } from "lucide-react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { humanize } from "@/lib/document-links";
 import { isComparisonReady, isResearchReady } from "@/lib/document-readiness";
 import { RecommendationCard } from "@/components/recommendations/RecommendationCard";
-import { useComparison } from "@/context/ComparisonContext";
+import {
+  comparisonHrefForDocuments,
+  useComparison,
+} from "@/context/ComparisonContext";
 
 export function RelatedDocuments({
+  sourceDocument,
   sourceDocumentType,
   relationships = [],
   recommendations = [],
   relatedChats = [],
 }) {
-  const { addDocument, isSelected, removeDocument } = useComparison();
-  const items = relationships.slice(0, 6).map((item) => ({
+  const router = useRouter();
+  const {
+    addDocument,
+    isSelected,
+    removeDocument,
+    startComparison,
+  } = useComparison();
+  const openComparison = (targetDocument) => {
+    const result = startComparison(sourceDocument, targetDocument);
+    const href = result.ok
+      ? comparisonHrefForDocuments(result.documents)
+      : null;
+    if (href) router.push(href);
+  };
+  const items = relationships.filter((item) =>
+    item.verificationStatus === "source_verified" ||
+    (item.verificationStatus === "model_checked_inference" &&
+      Number(item.confidence || 0) >= 0.65) ||
+    Number(item.confidence || 0) >= 0.85,
+  ).slice(0, 6).map((item) => ({
     ...item.document,
     relation: item.relationshipType,
     explanation: item.explanation,
@@ -41,6 +64,8 @@ export function RelatedDocuments({
               recommendation={recommendation}
               pagePath={`/app/document/${recommendation.id}`}
               compact
+              autoOpenComparison
+              onCompare={sourceDocument ? openComparison : undefined}
             />
           ))}
         </div>
@@ -106,15 +131,27 @@ export function RelatedDocuments({
                 {isComparisonReady(item) && (
                   <button
                     type="button"
-                    onClick={() =>
-                      isSelected(item.id)
-                        ? removeDocument(item.id)
-                        : addDocument(item)
-                    }
+                    onClick={() => {
+                      if (sourceDocument) {
+                        openComparison(item);
+                        return;
+                      }
+                      if (isSelected(item.id)) {
+                        removeDocument(item.id);
+                        return;
+                      }
+                      const result = addDocument(item);
+                      const href = result.ok
+                        ? comparisonHrefForDocuments(result.documents)
+                        : null;
+                      if (href) router.push(href);
+                    }}
                     className="inline-flex items-center gap-1 text-[10px] font-semibold text-[#874047]"
                   >
                     <GitCompareArrows className="h-3 w-3" />
-                    {isSelected(item.id)
+                    {sourceDocument
+                      ? "Compare"
+                      : isSelected(item.id)
                       ? "Remove"
                       : "Add to compare"}
                   </button>

@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
   ArrowRight,
   CalendarDays,
@@ -10,6 +11,7 @@ import {
 } from "lucide-react";
 import {
   comparisonDisabledReason,
+  comparisonHrefForDocuments,
   useComparison,
 } from "@/context/ComparisonContext";
 import { trackActivity } from "@/lib/api";
@@ -23,7 +25,10 @@ export function RecommendationCard({
   recommendation,
   pagePath = "/app",
   compact = false,
+  autoOpenComparison = false,
+  onCompare,
 }) {
+  const router = useRouter();
   const { addDocument, removeDocument, isSelected } = useComparison();
   const selected = isSelected(recommendation.id);
   const disabledReason = comparisonDisabledReason(recommendation);
@@ -135,17 +140,28 @@ export function RecommendationCard({
           title={compareAction.disabled ? disabledReason : undefined}
           aria-pressed={selected}
           onClick={() => {
+            if (onCompare) {
+              onCompare(recommendation);
+              track("recommendation_added_to_compare");
+              return;
+            }
             if (selected) {
               removeDocument(recommendation.id);
             } else {
               const result = addDocument(recommendation);
-              if (result.ok) track("recommendation_added_to_compare");
+              if (result.ok) {
+                track("recommendation_added_to_compare");
+                const href = autoOpenComparison
+                  ? comparisonHrefForDocuments(result.documents)
+                  : null;
+                if (href) router.push(href);
+              }
             }
           }}
           className="inline-flex min-h-9 flex-1 items-center justify-center gap-1.5 rounded-xl border border-[#8f1d2c]/8 bg-[#eee0dc] px-3 py-2 text-[10px] font-semibold text-[#8f1d2c] transition hover:bg-[#e7d5cf] disabled:cursor-not-allowed disabled:opacity-40"
         >
           <GitCompareArrows className="h-3 w-3" />
-          {compareAction.label}
+          {onCompare ? "Compare" : compareAction.label}
         </button>
       </div>
     </article>

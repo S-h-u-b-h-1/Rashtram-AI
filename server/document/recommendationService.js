@@ -403,6 +403,22 @@ const scoreRecommendation = (signals = {}) => {
   return Math.min(Number((points / 145).toFixed(4)), 1);
 };
 
+// Broad catalogue metadata is useful for ranking, but it must never be enough
+// to establish that two documents discuss the same subject.
+const hasSubstantiveRecommendationAffinity = (signals = {}) => {
+  const sameIssuer = Boolean(
+    signals.sameMinistry || signals.sameAuthority || signals.sameDepartment,
+  );
+  const sameSubject = Boolean(signals.sameCategory || signals.semanticMatch);
+  return Boolean(
+    signals.sharedLegalIdentifier ||
+      signals.titleMatch ||
+      (signals.relationship && (sameIssuer || sameSubject)) ||
+      (signals.semanticMatch && (sameIssuer || signals.sameCategory)) ||
+      (sameIssuer && signals.sameCategory),
+  );
+};
+
 const reasonFromSignals = (signals, candidate) => {
   const reasons = [];
   if (signals.relationshipType) {
@@ -645,7 +661,10 @@ const getDocumentRecommendations = async (
        (candidate.state IS NOT NULL
          AND candidate.state = current.state) AS same_state,
        (candidate.category IS NOT NULL
-         AND candidate.category = current.category) AS same_category,
+         AND candidate.category = current.category
+         AND LOWER(candidate.category) NOT IN (
+           'other', 'general', 'uncategorized', 'miscellaneous'
+         )) AS same_category,
        (candidate.document_type = current.document_type) AS same_type,
        (candidate.year IS NOT NULL
          AND candidate.year = current.year) AS same_year,
@@ -742,15 +761,20 @@ const getDocumentRecommendations = async (
   const recommendations = result.rows
     .map((row) => {
       const signals = mapCandidateSignals(row, semanticSet, profile);
-      return shapeRecommendation(row, signals);
+      return { recommendation: shapeRecommendation(row, signals), signals };
     })
     .filter(
-      (item) =>
-        item.score >= 0.24 &&
-        isRecommendationEligible(item, { includeNonReady }),
+      ({ recommendation, signals }) =>
+        recommendation.score >= 0.24 &&
+        hasSubstantiveRecommendationAffinity(signals) &&
+        isRecommendationEligible(recommendation, { includeNonReady }),
     )
-    .sort((left, right) => right.score - left.score)
-    .slice(0, limit);
+    .sort(
+      (left, right) =>
+        right.recommendation.score - left.recommendation.score,
+    )
+    .slice(0, limit)
+    .map(({ recommendation }) => recommendation);
   await persistRecommendations(userId, recommendations, {
     sourceDocumentId: String(current.id),
   });
@@ -1253,6 +1277,7 @@ module.exports = {
   complianceDocumentTypeWeight,
   confidenceForScore,
   evaluateBusinessCandidate,
+  hasSubstantiveRecommendationAffinity,
   getDocumentRecommendations,
   getComparisonRecommendations,
   getProblemRecommendations,

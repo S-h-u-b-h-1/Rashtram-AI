@@ -5,6 +5,7 @@ const {
   RELEVANCE_TIERS,
   confidenceForScore,
   evaluateBusinessCandidate,
+  hasSubstantiveRecommendationAffinity,
   inferBusinessSignals,
   isRecommendationEligible,
   normalizeTypes,
@@ -13,6 +14,38 @@ const {
   validateComparisonRecommendationRequest,
   validateProblemRequest,
 } = require("../document/recommendationService");
+
+test("document recommendations require shared subject matter, not generic metadata", () => {
+  assert.equal(
+    hasSubstantiveRecommendationAffinity({
+      sameJurisdiction: true,
+      sameType: true,
+      sameYear: true,
+      recent: true,
+      researchReady: true,
+      qualityScore: 90,
+    }),
+    false,
+  );
+  assert.equal(
+    hasSubstantiveRecommendationAffinity({
+      semanticMatch: true,
+      sameCategory: true,
+    }),
+    true,
+  );
+  assert.equal(
+    hasSubstantiveRecommendationAffinity({
+      relationship: true,
+      sameMinistry: true,
+    }),
+    true,
+  );
+  assert.equal(
+    hasSubstantiveRecommendationAffinity({ sharedLegalIdentifier: true }),
+    true,
+  );
+});
 
 test("recommendation scoring rewards grounded catalogue signals", () => {
   const weak = scoreRecommendation({
