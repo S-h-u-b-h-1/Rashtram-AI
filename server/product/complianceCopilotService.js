@@ -190,12 +190,13 @@ const runComplianceCopilot = async (userId, payload = {}, adapters = {}) => {
   const loadDocument = adapters.loadDocument || DocumentRepository.getById;
   const retrieve = adapters.retrieve || retrieveDocumentContext;
   const persist = adapters.persist || query;
-  const [recommendationResult, knowledge] = await Promise.all([
-    recommend(userId, input),
-    discover([input.problem, input.industry, input.topic, ...input.states].filter(Boolean).join(" "), {
+  const recommendationResult = await recommend(userId, input);
+  const hasSpecificSector = Boolean(recommendationResult.inferredSignals?.sectors?.length);
+  const knowledge = adapters.discover || !hasSpecificSector
+    ? await discover([input.problem, input.industry, input.topic, ...input.states].filter(Boolean).join(" "), {
       userId, limit: 12,
-    }).catch(() => ({ concepts: [], documentIds: [], evidence: [] })),
-  ]);
+    }).catch(() => ({ concepts: [], documentIds: [], evidence: [] }))
+    : { concepts: [], documentIds: [], evidence: [] };
   const recommendations = (recommendationResult.recommendations || [])
     .filter((item) => [RELEVANCE_TIERS.HIGH, RELEVANCE_TIERS.MEDIUM].includes(item.relevanceTier))
     .slice(0, 5);
@@ -206,7 +207,23 @@ const runComplianceCopilot = async (userId, payload = {}, adapters = {}) => {
       document.documentType || document.type,
       document.id,
       `What obligations, permissions, regulators, deadlines, and penalties are relevant to this business problem: ${input.problem}`,
-      { document, accountId: userId, topK: 8 },
+      {
+        document,
+        accountId: userId,
+        topK: 8,
+        // Compliance pages need fast, passage-level evidence. PostgreSQL FTS
+        // is attempted first and vectors are only used when lexical evidence
+        // is genuinely insufficient.
+        plan: {
+          queryType: "COMPLIANCE",
+          useMetadata: false,
+          useLexical: true,
+          useVector: "if_insufficient",
+          useGraph: false,
+          comparisonIsolation: false,
+          plannerVersion: "compliance-copilot-lexical-first-v1",
+        },
+      },
     );
     const passages = retrieval.passages || [];
     return {
@@ -243,6 +260,15 @@ const runComplianceCopilot = async (userId, payload = {}, adapters = {}) => {
     createdAt: inserted.rows?.[0]?.created_at || new Date().toISOString(),
     recommendations,
     ...result,
+    preparationCandidates: recommendationResult.preparationCandidates || [],
+    lowerConfidenceRecommendations:
+      recommendationResult.lowerConfidenceRecommendations || [],
+    inferredSignals: recommendationResult.inferredSignals || {},
+    coverageClass: recommendationResult.coverageClass || null,
+    coverageExplanation: recommendationResult.coverageExplanation || null,
+    primarySourceGap:
+      result.primarySourceGap || recommendationResult.primarySourceGap || null,
+    abstention: recommendationResult.abstention || result.abstention || null,
   };
 };
 

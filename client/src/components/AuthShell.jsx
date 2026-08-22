@@ -52,7 +52,7 @@ export function AuthShell({ eyebrow, title, description, children }) {
       <section className="relative flex min-h-svh min-w-0 items-center justify-center overflow-x-clip px-5 py-20 sm:px-8 lg:px-12 lg:py-8">
         <Link
           href="/"
-          className="absolute left-5 top-5 inline-flex items-center gap-2 rounded-full px-3 py-2 text-sm text-[#5f5a52] transition hover:bg-white/60 hover:text-[#8f1d2c] sm:left-8 sm:top-7"
+          className="absolute left-5 top-5 inline-flex min-h-11 items-center gap-2 rounded-full px-3 py-2 text-sm text-[#5f5a52] transition hover:bg-white/60 hover:text-[#8f1d2c] sm:left-8 sm:top-7"
         >
           <ArrowLeft className="h-4 w-4" />
           Back home

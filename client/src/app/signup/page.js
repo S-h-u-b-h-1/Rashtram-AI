@@ -188,7 +188,7 @@ export default function Signup() {
           type="button"
           onClick={skipProfile}
           disabled={submitting}
-          className="absolute right-6 top-6 rounded-full border border-[#8f1d2c]/10 bg-white/80 px-3 py-1.5 text-xs font-semibold text-[#7c352f] shadow-sm backdrop-blur transition hover:bg-[#f6f2eb] disabled:opacity-50"
+          className="absolute right-5 top-5 min-h-11 rounded-full border border-[#8f1d2c]/10 bg-white/80 px-3 py-1.5 text-xs font-semibold text-[#7c352f] shadow-sm backdrop-blur transition hover:bg-[#f6f2eb] disabled:opacity-50 sm:right-8 sm:top-7"
         >
           Skip setup
         </button>

@@ -132,6 +132,15 @@ export function BusinessProblemRecommender() {
               </p>
             </section>
           )}
+          {(result.preparationCandidates || []).length > 0 && (
+            <RecommendationSection
+              title="Relevant records that need preparation"
+              eyebrow="Catalogue coverage found"
+              recommendations={result.preparationCandidates}
+              pagePath="/app/recommend"
+              emptyMessage=""
+            />
+          )}
           {(result.lowerConfidenceRecommendations || []).length > 0 && (
             <RecommendationSection
               title="More possible matches"
@@ -144,6 +153,11 @@ export function BusinessProblemRecommender() {
           {result.primarySourceGap && (
             <p className="rounded-xl border border-[#c1a06f]/35 bg-[#fffaf0] px-4 py-3 text-xs leading-5 text-[#70434a]">
               {result.primarySourceGap}
+            </p>
+          )}
+          {result.coverageExplanation && (
+            <p role="status" className="rounded-xl border border-[#8f1d2c]/12 bg-[#f7f2eb] px-4 py-3 text-xs leading-5 text-[#70434a]">
+              {result.coverageExplanation}
             </p>
           )}
           <section className="surface-card flex flex-col gap-3 p-5 sm:flex-row sm:items-center sm:justify-between sm:p-6">

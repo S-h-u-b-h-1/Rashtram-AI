@@ -53,6 +53,50 @@ test("low-confidence candidates remain discovery-only", () => {
   assert.ok([RELEVANCE_TIERS.LOW, RELEVANCE_TIERS.REJECTED].includes(relevance.tier));
 });
 
+test("broad sector articles cannot satisfy a specific compliance intent", () => {
+  const fixtures = [
+    [
+      "An NBFC offers digital loans across India.",
+      { title: "Micro-Loan Delinquency Surges in Rural India", document_type: "report", jurisdiction: "India", problem_rank: 1 },
+    ],
+    [
+      "I operate an EV battery recycling facility in Gujarat.",
+      { title: "Critical Mineral Recycling Incentive Scheme", document_type: "scheme", jurisdiction: "India", problem_rank: 1 },
+    ],
+    [
+      "I am starting a food manufacturing company in West Bengal.",
+      { title: "Plant Protein Technology for Food Processing", document_type: "report", jurisdiction: "India", problem_rank: 1 },
+    ],
+  ];
+  for (const [problem, candidate] of fixtures) {
+    const relevance = evaluateBusinessCandidate(candidate, { problem }, inferBusinessSignals({ problem }));
+    assert.ok([RELEVANCE_TIERS.LOW, RELEVANCE_TIERS.REJECTED].includes(relevance.tier), problem);
+  }
+});
+
+test("specific regulatory anchors permit genuinely relevant candidates", () => {
+  const fixtures = [
+    ["An NBFC offers digital loans across India.", "RBI Digital Lending Directions for NBFC Registration", "regulation"],
+    ["I operate an EV battery recycling facility in Gujarat.", "Battery Waste EPR Registration Rules", "rule"],
+    ["I am starting a food manufacturing company in West Bengal.", "FSSAI Food Manufacturing Licence and Safety Regulations", "regulation"],
+    ["I run an insurance brokerage in Maharashtra.", "IRDAI Insurance Broker Registration Regulations", "regulation"],
+    ["I operate a SaaS company in India handling customer personal data.", "Digital Personal Data Protection Act: Consent Duties", "act"],
+  ];
+  for (const [problem, title, documentType] of fixtures) {
+    const relevance = evaluateBusinessCandidate({
+      title,
+      document_type: documentType,
+      jurisdiction: "India",
+      source_authority_tier: "A",
+      problem_rank: 1,
+      semantic_match: true,
+    }, { problem }, inferBusinessSignals({ problem }));
+    assert.ok([RELEVANCE_TIERS.HIGH, RELEVANCE_TIERS.MEDIUM].includes(relevance.tier), problem);
+    assert.equal(relevance.domainAnchorMatch, true);
+    assert.equal(relevance.regulatoryAnchorMatch, true);
+  }
+});
+
 test("official authority improves an equally relevant match but cannot create relevance", () => {
   const input = { problem: "An NBFC offers digital loans across India." };
   const inferred = inferBusinessSignals(input);
@@ -74,6 +118,7 @@ test("official authority improves an equally relevant match but cannot create re
   assert.ok(primary.score > secondary.score);
   assert.ok(secondary.score > irrelevantOfficial.score);
   assert.equal(authorityWeight({ canonical_source: "policyedge" }).class, "SECONDARY_RESEARCH");
+  assert.equal(authorityWeight({ source_authority_tier: "A" }).class, "PRIMARY_OFFICIAL");
 });
 
 test("jurisdiction mismatch is rejected even when words and authority look attractive", () => {

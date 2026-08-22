@@ -106,7 +106,7 @@ export default function Home() {
               For researchers, policy teams and think tanks
             </div>
 
-            <h1 className="mt-7 max-w-3xl font-serif text-[clamp(3.5rem,7.4vw,6.9rem)] leading-[0.91] tracking-[-0.055em] text-[#8f1d2c]">
+            <h1 className="mt-7 max-w-3xl font-serif text-[clamp(3rem,7.4vw,6.9rem)] leading-[0.94] tracking-[-0.05em] text-[#8f1d2c]">
               Search policy.
               <br />
               <span className="text-[#8c4548]">Get answers.</span>

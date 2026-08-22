@@ -38,6 +38,7 @@ import { StudioPanel } from "./StudioPanel";
 import { SuggestedQuestions } from "./SuggestedQuestions";
 import { useSmoothMessageStream } from "@/hooks/useSmoothMessageStream";
 import { usePinnedChatScroll } from "@/hooks/usePinnedChatScroll";
+import { MobileWorkspaceSheet } from "@/components/workspace/MobileWorkspaceSheet";
 
 const QUESTIONS = {
   bill: [
@@ -92,6 +93,7 @@ export function DocumentChatLayout({
   const [selectedSourceIds, setSelectedSourceIds] = useState([]);
   const [sourcesOpen, setSourcesOpen] = useState(true);
   const [studioOpen, setStudioOpen] = useState(true);
+  const [mobilePanel, setMobilePanel] = useState(null);
   const abortControllerRef = useRef(null);
   const smoothStream = useSmoothMessageStream(setMessages);
   const {
@@ -600,45 +602,24 @@ export function DocumentChatLayout({
           <div className="flex shrink-0 items-center justify-between border-b border-[#8f1d2c]/8 bg-[#f7f2eb] px-4 py-3 sm:px-6">
             <div className="min-w-0">
               <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-[#874047]">Chat</p>
-              <p className="mt-1 truncate text-xs text-[#706a61]">Ask questions across the selected sources and this document.</p>
+              <p className="mt-1 hidden truncate text-xs text-[#706a61] sm:block">Ask questions across the selected sources and this document.</p>
             </div>
             <div className="ml-3 flex shrink-0 items-center gap-1.5">
+              <button type="button" onClick={() => setMobilePanel("sources")} className="grid h-10 w-10 place-items-center rounded-xl border border-[#8f1d2c]/12 bg-white text-[#874047] lg:hidden" aria-label="Open sources and study context">
+                <PanelLeftOpen className="h-4 w-4" />
+              </button>
+              <button type="button" onClick={() => setMobilePanel("studio")} className="grid h-10 w-10 place-items-center rounded-xl border border-[#8f1d2c]/12 bg-white text-[#874047] lg:hidden" aria-label="Open research tools">
+                <PanelRightOpen className="h-4 w-4" />
+              </button>
               {!sourcesOpen && <button type="button" onClick={() => setSourcesOpen(true)} className="hidden h-8 w-8 place-items-center rounded-lg border border-[#8f1d2c]/12 bg-white text-[#874047] transition hover:bg-[#eee0dc] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#8f1d2c]/30 lg:grid" aria-label="Expand sources" title="Expand sources">
                 <PanelLeftOpen className="h-4 w-4" />
               </button>}
               {!studioOpen && <button type="button" onClick={() => setStudioOpen(true)} className="hidden h-8 w-8 place-items-center rounded-lg border border-[#8f1d2c]/12 bg-white text-[#874047] transition hover:bg-[#eee0dc] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#8f1d2c]/30 lg:grid" aria-label="Expand research tools" title="Expand research tools">
                 <PanelRightOpen className="h-4 w-4" />
               </button>}
-              <span className="rounded-full border border-[#8f1d2c]/12 bg-white px-2.5 py-1 text-[10px] font-semibold text-[#874047]">{selectedSourceIds.length + (researchReady ? 1 : 0)} sources in context</span>
+              <span className="rounded-full border border-[#8f1d2c]/12 bg-white px-2.5 py-1 text-[10px] font-semibold text-[#874047]"><span className="sm:hidden">{selectedSourceIds.length + (researchReady ? 1 : 0)}</span><span className="hidden sm:inline">{selectedSourceIds.length + (researchReady ? 1 : 0)} sources in context</span></span>
             </div>
           </div>
-          <details className="shrink-0 border-b border-[#8f1d2c]/8 bg-[#f7f2eb] lg:hidden">
-            <summary className="cursor-pointer px-4 py-3 text-xs font-semibold text-[#874047]">Sources and study context</summary>
-            <div className="max-h-[55vh] overflow-hidden">
-              <StudySourcesPanel
-                sources={studySources}
-                selectedIds={selectedSourceIds}
-                onToggle={toggleStudySource}
-                onAddUrl={addUrlSource}
-                onAddPdf={addPdfSource}
-                onDelete={removeStudySource}
-              />
-            </div>
-          </details>
-          <details className="shrink-0 border-b border-[#8f1d2c]/8 bg-[#f7f2eb] lg:hidden">
-            <summary className="cursor-pointer px-4 py-3 text-xs font-semibold text-[#874047]">Studio and research outputs</summary>
-            <div className="max-h-[60vh] overflow-hidden">
-              <StudioPanel
-                document={document}
-                summary={summary}
-                notes={notes}
-                onAddNote={addNote}
-                onDeleteNote={removeNote}
-                disabled={sending || processing}
-                onRunWorkflow={runWorkflow}
-              />
-            </div>
-          </details>
           {!researchReady && !processing && (
             <div className="border-b border-[#8f1d2c]/8 bg-[#fffaf0] px-4 py-3 text-xs text-[#706a61]">
               <p className="font-semibold text-[#8f1d2c]">
@@ -706,6 +687,32 @@ export function DocumentChatLayout({
           />
         </aside>}
       </div>
+      <MobileWorkspaceSheet
+        open={Boolean(mobilePanel)}
+        title={mobilePanel === "sources" ? "Sources and study context" : "Research tools"}
+        onClose={() => setMobilePanel(null)}
+      >
+        {mobilePanel === "sources" ? (
+                <StudySourcesPanel
+                  sources={studySources}
+                  selectedIds={selectedSourceIds}
+                  onToggle={toggleStudySource}
+                  onAddUrl={addUrlSource}
+                  onAddPdf={addPdfSource}
+                  onDelete={removeStudySource}
+                />
+        ) : (
+                <StudioPanel
+                  document={document}
+                  summary={summary}
+                  notes={notes}
+                  onAddNote={addNote}
+                  onDeleteNote={removeNote}
+                  disabled={sending || processing}
+                  onRunWorkflow={runWorkflow}
+                />
+        )}
+      </MobileWorkspaceSheet>
     </div>
   );
 }

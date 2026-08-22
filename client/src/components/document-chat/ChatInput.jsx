@@ -15,7 +15,7 @@ export function ChatInput({
   onResponseLanguageChange,
 }) {
   return (
-    <div className="border-t border-[#8f1d2c]/8 bg-[#f7f2eb] p-4">
+    <div className="sticky bottom-0 z-10 border-t border-[#8f1d2c]/8 bg-[#f7f2eb]/95 p-3 pb-[max(.75rem,env(safe-area-inset-bottom))] backdrop-blur sm:p-4">
       <div className="mx-auto max-w-4xl">
         <div className="flex items-end gap-2 rounded-2xl border border-[#8f1d2c]/10 bg-white p-2 shadow-sm">
           <textarea
@@ -54,13 +54,14 @@ export function ChatInput({
           </button>
         </div>
         <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
-          <p className="text-[10px] text-[#8a8277]">
+          <p className="hidden text-[10px] text-[#8a8277] sm:block">
             Answers cite retrieved passages. Verify important conclusions
             against the original record.
           </p>
           <div className="flex items-center gap-3">
             <label className="flex items-center gap-1.5 text-[10px] font-semibold text-[#874047]">
-              Response language
+              <span className="hidden sm:inline">Response language</span>
+              <span className="sm:hidden">Language</span>
               <select
                 value={responseLanguage}
                 onChange={(event) =>
@@ -78,18 +79,20 @@ export function ChatInput({
               type="button"
               onClick={onRegenerate}
               disabled={disabled || sending}
-              className="inline-flex items-center gap-1 text-[10px] font-semibold text-[#874047] disabled:opacity-40"
+              className="inline-flex min-h-9 items-center gap-1 rounded-lg px-2 text-[10px] font-semibold text-[#874047] disabled:opacity-40"
+              aria-label="Regenerate last response"
             >
               <RotateCcw className="h-3 w-3" />
-              Regenerate
+              <span className="hidden sm:inline">Regenerate</span>
             </button>
             <button
               type="button"
               onClick={onClear}
-              className="inline-flex items-center gap-1 text-[10px] font-semibold text-[#874047]"
+              className="inline-flex min-h-9 items-center gap-1 rounded-lg px-2 text-[10px] font-semibold text-[#874047]"
+              aria-label="Clear conversation"
             >
               <Trash2 className="h-3 w-3" />
-              Clear
+              <span className="hidden sm:inline">Clear</span>
             </button>
           </div>
         </div>

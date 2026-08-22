@@ -28,6 +28,7 @@ import { ChatInput } from "@/components/document-chat/ChatInput";
 import { useSmoothMessageStream } from "@/hooks/useSmoothMessageStream";
 import { usePinnedChatScroll } from "@/hooks/usePinnedChatScroll";
 import { StudySourcesPanel } from "@/components/document-chat/StudySourcesPanel";
+import { MobileWorkspaceSheet } from "@/components/workspace/MobileWorkspaceSheet";
 
 const timeLabel = () =>
   new Date().toLocaleTimeString([], {
@@ -51,6 +52,7 @@ export function MultiDocumentChat({
   const [selectedSourceIds, setSelectedSourceIds] = useState([]);
   const [sourcesOpen, setSourcesOpen] = useState(true);
   const [studioOpen, setStudioOpen] = useState(true);
+  const [mobilePanel, setMobilePanel] = useState(null);
   const abortControllerRef = useRef(null);
   const smoothStream = useSmoothMessageStream(setMessages);
   const {
@@ -225,7 +227,7 @@ export function MultiDocumentChat({
   }
 
   return (
-    <section className={`surface-card grid h-[calc(100dvh-10rem)] min-h-[420px] min-w-0 overflow-hidden ${sourcesOpen && studioOpen ? "lg:grid-cols-[280px_minmax(0,1fr)_300px]" : sourcesOpen ? "lg:grid-cols-[280px_minmax(0,1fr)]" : studioOpen ? "lg:grid-cols-[minmax(0,1fr)_300px]" : "lg:grid-cols-1"}`}>
+    <section className={`surface-card relative grid h-[calc(100dvh-7rem)] min-h-[420px] min-w-0 overflow-hidden sm:h-[calc(100dvh-10rem)] ${sourcesOpen && studioOpen ? "lg:grid-cols-[280px_minmax(0,1fr)_300px]" : sourcesOpen ? "lg:grid-cols-[280px_minmax(0,1fr)]" : studioOpen ? "lg:grid-cols-[minmax(0,1fr)_300px]" : "lg:grid-cols-1"}`}>
       {sourcesOpen && <aside className="hidden min-h-0 overflow-hidden border-r border-[#8f1d2c]/10 lg:block">
         <StudySourcesPanel
           sources={studySources}
@@ -244,9 +246,13 @@ export function MultiDocumentChat({
             <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-[#874047]">Cross-document research</p>
             <h2 className="mt-2 font-serif text-2xl text-[#8f1d2c]">One conversation, multiple legal records</h2>
           </div>
-          <div className="hidden shrink-0 items-center gap-1.5 lg:flex">
+          <div className="flex shrink-0 items-center gap-1.5">
+            <button type="button" onClick={() => setMobilePanel("sources")} className="grid h-10 w-10 place-items-center rounded-xl border border-[#8f1d2c]/12 bg-white text-[#874047] lg:hidden" aria-label="Open sources"><PanelLeftOpen className="h-4 w-4" /></button>
+            <button type="button" onClick={() => setMobilePanel("studio")} className="grid h-10 w-10 place-items-center rounded-xl border border-[#8f1d2c]/12 bg-white text-[#874047] lg:hidden" aria-label="Open comparison tools"><PanelRightOpen className="h-4 w-4" /></button>
+            <div className="hidden items-center gap-1.5 lg:flex">
             {!sourcesOpen && <button type="button" onClick={() => setSourcesOpen(true)} className="grid h-8 w-8 place-items-center rounded-lg border border-[#8f1d2c]/12 bg-white text-[#874047] transition hover:bg-[#eee0dc]" aria-label="Expand sources" title="Expand sources"><PanelLeftOpen className="h-4 w-4" /></button>}
             {!studioOpen && <button type="button" onClick={() => setStudioOpen(true)} className="grid h-8 w-8 place-items-center rounded-lg border border-[#8f1d2c]/12 bg-white text-[#874047] transition hover:bg-[#eee0dc]" aria-label="Expand comparison tools" title="Expand comparison tools"><PanelRightOpen className="h-4 w-4" /></button>}
+            </div>
           </div>
         </div>
         <div className="mt-3 flex flex-wrap gap-2">
@@ -262,19 +268,6 @@ export function MultiDocumentChat({
         </div>
         {error && <p className="mt-3 text-xs text-[#85434a]">{error}</p>}
       </header>
-      <details className="shrink-0 border-b border-[#8f1d2c]/8 bg-[#f7f2eb] lg:hidden">
-        <summary className="cursor-pointer px-4 py-3 text-xs font-semibold text-[#874047]">Sources and study context</summary>
-        <div className="max-h-[55vh] overflow-hidden">
-          <StudySourcesPanel
-            sources={studySources}
-            selectedIds={selectedSourceIds}
-            onToggle={toggleStudySource}
-            onAddUrl={addUrlSource}
-            onAddPdf={addPdfSource}
-            onDelete={removeStudySource}
-          />
-        </div>
-      </details>
       <div
         ref={scrollContainerRef}
         onScroll={handleScroll}
@@ -315,6 +308,16 @@ export function MultiDocumentChat({
           ))}
         </div>
       </aside>}
+      <MobileWorkspaceSheet open={Boolean(mobilePanel)} title={mobilePanel === "sources" ? "Sources and study context" : "Comparison tools"} onClose={() => setMobilePanel(null)}>
+        {mobilePanel === "sources" ? (
+          <StudySourcesPanel sources={studySources} selectedIds={selectedSourceIds} onToggle={toggleStudySource} onAddUrl={addUrlSource} onAddPdf={addPdfSource} onDelete={removeStudySource} />
+        ) : (
+          <div className="space-y-3 p-4">
+            <p className="text-xs leading-5 text-[#706a61]">Ask for a difference table, implementation risk scan, or plain-language briefing across these records.</p>
+            {documents.map((document) => <div key={document.id} className="rounded-xl border border-[#8f1d2c]/8 bg-white p-3"><p className="text-xs font-semibold text-[#29312d]">{document.title}</p><p className="mt-1 text-[10px] uppercase text-[#8a8277]">{document.type}</p></div>)}
+          </div>
+        )}
+      </MobileWorkspaceSheet>
     </section>
   );
 }

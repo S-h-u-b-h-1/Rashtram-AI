@@ -18,7 +18,10 @@ const audit = async () => {
   const originalInfo = console.info;
   console.log = () => {};
   console.info = () => {};
-  const runs = await Promise.all(FIXTURES.map(async (problem) => {
+  // Run sequentially to model a real user request and avoid manufacturing
+  // connection-pool contention that inflates latency on a small Neon compute.
+  const runs = [];
+  for (const problem of FIXTURES) {
     const startedAt = Date.now();
     try {
       const result = await runComplianceCopilot(null, { problem, limit: 8 }, {
@@ -29,7 +32,7 @@ const audit = async () => {
         item.authorityClass === "PRIMARY_OFFICIAL").length;
       const mismatches = recommendations.filter((item) =>
         item.relevance?.jurisdictionMismatch).length;
-      return {
+      runs.push({
         problem,
         durationMs: Date.now() - startedAt,
         topCandidate: recommendations[0]
@@ -41,6 +44,23 @@ const audit = async () => {
             }
           : null,
         recommendationCount: recommendations.length,
+        inferredSignals: result.inferredSignals || {},
+        coverageClass: result.coverageClass || null,
+        coverageExplanation: result.coverageExplanation || null,
+        preparationCandidates: (result.preparationCandidates || []).map((item) => ({
+          id: item.id,
+          title: item.title,
+          relevanceTier: item.relevanceTier,
+          authorityClass: item.authorityClass,
+          readinessClass: item.readinessClass,
+          readinessReason: item.readinessReason,
+        })),
+        lowerConfidenceCandidates: (result.lowerConfidenceRecommendations || []).slice(0, 5).map((item) => ({
+          id: item.id,
+          title: item.title,
+          relevanceTier: item.relevanceTier,
+          authorityClass: item.authorityClass,
+        })),
         primarySourceRate: recommendations.length ? primaryCount / recommendations.length : 0,
         secondaryOnly: recommendations.length > 0 && primaryCount === 0,
         jurisdictionMismatchRate: recommendations.length ? mismatches / recommendations.length : 0,
@@ -49,11 +69,14 @@ const audit = async () => {
           : 0,
         abstained: Boolean(result.abstention),
         evidenceStatus: result.evidenceStatus,
-      };
+        evidenceCount: result.evidence?.length || 0,
+        obligationCount: result.evidenceBackedObligations?.length || 0,
+        primarySourceGap: result.primarySourceGap || null,
+      });
     } catch (error) {
-      return { problem, durationMs: Date.now() - startedAt, error: error.message };
+      runs.push({ problem, durationMs: Date.now() - startedAt, error: error.message });
     }
-  }));
+  }
   results.push(...runs);
   console.log = originalLog;
   console.info = originalInfo;

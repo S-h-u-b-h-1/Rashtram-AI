@@ -116,7 +116,7 @@ export function WorkspaceShell({ activeKey, title, children }) {
       {isMobileMenuOpen && (
         <button
           type="button"
-          className="fixed inset-0 z-40 bg-[#101814]/55 backdrop-blur-sm md:hidden"
+          className="fixed inset-0 z-40 bg-[#101814]/55 backdrop-blur-sm lg:hidden"
           onClick={() => setIsMobileMenuOpen(false)}
           aria-label="Close navigation"
         />
@@ -124,8 +124,8 @@ export function WorkspaceShell({ activeKey, title, children }) {
 
       <aside
         className={cn(
-          "fixed inset-y-0 left-0 z-50 flex w-[280px] flex-col border-r border-white/8 bg-[#8f1d2c] text-white transition-transform duration-300 md:static md:translate-x-0",
-          "h-full overflow-y-auto overscroll-contain app-scrollbar md:shrink-0",
+          "fixed inset-y-0 left-0 z-50 flex w-[min(280px,88vw)] flex-col border-r border-white/8 bg-[#8f1d2c] text-white transition-transform duration-300 lg:static lg:w-[280px] lg:translate-x-0",
+          "h-full overflow-y-auto overscroll-contain app-scrollbar lg:shrink-0",
           isMobileMenuOpen ? "translate-x-0" : "-translate-x-full",
         )}
       >
@@ -134,7 +134,7 @@ export function WorkspaceShell({ activeKey, title, children }) {
           <button
             type="button"
             onClick={() => setIsMobileMenuOpen(false)}
-            className="grid h-9 w-9 place-items-center rounded-lg text-white/55 hover:bg-white/8 hover:text-white md:hidden"
+            className="grid h-11 w-11 place-items-center rounded-lg text-white/55 hover:bg-white/8 hover:text-white lg:hidden"
             aria-label="Close sidebar"
           >
             <PanelLeftClose className="h-4 w-4" />
@@ -264,9 +264,9 @@ export function WorkspaceShell({ activeKey, title, children }) {
       </aside>
 
       <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-        <header className="flex h-20 shrink-0 items-center justify-between border-b border-[#8f1d2c]/9 bg-[#f1ece3]/85 px-5 backdrop-blur-xl md:px-8">
+        <header className="flex h-16 shrink-0 items-center justify-between border-b border-[#8f1d2c]/9 bg-[#f1ece3]/85 px-4 backdrop-blur-xl sm:h-20 sm:px-5 lg:px-8">
           <div className="flex items-center gap-3">
-            <BrandMark compact className="md:hidden" />
+            <BrandMark compact className="lg:hidden" />
             <div>
               <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[#874047]">
                 Rashtram AI
@@ -292,7 +292,7 @@ export function WorkspaceShell({ activeKey, title, children }) {
             <button
               type="button"
               onClick={() => setIsMobileMenuOpen(true)}
-              className="grid h-11 w-11 place-items-center rounded-xl border border-[#8f1d2c]/10 bg-white text-[#8f1d2c] md:hidden"
+              className="grid h-11 w-11 place-items-center rounded-xl border border-[#8f1d2c]/10 bg-white text-[#8f1d2c] lg:hidden"
               aria-label="Open navigation"
             >
               {isMobileMenuOpen ? (

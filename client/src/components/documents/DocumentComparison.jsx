@@ -251,7 +251,7 @@ export function DocumentComparison() {
     return () => {
       active = false;
     };
-  }, [comparisonId, readinessKey]);
+  }, [comparisonId, ids, readinessKey]);
 
   useEffect(() => {
     if (!ids.length) {

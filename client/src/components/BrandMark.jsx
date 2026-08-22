@@ -12,7 +12,7 @@ export function BrandMark({
     <Link
       href={href}
       className={cn(
-        "inline-flex items-center gap-3 rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#a85a52]",
+        "inline-flex min-h-11 items-center gap-3 rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#a85a52]",
         className,
       )}
       aria-label="Rashtram AI home"

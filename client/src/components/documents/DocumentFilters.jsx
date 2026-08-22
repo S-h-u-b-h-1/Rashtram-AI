@@ -113,7 +113,7 @@ export function DocumentFilters({
           </button>
         )}
       </div>
-      <details className="rounded-2xl border border-[#8f1d2c]/8 bg-[#f7f2eb]">
+      <details className="mobile-filter-sheet rounded-2xl border border-[#8f1d2c]/8 bg-[#f7f2eb]">
         <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-xs font-semibold text-[#8f1d2c] [&::-webkit-details-marker]:hidden">
           <span className="inline-flex items-center gap-1.5">
             <Filter className="h-3.5 w-3.5" />
