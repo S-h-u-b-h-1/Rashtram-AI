@@ -5,6 +5,7 @@ const {
   RELEVANCE_TIERS,
   confidenceForScore,
   evaluateBusinessCandidate,
+  hasDocumentTitleSubjectOverlap,
   hasSubstantiveRecommendationAffinity,
   inferBusinessSignals,
   isRecommendationEligible,
@@ -39,11 +40,28 @@ test("document recommendations require shared subject matter, not generic metada
       relationship: true,
       sameMinistry: true,
     }),
-    true,
+    false,
   );
   assert.equal(
     hasSubstantiveRecommendationAffinity({ sharedLegalIdentifier: true }),
     true,
+  );
+});
+
+test("document title affinity keeps shared policy subjects and rejects broad tax noise", () => {
+  assert.equal(
+    hasDocumentTitleSubjectOverlap(
+      "The Manipur Goods and Services Tax (Amendment) Bill, 2025",
+      "The Central Goods and Services Tax Bill, 2017",
+    ),
+    true,
+  );
+  assert.equal(
+    hasDocumentTitleSubjectOverlap(
+      "The Manipur Goods and Services Tax (Amendment) Bill, 2025",
+      "The Income-tax Bill, 2025",
+    ),
+    false,
   );
 });
 

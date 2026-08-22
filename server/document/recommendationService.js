@@ -403,6 +403,23 @@ const scoreRecommendation = (signals = {}) => {
   return Math.min(Number((points / 145).toFixed(4)), 1);
 };
 
+const DOCUMENT_TITLE_STOP_WORDS = new Set([
+  "act", "amendment", "bill", "central", "draft", "india", "law", "laws",
+  "ordinance", "regulation", "regulations", "rule", "rules", "second",
+  "state", "the", "union", "territory",
+]);
+
+const hasDocumentTitleSubjectOverlap = (leftTitle, rightTitle) => {
+  const subjectTokens = (title) => meaningfulTokens(title).filter(
+    (token) => !DOCUMENT_TITLE_STOP_WORDS.has(token) && !/^\d{4}$/.test(token),
+  );
+  const left = new Set(subjectTokens(leftTitle));
+  const right = new Set(subjectTokens(rightTitle));
+  if (left.size < 2 || right.size < 2) return false;
+  const shared = [...left].filter((token) => right.has(token)).length;
+  return shared >= 2 && shared / Math.min(left.size, right.size) >= 0.5;
+};
+
 // Broad catalogue metadata is useful for ranking, but it must never be enough
 // to establish that two documents discuss the same subject.
 const hasSubstantiveRecommendationAffinity = (signals = {}) => {
@@ -413,9 +430,7 @@ const hasSubstantiveRecommendationAffinity = (signals = {}) => {
   return Boolean(
     signals.sharedLegalIdentifier ||
       signals.titleMatch ||
-      (signals.relationship && (sameIssuer || sameSubject)) ||
-      (signals.semanticMatch && (sameIssuer || signals.sameCategory)) ||
-      (sameIssuer && signals.sameCategory),
+      (signals.semanticMatch && (sameIssuer || sameSubject)),
   );
 };
 
@@ -463,7 +478,7 @@ const getProfileSignals = async (userId, enabled = true) => {
   };
 };
 
-const mapCandidateSignals = (row, semanticIds, profile) => {
+const mapCandidateSignals = (row, semanticIds, profile, current) => {
   const profileMatch =
     profile.ministries?.includes(row.ministry) ||
     profile.categories?.includes(row.category) ||
@@ -487,7 +502,9 @@ const mapCandidateSignals = (row, semanticIds, profile) => {
     sameCategory: Boolean(row.same_category),
     sameType: Boolean(row.same_type),
     sameYear: Boolean(row.same_year),
-    titleMatch: Boolean(row.title_match),
+    titleMatch:
+      Boolean(row.title_match) ||
+      hasDocumentTitleSubjectOverlap(current?.title, row.title),
     sharedLegalIdentifier: Boolean(row.shared_legal_identifier),
     semanticMatch: semanticIds.has(String(row.id)),
     profileMatch: Boolean(profileMatch),
@@ -760,7 +777,7 @@ const getDocumentRecommendations = async (
   const semanticSet = new Set(semanticIds);
   const recommendations = result.rows
     .map((row) => {
-      const signals = mapCandidateSignals(row, semanticSet, profile);
+      const signals = mapCandidateSignals(row, semanticSet, profile, current);
       return { recommendation: shapeRecommendation(row, signals), signals };
     })
     .filter(
@@ -1277,6 +1294,7 @@ module.exports = {
   complianceDocumentTypeWeight,
   confidenceForScore,
   evaluateBusinessCandidate,
+  hasDocumentTitleSubjectOverlap,
   hasSubstantiveRecommendationAffinity,
   getDocumentRecommendations,
   getComparisonRecommendations,
