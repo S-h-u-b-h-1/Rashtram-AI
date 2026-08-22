@@ -750,8 +750,7 @@ const runReadinessAudit = async () => {
           AND error_message IS NULL
         ) AS genuinely_ready,
         (
-          document_type = 'policy'
-          AND source_name = 'policyedge'
+          source_name IN ('policyedge', 'policy-edge')
           AND canonical_url IS NOT NULL
         ) AS extractable_policy_source
       FROM computed

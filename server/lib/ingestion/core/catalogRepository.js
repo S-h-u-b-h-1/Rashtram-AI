@@ -933,6 +933,36 @@ const persistRecord = async (record, decision) => {
       document.id,
       record,
     );
+    // Every catalogued document must enter the processing state machine.
+    // Without this row, backlog queries using readiness fields cannot see a
+    // newly ingested record, leaving extractable HTML sources permanently
+    // catalogued but unavailable for research.
+    await client.query(
+      `INSERT INTO document_processing_state (
+         document_id, processing_status, extraction_status,
+         embedding_status, summary_status, ocr_status,
+         pdf_status, chunking_status, readiness_class, readiness_reason
+       )
+       VALUES (
+         $1, 'not_started', 'not_started', 'not_started', 'not_started',
+         'not_required', $2, 'not_started', $3, $4
+       )
+       ON CONFLICT (document_id) DO NOTHING`,
+      [
+        document.id,
+        record.pdfUrl ? "available" : "missing",
+        record.sourceName === "policy-edge"
+          ? "source_extractable_not_processed"
+          : record.pdfUrl
+            ? "pdf_available_not_processed"
+            : "source_only",
+        record.sourceName === "policy-edge"
+          ? "PolicyEdge HTML is awaiting research processing."
+          : record.pdfUrl
+            ? "The document PDF is awaiting research processing."
+            : "No extractable research resource is available yet.",
+      ],
+    );
     if (decision.action !== "merge") {
       await recordIntelligenceEvent(client, document, record);
     } else if (meaningfulUpdate) {

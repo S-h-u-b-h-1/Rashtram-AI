@@ -358,9 +358,9 @@ const enqueueCandidateBatch = async (options = {}) => {
        AND (
          legacy.pdf_url IS NOT NULL
          OR (
-           document.document_type = 'policy'
-           AND COALESCE(legacy.canonical_source, legacy.source_name) = 'policyedge'
-           AND legacy.canonical_url IS NOT NULL
+           COALESCE(legacy.canonical_source, legacy.source_name)
+             IN ('policyedge', 'policy-edge')
+           AND COALESCE(legacy.canonical_url, legacy.source_url) IS NOT NULL
          )
        )
        AND (

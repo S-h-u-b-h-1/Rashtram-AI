@@ -309,6 +309,41 @@ router.get("/history", async (req, res) => {
   }
 });
 
+const addMessageWithSessionRecovery = async ({
+  userId,
+  documentType,
+  documentId,
+  message,
+  documentChat = DocumentChat,
+  loadDocument = getDocumentContext,
+}) => {
+  const existingChat = await documentChat.addMessage(
+    userId,
+    documentType,
+    documentId,
+    message,
+  );
+  if (existingChat) return existingChat;
+
+  // Source-only workspaces can become chat-enabled after a researcher adds
+  // an external source. Those workspaces intentionally skip session creation
+  // during initial page load, so recover atomically at the first saved message.
+  const document = await loadDocument(documentType, documentId);
+  if (!document) return null;
+  await documentChat.findOrCreate(userId, {
+    ...document,
+    documentType,
+    documentId,
+    summary: null,
+  });
+  return documentChat.addMessage(
+    userId,
+    documentType,
+    documentId,
+    message,
+  );
+};
+
 router.post("/message", async (req, res) => {
   try {
     const { documentType, documentId } = identity(req);
@@ -317,12 +352,12 @@ router.post("/message", async (req, res) => {
         error: "Message text and a valid sender are required.",
       });
     }
-    const chat = await DocumentChat.addMessage(
-      req.user.id,
+    const chat = await addMessageWithSessionRecovery({
+      userId: req.user.id,
       documentType,
       documentId,
-      req.body,
-    );
+      message: req.body,
+    });
     if (!chat) return res.status(404).json({ error: "Chat not found." });
     return res.json({ success: true, chat });
   } catch (error) {
@@ -831,3 +866,4 @@ router.post("/", generationLimiter, async (req, res) => {
 
 module.exports = router;
 module.exports.resolveDocumentIdentity = identity;
+module.exports.addMessageWithSessionRecovery = addMessageWithSessionRecovery;

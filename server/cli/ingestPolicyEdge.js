@@ -10,7 +10,9 @@
  * catalogue command. Use the bounded PolicyEdge canary after ingestion.
  */
 
-require("dotenv").config({ path: require("path").resolve(__dirname, "../.env") });
+require("dotenv").config({
+  path: process.env.ENV_FILE || require("path").resolve(__dirname, "../.env.local"),
+});
 
 const { query } = require("../db");
 const {
@@ -138,6 +140,20 @@ const upsertPolicy = async (article) => {
           extractable: true,
         }),
       ],
+    );
+    await query(
+      `INSERT INTO document_processing_state (
+         document_id, processing_status, extraction_status,
+         embedding_status, summary_status, ocr_status, pdf_status,
+         chunking_status, readiness_class, readiness_reason
+       ) VALUES (
+         $1, 'not_started', 'not_started', 'not_started', 'not_started',
+         'not_required', 'not_required', 'not_started',
+         'source_extractable_not_processed',
+         'PolicyEdge HTML is awaiting research processing.'
+       )
+       ON CONFLICT (document_id) DO NOTHING`,
+      [docId],
     );
   }
 

@@ -19,6 +19,7 @@ const {
   retrievalFamilyForType,
 } = require("../document/documentTypes");
 const {
+  addMessageWithSessionRecovery,
   resolveDocumentIdentity,
 } = require("../document/documentChatRoute");
 const {
@@ -98,6 +99,50 @@ test("document identity accepts bodyless GET requests", () => {
       }),
     /Unsupported document type/,
   );
+});
+
+test("chat message persistence recovers a missing source-only session", async () => {
+  const calls = [];
+  let sessionExists = false;
+  const documentChat = {
+    async addMessage(userId, documentType, documentId, message) {
+      calls.push(["add", userId, documentType, documentId, message.text]);
+      return sessionExists ? { id: "chat-1", messages: [message] } : null;
+    },
+    async findOrCreate(userId, document) {
+      calls.push(["session", userId, document.documentType, document.documentId]);
+      sessionExists = true;
+      return { id: "chat-1" };
+    },
+  };
+  const chat = await addMessageWithSessionRecovery({
+    userId: "8",
+    documentType: "policy",
+    documentId: "24563",
+    message: { text: "Compare the implementation duties", sender: "user" },
+    documentChat,
+    loadDocument: async () => ({ title: "PolicyEdge source", sourceUrl: "https://www.policyedge.in/p/example" }),
+  });
+  assert.equal(chat.id, "chat-1");
+  assert.deepEqual(calls.map((call) => call[0]), ["add", "session", "add"]);
+});
+
+test("chat message persistence does not create duplicate sessions", async () => {
+  let sessionCalls = 0;
+  const existing = { id: "chat-existing" };
+  const chat = await addMessageWithSessionRecovery({
+    userId: "8",
+    documentType: "bill",
+    documentId: "3646",
+    message: { text: "What changed?", sender: "user" },
+    documentChat: {
+      addMessage: async () => existing,
+      findOrCreate: async () => { sessionCalls += 1; },
+    },
+    loadDocument: async () => { throw new Error("should not load"); },
+  });
+  assert.equal(chat, existing);
+  assert.equal(sessionCalls, 0);
 });
 
 test("universal document types use aliases and one retrieval mapping", () => {
