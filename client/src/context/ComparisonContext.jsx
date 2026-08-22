@@ -12,6 +12,8 @@ import { getDocumentReadiness, prepareDocumentForComparison } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 import {
   canPrepareDocumentForResearch,
+  isComparisonReady,
+  isResearchReady,
   isSourceOnlyResearchDocument,
 } from "@/lib/document-readiness";
 
@@ -23,7 +25,7 @@ const ComparisonContext = createContext(null);
 
 export const comparisonDisabledReason = (document) => {
   if (!document?.id || !document?.title) return "Research workspace unavailable";
-  if (document.comparisonReady) return "";
+  if (isComparisonReady(document)) return "";
   if (isSourceOnlyResearchDocument(document)) {
     return document.sourceUrl
       ? "Only the source page is available"
@@ -54,7 +56,7 @@ export const comparisonDisabledReason = (document) => {
   ) {
     return "No extractable text found";
   }
-  if (!document.researchReady) return "Research workspace unavailable";
+  if (!isResearchReady(document)) return "Research workspace unavailable";
   if (document.comparisonReady === false) {
     return document.readinessReason || "Comparison retrieval is unavailable";
   }

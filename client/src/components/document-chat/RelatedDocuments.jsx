@@ -7,6 +7,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { humanize } from "@/lib/document-links";
+import { isComparisonReady, isResearchReady } from "@/lib/document-readiness";
 import { RecommendationCard } from "@/components/recommendations/RecommendationCard";
 import { useComparison } from "@/context/ComparisonContext";
 
@@ -93,7 +94,7 @@ export function RelatedDocuments({
                   }
                   className="inline-flex items-center gap-1 text-[10px] font-semibold text-[#874047]"
                 >
-                  {item.researchReady
+                  {isResearchReady(item)
                     ? "Open research"
                     : item.id && item.pdfUrl
                       ? "Prepare first"
@@ -102,7 +103,7 @@ export function RelatedDocuments({
                         : "View source"}
                   <ExternalLink className="h-3 w-3" />
                 </Link>
-                {item.researchReady && (
+                {isComparisonReady(item) && (
                   <button
                     type="button"
                     onClick={() =>

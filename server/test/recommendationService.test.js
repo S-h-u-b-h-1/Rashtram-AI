@@ -2,7 +2,10 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 
 const {
+  RELEVANCE_TIERS,
   confidenceForScore,
+  evaluateBusinessCandidate,
+  inferBusinessSignals,
   isRecommendationEligible,
   normalizeTypes,
   stateOnlyRequested,
@@ -119,4 +122,56 @@ test("problem recommender validates and normalizes bounded input", () => {
     () => validateProblemRequest({ problem: "too short" }),
     /12 to 2,000/i,
   );
+});
+
+test("business signals expand regulated activities without generic policy noise", () => {
+  const signals = inferBusinessSignals({
+    problem: "I operate an EV battery recycling facility in Gujarat.",
+  });
+  assert.ok(signals.sectors.includes("environment and recycling"));
+  assert.ok(signals.jurisdictions.includes("Gujarat"));
+  assert.ok(signals.expansions.includes("EPR"));
+  assert.ok(signals.regulators.includes("CPCB"));
+});
+
+test("jurisdiction and sector mismatch reject attractive but irrelevant distractors", () => {
+  const input = {
+    problem: "I operate an EV battery recycling facility in Gujarat.",
+    states: [],
+  };
+  const inferred = inferBusinessSignals(input);
+  const relevant = evaluateBusinessCandidate({
+    title: "Gujarat Battery Waste Management and EPR Rules",
+    document_type: "rule",
+    schema_state: "Gujarat",
+    authority: "Gujarat Pollution Control Board",
+    source_authority_tier: "PRIMARY_OFFICIAL",
+    problem_rank: 0.8,
+    semantic_match: true,
+  }, input, inferred);
+  const distractor = evaluateBusinessCandidate({
+    title: "Digital Education Infrastructure Strategy",
+    document_type: "report",
+    schema_state: "West Bengal",
+    authority: "Education Department",
+    source_authority_tier: "PRIMARY_OFFICIAL",
+    problem_rank: 0.2,
+    semantic_match: true,
+  }, input, inferred);
+  assert.ok([RELEVANCE_TIERS.HIGH, RELEVANCE_TIERS.MEDIUM].includes(relevant.tier));
+  assert.equal(distractor.tier, RELEVANCE_TIERS.REJECTED);
+  assert.equal(distractor.jurisdictionMismatch, true);
+});
+
+test("official authority cannot rescue an irrelevant compliance document", () => {
+  const input = { problem: "An NBFC offers digital loans across India.", states: [] };
+  const inferred = inferBusinessSignals(input);
+  const irrelevant = evaluateBusinessCandidate({
+    title: "Civil Registration Annual Report",
+    document_type: "report",
+    jurisdiction: "India",
+    source_authority_tier: "PRIMARY_OFFICIAL",
+    semantic_match: true,
+  }, input, inferred);
+  assert.ok([RELEVANCE_TIERS.LOW, RELEVANCE_TIERS.REJECTED].includes(irrelevant.tier));
 });

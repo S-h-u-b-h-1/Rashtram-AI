@@ -17,6 +17,7 @@ import {
   trackSearchActivity,
 } from "@/lib/api";
 import {
+  isResearchReady,
   isSourceOnlyResearchDocument,
   shouldShowPdfAction,
 } from "@/lib/document-readiness";
@@ -49,6 +50,7 @@ const EMPTY_FILTERS = {
 
 const READINESS_LABELS = {
   research_ready: "Ready for research",
+  search_ready: "Search ready",
   comparison_ready: "Ready for research",
   pdf_available: "PDF available",
   processing_failed: "Could not process",
@@ -311,12 +313,14 @@ export function DocumentExplorer({
           <div className="divide-y divide-[#8f1d2c]/7">
             {documents.map((document) => {
               const selected = isSelected(document.id);
+              const researchReady = isResearchReady(document);
               const readiness =
+                (researchReady ? "research_ready" : null) ||
                 document.readinessClass ||
                 document.readiness ||
                 (document.pdfUrl || document.type === "policy" ? "pdf_available" : "source_only");
               const canPrepare =
-                document.researchReady || canPrepareForResearch(document);
+                researchReady || canPrepareForResearch(document);
               const compareDisabled = comparisonDisabledReason(document);
               const canPrepareCompare = Boolean(compareDisabled && canPrepare);
               const sourceOnlyActions = isSourceOnlyResearchDocument(document);
@@ -455,7 +459,7 @@ export function DocumentExplorer({
                         }
                         className="inline-flex items-center gap-1.5 rounded-xl bg-[#8f1d2c] px-3 py-2 text-[10px] font-semibold text-white"
                       >
-                        {document.researchReady
+                        {researchReady
                           ? "Open research"
                           : "Prepare first"}
                         <ArrowRight className="h-3.5 w-3.5" />

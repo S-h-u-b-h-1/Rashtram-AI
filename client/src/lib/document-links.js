@@ -1,11 +1,8 @@
+import { isResearchReady } from "./document-readiness";
+
 export const buildResearchHref = (document) => {
   const id = document.documentId || document.id;
-  if (
-    document.researchReady === false ||
-    (document.readiness && document.readiness !== "research_ready")
-  ) {
-    return null;
-  }
+  if (!isResearchReady(document)) return null;
   return id ? `/app/document/${id}` : null;
 };
 

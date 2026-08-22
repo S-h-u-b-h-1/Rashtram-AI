@@ -45,10 +45,46 @@ const textIncludesTerminalFailure = (document = {}) =>
     .match(/html, not a pdf|not a pdf|unsupported file|invalid pdf|corrupt|encrypted pdf|not found|access denied|zero bytes/);
 
 export const documentReadinessClass = (document = {}) =>
-  document.readinessClass || document.readiness || "";
+  isResearchReady(document)
+    ? "research_ready"
+    : document.readinessClass || document.readiness || "";
+
+export const documentCapabilities = (document = {}) => {
+  const capabilities = document?.capabilities || {};
+  const searchReady =
+    capabilities.searchReady ?? document.searchReady ?? document.researchReady ?? false;
+  const chatReady =
+    capabilities.chatReady ?? document.chatReady ?? document.researchReady ?? false;
+  const comparisonReady =
+    capabilities.comparisonReady ??
+    document.comparisonReady ??
+    false;
+  return {
+    catalogued: capabilities.catalogued ?? true,
+    resourceReady:
+      capabilities.resourceReady ??
+      document.resourceReady ??
+      document.hasAccessibleResource ??
+      Boolean(document.pdfUrl),
+    textReady:
+      capabilities.textReady ?? document.textReady ?? Boolean(searchReady),
+    searchReady: Boolean(searchReady),
+    semanticReady: Boolean(
+      capabilities.semanticReady ?? document.semanticReady ?? false,
+    ),
+    chatReady: Boolean(chatReady),
+    comparisonReady: Boolean(comparisonReady && chatReady),
+  };
+};
+
+export const isResearchReady = (document = {}) =>
+  documentCapabilities(document).chatReady;
+
+export const isComparisonReady = (document = {}) =>
+  documentCapabilities(document).comparisonReady;
 
 export const isSourceOnlyResearchDocument = (document = {}) => {
-  if (!document || document.researchReady) return false;
+  if (!document || isResearchReady(document)) return false;
   const readiness = documentReadinessClass(document);
   if (readiness === "ocr_required") return false;
   if (SOURCE_ONLY_FAILURE_CODES.has(document.failureCode)) return true;
@@ -63,7 +99,7 @@ export const isSourceOnlyResearchDocument = (document = {}) => {
 };
 
 export const canPrepareDocumentForResearch = (document = {}) => {
-  if (!document || document.researchReady) return false;
+  if (!document || isResearchReady(document)) return false;
   if (isSourceOnlyResearchDocument(document)) return false;
   const readiness = documentReadinessClass(document);
   if (retryableReadinessClasses.has(readiness)) return true;
@@ -78,4 +114,3 @@ export const canPrepareDocumentForResearch = (document = {}) => {
 
 export const shouldShowPdfAction = (document = {}) =>
   Boolean(document.pdfUrl) && !isSourceOnlyResearchDocument(document);
-

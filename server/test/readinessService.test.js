@@ -111,6 +111,61 @@ test("document mapping never infers comparison readiness", () => {
   assert.equal(mapped.readinessReason, "Retrieval verification is pending.");
 });
 
+test("verified PolicyEdge HTML readiness is never overwritten by missing PDF", () => {
+  const mapped = mapDocument({
+    id: 1250,
+    title: "PolicyEdge HTML research record",
+    document_type: "report",
+    canonical_source: "policy-edge",
+    canonical_url: "https://www.policyedge.in/p/research-record",
+    pdf_url: null,
+    research_ready: true,
+    comparison_ready: true,
+    readiness_class: "comparison_ready",
+    capability_state: {
+      catalogued: true,
+      resourceReady: true,
+      textReady: true,
+      searchReady: true,
+      semanticReady: false,
+      chatReady: true,
+      comparisonReady: true,
+    },
+  });
+
+  assert.equal(mapped.pdfUrl, null);
+  assert.equal(mapped.readiness, "research_ready");
+  assert.equal(mapped.researchReady, true);
+  assert.equal(mapped.chatReady, true);
+  assert.equal(mapped.searchReady, true);
+  assert.equal(mapped.semanticReady, false);
+  assert.equal(mapped.comparisonReady, true);
+});
+
+test("semantic failure does not remove verified lexical research readiness", () => {
+  const mapped = mapDocument({
+    id: 1251,
+    title: "Lexical fallback record",
+    document_type: "act",
+    canonical_url: "https://example.gov.in/act",
+    pdf_url: "https://example.gov.in/act.pdf",
+    research_ready: true,
+    comparison_ready: true,
+    embedding_status: "failed",
+    capability_state: {
+      resourceReady: true,
+      textReady: true,
+      searchReady: true,
+      semanticReady: false,
+      chatReady: true,
+      comparisonReady: true,
+    },
+  });
+  assert.equal(mapped.readiness, "research_ready");
+  assert.equal(mapped.researchReady, true);
+  assert.equal(mapped.semanticReady, false);
+});
+
 test("document mapping exposes permanent download failures for source-only UI", () => {
   const mapped = mapDocument({
     id: 2,

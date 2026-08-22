@@ -27,6 +27,40 @@ const sanitizeNullableError = (value) =>
     ? null
     : sanitizeProviderError(value);
 
+const canonicalCapabilitiesFromRow = (row = {}, context = {}) => {
+  const stored = safeObject(row.capability_state);
+  const storedValue = (camel, snake) => {
+    if (stored[camel] != null) return Boolean(stored[camel]);
+    if (stored[snake] != null) return Boolean(stored[snake]);
+    return null;
+  };
+  const legacySearchReady = Boolean(row.research_ready);
+  const searchReady = storedValue("searchReady", "search_ready") ?? legacySearchReady;
+  const chatReady = storedValue("chatReady", "chat_ready") ?? legacySearchReady;
+  const comparisonReady =
+    storedValue("comparisonReady", "comparison_ready") ??
+    Boolean(row.comparison_ready);
+  const semanticReady =
+    storedValue("semanticReady", "semantic_ready") ??
+    Boolean(row.semantic_ready);
+  const textReady =
+    storedValue("textReady", "text_ready") ??
+    Boolean(searchReady || chatReady);
+  const resourceReady =
+    storedValue("resourceReady", "resource_ready") ??
+    Boolean(context.hasAccessibleResource || row.pdf_url || searchReady);
+
+  return {
+    catalogued: storedValue("catalogued", "catalogued") ?? true,
+    resourceReady: Boolean(resourceReady || searchReady),
+    textReady: Boolean(textReady || searchReady),
+    searchReady,
+    semanticReady,
+    chatReady,
+    comparisonReady: Boolean(comparisonReady && chatReady),
+  };
+};
+
 const mapDocumentResourceSafely = (row = {}) => ({
   id: row.id == null ? null : String(row.id),
   label: normalizeNullableString(row.label) || "Document resource",
@@ -117,15 +151,20 @@ const mapDocument = (row) => {
     row.has_accessible_resource == null
       ? Boolean(row.pdf_url)
       : Boolean(row.has_accessible_resource);
-  const readiness = !hasAccessibleResource
-    ? (sourceUrl ? "source_only" : "missing_pdf")
+  const capabilities = canonicalCapabilitiesFromRow(row, {
+    hasAccessibleResource,
+  });
+  const readiness = capabilities.chatReady
+    ? "research_ready"
     : processingStatus === "failed" ||
         row.extraction_status === "failed" ||
-        row.embedding_status === "failed"
+        (row.embedding_status === "failed" && !capabilities.searchReady)
       ? "processing_failed"
-      : row.research_ready
-        ? "research_ready"
-        : "pdf_available";
+      : capabilities.searchReady
+        ? "search_ready"
+        : !hasAccessibleResource && !capabilities.resourceReady
+          ? (sourceUrl ? "source_only" : "missing_pdf")
+          : "pdf_available";
   return {
     id: String(row.id),
     documentId: String(row.id),
@@ -184,13 +223,16 @@ const mapDocument = (row) => {
     readinessReason: row.readiness_reason || null,
     lastAttemptedAt: toIso(row.last_attempted_at),
     hasAccessibleResource,
+    capabilities,
     processedAt: toIso(row.processed_at),
     readiness,
-    researchReady: readiness === "research_ready",
-    comparisonReady: Boolean(
-      row.comparison_ready &&
-      readiness === "research_ready",
-    ),
+    researchReady: capabilities.chatReady,
+    chatReady: capabilities.chatReady,
+    searchReady: capabilities.searchReady,
+    semanticReady: capabilities.semanticReady,
+    resourceReady: capabilities.resourceReady,
+    textReady: capabilities.textReady,
+    comparisonReady: capabilities.comparisonReady,
     qualityScore: safeNumber(row.quality_score, null),
     visibilityStatus: row.visibility_status || "public",
     fileHash: row.file_hash || null,
@@ -649,6 +691,25 @@ const find = async (options = {}) => {
            WHERE state.document_id = legislative_documents.id
          ) AS readiness_reason,
          (
+           SELECT JSONB_BUILD_OBJECT(
+             'catalogued', state.catalogued,
+             'resourceReady', state.resource_ready,
+             'textReady', state.text_ready,
+             'searchReady', state.search_ready,
+             'semanticReady', state.semantic_ready,
+             'chatReady', state.chat_ready,
+             'comparisonReady', state.capability_comparison_ready
+           )
+           FROM document_processing_state state
+           WHERE state.document_id = legislative_documents.id
+         ) AS capability_state,
+         EXISTS (
+           SELECT 1 FROM document_resources resource
+           WHERE resource.document_id = legislative_documents.id
+             AND resource.resource_type IN ('pdf', 'text', 'html')
+             AND resource.is_accessible
+         ) AS has_accessible_resource,
+         (
            SELECT state.failure_reason
            FROM document_processing_state state
            WHERE state.document_id = legislative_documents.id
@@ -738,6 +799,19 @@ const getById = async (id) => {
            AND resource.resource_type IN ('pdf', 'text', 'html')
            AND resource.is_accessible
        ) AS has_accessible_resource,
+       (
+         SELECT JSONB_BUILD_OBJECT(
+           'catalogued', state.catalogued,
+           'resourceReady', state.resource_ready,
+           'textReady', state.text_ready,
+           'searchReady', state.search_ready,
+           'semanticReady', state.semantic_ready,
+           'chatReady', state.chat_ready,
+           'comparisonReady', state.capability_comparison_ready
+         )
+         FROM document_processing_state state
+         WHERE state.document_id = legislative_documents.id
+       ) AS capability_state,
        (
          SELECT state.processing_status
          FROM document_processing_state state
@@ -1464,6 +1538,7 @@ const getFilterOptions = async (options = {}) => {
 };
 
 module.exports = {
+  canonicalCapabilitiesFromRow,
   DOCUMENT_DATE_EXPRESSION,
   buildFilters,
   find,

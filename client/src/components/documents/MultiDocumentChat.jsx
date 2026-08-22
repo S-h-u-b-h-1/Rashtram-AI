@@ -19,6 +19,10 @@ import {
   processDocumentResearch,
   sendCrossDocumentChat,
 } from "@/lib/api";
+import {
+  canPrepareDocumentForResearch,
+  isResearchReady,
+} from "@/lib/document-readiness";
 import { ChatHistory } from "@/components/document-chat/ChatHistory";
 import { ChatInput } from "@/components/document-chat/ChatInput";
 import { useSmoothMessageStream } from "@/hooks/useSmoothMessageStream";
@@ -80,7 +84,11 @@ export function MultiDocumentChat({
         }
         const preparation = await Promise.allSettled(
           loadedDocuments
-            .filter((document) => document.pdfUrl && !document.researchReady)
+            .filter(
+              (document) =>
+                !isResearchReady(document) &&
+                canPrepareDocumentForResearch(document),
+            )
             .map((document) =>
               processDocumentResearch(document.type, document.id),
             ),

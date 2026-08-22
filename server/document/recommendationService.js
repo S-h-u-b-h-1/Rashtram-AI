@@ -59,6 +59,255 @@ const stateOnlyRequested = (value) =>
       ["state_bill", "state_bills", "state_act", "state_acts"].includes(type),
     );
 
+const RELEVANCE_TIERS = Object.freeze({
+  HIGH: "HIGH_RELEVANCE",
+  MEDIUM: "MEDIUM_RELEVANCE",
+  LOW: "LOW_RELEVANCE",
+  REJECTED: "REJECTED",
+});
+
+const INDIA_STATES = [
+  "andhra pradesh", "arunachal pradesh", "assam", "bihar", "chhattisgarh",
+  "goa", "gujarat", "haryana", "himachal pradesh", "jharkhand", "karnataka",
+  "kerala", "madhya pradesh", "maharashtra", "manipur", "meghalaya", "mizoram",
+  "nagaland", "odisha", "punjab", "rajasthan", "sikkim", "tamil nadu",
+  "telangana", "tripura", "uttar pradesh", "uttarakhand", "west bengal",
+  "delhi", "jammu and kashmir", "ladakh", "puducherry", "chandigarh",
+];
+
+const BUSINESS_DOMAINS = Object.freeze([
+  {
+    sector: "financial services",
+    terms: ["nbfc", "digital lending", "loan", "fintech", "banking", "credit"],
+    expansions: ["RBI", "digital lending", "NBFC registration", "fair practices", "KYC"],
+    regulators: ["Reserve Bank of India", "RBI"],
+    themes: ["licensing", "consumer protection", "reporting"],
+    anchors: ["nbfc", "digital lending", "loan", "fintech"],
+  },
+  {
+    sector: "environment and recycling",
+    terms: ["battery recycling", "battery waste", "recycling", "hazardous waste", "epr"],
+    expansions: ["battery waste", "EPR", "pollution control", "CPCB", "state pollution control board"],
+    regulators: ["CPCB", "Pollution Control Board"],
+    themes: ["environmental permission", "waste management", "extended producer responsibility"],
+    anchors: ["battery", "recycling", "battery waste", "epr"],
+  },
+  {
+    sector: "food manufacturing",
+    terms: ["food manufacturing", "food processing", "food business", "fssai"],
+    expansions: ["FSSAI", "food business licence", "food safety", "factory", "labour"],
+    regulators: ["FSSAI", "Food Safety and Standards Authority of India"],
+    themes: ["food licence", "safety", "labour", "factory permissions"],
+    anchors: ["food", "fssai", "food safety"],
+  },
+  {
+    sector: "insurance",
+    terms: ["insurance intermediary", "insurance brokerage", "insurance broker", "insurer"],
+    expansions: ["IRDAI", "insurance intermediary", "broker registration", "conduct requirements"],
+    regulators: ["IRDAI", "Insurance Regulatory and Development Authority of India"],
+    themes: ["registration", "conduct", "reporting"],
+    anchors: ["insurance", "irdai", "broker"],
+  },
+  {
+    sector: "digital services and data",
+    terms: ["saas", "digital platform", "personal data", "data protection", "customer data"],
+    expansions: ["Digital Personal Data Protection", "data fiduciary", "consent", "data breach"],
+    regulators: ["Data Protection Board"],
+    themes: ["data protection", "consent", "security", "breach response"],
+    anchors: ["saas", "personal data", "data protection", "data fiduciary"],
+  },
+  {
+    sector: "manufacturing",
+    terms: ["manufacturing", "factory", "industrial unit", "plant"],
+    expansions: ["Factories Act", "factory licence", "pollution consent", "labour compliance"],
+    regulators: ["Factory Inspectorate", "Pollution Control Board"],
+    themes: ["factory permissions", "worker safety", "environmental permission"],
+    anchors: ["manufacturing", "factory", "industrial unit"],
+  },
+  {
+    sector: "logistics and transport",
+    terms: ["logistics", "transport", "warehouse", "trucking", "goods carriage"],
+    expansions: ["motor vehicles", "goods carriage permit", "warehouse registration", "transport licence"],
+    regulators: ["Transport Department", "Regional Transport Office"],
+    themes: ["transport permits", "vehicle compliance", "warehousing"],
+    anchors: ["logistics", "transport", "warehouse", "goods carriage"],
+  },
+  {
+    sector: "professional and tax services",
+    terms: ["chartered accountant", "accounting firm", "tax practice", "professional services"],
+    expansions: ["GST", "income tax", "professional tax", "tax practitioner"],
+    regulators: ["Central Board of Direct Taxes", "Central Board of Indirect Taxes and Customs"],
+    themes: ["taxation", "registration", "filing and reporting"],
+    anchors: ["chartered accountant", "tax practice", "gst", "income tax"],
+  },
+]);
+
+const normalizeProblemText = (value) => String(value || "")
+  .normalize("NFKC")
+  .toLowerCase()
+  .replace(/[^\p{L}\p{N}]+/gu, " ")
+  .replace(/\s+/g, " ")
+  .trim();
+
+const meaningfulTokens = (value) => {
+  const ignored = new Set([
+    "about", "across", "business", "company", "india", "need", "policy",
+    "relevant", "requirement", "requirements", "research", "run", "starting",
+    "understand", "what", "which", "with", "would",
+  ]);
+  return [...new Set(normalizeProblemText(value).split(" "))]
+    .filter((token) => token.length >= 3 && !ignored.has(token));
+};
+
+const inferBusinessSignals = (input = {}) => {
+  const combined = [input.problem, input.industry, input.topic, ...(input.states || [])]
+    .filter(Boolean)
+    .join(" ");
+  const normalized = normalizeProblemText(combined);
+  let domains = BUSINESS_DOMAINS.filter((domain) =>
+    domain.terms.some((term) => normalized.includes(normalizeProblemText(term))),
+  );
+  if (domains.some((domain) => domain.sector === "food manufacturing")) {
+    domains = domains.filter((domain) => domain.sector !== "manufacturing");
+  }
+  const jurisdictions = [
+    ...new Set([
+      ...(input.states || []),
+      ...INDIA_STATES.filter((state) => normalized.includes(state)).map((state) =>
+        state.replace(/\b\w/g, (letter) => letter.toUpperCase())),
+    ]),
+  ];
+  return {
+    sectors: [...new Set(domains.map((domain) => domain.sector))],
+    activities: [...new Set(domains.flatMap((domain) => domain.terms)
+      .filter((term) => normalized.includes(normalizeProblemText(term))))],
+    jurisdictions,
+    regulators: [...new Set(domains.flatMap((domain) => domain.regulators))],
+    themes: [...new Set(domains.flatMap((domain) => domain.themes))],
+    expansions: [...new Set(domains.flatMap((domain) => domain.expansions))],
+    anchorGroups: domains.map((domain) => domain.anchors || domain.terms),
+    tokens: meaningfulTokens(combined),
+    needsSpecificity:
+      domains.length === 0 && meaningfulTokens(combined).length < 3,
+  };
+};
+
+const authorityWeight = (row = {}) => {
+  const tier = String(row.source_authority_tier || "").toUpperCase();
+  const source = normalizeProblemText(
+    [row.canonical_source, row.source_name, row.authority, row.ministry].join(" "),
+  );
+  if (tier === "PRIMARY_OFFICIAL" || /india code|gazette|rbi|sebi|irdai|gov in|ministry/.test(source)) {
+    return { score: 1, class: "PRIMARY_OFFICIAL" };
+  }
+  if (/policyedge|policy edge/.test(source) || tier === "RESEARCH") {
+    return { score: 0.35, class: "SECONDARY_RESEARCH" };
+  }
+  return { score: 0.55, class: tier || "UNKNOWN" };
+};
+
+const complianceDocumentTypeWeight = (type) => {
+  const normalized = String(type || "").toLowerCase();
+  if (["act", "rule", "regulation", "notification", "circular", "order"].includes(normalized)) return 1;
+  if (["policy", "guideline", "government_resolution"].includes(normalized)) return 0.75;
+  if (["scheme", "gazette"].includes(normalized)) return 0.65;
+  if (["report", "committee_report", "recommendation"].includes(normalized)) return 0.35;
+  return 0.45;
+};
+
+const evaluateBusinessCandidate = (row = {}, input = {}, inferred = inferBusinessSignals(input)) => {
+  const candidateText = normalizeProblemText([
+    row.title, row.category, row.ministry, row.authority, row.jurisdiction,
+    row.schema_state,
+  ].filter(Boolean).join(" "));
+  const titleText = normalizeProblemText(row.title);
+  const tokenMatches = inferred.tokens.filter((token) => candidateText.includes(token));
+  const titleMatches = inferred.tokens.filter((token) => titleText.includes(token));
+  const domainTokens = [...new Set([...inferred.activities, ...inferred.expansions]
+    .flatMap(meaningfulTokens))];
+  const domainTokenMatches = domainTokens.filter((token) => candidateText.includes(token));
+  const sectorMatch = inferred.sectors.some((sector) =>
+    meaningfulTokens(sector).some((token) => candidateText.includes(token)),
+  );
+  const activityMatch = inferred.activities.some((activity) =>
+    meaningfulTokens(activity).every((token) => candidateText.includes(token)),
+  );
+  const themeMatch = inferred.themes.some((theme) =>
+    meaningfulTokens(theme).some((token) => candidateText.includes(token)),
+  );
+  const regulatorMatch = inferred.regulators.some((regulator) => {
+    const regulatorTokens = meaningfulTokens(regulator)
+      .filter((token) => !["authority", "board", "department"].includes(token));
+    const required = regulatorTokens.length <= 1 ? 1 : 2;
+    return regulatorTokens.filter((token) => candidateText.includes(token)).length >= required;
+  });
+  const candidateState = normalizeProblemText(row.schema_state || row.jurisdiction);
+  const requestedStates = inferred.jurisdictions.map(normalizeProblemText);
+  const explicitState = requestedStates.length > 0;
+  const isNational = !candidateState || /india|national|central|union/.test(candidateState);
+  const jurisdictionMatch = !explicitState || isNational || requestedStates.some((state) =>
+    candidateState.includes(state) || state.includes(candidateState),
+  );
+  const jurisdictionMismatch = explicitState && !jurisdictionMatch;
+  const lexicalMatch = Number(row.problem_rank || 0) > 0;
+  const semanticMatch = Boolean(row.semantic_match);
+  const domainAnchorMatch = inferred.sectors.length === 0 ||
+    (inferred.anchorGroups || []).some((group) => group.some((anchor) => {
+      const anchorText = normalizeProblemText(anchor);
+      return anchorText && candidateText.includes(anchorText);
+    }));
+  const authority = authorityWeight(row);
+  const typeWeight = complianceDocumentTypeWeight(row.document_type);
+  const dimensions = [
+    sectorMatch, activityMatch, themeMatch, regulatorMatch,
+    tokenMatches.length >= 2, titleMatches.length >= 1,
+    lexicalMatch, semanticMatch,
+  ].filter(Boolean).length;
+  const score = Math.max(0, Math.min(1,
+    (Math.min(tokenMatches.length, 5) / 5) * 0.2 +
+    (Math.min(titleMatches.length, 3) / 3) * 0.2 +
+    (sectorMatch ? 0.1 : 0) +
+    (activityMatch ? 0.12 : 0) +
+    (themeMatch ? 0.08 : 0) +
+    (regulatorMatch ? 0.1 : 0) +
+    (lexicalMatch ? 0.08 : 0) +
+    (semanticMatch ? 0.08 : 0) +
+    (jurisdictionMatch ? 0.08 : -0.35) +
+    authority.score * 0.03 + typeWeight * 0.03
+  ));
+  let tier = RELEVANCE_TIERS.REJECTED;
+  if (!jurisdictionMismatch && domainAnchorMatch && dimensions >= 3 && score >= 0.58) tier = RELEVANCE_TIERS.HIGH;
+  else if (!jurisdictionMismatch && domainAnchorMatch && dimensions >= 2 && score >= 0.38) tier = RELEVANCE_TIERS.MEDIUM;
+  else if (!jurisdictionMismatch && dimensions >= 1 && score >= 0.2) tier = RELEVANCE_TIERS.LOW;
+  const matchReasons = [
+    sectorMatch ? `sector: ${inferred.sectors.join(", ")}` : null,
+    activityMatch ? `activity: ${inferred.activities.join(", ")}` : null,
+    regulatorMatch ? `regulator: ${inferred.regulators.join(", ")}` : null,
+    themeMatch ? `theme: ${inferred.themes.join(", ")}` : null,
+    explicitState && jurisdictionMatch ? `jurisdiction: ${inferred.jurisdictions.join(", ")}` : null,
+    lexicalMatch || semanticMatch ? "indexed evidence matches the problem" : null,
+  ].filter(Boolean);
+  return {
+    tier,
+    score: Number(score.toFixed(4)),
+    dimensions,
+    jurisdictionMatch,
+    jurisdictionMismatch,
+    sectorMatch,
+    activityMatch,
+    themeMatch,
+    regulatorMatch,
+    lexicalMatch,
+    semanticMatch,
+    domainAnchorMatch,
+    domainTokenMatches,
+    authorityClass: authority.class,
+    authorityScore: authority.score,
+    documentTypeScore: typeWeight,
+    matchReasons,
+  };
+};
+
 const confidenceForScore = (score) => {
   if (score >= 0.5) return "high";
   if (score >= 0.3) return "medium";
@@ -477,11 +726,18 @@ const validateProblemRequest = (payload = {}) => {
 
 const getProblemRecommendations = async (userId, payload) => {
   const input = validateProblemRequest(payload);
+  const inferred = inferBusinessSignals(input);
+  if (!input.states.length && inferred.jurisdictions.length) {
+    input.states = inferred.jurisdictions;
+  }
   const searchText = [
     input.problem,
     input.industry,
     input.topic,
     ...input.states,
+    ...inferred.expansions,
+    ...inferred.regulators,
+    ...inferred.themes,
   ].filter(Boolean).join(" ");
   let semanticIds = [];
   try {
@@ -498,6 +754,7 @@ const getProblemRecommendations = async (userId, payload) => {
   const result = await query(
     `SELECT legacy.*, candidate.state AS schema_state,
        candidate.research_ready, candidate.quality_score,
+       candidate.source_authority_tier,
        candidate.visibility_status, candidate.metadata_json,
        TS_RANK_CD(
          candidate.search_vector,
@@ -548,8 +805,9 @@ const getProblemRecommendations = async (userId, payload) => {
       semanticIds,
     ],
   );
-  const recommendations = result.rows
+  const candidates = result.rows
     .map((row) => {
+      const relevance = evaluateBusinessCandidate(row, input, inferred);
       const signals = {
         sameJurisdiction: Boolean(row.state_match),
         sameState: Boolean(row.state_match),
@@ -566,18 +824,32 @@ const getProblemRecommendations = async (userId, payload) => {
       const recommendation = shapeRecommendation(row, signals);
       return {
         ...recommendation,
-        reason: `Relevant to the described problem because ${[
-          row.state_match ? "its jurisdiction matches the selected states" : "",
-          row.industry_match ? "its subject matches the stated industry" : "",
-          Number(row.problem_rank || 0) > 0
-            ? "its indexed catalogue text matches the problem"
-            : "",
-          row.semantic_match ? "its indexed passages are semantically related" : "",
-        ].filter(Boolean).join(" and ")}.`,
+        score: relevance.score,
+        confidence:
+          relevance.tier === RELEVANCE_TIERS.HIGH
+            ? "high"
+            : relevance.tier === RELEVANCE_TIERS.MEDIUM
+              ? "medium"
+              : "low",
+        relevanceTier: relevance.tier,
+        relevance,
+        authorityClass: relevance.authorityClass,
+        reason: relevance.matchReasons.length
+          ? `Matches ${relevance.matchReasons.slice(0, 4).join("; ")}.`
+          : "A lower-confidence discovery result; applicability is not established.",
       };
     })
-    .sort((left, right) => right.score - left.score)
+    .sort((left, right) =>
+      right.score - left.score ||
+      right.relevance.authorityScore - left.relevance.authorityScore ||
+      right.relevance.documentTypeScore - left.relevance.documentTypeScore,
+    );
+  const recommendations = candidates
+    .filter((item) => [RELEVANCE_TIERS.HIGH, RELEVANCE_TIERS.MEDIUM].includes(item.relevanceTier))
     .slice(0, input.limit);
+  const lowerConfidenceRecommendations = candidates
+    .filter((item) => item.relevanceTier === RELEVANCE_TIERS.LOW)
+    .slice(0, Math.min(8, input.limit));
   const problemHash = crypto
     .createHash("sha256")
     .update(JSON.stringify(input))
@@ -590,18 +862,54 @@ const getProblemRecommendations = async (userId, payload) => {
   });
   const complianceThemes = [
     ...new Set(
-      recommendations.flatMap((item) =>
-        [item.category, item.ministry, item.documentType].filter(Boolean),
-      ),
+      [...inferred.themes, ...recommendations.flatMap((item) => item.category ? [item.category] : [])],
     ),
   ].slice(0, 8);
+  const primarySources = recommendations.filter((item) =>
+    item.authorityClass === "PRIMARY_OFFICIAL",
+  );
+  const sourceSupportedThemes = complianceThemes.filter((theme) =>
+    recommendations.some((item) =>
+      normalizeProblemText([item.title, item.category, item.reason].join(" "))
+        .includes(normalizeProblemText(theme)),
+    ),
+  );
+  const suggestedQuestions = [
+    "Which licences, registrations, or permissions may apply?",
+    inferred.regulators.length
+      ? `What requirements are issued by ${inferred.regulators.slice(0, 2).join(" or ")}?`
+      : "Which regulator or authority oversees this activity?",
+    inferred.jurisdictions.length
+      ? `Which requirements are specific to ${inferred.jurisdictions.join(" and ")}?`
+      : "Are there state-specific requirements?",
+    "What recurring filings, deadlines, or record-keeping duties are explicitly stated?",
+    "What penalties or exemptions are explicitly stated in primary sources?",
+  ];
   return {
     query: input,
+    inferredSignals: {
+      sectors: inferred.sectors,
+      activities: inferred.activities,
+      jurisdictions: inferred.jurisdictions,
+      regulators: inferred.regulators,
+      themes: inferred.themes,
+    },
     recommendations,
+    lowerConfidenceRecommendations,
+    hasSufficientRecommendations: recommendations.length > 0,
+    needsSpecificity: inferred.needsSpecificity,
     complianceThemes,
-    suggestedQuestions: recommendations.slice(0, 4).map((document) =>
-      `What obligations or implementation requirements in ${document.title} are relevant to this problem?`,
-    ),
+    inferredThemes: complianceThemes.filter((theme) => !sourceSupportedThemes.includes(theme)),
+    sourceSupportedThemes,
+    suggestedQuestions,
+    primarySourceGap:
+      recommendations.length > 0 && primarySources.length === 0
+        ? "Relevant secondary material was found, but a primary official source has not yet been verified."
+        : null,
+    abstention:
+      recommendations.length === 0
+        ? "No sufficiently relevant verified documents were found for this business problem. Add the business activity, state, entity type, regulator, or specific licence concern."
+        : null,
     disclaimer: "Rashtram AI provides research assistance, not legal advice.",
   };
 };
@@ -836,12 +1144,17 @@ const getRecentRecommendations = async (userId, limit = 12) => {
 };
 
 module.exports = {
+  RELEVANCE_TIERS,
+  authorityWeight,
+  complianceDocumentTypeWeight,
   confidenceForScore,
+  evaluateBusinessCandidate,
   getDocumentRecommendations,
   getComparisonRecommendations,
   getProblemRecommendations,
   getRecentRecommendations,
   isRecommendationEligible,
+  inferBusinessSignals,
   normalizeTypes,
   stateOnlyRequested,
   scoreRecommendation,

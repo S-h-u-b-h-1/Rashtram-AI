@@ -122,6 +122,30 @@ export function BusinessProblemRecommender() {
             pagePath="/app/recommend"
             emptyMessage="No research-ready catalogue records matched strongly enough. Add the sector, location, obligation, or affected group to your problem description and try again."
           />
+          {result.abstention && (
+            <section role="status" className="surface-card border border-[#8f1d2c]/12 p-5 sm:p-6">
+              <h2 className="font-serif text-2xl text-[#8f1d2c]">
+                Insufficient relevant evidence
+              </h2>
+              <p className="mt-2 text-sm leading-6 text-[#625d55]">
+                {result.abstention}
+              </p>
+            </section>
+          )}
+          {(result.lowerConfidenceRecommendations || []).length > 0 && (
+            <RecommendationSection
+              title="More possible matches"
+              eyebrow="Lower-confidence discovery results"
+              recommendations={result.lowerConfidenceRecommendations}
+              pagePath="/app/recommend"
+              emptyMessage=""
+            />
+          )}
+          {result.primarySourceGap && (
+            <p className="rounded-xl border border-[#c1a06f]/35 bg-[#fffaf0] px-4 py-3 text-xs leading-5 text-[#70434a]">
+              {result.primarySourceGap}
+            </p>
+          )}
           <section className="surface-card flex flex-col gap-3 p-5 sm:flex-row sm:items-center sm:justify-between sm:p-6">
             <div>
               <h2 className="font-serif text-2xl text-[#8f1d2c]">Track verified updates</h2>
@@ -143,7 +167,9 @@ export function BusinessProblemRecommender() {
           <div className="grid gap-5 lg:grid-cols-2">
             <section className="surface-card p-5 sm:p-6">
               <h2 className="font-serif text-2xl text-[#8f1d2c]">
-                Compliance themes
+                {result.sourceSupportedThemes?.length
+                  ? "Source-supported themes"
+                  : "Inferred themes"}
               </h2>
               <div className="mt-3 flex flex-wrap gap-2">
                 {(result.complianceThemes || []).map((theme) => (
@@ -167,32 +193,41 @@ export function BusinessProblemRecommender() {
               </ul>
             </section>
           </div>
-          <section className="surface-card p-5 sm:p-6">
-            <h2 className="font-serif text-2xl text-[#8f1d2c]">What the sources say</h2>
-            <p className="mt-2 text-sm leading-6 text-[#706a61]">
-              These are possible requirements found in the cited documents. Confirm that they apply to your exact business.
-            </p>
-            <div className="mt-4 grid gap-4 lg:grid-cols-2">
-              <div>
-                <h3 className="text-xs font-bold uppercase tracking-[0.14em] text-[#874047]">Possible obligations</h3>
-                <ul className="mt-2 space-y-2 text-sm leading-6 text-[#514d46]">
-                  {(result.evidenceBackedObligations || []).map((item) => (
-                    <li key={`${item.documentId}-${item.citations?.[0]}`} className="rounded-xl bg-[#fffaf0] p-3">
-                      {item.finding} <span className="text-xs font-semibold text-[#8f1d2c]">[{item.citations?.join(", ")}]</span>
-                    </li>
-                  ))}
-                  {!result.evidenceBackedObligations?.length && <li>No explicit obligation passage was found.</li>}
-                </ul>
+          {result.evidenceStatus === "sufficient_relevant_evidence" ? (
+            <section className="surface-card p-5 sm:p-6">
+              <h2 className="font-serif text-2xl text-[#8f1d2c]">What the sources say</h2>
+              <p className="mt-2 text-sm leading-6 text-[#706a61]">
+                These possible requirements come from relevant cited passages. Confirm that they apply to your exact business.
+              </p>
+              <div className="mt-4 grid gap-4 lg:grid-cols-2">
+                <div>
+                  <h3 className="text-xs font-bold uppercase tracking-[0.14em] text-[#874047]">Possible obligations</h3>
+                  <ul className="mt-2 space-y-2 text-sm leading-6 text-[#514d46]">
+                    {(result.evidenceBackedObligations || []).map((item) => (
+                      <li key={`${item.documentId}-${item.citations?.[0]}`} className="rounded-xl bg-[#fffaf0] p-3">
+                        {item.finding} <span className="text-xs font-semibold text-[#8f1d2c]">[{item.citations?.join(", ")}]</span>
+                      </li>
+                    ))}
+                    {!result.evidenceBackedObligations?.length && <li>No explicit obligation passage was found.</li>}
+                  </ul>
+                </div>
+                <div>
+                  <h3 className="text-xs font-bold uppercase tracking-[0.14em] text-[#874047]">What still needs checking</h3>
+                  <ul className="mt-2 space-y-2 text-sm leading-6 text-[#514d46]">
+                    {(result.missingEvidence || []).map((item) => <li key={item}>• {item}</li>)}
+                    {(result.questionsRequiringProfessionalVerification || []).map((item) => <li key={item}>• {item}</li>)}
+                  </ul>
+                </div>
               </div>
-              <div>
-                <h3 className="text-xs font-bold uppercase tracking-[0.14em] text-[#874047]">What still needs checking</h3>
-                <ul className="mt-2 space-y-2 text-sm leading-6 text-[#514d46]">
-                  {(result.missingEvidence || []).map((item) => <li key={item}>• {item}</li>)}
-                  {(result.questionsRequiringProfessionalVerification || []).map((item) => <li key={item}>• {item}</li>)}
-                </ul>
-              </div>
-            </div>
-          </section>
+            </section>
+          ) : (
+            <section className="surface-card p-5 sm:p-6">
+              <h2 className="font-serif text-2xl text-[#8f1d2c]">What the sources say</h2>
+              <p className="mt-2 text-sm leading-6 text-[#625d55]">
+                Insufficient relevant evidence. No obligation was generated from metadata or lower-confidence matches.
+              </p>
+            </section>
+          )}
           <p className="flex items-center gap-2 rounded-xl bg-[#eee0dc] px-4 py-3 text-xs text-[#70434a]">
             <ShieldAlert className="h-4 w-4" />
             {result.disclaimer}
