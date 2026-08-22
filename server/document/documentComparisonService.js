@@ -127,6 +127,30 @@ const readinessReason = (document) => {
   return null;
 };
 
+const buildComparisonCitation = ({ label, document, passage }) => ({
+  id: label,
+  documentId: document.id,
+  documentType: document.type,
+  documentTitle: document.title,
+  chunkIndex: passage.chunkIndex,
+  page: passage.pageStart || null,
+  pageEnd: passage.pageEnd || null,
+  pageEstimate: passage.pageEstimate,
+  section: passage.sectionTitle || passage.sectionId || null,
+  heading: passage.heading || passage.sectionTitle || null,
+  sectionPath: passage.sectionPath || [],
+  clause: passage.clauseId || null,
+  score: passage.score,
+  languageCode: passage.languageCode,
+  sourceUrl: passage.sourceUrl || document.sourceUrl,
+  canonicalSourceUrl: passage.canonicalSourceUrl || document.sourceUrl,
+  resourceType: passage.resourceType || (passage.pdfUrl ? "pdf" : null),
+  mimeType: passage.mimeType || null,
+  anchor: passage.sourceAnchor || null,
+  pdfUrl: passage.resourceType === "html" ? null : passage.pdfUrl || document.pdfUrl,
+  snippet: passage.content.slice(0, 700),
+});
+
 const ensureResearchReady = async (document) => {
   const readiness = await getDocumentReadiness(document.id);
   const reason = readiness?.comparisonReady ? null : readiness?.reason || readinessReason(document);
@@ -803,23 +827,7 @@ const createComparison = async (userId, payload) => {
         `=== ${documentLabel}: ${document.title} (${document.type}) ===`,
         ...passages.map((passage, passageIndex) => {
           const label = `${documentLabel}-C${passageIndex + 1}`;
-          citations.push({
-            id: label,
-            documentId: document.id,
-            documentType: document.type,
-            documentTitle: document.title,
-            chunkIndex: passage.chunkIndex,
-            page: passage.pageStart || null,
-            pageEnd: passage.pageEnd || null,
-            pageEstimate: passage.pageEstimate,
-            section: passage.sectionTitle || passage.sectionId || null,
-            clause: passage.clauseId || null,
-            score: passage.score,
-            languageCode: passage.languageCode,
-            sourceUrl: passage.sourceUrl || document.sourceUrl,
-            pdfUrl: document.pdfUrl,
-            snippet: passage.content.slice(0, 700),
-          });
+          citations.push(buildComparisonCitation({ label, document, passage }));
           return `[${label}] ${passage.content.slice(0, passageCharLimit)}`;
         }),
       ].join("\n\n");
@@ -1125,7 +1133,11 @@ const createComparison = async (userId, payload) => {
     embeddingModel: providerConfig().embeddingModel,
     retrievalVersion: settings.versions.retrievalVersion,
     cacheStatus: cachedAnalysis ? "hit" : analysisKey ? "miss" : "bypass",
-    flags,
+    flags: {
+      ...flags,
+      resourceTypes: [...new Set(comparisonEvidence.map((item) => item.resourceType).filter(Boolean))].slice(0, 5),
+      htmlEvidenceCount: comparisonEvidence.filter((item) => item.resourceType === "html").length,
+    },
   });
   return mapComparison(inserted.rows[0]);
 };
@@ -1168,6 +1180,7 @@ module.exports = {
   createComparison,
   deleteComparison,
   allowExtractiveComparisonFallback,
+  buildComparisonCitation,
   ensureResearchReady,
   comparisonSectionBackfill,
   getComparison,

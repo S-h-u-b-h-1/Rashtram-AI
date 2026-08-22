@@ -57,6 +57,12 @@ const {
 } = require("../graph/knowledgeLayerService");
 const { expandLargeDocumentMatches } = require("./largeDocumentService");
 const { retrieveTemporalPassages } = require("./temporalLegalService");
+const {
+  chunkStructuredHtml,
+  extractStructuredHtml,
+  htmlFailure,
+} = require("./htmlResourceService");
+const { SOURCE_AUTHORITY } = require("../retrieval/sourceAuthority");
 
 const TYPE_CONFIG = {
   bill: {
@@ -111,26 +117,41 @@ const typeConfig = (documentType) => {
   return config;
 };
 
-const isExtractableSourceDocument = (document) =>
-  document?.type === "policy" &&
-  document.sourceUrl &&
-  [
+const isExtractableSourceDocument = (document) => {
+  if (!document?.sourceUrl) return false;
+  // Validate the public document type, but do not force PolicyEdge reports,
+  // circulars, or other catalogue classes through a PDF-only branch.
+  normalizeDocumentType(document?.type);
+  return [
     document.source,
     document.sourceName,
     document.metadata?.source,
     document.metadata?.sourceClassification,
   ]
     .filter(Boolean)
-    .some((value) => String(value).toLowerCase().includes("policyedge"));
+    .some((value) => /policy[\s_-]*edge/i.test(String(value)) || /policyedge\.in/i.test(String(value)));
+};
 
 const sourceSlug = (document) => {
-  const explicit = document?.metadata?.slug || document?.canonicalId;
+  const explicit = document?.metadata?.slug;
   if (explicit) return String(explicit).trim();
   const sourceUrl = String(document?.sourceUrl || "");
   if (sourceUrl.includes("/p/")) {
     return sourceUrl.split("/p/").pop()?.split(/[?#]/)[0] || "";
   }
-  return "";
+  const canonical = String(document?.canonicalId || "").trim();
+  return /^[a-z0-9]+(?:-[a-z0-9]+)+$/i.test(canonical) ? canonical : "";
+};
+
+const pineconeSafeHtmlMetadata = (metadata = {}, summary = "") => {
+  const { tableContext, ...vectorMetadata } = metadata;
+  return {
+    ...vectorMetadata,
+    tableCaption: tableContext?.caption || null,
+    tableHeaders: Array.isArray(tableContext?.headers) ? tableContext.headers : [],
+    tableRowIndex: tableContext?.rowIndex || null,
+    summary,
+  };
 };
 
 const getTextArtifact = async (documentId) => {
@@ -658,6 +679,87 @@ const processExtractableSourceDocument = async (
   const downloadStartedAt = Date.now();
   const article = await fetchArticle(slug, { title: document.title });
   const downloadMs = Date.now() - downloadStartedAt;
+  const escaped = (value) => String(value || "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+  const sourceHtml = article.rawHtml || [
+    "<article>",
+    `<h1>${escaped(article.title || document.title)}</h1>`,
+    article.description ? `<p>${escaped(article.description)}</p>` : "",
+    ...String(article.bodyText || "").split(/\n{2,}/).map((paragraph) =>
+      `<p>${escaped(paragraph)}</p>`),
+    "</article>",
+  ].join("\n");
+  const extracted = extractStructuredHtml({
+    html: sourceHtml,
+    url: article.url || document.sourceUrl,
+    preferredTitle: article.title || document.title,
+    description: article.description || "",
+  });
+  if (!extracted.quality.valid) {
+    const dynamic = extracted.quality.dynamicShell;
+    throw htmlFailure(
+      dynamic ? "HTML_DYNAMIC_CONTENT_UNAVAILABLE" : "HTML_EXTRACTION_LOW_QUALITY",
+      dynamic
+        ? "PolicyEdge returned a dynamic page shell without readable document content."
+        : "PolicyEdge HTML extraction did not meet the deterministic research quality threshold.",
+      { retryable: dynamic, reviewRequired: !dynamic },
+    );
+  }
+  let sourceHtmlObjectKey = null;
+  if (objectStorageConfig().configured) {
+    try {
+      const storage = createObjectStorage();
+      const body = Buffer.from(sourceHtml, "utf8");
+      const uploaded = await storage.putArtifact({
+        kind: "source-html",
+        body,
+        contentType: "text/html; charset=utf-8",
+        extension: "html",
+        metadata: {
+          documentId: document.id,
+          source: "policyedge",
+          cleanContentHash: extracted.cleanContentHash,
+        },
+      });
+      const verified = await storage.getArtifact({
+        key: uploaded.key,
+        expectedHash: extracted.rawHtmlHash,
+      });
+      if (!verified.body.equals(body)) {
+        throw new Error("PolicyEdge source HTML failed byte verification after upload.");
+      }
+      sourceHtmlObjectKey = uploaded.key;
+      await query(
+        `INSERT INTO document_artifact_objects (
+           document_id, artifact_kind, source_locator, object_key, sha256,
+           mime_type, byte_size, processing_version, status,
+           original_retained, verified_at
+         ) VALUES ($1, 'source-html', $2, $3, $4, 'text/html; charset=utf-8',
+                   $5, 'policyedge-structured-html-v1', 'verified', TRUE, NOW())
+         ON CONFLICT (document_id, artifact_kind, sha256) DO UPDATE SET
+           object_key = EXCLUDED.object_key,
+           source_locator = EXCLUDED.source_locator,
+           byte_size = EXCLUDED.byte_size,
+           processing_version = EXCLUDED.processing_version,
+           status = 'verified', original_retained = TRUE,
+           verified_at = NOW(), updated_at = NOW()`,
+        [
+          document.id,
+          article.url || document.sourceUrl,
+          uploaded.key,
+          extracted.rawHtmlHash,
+          body.length,
+        ],
+      );
+    } catch (error) {
+      console.warn(
+        `PolicyEdge source HTML archival failed for document ${document.id}; continuing with verified hashes: ${error.message}`,
+      );
+    }
+  }
   await query(
     `INSERT INTO legislative_document_resources (
        document_id, label, resource_type, category, url, metadata
@@ -681,16 +783,15 @@ const processExtractableSourceDocument = async (
         slug,
         mimeType: "text/html",
         extractable: true,
+        extractionSource: article.extractionSource,
+        rawHtmlHash: extracted.rawHtmlHash,
+        cleanContentHash: extracted.cleanContentHash,
+        extractionQuality: extracted.quality,
+        sourceHtmlObjectKey,
       }),
     ],
   );
-  const rawText = [
-    article.title || document.title,
-    article.description,
-    article.bodyText,
-  ]
-    .filter(Boolean)
-    .join("\n\n");
+  const rawText = extracted.text;
   const detectedLanguage = pdfProcessor.detectLanguage(rawText);
   const originalText = pdfProcessor.cleanText(
     rawText,
@@ -702,37 +803,34 @@ const processExtractableSourceDocument = async (
     throw error;
   }
 
-  const rawChunks = pdfProcessor.chunkText(
-    originalText,
-    pdfProcessor.chunkSize,
-    pdfProcessor.overlap,
-    detectedLanguage.languageCode,
-  );
-  let cursor = 0;
-  const sourceChunks = rawChunks.map((content, index) => {
-    const metadata = pdfProcessor.structuralChunkMetadata(
-      content,
-      originalText,
-      cursor,
-      1,
-    );
-    cursor = metadata.end;
+  const htmlChunks = chunkStructuredHtml(extracted, {
+    chunkSize: pdfProcessor.chunkSize,
+  });
+  const sourceChunks = htmlChunks.map((chunk, index) => {
+    const content = chunk.content;
     return {
       id: `policy-${document.id}-chunk-${index}`,
       [config.idField]: String(document.id),
-      policyId: String(document.id),
       title: article.title || document.title,
       content,
       embeddingText: content,
       chunkIndex: index,
-      totalChunks: rawChunks.length,
+      totalChunks: htmlChunks.length,
       metadata: {
-        ...metadata,
-        documentType: "policy",
+        ...chunk.metadata,
+        documentType: normalizeDocumentType(document.type),
         source: "PolicyEdge",
-        sourceUrl: article.url || document.sourceUrl,
+        sourceUrl: chunk.metadata.sourceUrl || article.url || document.sourceUrl,
+        canonicalSourceUrl: article.url || document.sourceUrl,
         category: article.category || document.category,
         extractionMethod: "source_html",
+        extractionSource: article.extractionSource,
+        resourceType: "html",
+        mimeType: "text/html",
+        pageStart: null,
+        pageEnd: null,
+        pageEstimate: false,
+        authorityClass: SOURCE_AUTHORITY.RESEARCH,
         languageCode: detectedLanguage.languageCode,
         script: detectedLanguage.script,
         originalLanguage: detectedLanguage.languageCode,
@@ -744,10 +842,14 @@ const processExtractableSourceDocument = async (
     .slice(0, 6)
     .map((chunk) => chunk.content)
     .join("\n\n");
+  const previousArtifact = await getTextArtifact(document.id);
+  const unchangedCleanContent = previousArtifact?.metadata?.cleanContentHash === extracted.cleanContentHash;
   const summaryStartedAt = Date.now();
-  const summaryResult = await safeGenerateSummary("policy", summaryContext, {
-    sourceLanguage: detectedLanguage.languageCode,
-  });
+  const summaryResult = unchangedCleanContent && previousArtifact?.englishSummary
+    ? { summary: previousArtifact.englishSummary, fallback: false, error: null, reused: true }
+    : await safeGenerateSummary("policy", summaryContext, {
+        sourceLanguage: detectedLanguage.languageCode,
+      });
   const { summary } = summaryResult;
   const summarySections = parseSummarySections(summary);
   const suggestedQuestions = await safeSuggestedQuestions(
@@ -771,6 +873,10 @@ const processExtractableSourceDocument = async (
     pdfQuality: {
       qualityClass: "source_html",
       sourceUrl: article.url || document.sourceUrl,
+      rawHtmlHash: extracted.rawHtmlHash,
+      cleanContentHash: extracted.cleanContentHash,
+      extractionQuality: extracted.quality,
+      sourceHtmlObjectKey,
     },
     metadata: {
       source: "policyedge",
@@ -779,6 +885,14 @@ const processExtractableSourceDocument = async (
       suggestedQuestions,
       summaryFallback: summaryResult.fallback,
       summaryFallbackReason: summaryResult.error?.message || null,
+      summaryReused: Boolean(summaryResult.reused),
+      contentUnchanged: unchangedCleanContent,
+      sourceHtmlArchived: Boolean(sourceHtmlObjectKey),
+      resourceType: "html",
+      authorityClass: SOURCE_AUTHORITY.RESEARCH,
+      rawHtmlHash: extracted.rawHtmlHash,
+      cleanContentHash: extracted.cleanContentHash,
+      extractionQuality: extracted.quality,
     },
   });
 
@@ -800,10 +914,7 @@ const processExtractableSourceDocument = async (
     stored = await config.store(
       sourceChunks.map((chunk) => ({
         ...chunk,
-        metadata: {
-          ...chunk.metadata,
-          summary,
-        },
+        metadata: pineconeSafeHtmlMetadata(chunk.metadata, summary),
       })),
       { unchangedChunkIds: chunkCacheResult.unchangedChunkIds },
     );
@@ -817,6 +928,10 @@ const processExtractableSourceDocument = async (
     (sum, chunk) => sum + Math.ceil(String(chunk.content || "").length / 4),
     0,
   );
+  const chunkSetSha256 = hashChunkSet(sourceChunks);
+  const embeddingInputSha256 = computeChunkContentHash(
+    sourceChunks.map((chunk) => chunk.embeddingText || chunk.content).join("\n\f\n"),
+  );
 
   return {
     alreadyProcessed: false,
@@ -829,18 +944,32 @@ const processExtractableSourceDocument = async (
     language: detectedLanguage,
     ocrUsed: false,
     ocrRequired: false,
-    pdfQuality: { qualityClass: "source_html" },
+    pdfQuality: {
+      qualityClass: "source_html",
+      fileSizeBytes: Buffer.byteLength(sourceHtml),
+    },
+    extractionMethod: "source_html",
+    extractedTextSha256: extracted.cleanContentHash,
+    chunkSetSha256,
+    embeddingInputSha256,
     stageMetrics: {
       indexCheckMs: Number(indexCheckMs || 0),
       downloadMs,
       summaryMs,
       embeddingsMs: Number(stored.metrics?.embeddingsMs || 0),
       pineconeMs: Number(stored.metrics?.pineconeMs || 0),
-      ocrPages: Number(processed.pdfQuality?.ocrPages || 0),
-      totalPages: Number(processed.pdfQuality?.pageCount || processed.totalChunks || 0),
+      ocrPages: 0,
+      totalPages: 0,
       chunksStored: Number(stored.chunksStored || 0),
       embeddingsStored: vectorStorageError ? 0 : Number(stored.chunksStored || 0),
       chunkPersistenceMs,
+      downloadChecksumSha256: extracted.rawHtmlHash,
+      downloadFinalUrl: article.url || document.sourceUrl,
+      downloadBytes: Buffer.byteLength(sourceHtml),
+      rawHtmlHash: extracted.rawHtmlHash,
+      cleanContentHash: extracted.cleanContentHash,
+      tableRowsExtracted: extracted.quality.tableRowCount,
+      contentUnchanged: unchangedCleanContent,
       totalMs: Date.now() - Number(totalStartedAt || Date.now()),
       vectorStorageFailed: Boolean(vectorStorageError),
     },
@@ -852,6 +981,7 @@ const processExtractableSourceDocument = async (
       ocrUsed: false,
       retrievalMode: vectorStorageError ? "local_text" : "hybrid",
       summaryFallback: summaryResult.fallback,
+      contentUnchanged: unchangedCleanContent,
     },
   };
 };
@@ -865,6 +995,12 @@ const processDocument = async (documentType, documentId) => {
     throw error;
   }
   const config = typeConfig(documentType);
+  if (isExtractableSourceDocument(document)) {
+    return processExtractableSourceDocument(document, config, {
+      totalStartedAt,
+      indexCheckMs: 0,
+    });
+  }
   const indexCheckStartedAt = Date.now();
   let existence = { exists: false };
   let indexCheckError = null;
@@ -1087,13 +1223,6 @@ const processDocument = async (documentType, documentId) => {
     };
   }
 
-  if (!document.pdfUrl && isExtractableSourceDocument(document)) {
-    return processExtractableSourceDocument(document, config, {
-      totalStartedAt,
-      indexCheckMs,
-    });
-  }
-
   if (!document.pdfUrl) {
     const error = new Error(
       "This document does not have a verified official PDF.",
@@ -1275,6 +1404,13 @@ const passageFromVectorMatch = (match, index) => ({
   clauseId: match.metadata?.clauseId || null,
   structuralType: match.metadata?.structuralType || "passage",
   sourceUrl: match.metadata?.sourceUrl || null,
+  canonicalSourceUrl: match.metadata?.canonicalSourceUrl || null,
+  resourceType: match.metadata?.resourceType || null,
+  mimeType: match.metadata?.mimeType || null,
+  heading: match.metadata?.heading || match.metadata?.sectionTitle || null,
+  sectionPath: match.metadata?.sectionPath || [],
+  sourceAnchor: match.metadata?.sourceAnchor || null,
+  authorityClass: match.metadata?.authorityClass || null,
   retrievalMode: "vector",
 });
 
@@ -1489,6 +1625,13 @@ const retrieveFtsPassages = async (documentId, message, limit = 25) => {
       clauseId: metadata.clauseId || null,
       structuralType: metadata.structuralType || "passage",
       sourceUrl: metadata.sourceUrl || null,
+      canonicalSourceUrl: metadata.canonicalSourceUrl || null,
+      resourceType: metadata.resourceType || null,
+      mimeType: metadata.mimeType || null,
+      heading: metadata.heading || metadata.sectionTitle || null,
+      sectionPath: metadata.sectionPath || [],
+      sourceAnchor: metadata.sourceAnchor || null,
+      authorityClass: metadata.authorityClass || null,
       retrievalMode: "fts",
     };
   }).filter((passage) => passage.content);
@@ -1558,6 +1701,13 @@ const retrieveLocalTextPassages = async (documentId, message, topK = 6) => {
         clauseId: metadata.clauseId || null,
         structuralType: metadata.structuralType || "passage",
         sourceUrl: metadata.sourceUrl || null,
+        canonicalSourceUrl: metadata.canonicalSourceUrl || null,
+        resourceType: metadata.resourceType || null,
+        mimeType: metadata.mimeType || null,
+        heading: metadata.heading || metadata.sectionTitle || null,
+        sectionPath: metadata.sectionPath || [],
+        sourceAnchor: metadata.sourceAnchor || null,
+        authorityClass: metadata.authorityClass || null,
         retrievalMode: queryTokens.length ? "local_text" : "representative",
       };
     })
@@ -2024,6 +2174,7 @@ module.exports = {
   postgresChunkMetadata,
   buildExtractiveSummary,
   parseSummarySections,
+  pineconeSafeHtmlMetadata,
   searchAcrossIndexedDocuments,
   ensureSummary,
 };

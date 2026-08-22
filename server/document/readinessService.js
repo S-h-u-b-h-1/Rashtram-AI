@@ -307,6 +307,8 @@ const prepareDocument = async (
       throw error;
     }
     const artifact = result.textArtifact || {};
+    const isHtmlResource = artifact.extractionMethod === "source_html" ||
+      result.extractionMethod === "source_html";
     const stageMetrics = {
       ...(result.stageMetrics || {}),
       retrievalMs,
@@ -317,7 +319,7 @@ const prepareDocument = async (
       "ready",
       null,
       {
-        pdfStatus: "valid",
+        pdfStatus: isHtmlResource ? "not_required" : "valid",
         extractionStatus: "ready",
         ocrStatus: artifact.ocrUsed
           ? "ready"

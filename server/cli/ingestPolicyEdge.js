@@ -6,8 +6,8 @@
  * Usage:
  *   node server/cli/ingestPolicyEdge.js               # Scrape ALL pages (default)
  *   node server/cli/ingestPolicyEdge.js --pages 5     # Scrape first 5 pages only
- *   node server/cli/ingestPolicyEdge.js --embed       # Also embed into Pinecone
- *   node server/cli/ingestPolicyEdge.js --embed --pages 10
+ * Semantic preparation is intentionally handled by Processing V3, not this
+ * catalogue command. Use the bounded PolicyEdge canary after ingestion.
  */
 
 require("dotenv").config({ path: require("path").resolve(__dirname, "../.env") });
@@ -17,18 +17,13 @@ const {
   fetchAllPages,
   fetchArticle,
 } = require("../lib/ingestion/connectors/policyedgeConnector");
-const {
-  checkPolicyExists,
-  generatePolicySummary,
-  storePolicyContentInChunks,
-} = require("../lib/vectordb");
 
 const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 const parseArgs = () => {
   const args = process.argv.slice(2);
   // Default: scrape ALL pages (99999 = effectively unlimited, capped by real total)
-  const options = { pages: 99999, embed: false };
+  const options = { pages: 99999 };
   for (let i = 0; i < args.length; i += 1) {
     if (args[i] === "--pages" && args[i + 1]) {
       const value = args[i + 1];
@@ -36,29 +31,20 @@ const parseArgs = () => {
       i += 1;
     }
     if (args[i] === "--embed") {
-      options.embed = true;
+      throw new Error("--embed was retired. PolicyEdge semantic work must use bounded Processing V3 preparation.");
     }
   }
   return options;
 };
 
-const splitIntoChunks = (text, chunkSize = 800) => {
-  const words = text.split(" ");
-  const chunks = [];
-  for (let i = 0; i < words.length; i += chunkSize) {
-    chunks.push(words.slice(i, i + chunkSize).join(" "));
-  }
-  return chunks;
-};
-
 /**
- * Upsert article into legislative_documents and mark it as research_ready
- * in the documents table (synced via trigger) so it shows up with research enabled.
+ * Upsert catalogue and HTML-resource provenance only. Processing V3 is the
+ * sole component allowed to grant research capabilities.
  */
 const upsertPolicy = async (article) => {
   const slug = article.slug;
-  const publicationDate = article.publishedDate
-    ? new Date(article.publishedDate).toISOString()
+  const publicationDate = article.publishDate
+    ? new Date(article.publishDate).toISOString()
     : null;
   const year = publicationDate
     ? new Date(publicationDate).getFullYear()
@@ -100,11 +86,11 @@ const upsertPolicy = async (article) => {
     [
       article.title || slug,
       "policy",
-      "policyedge",
+      "policy-edge",
       slug,
       "national",
       "India",
-      "policyedge",
+      "policy-edge",
       slug,
       article.url,
       article.url,
@@ -119,7 +105,7 @@ const upsertPolicy = async (article) => {
       }),
       JSON.stringify({
         slug,
-        source: "policyedge",
+        source: "policy-edge",
       }),
     ],
   );
@@ -146,7 +132,7 @@ const upsertPolicy = async (article) => {
         article.category || "Reports/Data Releases",
         article.url,
         JSON.stringify({
-          source: "policyedge",
+          source: "policy-edge",
           slug,
           mimeType: "text/html",
           extractable: true,
@@ -158,54 +144,6 @@ const upsertPolicy = async (article) => {
   return docId;
 };
 
-const embedPolicy = async (policyId, article) => {
-  const existence = await checkPolicyExists(String(policyId));
-  if (existence.exists) {
-    console.log(`      Already embedded (${existence.chunksCount} chunks)`);
-    return { alreadyEmbedded: true, chunksStored: existence.chunksCount };
-  }
-
-  const fullContent = [article.title, article.description, article.bodyText]
-    .filter(Boolean)
-    .join("\n\n");
-
-  if (fullContent.length < 50) {
-    console.log(`      Content too short (${fullContent.length} chars), skipping embed`);
-    return { skipped: true, reason: "content_too_short" };
-  }
-
-  const rawChunks = splitIntoChunks(fullContent);
-  const summaryContext = rawChunks.slice(0, 6).join("\n\n");
-
-  let summary;
-  try {
-    summary = await generatePolicySummary(summaryContext);
-  } catch (error) {
-    console.warn(`      Summary generation failed: ${error.message}`);
-    summary = article.description || "";
-  }
-
-  const chunks = rawChunks.map((chunk, index) => ({
-    id: `policy-${policyId}-chunk-${index}`,
-    policyId: String(policyId),
-    title: article.title,
-    content: chunk,
-    chunkIndex: index,
-    totalChunks: rawChunks.length,
-    metadata: {
-      documentType: "policy",
-      source: "PolicyEdge",
-      sourceUrl: article.url,
-      category: article.category,
-      summary,
-    },
-  }));
-
-  const stored = await storePolicyContentInChunks(chunks);
-  console.log(`      Embedded ${stored.chunksStored} chunks`);
-  return { chunksStored: stored.chunksStored };
-};
-
 const run = async () => {
   const options = parseArgs();
   const pagesLabel = options.pages >= 99999 ? "ALL" : options.pages;
@@ -214,7 +152,7 @@ const run = async () => {
   console.log("║   PolicyEdge → Rashtram AI Ingestion     ║");
   console.log("╚══════════════════════════════════════════╝\n");
   console.log(`Pages to scrape: ${pagesLabel}`);
-  console.log(`Embed into Pinecone: ${options.embed ? "YES" : "NO"}\n`);
+  console.log("Semantic preparation: deferred to bounded Processing V3 canary\n");
 
   const listing = await fetchAllPages(options.pages, 1500);
   console.log(`\nFound ${listing.listings.length} article links across ${listing.fetchedPages} of ${listing.totalPages} pages.\n`);
@@ -222,7 +160,6 @@ const run = async () => {
   let inserted = 0;
   let updated = 0;
   let errors = 0;
-  let embedded = 0;
 
   for (let i = 0; i < listing.listings.length; i += 1) {
     const entry = listing.listings[i];
@@ -241,11 +178,6 @@ const run = async () => {
         updated += 1;
       }
 
-      if (options.embed && policyId) {
-        await delay(800);
-        await embedPolicy(policyId, article);
-        embedded += 1;
-      }
     } catch (error) {
       errors += 1;
       console.error(`    ✗ Error processing ${entry.slug}: ${error.message}`);
@@ -257,9 +189,6 @@ const run = async () => {
   console.log(`    Articles processed: ${inserted + updated}`);
   console.log(`    New/updated:        ${inserted}`);
   console.log(`    Errors:             ${errors}`);
-  if (options.embed) {
-    console.log(`    Embedded:           ${embedded}`);
-  }
   console.log("════════════════════════════════════════════\n");
   process.exit(0);
 };

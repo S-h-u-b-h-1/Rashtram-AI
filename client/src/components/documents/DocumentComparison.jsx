@@ -689,6 +689,14 @@ export function DocumentComparison() {
                       <p className="mt-1 text-xs font-semibold text-[#29312d]">
                         {citation.documentTitle}
                       </p>
+                      <p className="mt-1 text-[10px] text-[#81796e]">
+                        {[
+                          citation.resourceType === "html" ? "PolicyEdge webpage" : null,
+                          citation.sectionPath?.length
+                            ? citation.sectionPath.join(" › ")
+                            : citation.heading || citation.section,
+                        ].filter(Boolean).join(" · ") || "Source passage"}
+                      </p>
                     </div>
                     {(citation.pdfUrl || citation.sourceUrl) && (
                       <a

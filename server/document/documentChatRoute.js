@@ -684,7 +684,11 @@ router.post("/", generationLimiter, async (req, res) => {
       embeddingModel: providerConfig().embeddingModel,
       retrievalVersion: retrieval.diagnostics.versions.retrievalVersion,
       cacheStatus: retrieval.diagnostics.cache?.status || "bypass",
-      flags,
+      flags: {
+        ...flags,
+        resourceTypes: [...new Set(evidence.map((item) => item.resourceType).filter(Boolean))].slice(0, 5),
+        htmlEvidenceCount: evidence.filter((item) => item.resourceType === "html").length,
+      },
     });
 
     startSSE(res);

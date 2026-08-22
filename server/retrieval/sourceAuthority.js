@@ -22,6 +22,11 @@ const classifySourceAuthority = (source = {}) => {
   }
   const text = [source.sourceUrl, source.pdfUrl, source.source, source.sourceName,
     source.authority, source.sourceClassification].filter(Boolean).join(" ").toLowerCase();
+  // PolicyEdge is a useful institutional research source, but it is not the
+  // primary legal instrument merely because its HTML is technically clean.
+  if (/\b(policyedge|policy-edge|policyedge\.in)\b/.test(text)) {
+    return SOURCE_AUTHORITY.RESEARCH;
+  }
   if (/\b(gov\.in|nic\.in|indiacode\.nic\.in|egazette|sansad|parliamentofindia|rbi\.org\.in|sebi\.gov\.in|supremecourt\.gov\.in)\b/.test(text)) {
     return SOURCE_AUTHORITY.PRIMARY_OFFICIAL;
   }

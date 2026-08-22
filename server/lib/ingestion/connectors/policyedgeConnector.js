@@ -13,8 +13,105 @@ const API_BASE = "https://api.policyedge.in";
 const TOKEN_URL = "https://www.policyedge.in/api/token";
 const ARTICLE_BASE = "https://www.policyedge.in/p/";
 const CATEGORY_SLUG = "reports-data-releases";
+const ALLOWED_HOSTS = new Set(["www.policyedge.in", "api.policyedge.in"]);
+const MAX_RESPONSE_BYTES = 10 * 1024 * 1024;
+const FETCH_TIMEOUT_MS = 30_000;
 
 const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+const assertPolicyEdgeUrl = (value) => {
+  const parsed = new URL(String(value || ""));
+  if (parsed.protocol !== "https:" || parsed.username || parsed.password ||
+      !ALLOWED_HOSTS.has(parsed.hostname.toLowerCase())) {
+    const error = new Error("PolicyEdge fetch rejected an invalid or unrelated URL.");
+    error.failureCode = "HTML_REDIRECT_INVALID";
+    error.status = 422;
+    throw error;
+  }
+  return parsed;
+};
+
+const boundedFetch = async (initialUrl, { accept, retries = 2 } = {}) => {
+  let current = assertPolicyEdgeUrl(initialUrl);
+  for (let redirect = 0; redirect <= 3; redirect += 1) {
+    let lastError;
+    for (let attempt = 0; attempt <= retries; attempt += 1) {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+      timeout.unref?.();
+      try {
+        const response = await fetch(current.href, {
+          redirect: "manual",
+          signal: controller.signal,
+          headers: {
+            "User-Agent": "RashtramAI-PolicyEdge/2.0 (+https://rashtram-ai.vercel.app)",
+            Accept: accept || "text/html,application/json;q=0.9",
+          },
+        });
+        clearTimeout(timeout);
+        if (response.status >= 300 && response.status < 400) {
+          const location = response.headers.get("location");
+          if (!location || redirect === 3) {
+            const error = new Error("PolicyEdge returned an invalid redirect.");
+            error.failureCode = "HTML_REDIRECT_INVALID";
+            error.status = 422;
+            throw error;
+          }
+          current = assertPolicyEdgeUrl(new URL(location, current).href);
+          lastError = null;
+          break;
+        }
+        if (!response.ok) {
+          const error = new Error(`PolicyEdge returned HTTP ${response.status}.`);
+          error.status = response.status;
+          error.failureCode = response.status === 401 || response.status === 403
+            ? "HTML_ACCESS_DENIED"
+            : "HTML_FETCH_FAILED";
+          if (attempt < retries && (response.status === 429 || response.status >= 500)) {
+            lastError = error;
+            await delay(Math.min(4_000, 400 * 2 ** attempt));
+            continue;
+          }
+          throw error;
+        }
+        const declaredLength = Number(response.headers.get("content-length") || 0);
+        if (declaredLength > MAX_RESPONSE_BYTES) {
+          const error = new Error("PolicyEdge response exceeded the safe size limit.");
+          error.failureCode = "HTML_UNSUPPORTED_STRUCTURE";
+          error.status = 422;
+          throw error;
+        }
+        const buffer = Buffer.from(await response.arrayBuffer());
+        if (buffer.length > MAX_RESPONSE_BYTES) {
+          const error = new Error("PolicyEdge response exceeded the safe size limit.");
+          error.failureCode = "HTML_UNSUPPORTED_STRUCTURE";
+          error.status = 422;
+          throw error;
+        }
+        return {
+          buffer,
+          contentType: String(response.headers.get("content-type") || "").toLowerCase(),
+          status: response.status,
+          url: current.href,
+        };
+      } catch (error) {
+        clearTimeout(timeout);
+        lastError = error;
+        if (error.name === "AbortError") {
+          error.failureCode = "HTML_FETCH_FAILED";
+          error.status = 504;
+        }
+        if (attempt < retries && (!error.status || error.status >= 500 || error.status === 429)) {
+          await delay(Math.min(4_000, 400 * 2 ** attempt));
+          continue;
+        }
+        throw error;
+      }
+    }
+    if (lastError) throw lastError;
+  }
+  throw new Error("PolicyEdge fetch could not be completed.");
+};
 
 // ---------------------------------------------------------------------------
 // Token management
@@ -28,14 +125,13 @@ const getApiToken = async () => {
   const now = Date.now();
   if (_cachedToken && now - _tokenFetchedAt < TOKEN_TTL_MS) return _cachedToken;
 
-  const res = await fetch(TOKEN_URL, {
-    headers: {
-      "User-Agent": "Mozilla/5.0 (compatible; RashtramAI/1.0; +https://rashtram-ai.vercel.app)",
-      "Accept": "application/json",
-    },
-  });
-  if (!res.ok) throw new Error(`Failed to fetch PolicyEdge token: HTTP ${res.status}`);
-  const { token } = await res.json();
+  const response = await boundedFetch(TOKEN_URL, { accept: "application/json" });
+  if (!response.contentType.includes("json")) {
+    const error = new Error("PolicyEdge token endpoint returned a non-JSON response.");
+    error.failureCode = "HTML_CONTENT_TYPE_MISMATCH";
+    throw error;
+  }
+  const { token } = JSON.parse(response.buffer.toString("utf8"));
   if (!token) throw new Error("PolicyEdge /api/token returned no token");
   _cachedToken = token;
   _tokenFetchedAt = now;
@@ -51,15 +147,33 @@ const strapiGet = async (path, params = {}) => {
   const url = new URL(API_BASE + path);
   Object.entries(params).forEach(([k, v]) => url.searchParams.set(k, v));
 
-  const res = await fetch(url.toString(), {
-    headers: {
-      Authorization: `Bearer ${token}`,
-      Accept: "application/json",
-      "User-Agent": "Mozilla/5.0 (compatible; RashtramAI/1.0)",
-    },
-  });
-  if (!res.ok) throw new Error(`Strapi API error ${res.status} for ${url}`);
-  return res.json();
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+  timeout.unref?.();
+  try {
+    const res = await fetch(assertPolicyEdgeUrl(url.toString()).href, {
+      redirect: "error",
+      signal: controller.signal,
+      headers: {
+        Authorization: `Bearer ${token}`,
+        Accept: "application/json",
+        "User-Agent": "RashtramAI-PolicyEdge/2.0",
+      },
+    });
+    if (!res.ok) throw new Error(`Strapi API error ${res.status} for PolicyEdge.`);
+    const declaredLength = Number(res.headers.get("content-length") || 0);
+    if (declaredLength > MAX_RESPONSE_BYTES) throw new Error("PolicyEdge API response exceeded the safe size limit.");
+    const buffer = Buffer.from(await res.arrayBuffer());
+    if (buffer.length > MAX_RESPONSE_BYTES) throw new Error("PolicyEdge API response exceeded the safe size limit.");
+    if (!String(res.headers.get("content-type") || "").toLowerCase().includes("json")) {
+      const error = new Error("PolicyEdge API returned an unsupported content type.");
+      error.failureCode = "HTML_CONTENT_TYPE_MISMATCH";
+      throw error;
+    }
+    return JSON.parse(buffer.toString("utf8"));
+  } finally {
+    clearTimeout(timeout);
+  }
 };
 
 // ---------------------------------------------------------------------------
@@ -133,18 +247,21 @@ const fetchAllPages = async (maxPages = 99999, delayMs = 800) => {
 // ---------------------------------------------------------------------------
 
 const fetchHTML = async (url) => {
-  const res = await fetch(url, {
-    headers: {
-      "User-Agent": "Mozilla/5.0 (compatible; RashtramAI/1.0; +https://rashtram-ai.vercel.app)",
-      Accept: "text/html",
-    },
-  });
-  if (!res.ok) throw new Error(`HTTP ${res.status} fetching ${url}`);
-  return res.text();
+  const response = await boundedFetch(url, { accept: "text/html,application/xhtml+xml" });
+  const prefix = response.buffer.subarray(0, 512).toString("utf8");
+  if (!response.contentType.includes("text/html") &&
+      !response.contentType.includes("application/xhtml") &&
+      !/^\s*<(?:!doctype\s+html|html)\b/i.test(prefix)) {
+    const error = new Error("PolicyEdge page did not return supported HTML.");
+    error.failureCode = "HTML_CONTENT_TYPE_MISMATCH";
+    error.status = 422;
+    throw error;
+  }
+  return response.buffer.toString("utf8");
 };
 
 const stripHTML = (html) =>
-  html
+  String(html || "")
     .replace(/<script[\s\S]*?<\/script>/gi, "")
     .replace(/<style[\s\S]*?<\/style>/gi, "")
     .replace(/<aside[\s\S]*?<\/aside>/gi, "")
@@ -162,6 +279,43 @@ const stripHTML = (html) =>
     .replace(/\s+/g, " ")
     .trim();
 
+const escapeHtml = (value) => String(value || "")
+  .replace(/&/g, "&amp;")
+  .replace(/</g, "&lt;")
+  .replace(/>/g, "&gt;")
+  .replace(/"/g, "&quot;");
+
+const richContentHtml = (value) => {
+  if (typeof value === "string") return value;
+  if (!value) return "";
+  const nodes = Array.isArray(value) ? value : [value];
+  const render = (node) => {
+    if (node == null) return "";
+    if (typeof node === "string") return escapeHtml(node);
+    if (typeof node.text === "string") return escapeHtml(node.text);
+    const children = (node.children || []).map(render).join("");
+    if (node.type === "heading") {
+      const level = Math.max(1, Math.min(6, Number(node.level || 2)));
+      return `<h${level}>${children}</h${level}>`;
+    }
+    if (node.type === "paragraph") return `<p>${children}</p>`;
+    if (node.type === "list") {
+      const tag = node.format === "ordered" ? "ol" : "ul";
+      return `<${tag}>${children}</${tag}>`;
+    }
+    if (node.type === "list-item") return `<li>${children}</li>`;
+    if (node.type === "quote") return `<blockquote>${children}</blockquote>`;
+    if (node.type === "table") return `<table><tbody>${children}</tbody></table>`;
+    if (node.type === "table-row") return `<tr>${children}</tr>`;
+    if (node.type === "table-cell") return `<td>${children}</td>`;
+    if (node.type === "link" && node.url) {
+      return `<a href="${escapeHtml(node.url)}">${children}</a>`;
+    }
+    return children;
+  };
+  return nodes.map(render).join("\n");
+};
+
 const normalizedMatchText = (value) =>
   String(value || "")
     .normalize("NFKC")
@@ -172,13 +326,15 @@ const normalizedMatchText = (value) =>
 const mapApiArticle = (item) => {
   if (!item) return null;
   const slug = String(item.slug || "").trim();
-  const bodyText = String(item.plain_content || "").trim() || stripHTML(item.content || "");
+  const rawHtml = richContentHtml(item.content);
+  const bodyText = String(item.plain_content || "").trim() || stripHTML(rawHtml);
   return {
     slug,
     url: slug ? `${ARTICLE_BASE}${slug}` : null,
     title: String(item.title || item.seoTitle || "").trim(),
     description: String(item.summary || item.seoDescription || "").trim(),
     bodyText,
+    rawHtml: rawHtml.trim() || null,
     sdgTags: (item.tags || []).map((tag) => tag?.name || tag?.title || "").filter(Boolean),
     institutions: (item.institutions || []).map((institution) => institution?.name || "").filter(Boolean),
     category: (item.categories || [])[0]?.name || "Reports/Data Releases",
@@ -253,6 +409,7 @@ const fetchArticleFromHtml = async (slug) => {
     title: htmlTitle,
     description,
     bodyText,
+    rawHtml: html,
     sdgTags,
     institutions,
     category: "Reports/Data Releases",
@@ -317,6 +474,8 @@ module.exports = {
   fetchHTML,
   fetchPage,
   mapApiArticle,
+  boundedFetch,
+  assertPolicyEdgeUrl,
   stripHTML,
   getApiToken,
   ARTICLE_BASE,

@@ -175,6 +175,13 @@ const recordCompletedPipeline = async ({ documentId, jobId, result }) => {
     ["READY", "completed", result.chunkSetSha256 || textHash, result.chunkSetSha256 || textHash],
   ];
   for (const [stage, status, inputHash, outputHash] of stages) {
+    const htmlMetadata = artifact.extractionMethod === "source_html" ? {
+      resourceType: "html",
+      rawHtmlHash: metrics.rawHtmlHash || null,
+      cleanContentHash: metrics.cleanContentHash || null,
+      tableRowsExtracted: Number(metrics.tableRowsExtracted || 0),
+      contentUnchanged: Boolean(metrics.contentUnchanged),
+    } : {};
     await recordStage({
       documentId,
       jobId,
@@ -191,7 +198,10 @@ const recordCompletedPipeline = async ({ documentId, jobId, result }) => {
       metadata: stage === "OCR" ? {
         pageLevel: Boolean(result.pdfQuality?.pageExtraction),
         pages: result.pdfQuality?.pageExtraction || [],
-      } : {},
+        ...(artifact.extractionMethod === "source_html" ? { skippedForResourceType: "html" } : {}),
+      } : ["FETCH", "EXTRACT", "NORMALIZE", "CHUNK", "FTS_INDEX"].includes(stage)
+        ? htmlMetadata
+        : {},
     });
   }
 };

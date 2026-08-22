@@ -2,11 +2,14 @@ const crypto = require("node:crypto");
 const dns = require("node:dns").promises;
 const net = require("node:net");
 const axios = require("axios");
-const cheerio = require("cheerio");
 const { query } = require("../db");
 const { pdfProcessor } = require("../lib/pdfProcessor");
 const { createObjectStorage, objectStorageConfig } = require("../lib/storage/objectStorage");
 const { httpsAgentForUrl } = require("../lib/ingestion/core/tlsTrust");
+const {
+  chunkStructuredHtml,
+  extractStructuredHtml,
+} = require("../document/htmlResourceService");
 
 const MAX_SOURCE_BYTES = 20 * 1024 * 1024;
 const MAX_SOURCE_TEXT = 500_000;
@@ -77,112 +80,24 @@ const cleanSourceText = (value) =>
     .trim()
     .slice(0, MAX_SOURCE_TEXT);
 
-const textFromMarkup = (value) => {
-  const fragment = cheerio.load(String(value || ""));
-  fragment("script, style, noscript, template, svg").remove();
-  return cleanSourceText(fragment.root().text());
-};
-
-const structuredHtmlText = ($) => {
-  const candidates = [];
-  $("script[type='application/ld+json']").each((_, element) => {
-    try {
-      const parsed = JSON.parse($(element).html() || "null");
-      const records = Array.isArray(parsed) ? parsed : [parsed];
-      for (const record of records) {
-        const graph = Array.isArray(record?.["@graph"])
-          ? record["@graph"]
-          : [record];
-        for (const item of graph) {
-          for (const field of ["articleBody", "text", "description", "abstract"]) {
-            if (typeof item?.[field] === "string") candidates.push(item[field]);
-          }
-        }
-      }
-    } catch {
-      // Invalid structured data should not block the readable HTML fallback.
-    }
-  });
-
-  const nextData = $("#__NEXT_DATA__").first().html();
-  if (nextData) {
-    try {
-      const visit = (value, key = "", depth = 0) => {
-        if (depth > 10 || value == null) return;
-        if (typeof value === "string") {
-          if (
-            /^(articleBody|plain_content|content|body|description|summary|abstract)$/i.test(key)
-            && value.length >= 40
-          ) candidates.push(value);
-          return;
-        }
-        if (Array.isArray(value)) {
-          value.slice(0, 100).forEach((entry) => visit(entry, key, depth + 1));
-          return;
-        }
-        if (typeof value === "object") {
-          Object.entries(value).forEach(([childKey, child]) =>
-            visit(child, childKey, depth + 1));
-        }
-      };
-      visit(JSON.parse(nextData));
-    } catch {
-      // Some Next.js pages do not serialize valid JSON into this script.
-    }
-  }
-  return candidates.map(textFromMarkup).filter((text) => text.length >= 40);
-};
-
 const extractHtml = (buffer, url) => {
-  const html = buffer.toString("utf8");
-  const $ = cheerio.load(html);
-  const structured = structuredHtmlText($);
-  const title = cleanSourceText(
-    $("meta[property='og:title']").attr("content")
-      || $("h1").first().text()
-      || $("title").first().text()
-      || new URL(url).hostname,
-  ).slice(0, 300);
-  const description = cleanSourceText(
-    $("meta[name='description']").attr("content")
-      || $("meta[property='og:description']").attr("content")
-      || "",
-  );
-  $("script, style, noscript, template, svg, nav, footer, header").remove();
-  const readable = [];
-  for (const selector of [
-    "article",
-    "main",
-    "[role='main']",
-    "#single-entry-content",
-    ".entry-content",
-    ".article-content",
-    ".post-content",
-    "[data-testid*='article']",
-  ]) {
-    $(selector).each((_, element) => {
-      const text = cleanSourceText($(element).text());
-      if (text.length >= 40) readable.push(text);
-    });
+  const extracted = extractStructuredHtml({
+    html: buffer.toString("utf8"),
+    url,
+  });
+  if (!extracted.quality.valid) {
+    const error = new Error(
+      extracted.quality.dynamicShell
+        ? "This page loads its document content dynamically and no readable source payload was available."
+        : "This webpage did not contain enough high-quality document text to study.",
+    );
+    error.status = 422;
+    error.failureCode = extracted.quality.dynamicShell
+      ? "HTML_DYNAMIC_CONTENT_UNAVAILABLE"
+      : "HTML_EXTRACTION_LOW_QUALITY";
+    throw error;
   }
-  const bodyText = cleanSourceText($("body").text());
-  const candidates = [...structured, ...readable];
-  let text = candidates.sort((left, right) => right.length - left.length)[0]
-    || bodyText;
-  if (description && !text.includes(description)) {
-    text = cleanSourceText(`${description}\n\n${text}`);
-  }
-  return {
-    title,
-    text,
-    mimeType: "text/html",
-    pageCount: null,
-    extractionMethod: structured.length
-      ? "structured_html"
-      : readable.length
-        ? "source_html"
-        : "html_body_fallback",
-  };
+  return { ...extracted, chunks: chunkStructuredHtml(extracted) };
 };
 
 const extractPdf = async (buffer, url, fileName = null) => {
@@ -321,11 +236,19 @@ const persistSource = async ({ userId, title, sourceType, sourceUrl, fileName, m
         pageCount: extracted.pageCount || null,
         extractionMethod: extracted.extractionMethod || null,
         ocrUsed: Boolean(extracted.ocrUsed),
+        rawHtmlHash: extracted.rawHtmlHash || null,
+        cleanContentHash: extracted.cleanContentHash || null,
+        extractionQuality: extracted.quality || null,
       }),
     ],
   );
   const source = result.rows[0];
-  const chunks = chunkText(text);
+  const chunks = Array.isArray(extracted.chunks) && extracted.chunks.length
+    ? extracted.chunks.map((chunk) => ({
+        content: cleanSourceText(chunk.content),
+        metadata: { ...chunk.metadata, source: "user_source" },
+      }))
+    : chunkText(text);
   for (const [index, chunk] of chunks.entries()) {
     await query(
       `INSERT INTO research_source_chunks (source_id, chunk_index, content, metadata_json)
@@ -418,7 +341,7 @@ const getSourceContext = async (userId, sourceIds = [], search = "") => {
   if (!ids.length) return { context: "", sources: [], evidence: [], chunks: 0 };
   const result = await query(
     `SELECT s.id, s.title, s.source_url, s.file_name, s.source_type,
-            c.chunk_index, c.content
+            c.chunk_index, c.content, c.metadata_json
       FROM research_sources s
       JOIN research_source_chunks c ON c.source_id = s.id
       WHERE s.user_id = $1 AND s.id = ANY($2::BIGINT[]) AND s.status = 'ready'
@@ -455,6 +378,12 @@ const getSourceContext = async (userId, sourceIds = [], search = "") => {
       passage: Number(row.chunk_index) + 1,
       userSource: true,
       authorityClass: "USER_SOURCE",
+      resourceType: row.metadata_json?.resourceType || null,
+      heading: row.metadata_json?.heading || row.metadata_json?.sectionTitle || null,
+      sectionPath: row.metadata_json?.sectionPath || [],
+      anchor: row.metadata_json?.sourceAnchor || null,
+      pageStart: null,
+      pageEnd: null,
     });
     if (!sources.some((source) => source.sourceId === String(row.id))) {
       sources.push({
@@ -467,6 +396,10 @@ const getSourceContext = async (userId, sourceIds = [], search = "") => {
         passage: Number(row.chunk_index) + 1,
         userSource: true,
         authorityClass: "USER_SOURCE",
+        resourceType: row.metadata_json?.resourceType || null,
+        heading: row.metadata_json?.heading || row.metadata_json?.sectionTitle || null,
+        sectionPath: row.metadata_json?.sectionPath || [],
+        anchor: row.metadata_json?.sourceAnchor || null,
       });
     }
   }

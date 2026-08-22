@@ -57,6 +57,8 @@
     "ingest:catalog-only": "node scripts/ingest-prs-catalog.js --catalog-only",
     "ingest:sources": "node cli/ingestSources.js",
     "ingest:health": "node cli/ingestHealth.js",
+    "policyedge:html:audit": "node cli/policyEdgeHtmlAudit.js",
+    "policyedge:html:canary": "node cli/policyEdgeHtmlCanary.js",
     "prs:health": "node cli/prsHealth.js",
     "prs:sync": "node cli/prsSync.js",
     "ingest:scheduled": "node cli/scheduledIngestion.js",
