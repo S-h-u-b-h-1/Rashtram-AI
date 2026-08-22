@@ -42,9 +42,14 @@ const loadCatalogueContext = async (ids) => {
             LEFT(COALESCE(a.original_text, ''), 12000) AS original_text,
             LEFT(COALESCE(a.english_summary, ''), 3200) AS english_summary
        FROM legislative_documents d
+       JOIN documents catalogue_document ON catalogue_document.id = d.id
        LEFT JOIN document_text_artifacts a ON a.document_id = d.id
       WHERE d.id = ANY($1::BIGINT[])
-        AND d.research_ready = TRUE
+        AND catalogue_document.visibility_status = 'public'
+        AND (
+          catalogue_document.research_ready = TRUE
+          OR LENGTH(BTRIM(COALESCE(a.english_summary, ''))) >= 80
+        )
       ORDER BY array_position($1::BIGINT[], d.id)
       LIMIT ${MAX_DOCUMENTS}`,
     [ids],
@@ -52,7 +57,10 @@ const loadCatalogueContext = async (ids) => {
   const context = [];
   const citations = [];
   for (const row of rows.rows) {
-    const label = `[Catalogue document: ${row.title}]`;
+    const usingSummary = !String(row.original_text || "").trim();
+    const label = usingSummary
+      ? `[Catalogue summary: ${row.title}]`
+      : `[Catalogue document: ${row.title}]`;
     const evidence = String(row.original_text || row.english_summary || "")
       .replace(/\s+/g, " ")
       .trim();
@@ -125,7 +133,7 @@ router.post("/generate", generationLimiter, async (req, res) => {
       userSources.context,
     ].filter(Boolean).join("\n\n").slice(0, MAX_CONTEXT_CHARS);
     if (!context) {
-      return res.status(422).json({ error: "Select at least one research-ready catalogue document or study source." });
+      return res.status(422).json({ error: "Select at least one prepared catalogue document, stored document summary, or study source." });
     }
     const citations = [...catalogue.citations, ...userSources.sources.map((source) => ({
       sourceType: "user_source",

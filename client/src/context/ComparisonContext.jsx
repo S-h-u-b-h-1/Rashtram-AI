@@ -183,6 +183,39 @@ export function ComparisonProvider({ children }) {
         setDocuments(nextDocuments);
         return { ok: true, documents: nextDocuments, added: true };
       };
+      const prepareCandidate = async (document) => {
+        if (isComparisonReady(document)) return normalizePreparedDocument(document);
+        if (!canPrepareForResearch(document)) {
+          return { error: comparisonDisabledReason(document) };
+        }
+        const prepared = await prepareDocumentForComparison(document.id);
+        const readiness =
+          prepared.readiness || await getDocumentReadiness(document.id);
+        if (!readiness?.comparisonReady) {
+          return {
+            error:
+              readiness?.reason ||
+              readiness?.readinessReason ||
+              "Document could not be prepared for comparison.",
+          };
+        }
+        return normalizePreparedDocument({
+          ...document,
+          researchReady: true,
+          comparisonReady: true,
+          processingStatus: "ready",
+          extractionStatus: "ready",
+          embeddingStatus:
+            readiness.embeddingStatus || document.embeddingStatus,
+          chunksCount: readiness.counts?.chunks || document.chunksCount,
+          embeddingsCount:
+            readiness.counts?.embeddings || document.embeddingsCount,
+          retrievalMode: readiness.retrievalMode,
+          hasAccessibleResource:
+            readiness.requirements?.hasAccessibleResource ??
+            document.hasAccessibleResource,
+        });
+      };
       return {
         documents,
         isSelected: (id) =>
@@ -214,39 +247,32 @@ export function ComparisonProvider({ children }) {
           setDocuments(nextDocuments);
           return { ok: true, documents: nextDocuments };
         },
+        prepareAndStartComparison: async (...candidates) => {
+          const uniqueCandidates = candidates.filter(
+            (candidate, index, values) =>
+              candidate?.id &&
+              values.findIndex(
+                (value) => String(value?.id) === String(candidate.id),
+              ) === index,
+          );
+          if (uniqueCandidates.length < 2) {
+            return { ok: false, reason: "Select two different documents." };
+          }
+          const prepared = await Promise.all(
+            uniqueCandidates.slice(0, 5).map(prepareCandidate),
+          );
+          const unavailable = prepared.find((result) => result.error);
+          if (unavailable) return { ok: false, reason: unavailable.error };
+          setDocuments(prepared);
+          return { ok: true, documents: prepared };
+        },
         prepareAndAddDocument: async (document) => {
           if (!document?.id) {
             return { ok: false, reason: "Document not found." };
           }
-          const prepared = await prepareDocumentForComparison(document.id);
-          const readiness =
-            prepared.readiness || await getDocumentReadiness(document.id);
-          if (!readiness?.comparisonReady) {
-            return {
-              ok: false,
-              reason:
-                readiness?.reason ||
-                readiness?.readinessReason ||
-                "Document could not be prepared for comparison.",
-              readiness,
-            };
-          }
-          return addPreparedDocument({
-            ...document,
-            researchReady: true,
-            comparisonReady: true,
-            processingStatus: "ready",
-            extractionStatus: "ready",
-            embeddingStatus:
-              readiness.embeddingStatus || document.embeddingStatus,
-            chunksCount: readiness.counts?.chunks || document.chunksCount,
-            embeddingsCount:
-              readiness.counts?.embeddings || document.embeddingsCount,
-            retrievalMode: readiness.retrievalMode,
-            hasAccessibleResource:
-              readiness.requirements?.hasAccessibleResource ??
-              document.hasAccessibleResource,
-          });
+          const candidate = await prepareCandidate(document);
+          if (candidate.error) return { ok: false, reason: candidate.error };
+          return addPreparedDocument(candidate);
         },
         removeDocument: (id) =>
           setDocuments((current) =>

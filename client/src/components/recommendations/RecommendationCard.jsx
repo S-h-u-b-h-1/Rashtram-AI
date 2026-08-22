@@ -2,14 +2,17 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { useState } from "react";
 import {
   ArrowRight,
   CalendarDays,
   GitCompareArrows,
   Landmark,
+  Loader2,
   ShieldCheck,
 } from "lucide-react";
 import {
+  canPrepareForResearch,
   comparisonDisabledReason,
   comparisonHrefForDocuments,
   useComparison,
@@ -29,11 +32,22 @@ export function RecommendationCard({
   onCompare,
 }) {
   const router = useRouter();
-  const { addDocument, removeDocument, isSelected } = useComparison();
+  const {
+    addDocument,
+    prepareAndAddDocument,
+    removeDocument,
+    isSelected,
+  } = useComparison();
+  const [preparing, setPreparing] = useState(false);
+  const [compareError, setCompareError] = useState("");
   const selected = isSelected(recommendation.id);
   const disabledReason = comparisonDisabledReason(recommendation);
+  const canPrepare = canPrepareForResearch(recommendation);
   const confidence = recommendation.confidence || "medium";
-  const compareAction = compareActionState(disabledReason, selected);
+  const compareAction = compareActionState(
+    canPrepare ? "" : disabledReason,
+    selected,
+  );
   const documentType = humanize(
     recommendation.documentType || recommendation.type || "document",
   );
@@ -136,34 +150,63 @@ export function RecommendationCard({
         </Link>
         <button
           type="button"
-          disabled={compareAction.disabled}
+          disabled={compareAction.disabled || preparing}
           title={compareAction.disabled ? disabledReason : undefined}
           aria-pressed={selected}
-          onClick={() => {
-            if (onCompare) {
-              onCompare(recommendation);
-              track("recommendation_added_to_compare");
-              return;
-            }
-            if (selected) {
-              removeDocument(recommendation.id);
-            } else {
-              const result = addDocument(recommendation);
-              if (result.ok) {
-                track("recommendation_added_to_compare");
-                const href = autoOpenComparison
-                  ? comparisonHrefForDocuments(result.documents)
-                  : null;
-                if (href) router.push(href);
+          onClick={async () => {
+            setPreparing(true);
+            setCompareError("");
+            try {
+              if (onCompare) {
+                const result = await onCompare(recommendation);
+                if (result?.ok !== false) track("recommendation_added_to_compare");
+                return;
               }
+              if (selected) {
+                removeDocument(recommendation.id);
+              } else {
+                const result = canPrepare
+                  ? await prepareAndAddDocument(recommendation)
+                  : addDocument(recommendation);
+                if (result.ok) {
+                  track("recommendation_added_to_compare");
+                  const href = autoOpenComparison
+                    ? comparisonHrefForDocuments(result.documents)
+                    : null;
+                  if (href) router.push(href);
+                } else {
+                  setCompareError(
+                    result.reason || "This document could not be prepared.",
+                  );
+                }
+              }
+            } catch (error) {
+              setCompareError(
+                error.message || "This document could not be prepared.",
+              );
+            } finally {
+              setPreparing(false);
             }
           }}
           className="inline-flex min-h-9 flex-1 items-center justify-center gap-1.5 rounded-xl border border-[#8f1d2c]/8 bg-[#eee0dc] px-3 py-2 text-[10px] font-semibold text-[#8f1d2c] transition hover:bg-[#e7d5cf] disabled:cursor-not-allowed disabled:opacity-40"
         >
-          <GitCompareArrows className="h-3 w-3" />
-          {onCompare ? "Compare" : compareAction.label}
+          {preparing ? (
+            <Loader2 className="h-3 w-3 animate-spin" />
+          ) : (
+            <GitCompareArrows className="h-3 w-3" />
+          )}
+          {preparing
+            ? "Preparing…"
+            : canPrepare
+              ? "Prepare & compare"
+              : onCompare ? "Compare" : compareAction.label}
         </button>
       </div>
+      {compareError && (
+        <p role="alert" className="mt-2 text-[10px] leading-4 text-[#8f1d2c]">
+          {compareError}
+        </p>
+      )}
     </article>
   );
 }

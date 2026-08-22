@@ -11,6 +11,9 @@ const {
 const {
   getProcessingStatus,
 } = require("../document/readinessService");
+const {
+  getRecentRecommendations,
+} = require("../document/recommendationService");
 
 let overviewCache = {
   key: null,
@@ -440,6 +443,7 @@ const getDashboardIntelligence = async (userId) => {
     trendingResult,
     ministryActivityResult,
     developmentCountsResult,
+    contextualRecommendations,
     recommendedReadingResult,
     refreshResult,
     recentCountsResult,
@@ -653,6 +657,10 @@ const getDashboardIntelligence = async (userId) => {
       GROUP BY document_type
       ORDER BY documents DESC, document_type
     `),
+    getRecentRecommendations(userId, 8).catch((error) => {
+      console.warn("Contextual reading recommendations unavailable:", error.message);
+      return [];
+    }),
     query(
       `WITH preferences AS (
          SELECT
@@ -942,24 +950,26 @@ const getDashboardIntelligence = async (userId) => {
       documentType: row.document_type,
       documentCount: row.documents,
     })),
-    recommendedReading: recommendedReadingResult.rows
-      .map(mapDocument)
-      .filter((document) => document.recommendationScore >= 3)
-      .map((document) => {
-        const score = Math.min(
-          Number((document.recommendationScore / 11).toFixed(4)),
-          1,
-        );
-        return {
-          ...document,
-          type: document.documentType,
-          score,
-          confidence: score >= 0.5 ? "high" : "medium",
-          reason:
-            "Recommended because it matches your saved ministry, jurisdiction, topic, or document-type preferences.",
-          recommendationType: "profile_match",
-        };
-      }),
+    recommendedReading: contextualRecommendations.length
+      ? contextualRecommendations
+      : recommendedReadingResult.rows
+        .map(mapDocument)
+        .filter((document) => document.recommendationScore >= 3)
+        .map((document) => {
+          const score = Math.min(
+            Number((document.recommendationScore / 11).toFixed(4)),
+            1,
+          );
+          return {
+            ...document,
+            type: document.documentType,
+            score,
+            confidence: score >= 0.5 ? "high" : "medium",
+            reason:
+              "Recommended because it matches your saved ministry, jurisdiction, topic, or document-type preferences.",
+            recommendationType: "profile_match",
+          };
+        }),
     demoHighlights: [
       latestBy((document) => document.documentType === "act", 1)[0],
       activeBillsResult.rows.map(mapDocument)[0],

@@ -394,6 +394,7 @@ const scoreRecommendation = (signals = {}) => {
     (signals.titleMatch ? 8 : 0) +
     (signals.sharedLegalIdentifier ? 12 : 0) +
     (signals.semanticMatch ? 12 : 0) +
+    (signals.summaryMatch ? 12 : 0) +
     (signals.profileMatch ? 5 : 0) +
     (signals.recent ? 4 : 0) +
     (signals.researchReady ? 8 : 0) +
@@ -409,6 +410,14 @@ const DOCUMENT_TITLE_STOP_WORDS = new Set([
   "state", "the", "union", "territory",
 ]);
 
+const DOCUMENT_SUMMARY_STOP_WORDS = new Set([
+  ...DOCUMENT_TITLE_STOP_WORDS,
+  "according", "affected", "authority", "chapter", "document", "government",
+  "implementation", "including", "institution", "ministry", "persons",
+  "provision", "provisions", "public", "section", "shall", "summary",
+  "under", "using", "year",
+]);
+
 const hasDocumentTitleSubjectOverlap = (leftTitle, rightTitle) => {
   const subjectTokens = (title) => meaningfulTokens(title).filter(
     (token) => !DOCUMENT_TITLE_STOP_WORDS.has(token) && !/^\d{4}$/.test(token),
@@ -420,17 +429,33 @@ const hasDocumentTitleSubjectOverlap = (leftTitle, rightTitle) => {
   return shared >= 2 && shared / Math.min(left.size, right.size) >= 0.5;
 };
 
+const hasDocumentSummarySubjectOverlap = (leftSummary, rightSummary) => {
+  const subjectTokens = (summary) => meaningfulTokens(String(summary || "").slice(0, 4_000))
+    .filter((token) =>
+      !DOCUMENT_SUMMARY_STOP_WORDS.has(token) &&
+      !/^\d+$/.test(token),
+    );
+  const left = new Set(subjectTokens(leftSummary));
+  const right = new Set(subjectTokens(rightSummary));
+  if (left.size < 8 || right.size < 8) return false;
+  const shared = [...left].filter((token) => right.has(token)).length;
+  return shared >= 6 && shared / Math.min(left.size, right.size) >= 0.12;
+};
+
 // Broad catalogue metadata is useful for ranking, but it must never be enough
 // to establish that two documents discuss the same subject.
 const hasSubstantiveRecommendationAffinity = (signals = {}) => {
   const sameIssuer = Boolean(
     signals.sameMinistry || signals.sameAuthority || signals.sameDepartment,
   );
-  const sameSubject = Boolean(signals.sameCategory || signals.semanticMatch);
+  const sameSubject = Boolean(
+    signals.sameCategory || signals.semanticMatch || signals.summaryMatch,
+  );
   return Boolean(
     signals.sharedLegalIdentifier ||
       signals.titleMatch ||
-      (signals.semanticMatch && (sameIssuer || sameSubject)),
+      (signals.semanticMatch && (sameIssuer || sameSubject)) ||
+      (signals.summaryMatch && (sameIssuer || signals.sameCategory || signals.sameType)),
   );
 };
 
@@ -449,7 +474,7 @@ const reasonFromSignals = (signals, candidate) => {
   if (signals.sameState) reasons.push(`the same state (${candidate.state})`);
   else if (signals.sameJurisdiction) reasons.push("the same jurisdiction");
   if (signals.sameCategory) reasons.push("the same policy category");
-  if (signals.semanticMatch || signals.titleMatch) {
+  if (signals.semanticMatch || signals.titleMatch || signals.summaryMatch) {
     reasons.push("closely matching subject matter");
   }
   if (signals.sharedLegalIdentifier) reasons.push("a shared legal identifier");
@@ -507,6 +532,10 @@ const mapCandidateSignals = (row, semanticIds, profile, current) => {
       hasDocumentTitleSubjectOverlap(current?.title, row.title),
     sharedLegalIdentifier: Boolean(row.shared_legal_identifier),
     semanticMatch: semanticIds.has(String(row.id)),
+    summaryMatch: hasDocumentSummarySubjectOverlap(
+      row.current_summary,
+      row.candidate_summary,
+    ),
     profileMatch: Boolean(profileMatch),
     recent,
     researchReady: Boolean(row.research_ready),
@@ -661,6 +690,18 @@ const getDocumentRecommendations = async (
        state.processing_status, state.extraction_status,
        state.embedding_status, state.chunks_count, state.embeddings_count,
        state.readiness_class, state.readiness_reason,
+       COALESCE(
+         current_artifact.english_summary,
+         current_legacy.source_metadata ->> 'summary',
+         current_legacy.source_metadata ->> 'description',
+         current_legacy.source_metadata ->> 'abstract'
+       ) AS current_summary,
+       COALESCE(
+         candidate_artifact.english_summary,
+         legacy.source_metadata ->> 'summary',
+         legacy.source_metadata ->> 'description',
+         legacy.source_metadata ->> 'abstract'
+       ) AS candidate_summary,
        EXISTS (
          SELECT 1 FROM document_resources resource
          WHERE resource.document_id = candidate.id
@@ -743,8 +784,13 @@ const getDocumentRecommendations = async (
        ) AS relationship_explanation
      FROM documents candidate
      JOIN legislative_documents legacy ON legacy.id = candidate.id
-     LEFT JOIN document_processing_state state ON state.document_id = candidate.id
      CROSS JOIN current_document current
+     JOIN legislative_documents current_legacy ON current_legacy.id = current.id
+     LEFT JOIN document_processing_state state ON state.document_id = candidate.id
+     LEFT JOIN document_text_artifacts candidate_artifact
+       ON candidate_artifact.document_id = candidate.id
+     LEFT JOIN document_text_artifacts current_artifact
+       ON current_artifact.document_id = current.id
      WHERE candidate.id <> current.id
        AND candidate.visibility_status = 'public'
        AND candidate.quality_score >= 40
@@ -1234,8 +1280,16 @@ const getRecentRecommendations = async (userId, limit = 12) => {
      LEFT JOIN document_processing_state state ON state.document_id = document.id
      WHERE ranked.recommendation_rank = 1
        AND document.visibility_status = 'public'
-       AND document.research_ready
        AND document.quality_score >= 40
+       AND (
+         document.research_ready
+         OR EXISTS (
+           SELECT 1 FROM document_resources resource
+           WHERE resource.document_id = document.id
+             AND resource.resource_type IN ('pdf', 'text', 'html')
+             AND resource.is_accessible
+         )
+       )
      ORDER BY ranked.recommended_at DESC
      LIMIT $2`,
     [userId, safeLimit],
@@ -1256,7 +1310,7 @@ const getRecentRecommendations = async (userId, limit = 12) => {
       publicationDate: row.publication_date,
       sourceUrl: row.canonical_url || row.detail_url || row.source_url,
       pdfUrl: row.pdf_url,
-      researchReady: true,
+      researchReady: Boolean(row.research_ready),
       comparisonReady: Boolean(row.comparison_ready),
       hasAccessibleResource: Boolean(row.has_accessible_resource),
       processingStatus: row.processing_status || null,
@@ -1266,7 +1320,7 @@ const getRecentRecommendations = async (userId, limit = 12) => {
       embeddingsCount: Number(row.embeddings_count || 0),
       readinessClass: row.readiness_class || null,
       readinessReason: row.readiness_reason || null,
-      readiness: "research_ready",
+      readiness: row.research_ready ? "research_ready" : "pdf_available",
       qualityScore: Number(row.quality_score || 0),
       score: Number(row.score || 0),
       confidence:
@@ -1295,6 +1349,7 @@ module.exports = {
   confidenceForScore,
   evaluateBusinessCandidate,
   hasDocumentTitleSubjectOverlap,
+  hasDocumentSummarySubjectOverlap,
   hasSubstantiveRecommendationAffinity,
   getDocumentRecommendations,
   getComparisonRecommendations,

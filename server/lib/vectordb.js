@@ -1095,6 +1095,7 @@ Grounding rules are mandatory:
 `;
 
   return runGeneration("generateContentStream", fullPrompt, {
+    useCircuitBreaker: false,
     models: taskGenerationModels("chat"),
     maxModels: Number(process.env.CHAT_AI_MAX_MODELS || 3),
     timeoutMs: Number(process.env.CHAT_AI_TIMEOUT_MS || 18_000),
@@ -1139,8 +1140,13 @@ Return a polished Markdown policy draft with exactly these sections:
 ## Evidence Notes
 
 Use concise tables or bullets where useful. Cite supplied labels such as
-[Catalogue document: ...] and [User source: ...] inline for every substantive
-evidence claim. Do not present independent research as government policy.
+[Catalogue document: ...], [Catalogue summary: ...], and [User source: ...]
+inline for every substantive evidence claim. A catalogue summary is secondary
+context: use it for high-level direction, explicitly mark details that require
+the full document as "To be validated", and never invent a clause from it.
+Do not present independent research as government policy. Fully answer every
+requested drafting section: where the evidence is incomplete, provide a clearly
+labelled proposal or validation question instead of silently omitting the field.
 Write in ${language} while retaining important original-language terms.
 
 Researcher brief:
@@ -1151,6 +1157,7 @@ ${context}
 `;
 
   return runGeneration("generateContentStream", fullPrompt, {
+    useCircuitBreaker: false,
     models: taskGenerationModels("chat"),
     maxModels: Number(process.env.POLICY_DRAFT_AI_MAX_MODELS || 2),
     timeoutMs: Number(process.env.POLICY_DRAFT_AI_TIMEOUT_MS || 24_000),

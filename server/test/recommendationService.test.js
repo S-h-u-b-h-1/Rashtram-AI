@@ -5,6 +5,7 @@ const {
   RELEVANCE_TIERS,
   confidenceForScore,
   evaluateBusinessCandidate,
+  hasDocumentSummarySubjectOverlap,
   hasDocumentTitleSubjectOverlap,
   hasSubstantiveRecommendationAffinity,
   inferBusinessSignals,
@@ -60,6 +61,23 @@ test("document title affinity keeps shared policy subjects and rejects broad tax
     hasDocumentTitleSubjectOverlap(
       "The Manipur Goods and Services Tax (Amendment) Bill, 2025",
       "The Income-tax Bill, 2025",
+    ),
+    false,
+  );
+});
+
+test("stored summaries establish subject affinity without treating generic legal prose as a match", () => {
+  assert.equal(
+    hasDocumentSummarySubjectOverlap(
+      "The measure changes goods and services tax registration, input tax credit, electronic invoices, returns, taxable supplies, small dealers, and compliance procedures.",
+      "This GST proposal addresses goods and services tax registration, input tax credit, electronic invoices, returns, taxable supplies, small dealers, and compliance procedures.",
+    ),
+    true,
+  );
+  assert.equal(
+    hasDocumentSummarySubjectOverlap(
+      "The measure changes goods and services tax registration, input tax credit, electronic invoices, returns, taxable supplies, small dealers, and compliance procedures.",
+      "The mining framework regulates mineral auctions, exploration leases, royalty payments, mine closure, environmental restoration, concession holders, and geological surveys.",
     ),
     false,
   );

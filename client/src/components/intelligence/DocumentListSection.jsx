@@ -15,6 +15,7 @@ import {
 import { getPublicSourceLabel } from "@/lib/source-branding";
 import { trackActivity } from "@/lib/api";
 import {
+  canPrepareForResearch,
   comparisonDisabledReason,
   useComparison,
 } from "@/context/ComparisonContext";
@@ -26,7 +27,7 @@ export function DocumentListSection({
   emptyMessage,
   onViewAll,
 }) {
-  const { addDocument, removeDocument, isSelected } = useComparison();
+  const { addDocument, prepareAndAddDocument, removeDocument, isSelected } = useComparison();
   return (
     <section className="surface-card p-5 sm:p-6">
       <div className="flex items-start justify-between gap-4">
@@ -64,6 +65,7 @@ export function DocumentListSection({
               pdfUrl: document.pdfUrl || document.pdf,
             };
             const disabledReason = comparisonDisabledReason(normalizedDocument);
+            const canPrepareCompare = canPrepareForResearch(normalizedDocument);
             const row = (
               <div className="group flex min-w-0 flex-1 items-start gap-3 p-3">
                 <div className="mt-0.5 grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-[#ebe3d6] text-[#874047]">
@@ -122,13 +124,19 @@ export function DocumentListSection({
                 )}
                 <button
                   type="button"
-                  disabled={Boolean(disabledReason)}
+                  disabled={Boolean(disabledReason) && !canPrepareCompare}
                   title={disabledReason || undefined}
-                  onClick={() =>
-                    selected
-                      ? removeDocument(document.id)
-                      : addDocument(normalizedDocument)
-                  }
+                  onClick={async () => {
+                    if (selected) {
+                      removeDocument(document.id);
+                      return;
+                    }
+                    if (canPrepareCompare) {
+                      await prepareAndAddDocument(normalizedDocument);
+                      return;
+                    }
+                    addDocument(normalizedDocument);
+                  }}
                   aria-label={`${selected ? "Remove" : "Add"} ${
                     document.title
                   } ${selected ? "from" : "to"} comparison`}

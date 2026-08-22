@@ -127,7 +127,10 @@ const getById = async (id, userId = null) => {
             document.id,
             userId,
             8,
-            document.type === "bill" ? { type: "bill" } : {},
+            {
+              ...(document.type === "bill" ? { type: "bill" } : {}),
+              includeNonReady: true,
+            },
           ),
         [],
       ),

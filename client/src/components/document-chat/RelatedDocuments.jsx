@@ -27,14 +27,18 @@ export function RelatedDocuments({
     addDocument,
     isSelected,
     removeDocument,
-    startComparison,
+    prepareAndStartComparison,
   } = useComparison();
-  const openComparison = (targetDocument) => {
-    const result = startComparison(sourceDocument, targetDocument);
+  const openComparison = async (targetDocument) => {
+    const result = await prepareAndStartComparison(
+      sourceDocument,
+      targetDocument,
+    );
     const href = result.ok
       ? comparisonHrefForDocuments(result.documents)
       : null;
     if (href) router.push(href);
+    return result;
   };
   const items = relationships.filter((item) =>
     item.verificationStatus === "source_verified" ||

@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { useState } from "react";
 import {
   ArrowLeft,
   Bookmark,
@@ -10,11 +11,13 @@ import {
   FileDown,
   Pin,
   GitCompareArrows,
+  Loader2,
   MoreHorizontal,
 } from "lucide-react";
 import { CollectionMenu } from "./CollectionMenu";
 import {
   comparisonDisabledReason,
+  canPrepareForResearch,
   comparisonHrefForDocuments,
   useComparison,
 } from "@/context/ComparisonContext";
@@ -31,9 +34,11 @@ export function ChatHeader({
   onExport,
 }) {
   const router = useRouter();
-  const { addDocument, removeDocument, isSelected } = useComparison();
+  const { addDocument, prepareAndAddDocument, removeDocument, isSelected } = useComparison();
+  const [preparingCompare, setPreparingCompare] = useState(false);
   const selected = isSelected(document.id);
   const compareDisabled = comparisonDisabledReason(document);
+  const canPrepareCompare = canPrepareForResearch(document);
   const sourceOnlyActions = isSourceOnlyResearchDocument(document);
   return (
     <header className="flex shrink-0 items-center justify-between gap-3 border-b border-white/8 bg-[#8f1d2c] px-4 py-3 text-white sm:px-6">
@@ -56,18 +61,28 @@ export function ChatHeader({
         {!sourceOnlyActions && (
           <button
             type="button"
-            disabled={Boolean(compareDisabled)}
+            disabled={
+              (Boolean(compareDisabled) && !canPrepareCompare) ||
+              preparingCompare
+            }
             title={compareDisabled || undefined}
-            onClick={() => {
+            onClick={async () => {
               if (selected) {
                 removeDocument(document.id);
                 return;
               }
-              const result = addDocument(document);
-              const href = result.ok
-                ? comparisonHrefForDocuments(result.documents)
-                : null;
-              if (href) router.push(href);
+              setPreparingCompare(true);
+              try {
+                const result = canPrepareCompare
+                  ? await prepareAndAddDocument(document)
+                  : addDocument(document);
+                const href = result.ok
+                  ? comparisonHrefForDocuments(result.documents)
+                  : null;
+                if (href) router.push(href);
+              } finally {
+                setPreparingCompare(false);
+              }
             }}
             className="grid h-9 w-9 place-items-center rounded-xl bg-white/8 text-white/70 hover:text-white disabled:cursor-not-allowed disabled:opacity-35"
             aria-label={
@@ -76,7 +91,11 @@ export function ChatHeader({
                 : "Add document to comparison"
             }
           >
-            <GitCompareArrows className="h-4 w-4" />
+            {preparingCompare ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <GitCompareArrows className="h-4 w-4" />
+            )}
           </button>
         )}
         <div className="hidden items-center gap-1.5 sm:flex">
