@@ -586,7 +586,7 @@ export function DocumentChatLayout({
           )}
         </div>
       )}
-      <div className={`grid min-h-0 flex-1 ${sourcesOpen && studioOpen ? "lg:grid-cols-[280px_minmax(0,1fr)_340px]" : sourcesOpen ? "lg:grid-cols-[280px_minmax(0,1fr)]" : studioOpen ? "lg:grid-cols-[minmax(0,1fr)_340px]" : "lg:grid-cols-1"}`}>
+      <div className={`grid min-h-0 min-w-0 flex-1 ${sourcesOpen && studioOpen ? "lg:grid-cols-[280px_minmax(0,1fr)_340px]" : sourcesOpen ? "lg:grid-cols-[280px_minmax(0,1fr)]" : studioOpen ? "lg:grid-cols-[minmax(0,1fr)_340px]" : "lg:grid-cols-1"}`}>
         {sourcesOpen && <aside className="hidden min-h-0 overflow-hidden border-r border-[#8f1d2c]/10 lg:block">
           <StudySourcesPanel
             sources={studySources}
@@ -598,7 +598,7 @@ export function DocumentChatLayout({
             onCollapse={() => setSourcesOpen(false)}
           />
         </aside>}
-        <main id="research-chat" className="flex min-h-0 flex-col">
+        <main id="research-chat" className="flex min-h-0 min-w-0 w-full flex-col">
           <div className="flex shrink-0 items-center justify-between border-b border-[#8f1d2c]/8 bg-[#f7f2eb] px-4 py-3 sm:px-6">
             <div className="min-w-0">
               <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-[#874047]">Chat</p>

@@ -27,8 +27,15 @@ test("research workspaces share accessible mobile bottom sheets", async () => {
 });
 
 test("chat composer is safe-area aware and remains pinned on phone", async () => {
-  const source = await read("components/document-chat/ChatInput.jsx");
-  assert.match(source, /sticky bottom-0/);
-  assert.match(source, /safe-area-inset-bottom/);
-  assert.match(source, /min-h-9/);
+  const [input, layout, questions] = await Promise.all([
+    read("components/document-chat/ChatInput.jsx"),
+    read("components/document-chat/DocumentChatLayout.jsx"),
+    read("components/document-chat/SuggestedQuestions.jsx"),
+  ]);
+  assert.match(input, /sticky bottom-0/);
+  assert.match(input, /safe-area-inset-bottom/);
+  assert.match(input, /min-h-9/);
+  assert.match(input, /min-w-0 max-w-full/);
+  assert.match(layout, /id="research-chat" className="flex min-h-0 min-w-0 w-full flex-col"/);
+  assert.match(questions, /min-w-0 max-w-full/);
 });

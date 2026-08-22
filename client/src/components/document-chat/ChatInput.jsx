@@ -15,8 +15,8 @@ export function ChatInput({
   onResponseLanguageChange,
 }) {
   return (
-    <div className="sticky bottom-0 z-10 border-t border-[#8f1d2c]/8 bg-[#f7f2eb]/95 p-3 pb-[max(.75rem,env(safe-area-inset-bottom))] backdrop-blur sm:p-4">
-      <div className="mx-auto max-w-4xl">
+    <div className="sticky bottom-0 z-10 min-w-0 max-w-full border-t border-[#8f1d2c]/8 bg-[#f7f2eb]/95 p-3 pb-[max(.75rem,env(safe-area-inset-bottom))] backdrop-blur sm:p-4">
+      <div className="mx-auto min-w-0 max-w-4xl">
         <div className="flex items-end gap-2 rounded-2xl border border-[#8f1d2c]/10 bg-white p-2 shadow-sm">
           <textarea
             value={input}
@@ -34,7 +34,7 @@ export function ChatInput({
                 : "Ask a grounded question about this document…"
             }
             rows={2}
-            className="max-h-40 min-h-12 flex-1 resize-none bg-transparent px-3 py-2 text-sm text-[#29312d] outline-none placeholder:text-[#9a9387]"
+            className="max-h-40 min-h-12 min-w-0 flex-1 resize-none bg-transparent px-3 py-2 text-sm text-[#29312d] outline-none placeholder:text-[#9a9387]"
           />
           <button
             type="button"

@@ -4,7 +4,7 @@ export function SuggestedQuestions({
   onSelect,
 }) {
   return (
-    <div className="flex gap-2 overflow-x-auto border-t border-[#8f1d2c]/8 bg-[#f6f0e6] px-4 py-3">
+    <div className="flex min-w-0 max-w-full gap-2 overflow-x-auto overscroll-x-contain border-t border-[#8f1d2c]/8 bg-[#f6f0e6] px-4 py-3">
       {questions.map((question) => (
         <button
           key={question}
