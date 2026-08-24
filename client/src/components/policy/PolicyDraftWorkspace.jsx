@@ -22,9 +22,9 @@ import {
   addResearchUrlSource,
   createPolicyDraft,
   deleteResearchSource,
-  fetchDocuments,
   getResearchSources,
   prepareDocumentForComparison,
+  recommendForProblem,
 } from "@/lib/api";
 import {
   canPrepareDocumentForResearch,
@@ -60,18 +60,51 @@ export function PolicyDraftWorkspace() {
 
   useEffect(() => {
     let active = true;
-    Promise.all([
-      getResearchSources().catch(() => ({ sources: [] })),
-      fetchDocuments({ type: "policy,report", limit: 60, sortBy: "cataloguedAt", sortDirection: "desc" }).catch(() => ({ documents: [] })),
-    ]).then(([sourceResponse, documentResponse]) => {
+    getResearchSources().catch(() => ({ sources: [] })).then((sourceResponse) => {
       if (!active) return;
       setSources(sourceResponse.sources || []);
-      setDocuments(documentResponse.documents || []);
     }).finally(() => {
       if (active) setLoading(false);
     });
     return () => { active = false; };
   }, []);
+
+  useEffect(() => {
+    const objective = brief.objective.trim();
+    if (objective.length < 12) {
+      setDocuments([]);
+      return undefined;
+    }
+    let active = true;
+    const timer = window.setTimeout(async () => {
+      setLoading(true);
+      try {
+        const response = await recommendForProblem({
+          problem: [objective, brief.audience, brief.geography, brief.requirements]
+            .filter(Boolean)
+            .join(". "),
+          documentTypes: ["policy", "report", "act", "bill", "gazette"],
+          limit: 12,
+        });
+        if (!active) return;
+        const candidates = [
+          ...(response.recommendations || []),
+          ...(response.preparationCandidates || []),
+        ];
+        setDocuments(candidates.filter((candidate, index, all) =>
+          all.findIndex((item) => String(item.id) === String(candidate.id)) === index,
+        ));
+      } catch {
+        if (active) setDocuments([]);
+      } finally {
+        if (active) setLoading(false);
+      }
+    }, 650);
+    return () => {
+      active = false;
+      window.clearTimeout(timer);
+    };
+  }, [brief.objective, brief.audience, brief.geography, brief.requirements]);
 
   const filteredDocuments = useMemo(() => {
     const query = libraryQuery.trim().toLowerCase();
@@ -165,7 +198,7 @@ export function PolicyDraftWorkspace() {
       <div className="border-b border-[#8f1d2c]/10 px-4 py-4">
         <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-[#874047]">Rashtram library</p>
         <h2 className="mt-1 text-lg font-semibold text-[#29312d]">Policy references</h2>
-        <p className="mt-2 text-[11px] leading-5 text-[#706a61]">Choose a policy or report. Rashtram prepares readable sources when you generate the draft.</p>
+        <p className="mt-2 text-[11px] leading-5 text-[#706a61]">References are matched to the problem, audience, and jurisdiction in your draft brief.</p>
         <label className="mt-4 flex items-center gap-2 rounded-xl border border-[#8f1d2c]/12 bg-white px-3 py-2">
           <Search className="h-4 w-4 text-[#8f1d2c]" />
           <input value={libraryQuery} onChange={(event) => setLibraryQuery(event.target.value)} placeholder="Search policy references" className="min-w-0 flex-1 bg-transparent text-xs outline-none placeholder:text-[#a79e91]" />
@@ -173,7 +206,7 @@ export function PolicyDraftWorkspace() {
       </div>
       <div className="app-scrollbar min-h-0 flex-1 space-y-2 overflow-y-auto p-3">
         {loading ? <div className="flex items-center justify-center py-10 text-xs text-[#8a8277]"><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Loading references</div> : null}
-        {!loading && !filteredDocuments.length ? <div className="rounded-2xl border border-dashed border-[#8f1d2c]/15 bg-white px-4 py-8 text-center text-xs leading-5 text-[#8a8277]">No readable policy references found.</div> : null}
+        {!loading && !filteredDocuments.length ? <div className="rounded-2xl border border-dashed border-[#8f1d2c]/15 bg-white px-4 py-8 text-center text-xs leading-5 text-[#8a8277]">{brief.objective.trim().length < 12 ? "Describe the policy problem to see relevant references." : "No strongly related references were found. Add the sector, audience, or jurisdiction to the policy problem."}</div> : null}
         {filteredDocuments.map((document) => {
           const selected = selectedDocumentIds.includes(String(document.id));
           const available = isResearchReady(document) || canPrepareDocumentForResearch(document);

@@ -155,4 +155,8 @@ module.exports = [
     name: "039_commercial_pilot_observability.js",
     migration: require("./039_commercial_pilot_observability"),
   },
+  {
+    name: "040_product_reliability_v4.js",
+    migration: require("./040_product_reliability_v4"),
+  },
 ];

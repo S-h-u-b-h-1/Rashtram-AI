@@ -1171,6 +1171,99 @@ ${context}
   });
 };
 
+const policyDraftJsonPrompt = ({ prompt, context, responseLanguage = "English" }) => `
+You are Rashtram AI's policy drafting copilot for researchers and think tanks.
+Produce a practical evidence-led policy draft from the researcher brief and the
+labelled source material. This is a proposed research draft, not legal advice or
+an official government position. Never invent statistics, laws, budgets,
+institutions, dates, duties, or commitments. Clearly distinguish verified
+evidence from proposed recommendations. If evidence is missing, say "To be
+validated" in the relevant content and record the gap under evidenceLimitations.
+
+Return only valid JSON. Do not use Markdown fences. Use this exact shape:
+{
+  "title": "string",
+  "executiveSummary": "string",
+  "sections": [{"heading":"string","content":"string","citations":["Catalogue document: title"]}],
+  "recommendations": [{"heading":"string","content":"string","citations":[]}],
+  "implementation": [{"heading":"string","content":"string","citations":[]}],
+  "risks": [{"heading":"string","content":"string","citations":[]}],
+  "evidenceLimitations": [{"content":"string","citations":[]}]
+}
+
+Include substantive sections for problem/evidence, objectives, target groups and
+equity, policy options, recommended approach, implementation, institutions,
+funding/delivery, monitoring/evaluation, risks, consultation, and evidence notes.
+Every factual source claim must cite a supplied label exactly. A catalogue
+summary is secondary context and cannot prove a clause. Proposed policy choices
+need not appear in a source, but must be described as proposals. Write in
+${responseLanguage || "English"} while retaining important original-language terms.
+
+Researcher brief:
+${prompt}
+
+Source material:
+${context}
+`;
+
+const generatePolicyDraftStructured = async (
+  prompt,
+  context = "",
+  { responseLanguage = "English" } = {},
+) => {
+  const language = normalizeResponseLanguage(responseLanguage, prompt);
+  const response = await runGeneration("generateContent", policyDraftJsonPrompt({
+    prompt,
+    context,
+    responseLanguage: language,
+  }), {
+    useCircuitBreaker: false,
+    models: taskGenerationModels("chat"),
+    maxModels: Number(process.env.POLICY_DRAFT_AI_MAX_MODELS || 2),
+    timeoutMs: Number(process.env.POLICY_DRAFT_AI_TIMEOUT_MS || 24_000),
+    maxQueueWaitMs: Number(process.env.POLICY_DRAFT_AI_MAX_QUEUE_WAIT_MS || 3_000),
+    maxRetryAfterMs: Number(process.env.POLICY_DRAFT_AI_MAX_RETRY_AFTER_MS || 0),
+    attempts: Number(process.env.POLICY_DRAFT_AI_ATTEMPTS || 1),
+    generationConfig: {
+      temperature: Number(process.env.POLICY_DRAFT_AI_TEMPERATURE || 0.2),
+      responseMimeType: "application/json",
+      maxOutputTokens: Number(process.env.POLICY_DRAFT_AI_MAX_OUTPUT_TOKENS || 3_200),
+    },
+  });
+  return responseText(response);
+};
+
+const repairPolicyDraftStructured = async (
+  raw,
+  { responseLanguage = "English" } = {},
+) => {
+  const response = await runGeneration("generateContent", `
+Repair the malformed policy-draft response below into valid JSON only.
+Do not add Markdown or new factual claims. Preserve usable content and citations.
+Required keys: title, executiveSummary, sections, recommendations,
+implementation, risks, evidenceLimitations. Each collection must be an array;
+each item must contain content and may contain heading and citations.
+Response language: ${responseLanguage}.
+
+Malformed response:
+${String(raw || "").slice(0, 24_000)}
+`, {
+    useCircuitBreaker: false,
+    models: taskGenerationModels("chat"),
+    maxModels: 1,
+    timeoutMs: Number(process.env.POLICY_DRAFT_REPAIR_TIMEOUT_MS || 8_000),
+    maxQueueWaitMs: Number(process.env.POLICY_DRAFT_REPAIR_QUEUE_WAIT_MS || 1_500),
+    maxRetryAfterMs: 0,
+    attempts: 1,
+    generationConfig: {
+      temperature: 0,
+      responseMimeType: "application/json",
+      maxOutputTokens: Number(process.env.POLICY_DRAFT_REPAIR_MAX_OUTPUT_TOKENS || 3_200),
+    },
+  });
+  return responseText(response);
+};
+
 const SUMMARY_GUIDANCE = {
   bill: "purpose, clauses, legislative stage, affected groups, fiscal implications, and implementation questions",
   act: "purpose, operative provisions, rights, duties, authorities, enforcement, penalties, commencement, and amendments",
@@ -2035,6 +2128,8 @@ module.exports = {
   estimateEmbeddingTokens,
   generateResponse,
   generatePolicyDraft,
+  generatePolicyDraftStructured,
+  repairPolicyDraftStructured,
   generateSuggestedQuestions,
   verifyDocumentRelationship,
   getActIndex,

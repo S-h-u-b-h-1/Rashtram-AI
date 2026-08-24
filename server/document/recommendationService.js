@@ -381,27 +381,31 @@ const isRecommendationEligible = (
   );
 
 const scoreRecommendation = (signals = {}) => {
-  const points =
-    (signals.relationship ? 22 : 0) +
-    (signals.sameMinistry ? 14 : 0) +
-    (signals.sameAuthority ? 10 : 0) +
-    (signals.sameDepartment ? 8 : 0) +
-    (signals.sameJurisdiction ? 8 : 0) +
-    (signals.sameState ? 10 : 0) +
-    (signals.sameCategory ? 8 : 0) +
-    (signals.sameType ? 4 : 0) +
-    (signals.sameYear ? 5 : 0) +
-    (signals.titleMatch ? 8 : 0) +
-    (signals.sharedLegalIdentifier ? 12 : 0) +
-    (signals.semanticMatch ? 12 : 0) +
-    (signals.summaryMatch ? 12 : 0) +
-    (signals.profileMatch ? 5 : 0) +
-    (signals.recent ? 4 : 0) +
-    (signals.researchReady ? 8 : 0) +
-    (signals.comparisonReady ? 4 : 0) +
-    Math.min(Math.max(Number(signals.popularity || 0), 0), 20) / 4 +
-    Math.min(Math.max(Number(signals.qualityScore || 0), 0), 100) / 10;
-  return Math.min(Number((points / 145).toFixed(4)), 1);
+  const contentScore =
+    (signals.relationshipVerified ? 0.55 : 0) +
+    (signals.sharedLegalIdentifier ? 0.42 : 0) +
+    (signals.titleMatch ? 0.3 : 0) +
+    (signals.summaryMatch ? 0.28 : 0) +
+    (signals.purposeMatch ? 0.24 : 0) +
+    (signals.topicMatch ? 0.22 : 0) +
+    (signals.semanticMatch ? 0.2 : 0) +
+    (signals.relationship && !signals.relationshipVerified ? 0.08 : 0);
+  // Issuer, jurisdiction, type and recency can refine a substantive match, but
+  // they can never manufacture one. Their combined contribution is capped.
+  const supportingScore = Math.min(0.12,
+    (signals.sameMinistry ? 0.025 : 0) +
+    (signals.sameAuthority ? 0.025 : 0) +
+    (signals.sameDepartment ? 0.02 : 0) +
+    (signals.sameJurisdiction ? 0.015 : 0) +
+    (signals.sameState ? 0.02 : 0) +
+    (signals.sameCategory ? 0.015 : 0) +
+    (signals.sameType ? 0.01 : 0) +
+    (signals.recent ? 0.01 : 0));
+  const qualityScore =
+    (signals.researchReady ? 0.025 : 0) +
+    (signals.comparisonReady ? 0.015 : 0) +
+    Math.min(Math.max(Number(signals.qualityScore || 0), 0), 100) / 2_500;
+  return Math.min(Number((contentScore + supportingScore + qualityScore).toFixed(4)), 1);
 };
 
 const DOCUMENT_TITLE_STOP_WORDS = new Set([
@@ -412,9 +416,12 @@ const DOCUMENT_TITLE_STOP_WORDS = new Set([
 
 const DOCUMENT_SUMMARY_STOP_WORDS = new Set([
   ...DOCUMENT_TITLE_STOP_WORDS,
-  "according", "affected", "authority", "chapter", "document", "government",
-  "implementation", "including", "institution", "ministry", "persons",
-  "provision", "provisions", "public", "section", "shall", "summary",
+  "according", "affected", "aim", "aims", "amend", "amended", "amending",
+  "amendments", "authority", "chapter", "document", "economic", "fiscal",
+  "existing", "framework", "give", "government", "implementation", "including",
+  "institution", "introduce", "introduced", "issue", "ministry", "objective",
+  "objectives", "persons", "power", "powers", "provide", "provides",
+  "provision", "provisions", "public", "section", "shall", "stable", "summary",
   "under", "using", "year",
 ]);
 
@@ -439,47 +446,49 @@ const hasDocumentSummarySubjectOverlap = (leftSummary, rightSummary) => {
   const right = new Set(subjectTokens(rightSummary));
   if (left.size < 8 || right.size < 8) return false;
   const shared = [...left].filter((token) => right.has(token)).length;
-  return shared >= 6 && shared / Math.min(left.size, right.size) >= 0.12;
+  // Summaries of legislation share a large legal boilerplate vocabulary. A
+  // recommendation needs a dense subject overlap, not six generic words from
+  // two otherwise unrelated instruments.
+  return shared >= 8 && shared / Math.min(left.size, right.size) >= 0.22;
 };
 
 // Broad catalogue metadata is useful for ranking, but it must never be enough
 // to establish that two documents discuss the same subject.
 const hasSubstantiveRecommendationAffinity = (signals = {}) => {
-  const sameIssuer = Boolean(
-    signals.sameMinistry || signals.sameAuthority || signals.sameDepartment,
-  );
   return Boolean(
     signals.sharedLegalIdentifier ||
+      signals.relationshipVerified ||
       signals.titleMatch ||
-      (signals.semanticMatch && (sameIssuer || signals.sameCategory)) ||
-      (signals.summaryMatch && (sameIssuer || signals.sameCategory || signals.sameType)),
+      signals.summaryMatch ||
+      signals.purposeMatch ||
+      signals.topicMatch ||
+      (signals.semanticMatch && Boolean(
+        signals.sameCategory || signals.sameAuthority ||
+        signals.titleMatch || signals.summaryMatch || signals.purposeMatch || signals.topicMatch
+      )),
   );
 };
 
 const reasonFromSignals = (signals, candidate) => {
   const reasons = [];
-  if (signals.relationshipType) {
+  if (signals.relationshipVerified && signals.relationshipType) {
     reasons.push(
-      `a catalogue ${signals.relationshipType.replaceAll("_", " ")} signal`,
+      `a verified ${signals.relationshipType.replaceAll("_", " ")} relationship`,
     );
   } else if (signals.relationship) {
-    reasons.push("a catalogue relationship signal");
+    reasons.push("an inferred catalogue relationship");
   }
-  if (signals.sameMinistry) reasons.push("the same ministry");
-  if (signals.sameDepartment) reasons.push("the same department");
-  else if (signals.sameAuthority) reasons.push("the same issuing authority");
-  if (signals.sameState) reasons.push(`the same state (${candidate.state})`);
-  else if (signals.sameJurisdiction) reasons.push("the same jurisdiction");
-  if (signals.sameCategory) reasons.push("the same policy category");
-  if (signals.semanticMatch || signals.titleMatch || signals.summaryMatch) {
-    reasons.push("closely matching subject matter");
+  if (signals.sharedLegalIdentifier) reasons.push("the same legal instrument or identifier");
+  if (signals.titleMatch || signals.summaryMatch || signals.purposeMatch) {
+    reasons.push("the same substantive policy purpose");
   }
-  if (signals.sharedLegalIdentifier) reasons.push("a shared legal identifier");
-  if (signals.sameYear) reasons.push("the same legislative year");
-  if (signals.profileMatch) reasons.push("your research preferences");
-  if (signals.recent) reasons.push("recent publication");
-  if (!reasons.length) reasons.push("strong catalogue quality and provenance");
-  return `Recommended because it has ${reasons.slice(0, 3).join(", ")}.`;
+  if (signals.topicMatch || signals.semanticMatch) reasons.push("overlapping evidence and topics");
+  if (!reasons.length) reasons.push("a validated content-level match");
+  const support = [];
+  if (signals.sameMinistry) support.push("same ministry");
+  if (signals.sameAuthority) support.push("same authority");
+  if (signals.sameJurisdiction) support.push("same jurisdiction");
+  return `Why this matches: ${reasons.slice(0, 2).join(" and ")}${support.length ? `; supported by ${support.slice(0, 2).join(" and ")}` : ""}.`;
 };
 
 const getProfileSignals = async (userId, enabled = true) => {
@@ -514,6 +523,7 @@ const mapCandidateSignals = (row, semanticIds, profile, current) => {
     publicationTime >= Date.now() - 366 * 24 * 60 * 60 * 1_000;
   return {
     relationship: Boolean(row.relationship_match),
+    relationshipVerified: Boolean(row.relationship_verified),
     relationshipType: row.relationship_type || null,
     relationshipExplanation: row.relationship_explanation || null,
     sameMinistry: Boolean(row.same_ministry),
@@ -533,6 +543,11 @@ const mapCandidateSignals = (row, semanticIds, profile, current) => {
       row.current_summary,
       row.candidate_summary,
     ),
+    purposeMatch: hasDocumentSummarySubjectOverlap(
+      row.current_purpose,
+      row.candidate_purpose,
+    ),
+    topicMatch: Boolean(row.profile_topic_match),
     profileMatch: Boolean(profileMatch),
     recent,
     researchReady: Boolean(row.research_ready),
@@ -551,6 +566,20 @@ const recommendationType = (type) => {
 
 const shapeRecommendation = (row, signals) => {
   const score = scoreRecommendation(signals);
+  const substantiveCount = [
+    signals.titleMatch,
+    signals.summaryMatch,
+    signals.purposeMatch,
+    signals.topicMatch,
+    signals.semanticMatch,
+  ].filter(Boolean).length;
+  const relevanceLabel = signals.relationshipVerified || signals.sharedLegalIdentifier
+    ? "DIRECTLY_RELATED"
+    : substantiveCount >= 2 && score >= 0.55
+      ? "HIGHLY_RELATED"
+      : substantiveCount >= 1 && score >= 0.3
+        ? "RELATED"
+        : "DISCOVERY";
   const candidate = {
     id: String(row.id),
     title: row.title,
@@ -579,6 +608,7 @@ const shapeRecommendation = (row, signals) => {
     readiness: row.research_ready ? "research_ready" : "pdf_available",
     qualityScore: Number(row.quality_score || 0),
     score,
+    relevanceLabel,
     confidence: confidenceForScore(score),
     signals: Object.entries(signals)
       .filter(([, enabled]) => enabled === true)
@@ -688,17 +718,27 @@ const getDocumentRecommendations = async (
        state.embedding_status, state.chunks_count, state.embeddings_count,
        state.readiness_class, state.readiness_reason,
        COALESCE(
+         current_profile.executive_summary,
          current_artifact.english_summary,
          current_legacy.source_metadata ->> 'summary',
          current_legacy.source_metadata ->> 'description',
          current_legacy.source_metadata ->> 'abstract'
        ) AS current_summary,
        COALESCE(
+         candidate_profile.executive_summary,
          candidate_artifact.english_summary,
          legacy.source_metadata ->> 'summary',
          legacy.source_metadata ->> 'description',
          legacy.source_metadata ->> 'abstract'
        ) AS candidate_summary,
+       COALESCE(current_profile.document_purpose, '') AS current_purpose,
+       COALESCE(candidate_profile.document_purpose, '') AS candidate_purpose,
+       EXISTS (
+         SELECT 1
+         FROM JSONB_ARRAY_ELEMENTS_TEXT(current_profile.topics_json) AS current_topic(value)
+         JOIN JSONB_ARRAY_ELEMENTS_TEXT(candidate_profile.topics_json) AS candidate_topic(value)
+           ON LOWER(current_topic.value) = LOWER(candidate_topic.value)
+       ) AS profile_topic_match,
        EXISTS (
          SELECT 1 FROM document_resources resource
          WHERE resource.document_id = candidate.id
@@ -745,6 +785,17 @@ const getDocumentRecommendations = async (
            AND relationship.from_document_id = candidate.id
          )
        ) AS relationship_match,
+       EXISTS (
+         SELECT 1 FROM document_relationships relationship
+         WHERE (((relationship.from_document_id = current.id
+             AND relationship.to_document_id = candidate.id)
+           OR (relationship.to_document_id = current.id
+             AND relationship.from_document_id = candidate.id)))
+           AND (
+             relationship.relationship_evidence->>'sourceVerified' = 'true'
+             OR relationship.relationship_source IN ('official_source', 'source_explicit')
+           )
+       ) AS relationship_verified,
        (
          SELECT relationship.relationship_type
          FROM document_relationships relationship
@@ -788,6 +839,10 @@ const getDocumentRecommendations = async (
        ON candidate_artifact.document_id = candidate.id
      LEFT JOIN document_text_artifacts current_artifact
        ON current_artifact.document_id = current.id
+     LEFT JOIN document_research_profiles candidate_profile
+       ON candidate_profile.document_id = candidate.id
+     LEFT JOIN document_research_profiles current_profile
+       ON current_profile.document_id = current.id
      WHERE candidate.id <> current.id
        AND candidate.visibility_status = 'public'
        AND candidate.quality_score >= 40
@@ -804,7 +859,10 @@ const getDocumentRecommendations = async (
          AND COALESCE(candidate.jurisdiction, '') =
            COALESCE(current.jurisdiction, '')
        )
-     ORDER BY relationship_match DESC,
+     ORDER BY relationship_verified DESC,
+       relationship_match DESC,
+       title_match DESC,
+       (candidate.id::TEXT = ANY($6::TEXT[])) DESC,
        candidate.quality_score DESC,
        candidate.research_ready DESC,
        candidate.publication_date DESC NULLS LAST
@@ -815,6 +873,7 @@ const getDocumentRecommendations = async (
       types,
       stateOnly,
       Math.max(limit * 5, 30),
+      semanticIds.map(String),
     ],
   );
   const semanticSet = new Set(semanticIds);
@@ -825,7 +884,7 @@ const getDocumentRecommendations = async (
     })
     .filter(
       ({ recommendation, signals }) =>
-        recommendation.score >= 0.24 &&
+        recommendation.score >= 0.28 &&
         hasSubstantiveRecommendationAffinity(signals) &&
         isRecommendationEligible(recommendation, { includeNonReady }),
     )

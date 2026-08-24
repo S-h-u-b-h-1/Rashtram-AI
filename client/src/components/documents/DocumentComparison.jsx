@@ -15,6 +15,7 @@ import {
   createDocumentComparison,
   getDocumentComparison,
   getDocumentReadiness,
+  prepareDocumentForComparison,
   recommendDocumentsForComparison,
   generateResearchReport,
   downloadResearchReportPdf,
@@ -225,22 +226,22 @@ export function DocumentComparison() {
     let active = true;
     setReadinessLoading(true);
     setError("");
-    Promise.all(
-      ids.map((id) =>
-        getDocumentReadiness(id)
-          .then((readiness) => [id, readiness])
-          .catch((requestError) => [
-            id,
-            {
-              documentId: id,
-              comparisonReady: false,
-              reason:
-                requestError.message ||
-                "Could not verify this document's readiness.",
-            },
-          ]),
-      ),
-    )
+    Promise.all(ids.map(async (id) => {
+      try {
+        const readiness = await getDocumentReadiness(id);
+        if (readiness.comparisonReady || !readiness.canPrepare) {
+          return [id, readiness];
+        }
+        const prepared = await prepareDocumentForComparison(id);
+        return [id, prepared.readiness || await getDocumentReadiness(id)];
+      } catch (requestError) {
+        return [id, {
+          documentId: id,
+          comparisonReady: false,
+          reason: requestError.message || "Could not prepare this document for comparison.",
+        }];
+      }
+    }))
       .then((entries) => {
         if (!active) return;
         setSelectionReadiness(Object.fromEntries(entries));

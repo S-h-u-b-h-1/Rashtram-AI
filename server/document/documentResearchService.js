@@ -57,6 +57,7 @@ const {
 } = require("../graph/knowledgeLayerService");
 const { expandLargeDocumentMatches } = require("./largeDocumentService");
 const { retrieveTemporalPassages } = require("./temporalLegalService");
+const { retrieveTreePassages } = require("./documentStructureService");
 const {
   chunkStructuredHtml,
   extractStructuredHtml,
@@ -1850,6 +1851,7 @@ const retrieveDocumentContext = async (
   const localSearch = adapters.localSearch || retrieveLocalTextPassages;
   const metadataSearch = adapters.metadataSearch || retrieveMetadataPassages;
   const temporalSearch = adapters.temporalSearch || retrieveTemporalPassages;
+  const treeSearch = adapters.treeSearch || retrieveTreePassages;
   const vectorSearch = adapters.vectorSearch || (async (limit) => {
     const config = typeConfig(documentType);
     const matches = await config.search(message, documentId, limit);
@@ -1885,15 +1887,20 @@ const retrieveDocumentContext = async (
   const lexicalPromise = plan.useLexical
     ? timed("lexical", () => ftsSearch(documentId, message, lexicalLimit))
     : Promise.resolve([]);
+  const treePromise = !options.adapters && !["METADATA", "EXACT_REFERENCE"].includes(plan.queryType)
+    ? timed("tree", () => treeSearch(documentId, message, candidateLimits.lexical))
+      .catch(() => [])
+    : Promise.resolve([]);
   const eagerVectorPromise = plan.useVector === true
     ? timed("vector", () => vectorSearch(candidateLimits.vector))
       .then((passages) => ({ passages, error: null }))
       .catch((error) => ({ passages: [], error }))
     : null;
-  const [metadataPassages, temporalPassages, ftsPassages] = await Promise.all([
+  const [metadataPassages, temporalPassages, ftsPassages, treePassages] = await Promise.all([
     metadataPromise,
     temporalPromise,
     lexicalPromise,
+    treePromise,
   ]);
 
   let localPassages = [];
@@ -1945,7 +1952,7 @@ const retrieveDocumentContext = async (
   const fusionStartedAt = Date.now();
   const fusion = flags.rrf ? reciprocalRankFusion : legacyCandidateMerge;
   const fused = fusion(
-    [metadataPassages, temporalPassages, ftsPassages, localPassages, vectorPassages],
+    [metadataPassages, temporalPassages, treePassages, ftsPassages, localPassages, vectorPassages],
     {
       documentId,
       k: settings.rrfK,
@@ -1983,6 +1990,7 @@ const retrieveDocumentContext = async (
     candidateCounts: {
       metadata: metadataPassages.length,
       temporal: temporalPassages.length,
+      tree: treePassages.length,
       lexical: ftsPassages.length,
       local: localPassages.length,
       vector: vectorPassages.length,

@@ -35,6 +35,7 @@
     "embeddings:recover": "node cli/recoverEmbeddings.js",
     "research:ready-audit": "node cli/researchReadyAudit.js",
     "research:readiness-audit": "node cli/researchReadinessAuditV2.js",
+    "research:reliability-canary": "node cli/productReliabilityCanary.js",
     "compliance:retrieval-audit": "node cli/complianceRetrievalAudit.js",
     "process:audit": "node cli/processAudit.js",
     "process:status": "node cli/processStatus.js",

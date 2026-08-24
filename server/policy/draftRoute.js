@@ -2,12 +2,15 @@ const express = require("express");
 const { query } = require("../db");
 const DocumentRepository = require("../document/DocumentRepository");
 const { getSourceContext } = require("../research/sourceService");
-const { generatePolicyDraft } = require("../lib/vectordb");
+const {
+  generatePolicyDraftStructured,
+  repairPolicyDraftStructured,
+} = require("../lib/vectordb");
 const { sanitizeProviderError } = require("../lib/providerErrorSanitizer");
 const { generationLimiter } = require("../middleware/security");
 const { completeSSE, errorSSE, sendSSE, startSSE } = require("../lib/sse");
 const { sendError } = require("../lib/httpResponse");
-const { streamChunkText } = require("../lib/generationStream");
+const { generateValidatedPolicyDraft } = require("./policyDraftService");
 
 const router = express.Router();
 const MAX_DOCUMENTS = 8;
@@ -26,6 +29,7 @@ const mapDraft = (row) => ({
   brief: row.brief_json || {},
   documentIds: row.document_ids_json || [],
   sourceIds: row.source_ids_json || [],
+  draft: row.draft_json || {},
   draftText: row.draft_text || "",
   citations: row.citations_json || [],
   status: row.status,
@@ -82,6 +86,15 @@ const loadCatalogueContext = async (ids) => {
     citations,
     documents: rows.rows,
   };
+};
+
+const evidenceLabelsFromContext = (context) => [...new Set(
+  String(context || "").match(/\[(?:Catalogue document|Catalogue summary|User source):[^\]]+\]/g) || [],
+)];
+
+const streamMarkdown = (res, markdown) => {
+  const chunks = String(markdown || "").match(/[\s\S]{1,700}(?:\n\n|$)|[\s\S]{1,700}/g) || [];
+  for (const content of chunks) sendSSE(res, { type: "content", content });
 };
 
 router.get("/", async (req, res) => {
@@ -168,20 +181,37 @@ router.post("/generate", generationLimiter, async (req, res) => {
       brief.geography ? `Geography or jurisdiction: ${brief.geography}` : "",
       brief.requirements ? `Researcher requirements: ${brief.requirements}` : "",
     ].filter(Boolean).join("\n");
-    let draftText = "";
     try {
-      const stream = await generatePolicyDraft(prompt, context, { responseLanguage: brief.responseLanguage });
-      for await (const chunk of stream) {
-        const content = streamChunkText(chunk);
-        if (!content) continue;
-        draftText += content;
-        sendSSE(res, { type: "content", content });
-      }
+      const generated = await generateValidatedPolicyDraft({
+        prompt,
+        context,
+        brief,
+        title,
+        evidenceLabels: evidenceLabelsFromContext(context),
+        generate: ({ prompt: value, context: sourceContext, responseLanguage }) =>
+          generatePolicyDraftStructured(value, sourceContext, { responseLanguage }),
+        repair: ({ raw, responseLanguage }) =>
+          repairPolicyDraftStructured(raw, { responseLanguage }),
+      });
+      sendSSE(res, {
+        type: "status",
+        status: generated.generationMode === "grounded_fallback"
+          ? "A grounded fallback draft was prepared."
+          : "The structured policy draft is ready.",
+        generationMode: generated.generationMode,
+      });
+      streamMarkdown(res, generated.markdown);
       await query(
-        `UPDATE policy_drafts SET draft_text = $1, status = 'ready', error_message = NULL, updated_at = NOW() WHERE id = $2 AND user_id = $3`,
-        [draftText, draftId, req.user.id],
+        `UPDATE policy_drafts SET draft_text = $1, draft_json = $2::jsonb,
+           status = 'ready', error_message = NULL, updated_at = NOW()
+         WHERE id = $3 AND user_id = $4`,
+        [generated.markdown, JSON.stringify(generated.draft), draftId, req.user.id],
       );
-      completeSSE(res, { persisted: true, draftId: String(draftId) });
+      completeSSE(res, {
+        persisted: true,
+        draftId: String(draftId),
+        generationMode: generated.generationMode,
+      });
     } catch (error) {
       const safeError = sanitizeProviderError(error);
       await query(

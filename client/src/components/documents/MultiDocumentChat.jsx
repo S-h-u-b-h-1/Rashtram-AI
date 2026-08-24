@@ -16,13 +16,10 @@ import {
   deleteResearchSource,
   clearCrossDocumentChatHistory,
   getCrossDocumentChatHistory,
-  processDocumentResearch,
+  getDocumentReadiness,
+  prepareDocumentForComparison,
   sendCrossDocumentChat,
 } from "@/lib/api";
-import {
-  canPrepareDocumentForResearch,
-  isResearchReady,
-} from "@/lib/document-readiness";
 import { ChatHistory } from "@/components/document-chat/ChatHistory";
 import { ChatInput } from "@/components/document-chat/ChatInput";
 import { useSmoothMessageStream } from "@/hooks/useSmoothMessageStream";
@@ -84,24 +81,22 @@ export function MultiDocumentChat({
           setMessages(history.messages || []);
           setStudySources(sourceResponse.sources || []);
         }
-        const preparation = await Promise.allSettled(
-          loadedDocuments
-            .filter(
-              (document) =>
-                !isResearchReady(document) &&
-                canPrepareDocumentForResearch(document),
-            )
-            .map((document) =>
-              processDocumentResearch(document.type, document.id),
-            ),
+        const readinessResults = await Promise.allSettled(
+          loadedDocuments.map(async (document) => {
+            const readiness = await getDocumentReadiness(document.id);
+            if (readiness.comparisonReady) return readiness;
+            if (!readiness.canPrepare) throw new Error(readiness.reason || "Retrieval is unavailable.");
+            const prepared = await prepareDocumentForComparison(document.id);
+            const finalReadiness = prepared.readiness || await getDocumentReadiness(document.id);
+            if (!finalReadiness.comparisonReady) {
+              throw new Error(finalReadiness.reason || "Preparation did not produce retrievable evidence.");
+            }
+            return finalReadiness;
+          }),
         );
-        const failed = preparation.filter(
-          (result) => result.status === "rejected",
-        ).length;
-        if (active && preparation.length > 0 && failed === preparation.length) {
-          setError(
-            "The selected documents could not be prepared for grounded comparison.",
-          );
+        const failed = readinessResults.filter((result) => result.status === "rejected");
+        if (active && failed.length) {
+          setError(failed[0].reason?.message || "One selected document is not available for grounded comparison.");
         }
       })
       .catch((requestError) => {

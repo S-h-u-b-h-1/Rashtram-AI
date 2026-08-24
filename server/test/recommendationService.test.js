@@ -42,6 +42,14 @@ test("document recommendations require shared subject matter, not generic metada
   );
   assert.equal(
     hasSubstantiveRecommendationAffinity({
+      semanticMatch: true,
+      sameType: true,
+      sameJurisdiction: true,
+    }),
+    false,
+  );
+  assert.equal(
+    hasSubstantiveRecommendationAffinity({
       relationship: true,
       sameMinistry: true,
     }),
@@ -85,6 +93,13 @@ test("stored summaries establish subject affinity without treating generic legal
     ),
     false,
   );
+  assert.equal(
+    hasDocumentSummarySubjectOverlap(
+      "This Bill aims to amend an existing Act, provide a stable framework, improve implementation, and give the Central Government powers to issue provisions for affected persons.",
+      "This Bill aims to amend another Act, provide a stable framework, improve implementation, and give the Central Government powers to issue provisions for affected institutions.",
+    ),
+    false,
+  );
 });
 
 test("recommendation scoring rewards grounded catalogue signals", () => {
@@ -94,6 +109,7 @@ test("recommendation scoring rewards grounded catalogue signals", () => {
   });
   const strong = scoreRecommendation({
     relationship: true,
+    relationshipVerified: true,
     sameMinistry: true,
     sameJurisdiction: true,
     semanticMatch: true,
@@ -106,6 +122,7 @@ test("recommendation scoring rewards grounded catalogue signals", () => {
   assert.ok(
     scoreRecommendation({
       relationship: true,
+      relationshipVerified: true,
       researchReady: true,
       comparisonReady: true,
       qualityScore: 80,

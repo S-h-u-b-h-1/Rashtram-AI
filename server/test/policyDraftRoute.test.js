@@ -33,3 +33,9 @@ test("policy drafting bypasses unrelated generation circuit failures", () => {
   );
   assert.match(policyDraftBlock, /useCircuitBreaker: false/);
 });
+
+test("policy drafting persists canonical JSON and never implicitly renders an object", () => {
+  assert.match(routeSource, /draft_json = \$2::jsonb/);
+  assert.match(routeSource, /generateValidatedPolicyDraft/);
+  assert.doesNotMatch(routeSource, /draftText \+= chunk/);
+});
