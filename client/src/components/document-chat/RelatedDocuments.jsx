@@ -11,6 +11,7 @@ import { humanize } from "@/lib/document-links";
 import { isComparisonReady, isResearchReady } from "@/lib/document-readiness";
 import { RecommendationCard } from "@/components/recommendations/RecommendationCard";
 import {
+  canPrepareForResearch,
   comparisonHrefForDocuments,
   useComparison,
 } from "@/context/ComparisonContext";
@@ -26,6 +27,7 @@ export function RelatedDocuments({
   const {
     addDocument,
     isSelected,
+    prepareAndAddDocument,
     removeDocument,
     prepareAndStartComparison,
   } = useComparison();
@@ -132,19 +134,21 @@ export function RelatedDocuments({
                         : "View source"}
                   <ExternalLink className="h-3 w-3" />
                 </Link>
-                {isComparisonReady(item) && (
+                {(isComparisonReady(item) || canPrepareForResearch(item)) && (
                   <button
                     type="button"
-                    onClick={() => {
+                    onClick={async () => {
                       if (sourceDocument) {
-                        openComparison(item);
+                        await openComparison(item);
                         return;
                       }
                       if (isSelected(item.id)) {
                         removeDocument(item.id);
                         return;
                       }
-                      const result = addDocument(item);
+                      const result = isComparisonReady(item)
+                        ? addDocument(item)
+                        : await prepareAndAddDocument(item);
                       const href = result.ok
                         ? comparisonHrefForDocuments(result.documents)
                         : null;
@@ -154,7 +158,7 @@ export function RelatedDocuments({
                   >
                     <GitCompareArrows className="h-3 w-3" />
                     {sourceDocument
-                      ? "Compare"
+                      ? isComparisonReady(item) ? "Compare" : "Prepare & compare"
                       : isSelected(item.id)
                       ? "Remove"
                       : "Add to compare"}
