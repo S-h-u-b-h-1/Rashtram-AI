@@ -98,10 +98,7 @@ export function MultiDocumentChat({
         const failed = preparation.filter(
           (result) => result.status === "rejected",
         ).length;
-        if (
-          active &&
-          (!preparation.length || failed === preparation.length)
-        ) {
+        if (active && preparation.length > 0 && failed === preparation.length) {
           setError(
             "The selected documents could not be prepared for grounded comparison.",
           );

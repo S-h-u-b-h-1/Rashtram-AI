@@ -341,6 +341,12 @@ const buildDocumentFocus = (group) => {
   if (/appeal|appellate|tribunal|pre-deposit/.test(text)) {
     themes.push("appeals and dispute process");
   }
+  if (/central public information officer|\bcpio\b|right to information|first appellate authorit/.test(text)) {
+    themes.push("RTI administration and designated officers");
+  }
+  if (/ayurved|traditional medicine|ayush|global market|internationali[sz]/.test(text)) {
+    themes.push("Ayurveda standards and international reach");
+  }
   if (/penalty|interest|proceedings|notice|proper officer|section 74/.test(text)) {
     themes.push("tax demands and settlement");
   }
@@ -350,7 +356,7 @@ const buildDocumentFocus = (group) => {
   if (/return|statement|furnish|registered person/.test(text)) {
     themes.push("returns and reporting");
   }
-  if (/government|council|official gazette|rules|prescribed|notify/.test(text)) {
+  if (/rule-making|official gazette|\brules\b|prescribed|notif(?:y|ication)/.test(text)) {
     themes.push("government rule-making powers");
   }
   return {
@@ -382,28 +388,16 @@ const comparisonSectionBackfill = ({ documents, groups, citations, generated }) 
   const focus = groups.map(buildDocumentFocus);
   const allCitationIds = citations.slice(0, 10).map((citation) => citation.id);
   const metadataSimilarities = [];
-  const sharedMinistries = [
-    ...new Set(documents.map((document) => document.ministry).filter(Boolean)),
-  ];
-  const sharedJurisdictions = [
-    ...new Set(documents.map((document) => document.jurisdiction || document.state).filter(Boolean)),
-  ];
-  const sharedTypes = [...new Set(documents.map((document) => document.type).filter(Boolean))];
-  if (sharedTypes.length === 1) {
+  const sharedValue = (selector) => {
+    const values = documents.map(selector).map((value) => String(value || "").trim());
+    if (values.some((value) => !value)) return null;
+    const unique = [...new Set(values)];
+    return unique.length === 1 ? unique[0] : null;
+  };
+  const sharedMinistry = sharedValue((document) => document.ministry);
+  if (sharedMinistry) {
     metadataSimilarities.push({
-      point: `All selected records are ${sharedTypes[0]} documents and amend or operate within a comparable legal-policy framework.`,
-      citations: allCitationIds.slice(0, Math.min(4, allCitationIds.length)),
-    });
-  }
-  if (sharedMinistries.length === 1) {
-    metadataSimilarities.push({
-      point: `All selected records are connected with ${sharedMinistries[0]}, so the comparison is mainly within the same administrative policy area.`,
-      citations: allCitationIds.slice(0, Math.min(4, allCitationIds.length)),
-    });
-  }
-  if (sharedJurisdictions.length === 1) {
-    metadataSimilarities.push({
-      point: `All selected records share the same jurisdictional context: ${sharedJurisdictions[0]}.`,
+      point: `All selected records identify ${sharedMinistry} as their ministry.`,
       citations: allCitationIds.slice(0, Math.min(4, allCitationIds.length)),
     });
   }
@@ -712,12 +706,7 @@ const extractiveComparisonFallback = ({
       .slice(0, 3)
       .map((_, passageIndex) => `D${index + 1}-C${passageIndex + 1}`),
   }));
-  const similarities = [
-    {
-      point: "All compared documents were processed through Rashtram AI's grounded retrieval pipeline and include source passages.",
-      citations: citations.slice(0, Math.min(4, citations.length)).map((citation) => citation.id),
-    },
-  ];
+  const similarities = [];
   const differences = groups.flatMap(({ document, passages }, index) =>
     passages.slice(0, 4).map((passage, passageIndex) => ({
       topic: `${document.title} — evidence point ${passageIndex + 1}`,

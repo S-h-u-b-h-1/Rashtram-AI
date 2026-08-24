@@ -269,7 +269,7 @@ test("comparison section backfill fills sparse AI output from cited passages", (
   });
 
   assert.ok(repaired.executiveSummary.includes("D1"));
-  assert.ok(repaired.similarities.length >= 2);
+  assert.ok(repaired.similarities.length >= 1);
   assert.ok(repaired.differences.length >= 2);
   assert.ok(repaired.keyClauses.length >= 2);
   assert.ok(repaired.stakeholders.length >= 2);
@@ -282,4 +282,70 @@ test("comparison section backfill fills sparse AI output from cited passages", (
     repaired.stakeholders.every((item) => Array.isArray(item.citations)),
   );
   assert.ok(repaired.quality.backfilled);
+});
+
+test("comparison backfill never attributes one document's ministry to every document", () => {
+  const documents = [
+    {
+      id: "201",
+      type: "order",
+      title: "Details of CPIOs and First Appellate Authorities",
+      ministry: null,
+      jurisdiction: "India",
+    },
+    {
+      id: "202",
+      type: "policy",
+      title: "Strategic Roadmap for Making Ayurveda Global",
+      ministry: "Ministry of Planning",
+      jurisdiction: "India",
+    },
+  ];
+  const groups = documents.map((document, documentIndex) => ({
+    document,
+    documentIndex,
+    passages: [
+      {
+        content:
+          documentIndex === 0
+            ? "The National Medical Commission designates Central Public Information Officers and First Appellate Authorities under the Right to Information framework."
+            : "The roadmap discusses Ayurveda standards, global markets and international cooperation.",
+      },
+    ],
+  }));
+  const citations = groups.map((group) => ({
+    id: `D${group.documentIndex + 1}-C1`,
+    documentId: group.document.id,
+    snippet: group.passages[0].content,
+  }));
+
+  const repaired = comparisonSectionBackfill({
+    documents,
+    groups,
+    citations,
+    generated: { similarities: [], differences: [] },
+  });
+
+  assert.equal(
+    repaired.similarities.some((item) =>
+      String(item.point).includes("Ministry of Planning"),
+    ),
+    false,
+  );
+  assert.equal(
+    repaired.similarities.some((item) =>
+      String(item.point).includes("same jurisdictional context"),
+    ),
+    false,
+  );
+  assert.ok(
+    repaired.differences.some((item) =>
+      String(item.analysis).includes("RTI administration"),
+    ),
+  );
+  assert.ok(
+    repaired.differences.some((item) =>
+      String(item.analysis).includes("Ayurveda standards"),
+    ),
+  );
 });

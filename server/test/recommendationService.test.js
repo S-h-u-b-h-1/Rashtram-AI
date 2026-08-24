@@ -37,6 +37,10 @@ test("document recommendations require shared subject matter, not generic metada
     true,
   );
   assert.equal(
+    hasSubstantiveRecommendationAffinity({ semanticMatch: true }),
+    false,
+  );
+  assert.equal(
     hasSubstantiveRecommendationAffinity({
       relationship: true,
       sameMinistry: true,

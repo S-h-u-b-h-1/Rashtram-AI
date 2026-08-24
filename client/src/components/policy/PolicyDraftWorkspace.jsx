@@ -5,6 +5,7 @@ import remarkGfm from "remark-gfm";
 import {
   BookOpen,
   Check,
+  Download,
   FileText,
   Loader2,
   PanelLeftClose,
@@ -23,7 +24,12 @@ import {
   deleteResearchSource,
   fetchDocuments,
   getResearchSources,
+  prepareDocumentForComparison,
 } from "@/lib/api";
+import {
+  canPrepareDocumentForResearch,
+  isResearchReady,
+} from "@/lib/document-readiness";
 import { StudySourcesPanel } from "@/components/document-chat/StudySourcesPanel";
 import { MobileWorkspaceSheet } from "@/components/workspace/MobileWorkspaceSheet";
 
@@ -56,7 +62,7 @@ export function PolicyDraftWorkspace() {
     let active = true;
     Promise.all([
       getResearchSources().catch(() => ({ sources: [] })),
-      fetchDocuments({ type: "policy,report", researchReady: true, limit: 30, sortBy: "cataloguedAt", sortDirection: "desc" }).catch(() => ({ documents: [] })),
+      fetchDocuments({ type: "policy,report", limit: 60, sortBy: "cataloguedAt", sortDirection: "desc" }).catch(() => ({ documents: [] })),
     ]).then(([sourceResponse, documentResponse]) => {
       if (!active) return;
       setSources(sourceResponse.sources || []);
@@ -103,6 +109,27 @@ export function PolicyDraftWorkspace() {
     setCitations([]);
     setError("");
     try {
+      const selectedDocuments = documents.filter((document) =>
+        selectedDocumentIds.includes(String(document.id)),
+      );
+      const documentsToPrepare = selectedDocuments.filter(
+        (document) =>
+          !isResearchReady(document) && canPrepareDocumentForResearch(document),
+      );
+      for (let index = 0; index < documentsToPrepare.length; index += 2) {
+        const results = await Promise.allSettled(
+          documentsToPrepare
+            .slice(index, index + 2)
+            .map((document) => prepareDocumentForComparison(document.id)),
+        );
+        const failure = results.find((result) => result.status === "rejected");
+        if (failure) {
+          throw new Error(
+            failure.reason?.message ||
+              "One of the selected documents could not be prepared for drafting.",
+          );
+        }
+      }
       const result = await createPolicyDraft({
         ...brief,
         documentIds: selectedDocumentIds,
@@ -110,7 +137,7 @@ export function PolicyDraftWorkspace() {
         onMeta: (meta) => setCitations(meta.citations || []),
         onChunk: (chunk) => setDraft((current) => current + chunk),
       });
-      if (!draft && result.draftText) setDraft(result.draftText);
+      if (result.draftText) setDraft(result.draftText);
     } catch (requestError) {
       setError(requestError.message || "The policy draft could not be generated.");
     } finally {
@@ -118,12 +145,27 @@ export function PolicyDraftWorkspace() {
     }
   };
 
+  const downloadDraft = () => {
+    if (!draft) return;
+    const blob = new Blob([draft], { type: "text/markdown;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    const fileName = (brief.title || "rashtram-policy-draft")
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-|-$/g, "");
+    anchor.href = url;
+    anchor.download = `${fileName || "rashtram-policy-draft"}.md`;
+    anchor.click();
+    URL.revokeObjectURL(url);
+  };
+
   const libraryPanel = (
     <section className="flex h-full min-h-0 flex-col bg-[#f8f6f1]">
       <div className="border-b border-[#8f1d2c]/10 px-4 py-4">
         <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-[#874047]">Rashtram library</p>
         <h2 className="mt-1 text-lg font-semibold text-[#29312d]">Policy references</h2>
-        <p className="mt-2 text-[11px] leading-5 text-[#706a61]">Choose research-ready policies and reports to ground the draft.</p>
+        <p className="mt-2 text-[11px] leading-5 text-[#706a61]">Choose a policy or report. Rashtram prepares readable sources when you generate the draft.</p>
         <label className="mt-4 flex items-center gap-2 rounded-xl border border-[#8f1d2c]/12 bg-white px-3 py-2">
           <Search className="h-4 w-4 text-[#8f1d2c]" />
           <input value={libraryQuery} onChange={(event) => setLibraryQuery(event.target.value)} placeholder="Search policy references" className="min-w-0 flex-1 bg-transparent text-xs outline-none placeholder:text-[#a79e91]" />
@@ -131,13 +173,14 @@ export function PolicyDraftWorkspace() {
       </div>
       <div className="app-scrollbar min-h-0 flex-1 space-y-2 overflow-y-auto p-3">
         {loading ? <div className="flex items-center justify-center py-10 text-xs text-[#8a8277]"><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Loading references</div> : null}
-        {!loading && !filteredDocuments.length ? <div className="rounded-2xl border border-dashed border-[#8f1d2c]/15 bg-white px-4 py-8 text-center text-xs leading-5 text-[#8a8277]">No research-ready policy references found.</div> : null}
+        {!loading && !filteredDocuments.length ? <div className="rounded-2xl border border-dashed border-[#8f1d2c]/15 bg-white px-4 py-8 text-center text-xs leading-5 text-[#8a8277]">No readable policy references found.</div> : null}
         {filteredDocuments.map((document) => {
           const selected = selectedDocumentIds.includes(String(document.id));
-          return <button key={document.id} type="button" onClick={() => toggleDocument(document.id)} className={`w-full rounded-2xl border p-3 text-left transition ${selected ? "border-[#8f1d2c]/35 bg-[#fffaf0] shadow-sm" : "border-[#8f1d2c]/8 bg-white hover:border-[#8f1d2c]/20"}`}>
+          const available = isResearchReady(document) || canPrepareDocumentForResearch(document);
+          return <button key={document.id} type="button" disabled={!available} onClick={() => toggleDocument(document.id)} className={`w-full rounded-2xl border p-3 text-left transition ${selected ? "border-[#8f1d2c]/35 bg-[#fffaf0] shadow-sm" : "border-[#8f1d2c]/8 bg-white hover:border-[#8f1d2c]/20"} disabled:cursor-not-allowed disabled:opacity-50`}>
             <div className="flex items-start gap-2">
               <span className={`mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded-md border ${selected ? "border-[#8f1d2c] bg-[#8f1d2c] text-white" : "border-[#b8afa2] text-transparent"}`}><Check className="h-3 w-3" /></span>
-              <span className="min-w-0 flex-1"><span className="line-clamp-3 block text-xs font-semibold leading-5 text-[#29312d]">{document.title}</span><span className="mt-1 block text-[10px] uppercase tracking-[0.1em] text-[#8a8277]">{document.type} · {document.ministry || document.authority || "India"}</span></span>
+              <span className="min-w-0 flex-1"><span className="line-clamp-3 block text-xs font-semibold leading-5 text-[#29312d]">{document.title}</span><span className="mt-1 block text-[10px] uppercase tracking-[0.1em] text-[#8a8277]">{document.type} · {document.ministry || document.authority || "India"}</span><span className="mt-1 block text-[10px] text-[#874047]">{isResearchReady(document) ? "Ready to use" : available ? "Prepared when drafting" : "Source link only"}</span></span>
             </div>
           </button>;
         })}
@@ -160,7 +203,7 @@ export function PolicyDraftWorkspace() {
           {error && <p className="rounded-xl bg-[#f8e5e2] px-3 py-2 text-xs leading-5 text-[#9b3b40]">{error}</p>}
           <button type="submit" disabled={drafting || !brief.objective.trim()} className="inline-flex items-center gap-2 rounded-xl bg-[#8f1d2c] px-5 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-[#751623] disabled:cursor-not-allowed disabled:opacity-45">{drafting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}{drafting ? "Drafting from your sources…" : "Generate policy draft"}</button>
         </form>
-        <section className="mt-5 rounded-3xl border border-[#8f1d2c]/10 bg-[#fffaf0] p-4 sm:p-6"><div className="flex items-center justify-between gap-3"><div><p className="text-[10px] font-bold uppercase tracking-[0.18em] text-[#874047]">Working document</p><h2 className="mt-1 font-serif text-2xl text-[#8f1d2c]">{draft ? "Your policy draft" : "Your draft will appear here"}</h2></div>{drafting && <span className="inline-flex items-center gap-1.5 text-xs text-[#874047]"><Loader2 className="h-3.5 w-3.5 animate-spin" /> Writing</span>}</div>{draft ? <div className="prose prose-sm mt-5 max-w-none prose-headings:font-serif prose-headings:text-[#8f1d2c] prose-p:text-[#514d46] prose-li:text-[#514d46] prose-strong:text-[#29312d]"><ReactMarkdown remarkPlugins={[remarkGfm]}>{draft}</ReactMarkdown></div> : <div className="mt-5 rounded-2xl border border-dashed border-[#8f1d2c]/15 px-5 py-10 text-center text-sm leading-6 text-[#8a8277]">Choose references, describe the policy problem, and generate a source-grounded first draft.</div>}</section>
+        <section className="mt-5 rounded-3xl border border-[#8f1d2c]/10 bg-[#fffaf0] p-4 sm:p-6"><div className="flex items-center justify-between gap-3"><div><p className="text-[10px] font-bold uppercase tracking-[0.18em] text-[#874047]">Working document</p><h2 className="mt-1 font-serif text-2xl text-[#8f1d2c]">{draft ? "Your policy draft" : "Your draft will appear here"}</h2></div><div className="flex items-center gap-2">{draft && !drafting ? <button type="button" onClick={downloadDraft} className="inline-flex items-center gap-1.5 rounded-xl border border-[#8f1d2c]/15 bg-white px-3 py-2 text-xs font-semibold text-[#874047] transition hover:bg-[#f4eae4]"><Download className="h-3.5 w-3.5" /> Download text</button> : null}{drafting && <span className="inline-flex items-center gap-1.5 text-xs text-[#874047]"><Loader2 className="h-3.5 w-3.5 animate-spin" /> Writing</span>}</div></div>{draft ? <div className="prose prose-sm mt-5 max-w-none prose-headings:font-serif prose-headings:text-[#8f1d2c] prose-p:text-[#514d46] prose-li:text-[#514d46] prose-strong:text-[#29312d]"><ReactMarkdown remarkPlugins={[remarkGfm]}>{draft}</ReactMarkdown></div> : <div className="mt-5 rounded-2xl border border-dashed border-[#8f1d2c]/15 px-5 py-10 text-center text-sm leading-6 text-[#8a8277]">Choose references, describe the policy problem, and generate a source-grounded first draft.</div>}</section>
         {citations.length > 0 && <section className="mt-5 rounded-3xl border border-[#8f1d2c]/10 bg-white p-4 sm:p-6"><div className="flex items-center gap-2"><BookOpen className="h-4 w-4 text-[#8f1d2c]" /><h2 className="text-sm font-semibold text-[#29312d]">Evidence used in this draft</h2></div><div className="mt-3 grid gap-2 sm:grid-cols-2">{citations.map((citation, index) => <div key={`${citation.sourceId || citation.documentId || "source"}-${index}`} className="rounded-xl bg-[#f7f2eb] px-3 py-2.5"><p className="line-clamp-2 text-xs font-semibold text-[#29312d]">{citation.title}</p><p className="mt-1 text-[10px] uppercase tracking-[0.08em] text-[#8a8277]">{citation.sourceType === "catalogue" ? `${citation.documentType || "document"} · ${citation.authority || "Rashtram catalogue"}` : "Your study source"}</p></div>)}</div></section>}
       </div>
     </main>

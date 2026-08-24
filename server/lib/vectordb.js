@@ -1395,7 +1395,11 @@ substantive claim must include one or more citation labels exactly as supplied
 (for example "[D1-C2]"). If evidence is absent, say "Not identified in the
 retrieved text." Keep the documents distinct and do not merge their provisions.
 Do not leave a section empty when the supplied passages contain relevant
-evidence. For each major section, produce as many useful non-duplicative cited
+evidence. Do not treat public availability, an India-wide jurisdiction,
+government authorship, or a shared broad document type as a substantive policy
+similarity. When documents concern unrelated subjects, state that plainly and
+compare their distinct purposes, institutions, instruments and implementation
+implications without inventing an overlap. For each major section, produce as many useful non-duplicative cited
 items as the evidence supports; prefer 4-8 items for similarities, differences,
 stakeholders, compliance impact, authority differences, impact assessment and
 key findings, and 2-5 timeline items when dates exist.

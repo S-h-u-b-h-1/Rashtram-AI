@@ -448,13 +448,10 @@ const hasSubstantiveRecommendationAffinity = (signals = {}) => {
   const sameIssuer = Boolean(
     signals.sameMinistry || signals.sameAuthority || signals.sameDepartment,
   );
-  const sameSubject = Boolean(
-    signals.sameCategory || signals.semanticMatch || signals.summaryMatch,
-  );
   return Boolean(
     signals.sharedLegalIdentifier ||
       signals.titleMatch ||
-      (signals.semanticMatch && (sameIssuer || sameSubject)) ||
+      (signals.semanticMatch && (sameIssuer || signals.sameCategory)) ||
       (signals.summaryMatch && (sameIssuer || signals.sameCategory || signals.sameType)),
   );
 };

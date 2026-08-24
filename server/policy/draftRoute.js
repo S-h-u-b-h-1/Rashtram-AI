@@ -7,6 +7,7 @@ const { sanitizeProviderError } = require("../lib/providerErrorSanitizer");
 const { generationLimiter } = require("../middleware/security");
 const { completeSSE, errorSSE, sendSSE, startSSE } = require("../lib/sse");
 const { sendError } = require("../lib/httpResponse");
+const { streamChunkText } = require("../lib/generationStream");
 
 const router = express.Router();
 const MAX_DOCUMENTS = 8;
@@ -170,7 +171,8 @@ router.post("/generate", generationLimiter, async (req, res) => {
     let draftText = "";
     try {
       const stream = await generatePolicyDraft(prompt, context, { responseLanguage: brief.responseLanguage });
-      for await (const content of stream) {
+      for await (const chunk of stream) {
+        const content = streamChunkText(chunk);
         if (!content) continue;
         draftText += content;
         sendSSE(res, { type: "content", content });

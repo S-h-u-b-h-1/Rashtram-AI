@@ -1,3 +1,10 @@
+export const streamEventText = (value) => {
+  if (typeof value === "string") return value;
+  if (typeof value?.text === "string") return value.text;
+  if (typeof value?.delta === "string") return value.delta;
+  return "";
+};
+
 export const consumeSSEStream = async (
   response,
   { onEvent, signal } = {},
@@ -48,4 +55,3 @@ export const consumeSSEStream = async (
     reader.releaseLock();
   }
 };
-

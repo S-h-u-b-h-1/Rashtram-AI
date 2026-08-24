@@ -1,6 +1,6 @@
 
 
-import { consumeSSEStream } from "@/lib/chat-stream";
+import { consumeSSEStream, streamEventText } from "@/lib/chat-stream";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5001/api';
 const DEFAULT_GET_CACHE_TTL_MS = Number(
@@ -305,8 +305,9 @@ export const createPolicyDraft = async ({
         citations = event.citations || [];
         onMeta?.(event);
       } else if (event.type === "content") {
-        fullText += event.content || "";
-        onChunk?.(event.content || "");
+        const content = streamEventText(event.content);
+        fullText += content;
+        onChunk?.(content);
       } else if (event.type === "error") {
         throw new Error(event.error || "Policy drafting was interrupted.");
       }
