@@ -71,14 +71,18 @@ test("only explicit source-backed relationships enter temporal reasoning", () =>
 
 test("temporal retrieval states uncertainty and keeps source identity", async () => {
   let call = 0;
-  const queryFn = async () => {
+  const queryFn = async (sql) => {
     call += 1;
-    if (call === 1) return { rows: [{
+    if (call === 1) {
+      assert.doesNotMatch(sql, /current\.canonical_source\b|current\.source_name\b/);
+      assert.match(sql, /source_registry registry/);
+      return { rows: [{
       id: 10, title: "Model Rule", publication_date: "2024-01-01",
       effective_date: null, commencement_date: null,
       canonical_url: "https://official.example/rule",
       temporal_metadata_json: {},
-    }] };
+      }] };
+    }
     return { rows: [] };
   };
   const passages = await retrieveTemporalPassages(

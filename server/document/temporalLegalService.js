@@ -103,7 +103,10 @@ const applicabilityAt = (document, targetDate) => {
 const loadTemporalContext = async (documentId, queryFn = query) => {
   const documentResult = await queryFn(`SELECT current.id, current.title,
        current.document_type, current.jurisdiction, current.canonical_url,
-       current.canonical_source, current.source_name, current.updated_at,
+       COALESCE(registry.source_name, legacy.canonical_source, legacy.source_name)
+         AS canonical_source,
+       COALESCE(legacy.source_name, registry.source_name) AS source_name,
+       current.updated_at,
        current.publication_date, current.introduced_date, current.passed_date,
        current.assent_date,
        COALESCE(current.notified_date, legacy.notified_date) AS notified_date,
@@ -117,6 +120,7 @@ const loadTemporalContext = async (documentId, queryFn = query) => {
          AS temporal_metadata_json
      FROM documents current
      LEFT JOIN legislative_documents legacy ON legacy.id = current.id
+     LEFT JOIN source_registry registry ON registry.id = current.canonical_source_id
      WHERE current.id = $1 AND current.visibility_status = 'public'`, [documentId]);
   const document = documentResult.rows[0] || null;
   if (!document) return null;
