@@ -227,5 +227,6 @@ test("Knowledge Layer V1 reuses rather than replaces the existing document graph
   const graph = fs.readFileSync(path.join(__dirname, "../graph/knowledgeGraphService.js"), "utf8");
   assert.match(route, /findPath/);
   assert.match(route, /knowledge\/search/);
+  assert.match(route, /require\("\.\/knowledgeLayerService"\)/);
   assert.match(graph, /document_relationships/);
 });

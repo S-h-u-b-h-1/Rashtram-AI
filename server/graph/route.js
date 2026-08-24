@@ -2,13 +2,15 @@ const express = require("express");
 const fetchuser = require("../middleware/fetchuser");
 const { sendError } = require("../lib/httpResponse");
 const {
-  discoverKnowledgeCandidates,
-  exportKnowledgeNode,
   findPath,
   getKnowledgeGraphMetrics,
   saveGraphPath,
   searchGraph,
 } = require("./knowledgeGraphService");
+const {
+  discoverKnowledgeCandidates,
+  exportKnowledgeNode,
+} = require("./knowledgeLayerService");
 
 const router = express.Router();
 
