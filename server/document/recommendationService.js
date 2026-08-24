@@ -469,11 +469,10 @@ const hasSubstantiveRecommendationAffinity = (signals = {}) => {
     signals.sharedLegalIdentifier ||
       signals.relationshipVerified ||
       signals.titleMatch ||
-      signals.summaryMatch ||
       signals.purposeMatch ||
       signals.topicMatch ||
       (signals.semanticMatch && Boolean(
-        signals.titleMatch || signals.summaryMatch || signals.purposeMatch || signals.topicMatch
+        signals.titleMatch || signals.purposeMatch || signals.topicMatch
       )),
   );
 };

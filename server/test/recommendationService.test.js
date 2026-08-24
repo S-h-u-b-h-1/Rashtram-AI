@@ -59,6 +59,22 @@ test("document recommendations require shared subject matter, not generic metada
     hasSubstantiveRecommendationAffinity({ sharedLegalIdentifier: true }),
     true,
   );
+  assert.equal(
+    hasSubstantiveRecommendationAffinity({
+      summaryMatch: true,
+      semanticMatch: true,
+      sameCategory: true,
+    }),
+    false,
+  );
+  assert.equal(
+    hasSubstantiveRecommendationAffinity({
+      summaryMatch: true,
+      semanticMatch: true,
+      topicMatch: true,
+    }),
+    true,
+  );
 });
 
 test("document title affinity keeps shared policy subjects and rejects broad tax noise", () => {
