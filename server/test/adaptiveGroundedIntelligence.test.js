@@ -97,6 +97,12 @@ test("freshness guard never lets an unqualified current-status answer escape", (
   assert.equal(enforceFreshnessGuard("Verified answer", {
     required: true, status: "VERIFIED_CURRENT",
   }), "Verified answer");
+  const contradictory = enforceFreshnessGuard(
+    "The Bill is currently at the introduction stage. Its passed status is unverified.",
+    { required: true, status: "PARTIALLY_VERIFIED" },
+  );
+  assert.doesNotMatch(contradictory, /is currently at/i);
+  assert.match(contradictory, /is described in the selected document as at the introduction stage/i);
 });
 
 test("task profiles keep extraction conservative and synthesis moderately flexible", () => {

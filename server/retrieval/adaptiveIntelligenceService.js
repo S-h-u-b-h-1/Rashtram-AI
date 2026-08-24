@@ -209,12 +209,14 @@ const classifyMaterialClaim = (text) => {
 const enforceFreshnessGuard = (answer, verification = {}) => {
   const value = String(answer || "").trim();
   if (!verification.required || verification.status === "VERIFIED_CURRENT") return value;
-  if (/could not verify|not fully verified|unable to verify|cannot verify/i.test(value)) return value;
-  return [
-    value,
-    "",
-    "Current-status note: I could not verify from the currently indexed authoritative sources whether a later amendment, repeal, or superseding instrument changes this position.",
-  ].filter(Boolean).join("\n");
+  const qualified = value
+    .replace(/\bis currently\b/gi, "is described in the selected document as")
+    .replace(/\bare currently\b/gi, "are described in the selected document as")
+    .replace(/\bremains? currently\b/gi, "is described in the selected document as");
+  const alreadyCaveated = /could not verify|not fully verified|unable to verify|cannot verify|unverified/i
+    .test(qualified);
+  const warning = "Current position: I could not verify from the currently indexed authoritative sources whether a later amendment, repeal, or superseding instrument changes this position.";
+  return alreadyCaveated ? qualified : [warning, "", qualified].filter(Boolean).join("\n");
 };
 
 module.exports = {
