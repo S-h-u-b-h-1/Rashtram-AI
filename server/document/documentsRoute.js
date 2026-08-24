@@ -46,6 +46,17 @@ const { getDocumentReadiness } = require("./readinessContract");
 const { sendError } = require("../lib/httpResponse");
 const { applyResearchFlags, resolveResearchFlags } = require("../retrieval/featureFlags");
 const { recordResearchTelemetry } = require("../retrieval/researchTelemetry");
+const {
+  ANSWER_INTENTS,
+  classifyAnswerIntent,
+  classifyFreshness,
+  enforceFreshnessGuard,
+  requiresCurrentVerification,
+} = require("../retrieval/adaptiveIntelligenceService");
+const {
+  assessCurrentVerification,
+  loadDocumentSourceFreshness,
+} = require("./temporalLegalService");
 
 const router = express.Router();
 
@@ -275,6 +286,17 @@ router.post("/chat", generationLimiter, async (req, res) => {
     if (!documents.length) {
       return res.status(404).json({ error: "Documents not found." });
     }
+    const answerIntent = classifyAnswerIntent(message, {
+      task: documents.length > 1 ? "comparison" : undefined,
+      documentCount: documents.length,
+    });
+    const freshnessClass = classifyFreshness(message, answerIntent);
+    const freshnessRequired = requiresCurrentVerification(freshnessClass);
+    const historyPromise = query(
+      `SELECT messages FROM multi_document_chats
+        WHERE user_id = $1 AND selection_key = $2 LIMIT 1`,
+      [req.user.id, selectionKey(ids)],
+    ).catch(() => ({ rows: [] }));
     const passagesPerDocument = Math.max(
       2,
       Math.floor(12 / documents.length),
@@ -302,15 +324,19 @@ router.post("/chat", generationLimiter, async (req, res) => {
               }
             })()
           : Promise.resolve({ context: "", sources: [], graphGrounded: false });
-        const [retrieval, textArtifact, relationshipContext] = await Promise.all([
+        const [retrieval, textArtifact, relationshipContext, sourceFreshness] = await Promise.all([
           retrieveDocumentContext(
             document.type,
             document.id,
             message,
-            { topK: passagesPerDocument, plan, document, flags, accountId: req.user.id },
+            { topK: passagesPerDocument, plan, document, flags, accountId: req.user.id,
+              freshnessRequired },
           ),
           getTextArtifact(document.id),
           relationshipPromise,
+          freshnessRequired
+            ? loadDocumentSourceFreshness(document).catch(() => ({ status: "error" }))
+            : Promise.resolve({ status: "not_required" }),
         ]);
         return {
           document,
@@ -327,6 +353,9 @@ router.post("/chat", generationLimiter, async (req, res) => {
               graphMs: graphLatencyMs,
             },
           },
+          currentVerification: freshnessRequired
+            ? assessCurrentVerification({ document, passages: retrieval.passages, freshness: sourceFreshness })
+            : { required: false, status: "NOT_REQUIRED", checkedAt: new Date().toISOString() },
         };
       }),
     );
@@ -401,6 +430,33 @@ router.post("/chat", generationLimiter, async (req, res) => {
       reasons: ["Evidence gate disabled by controlled rollout."], missing: [],
       conflicts: [], version: "legacy-pass-through-v1",
     };
+    const currentVerification = freshnessRequired
+      ? {
+          required: true,
+          status: passageGroups.every((group) =>
+            group.currentVerification.status === "VERIFIED_CURRENT")
+            ? "VERIFIED_CURRENT"
+            : passageGroups.some((group) =>
+              group.currentVerification.status === "PARTIALLY_VERIFIED")
+              ? "PARTIALLY_VERIFIED"
+              : "UNVERIFIED",
+          checkedAt: new Date().toISOString(),
+          checkedThrough: passageGroups.map((group) => group.currentVerification.checkedThrough)
+            .filter(Boolean).sort().at(-1) || null,
+          connectorStatus: passageGroups.some((group) =>
+            ["degraded", "error", "stale", "not_checked"].includes(group.currentVerification.connectorStatus))
+            ? "degraded"
+            : "fresh",
+          documents: passageGroups.map((group) => ({
+            documentId: group.document.id,
+            status: group.currentVerification.status,
+          })),
+        }
+      : { required: false, status: "NOT_REQUIRED", checkedAt: new Date().toISOString() };
+    const historyResult = await historyPromise;
+    const conversationHistory = (historyResult.rows[0]?.messages || []).slice(-6)
+      .map((item) => `${item.sender === "assistant" ? "Assistant" : "User"}: ${compactText(item.text, 600)}`)
+      .join("\n");
 
     startSSE(res);
     sendSSE(res, {
@@ -420,6 +476,9 @@ router.post("/chat", generationLimiter, async (req, res) => {
         selectedSourceCount: userSourceContext.sources.length,
         graphSourceCount: graphSources.length,
         evidenceSufficiency: sufficiency,
+        answerIntent,
+        freshnessClass,
+        currentVerification,
         retrieval: passageGroups.map(({ document, retrieval }) => ({
           documentId: document.id,
           ...retrieval,
@@ -433,10 +492,12 @@ router.post("/chat", generationLimiter, async (req, res) => {
     let verification = null;
     let generationLatencyMs = 0;
     let verificationLatencyMs = 0;
-    if ([
+    const explainConflict = [ANSWER_INTENTS.CURRENT_STATUS, ANSWER_INTENTS.TIMELINE]
+      .includes(answerIntent);
+    if (answerIntent !== ANSWER_INTENTS.GENERAL_CONTEXT && ([
       SUFFICIENCY_LEVELS.INSUFFICIENT,
-      SUFFICIENCY_LEVELS.CONFLICTING,
-    ].includes(sufficiency.level)) {
+      ...(explainConflict ? [] : [SUFFICIENCY_LEVELS.CONFLICTING]),
+    ].includes(sufficiency.level))) {
       fullResponse = buildAbstentionResponse(sufficiency, {
         documentTitles: documents.map((document) => document.title),
       });
@@ -446,6 +507,12 @@ router.post("/chat", generationLimiter, async (req, res) => {
         const generationStartedAt = Date.now();
         const stream = await generateResponse(message, [briefContext, combinedContext].filter(Boolean).join("\n\n"), {
           responseLanguage,
+          task: documents.length > 1 ? "comparison_chat" : "multi_document_chat",
+          intent: answerIntent,
+          freshnessClass,
+          currentVerification,
+          conversationHistory,
+          strictCompliance: answerIntent === ANSWER_INTENTS.COMPLIANCE,
         });
         let generatedAnswer = "";
         for await (const chunk of stream) {
@@ -460,6 +527,8 @@ router.post("/chat", generationLimiter, async (req, res) => {
           ? await verifyAndRepairAnswer(generatedAnswer, verificationEvidence, {
               sufficiency,
               documentTitles: documents.map((document) => document.title),
+              allowStableGeneralKnowledge:
+                answerIntent === ANSWER_INTENTS.GENERAL_CONTEXT,
             })
           : {
               answer: generatedAnswer, claims: [], unsupportedBeforeRepair: 0,
@@ -467,7 +536,7 @@ router.post("/chat", generationLimiter, async (req, res) => {
               abstained: false, version: "legacy-unverified-v1",
             };
         verificationLatencyMs = Date.now() - verificationStartedAt;
-        fullResponse = verification.answer;
+        fullResponse = enforceFreshnessGuard(verification.answer, currentVerification);
         generationMode = verification.abstained ? "verification_abstention" : "ai_verified";
       } catch (generationError) {
         providerError = sanitizeProviderError(generationError);
@@ -559,6 +628,9 @@ router.post("/chat", generationLimiter, async (req, res) => {
           verification: verification
             ? summarizeVerification(verification)
             : { mode: generationMode },
+          answerIntent,
+          freshnessClass,
+          currentVerification,
         },
       },
     ];

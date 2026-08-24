@@ -2,6 +2,15 @@ const { query } = require("../db");
 const DocumentRepository = require("../document/DocumentRepository");
 const { retrieveDocumentContext } = require("../document/documentResearchService");
 const { assessEvidenceSufficiency, SUFFICIENCY_LEVELS } = require("../retrieval/evidenceSafetyService");
+const {
+  classifyAnswerIntent,
+  classifyFreshness,
+  requiresCurrentVerification,
+} = require("../retrieval/adaptiveIntelligenceService");
+const {
+  assessCurrentVerification,
+  loadDocumentSourceFreshness,
+} = require("../document/temporalLegalService");
 
 const INSUFFICIENT = "Insufficient verified evidence.";
 const normalize = (value, maximum = 1200) => String(value || "")
@@ -64,6 +73,13 @@ const assembleResearchReport = ({ input, runs }) => {
     sourceUrl: run.document.sourceUrl || null,
   })));
   const unavailable = (value) => value.length ? value : INSUFFICIENT;
+  const currentVerification = input.freshnessRequired
+    ? runs.map((run) => ({
+        documentId: String(run.document.id),
+        title: run.document.title,
+        ...run.currentVerification,
+      }))
+    : [];
   const sections = {
     executiveSummary: evidence.length ? [{
       text: `This report addresses “${input.researchQuestion}” using ${evidence.length} cited passage${evidence.length === 1 ? "" : "s"} from ${usableRuns.length} selected instrument${usableRuns.length === 1 ? "" : "s"}.`,
@@ -79,6 +95,9 @@ const assembleResearchReport = ({ input, runs }) => {
           documents: instruments }
       : INSUFFICIENT,
     potentialImplications: unavailable(implications),
+    currentPosition: input.freshnessRequired
+      ? currentVerification
+      : "This research question did not require a current-status determination.",
     openQuestions: [
       timeline.length ? null : "Which effective or commencement dates can be verified from official sources?",
       usableRuns.length < runs.length ? "Can additional verified passages resolve the documents with insufficient or conflicting evidence?" : null,
@@ -88,6 +107,8 @@ const assembleResearchReport = ({ input, runs }) => {
       !evidence.length ? INSUFFICIENT : null,
       ...runs.filter((run) => !usableRuns.includes(run)).map((run) =>
         `${run.document.title}: ${run.sufficiency.level.toLowerCase().replaceAll("_", " ")} evidence.`),
+      ...currentVerification.filter((item) => item.status !== "VERIFIED_CURRENT")
+        .map((item) => `${item.title}: current status could not be fully verified from indexed authoritative sources.`),
       "This report is research assistance, not legal advice. Verify material conclusions against the cited sources.",
     ].filter(Boolean),
     sources: evidence,
@@ -99,16 +120,31 @@ const assembleResearchReport = ({ input, runs }) => {
 
 const generateResearchReport = async (userId, payload = {}, adapters = {}) => {
   const input = validateReportInput(payload);
+  input.answerIntent = classifyAnswerIntent(input.researchQuestion, {
+    documentCount: input.documentIds.length,
+  });
+  input.freshnessClass = classifyFreshness(input.researchQuestion, input.answerIntent);
+  input.freshnessRequired = requiresCurrentVerification(input.freshnessClass);
   const loadDocument = adapters.loadDocument || DocumentRepository.getById;
   const retrieve = adapters.retrieve || retrieveDocumentContext;
   const persist = adapters.persist || query;
   const runs = (await Promise.all(input.documentIds.map(async (documentId) => {
     const document = await loadDocument(documentId);
     if (!document) return null;
-    const retrieval = await retrieve(document.documentType || document.type, document.id,
-      input.researchQuestion, { document, accountId: userId, topK: 12 });
+    const [retrieval, sourceFreshness] = await Promise.all([
+      retrieve(document.documentType || document.type, document.id,
+        input.researchQuestion, { document, accountId: userId, topK: 12,
+          freshnessRequired: input.freshnessRequired }),
+      input.freshnessRequired
+        ? loadDocumentSourceFreshness(document).catch(() => ({ status: "error" }))
+        : Promise.resolve({ status: "not_required" }),
+    ]);
     const passages = retrieval.passages || [];
-    return { document, passages, sufficiency: assessEvidenceSufficiency(input.researchQuestion,
+    return { document, passages,
+      currentVerification: input.freshnessRequired
+        ? assessCurrentVerification({ document, passages, freshness: sourceFreshness })
+        : { required: false, status: "NOT_REQUIRED" },
+      sufficiency: assessEvidenceSufficiency(input.researchQuestion,
       passages, { retrievalVerified: retrieval.retrievalVerified, minimumEvidence: 3 }) };
   }))).filter(Boolean);
   if (!runs.length) {

@@ -1,5 +1,9 @@
 const { QUERY_TYPES } = require("./queryPlanner");
 const { evidenceTextIsReliable } = require("../lib/pdfTextQuality");
+const {
+  CLAIM_CLASSES,
+  classifyMaterialClaim,
+} = require("./adaptiveIntelligenceService");
 
 const SUFFICIENCY_LEVELS = Object.freeze({
   HIGH: "HIGH",
@@ -11,7 +15,12 @@ const SUFFICIENCY_LEVELS = Object.freeze({
 
 const CLAIM_TYPES = Object.freeze({
   SOURCE_FACT: "SOURCE_FACT",
-  ANALYTICAL_INFERENCE: "ANALYTICAL_INFERENCE",
+  EXTERNAL_FACT: "EXTERNAL_FACT",
+  INFERENCE: "INFERENCE",
+  PERSPECTIVE: "PERSPECTIVE",
+  HYPOTHETICAL: "HYPOTHETICAL",
+  // Kept as an alias for stored telemetry and callers from Evidence Safety V1.
+  ANALYTICAL_INFERENCE: "INFERENCE",
   RECOMMENDATION: "RECOMMENDATION",
   UNCERTAINTY: "UNCERTAINTY",
 });
@@ -308,23 +317,25 @@ const buildAbstentionResponse = (assessment, options = {}) => {
 
 const classifyClaim = (text) => {
   const value = String(text || "").trim();
-  if (/\b(analytical implication|inference|may|might|could|likely|plausible|suggests?)\b/i.test(value)) {
-    return CLAIM_TYPES.ANALYTICAL_INFERENCE;
-  }
   if (/\b(recommend|should consider|next step|could consider|it would be prudent)\b/i.test(value)) {
     return CLAIM_TYPES.RECOMMENDATION;
   }
   if (/\b(uncertain|unclear|not identified|not stated|insufficient|cannot determine|evidence gap|not available)\b/i.test(value)) {
     return CLAIM_TYPES.UNCERTAINTY;
   }
-  return CLAIM_TYPES.SOURCE_FACT;
+  return ({
+    [CLAIM_CLASSES.EXTERNAL_FACT]: CLAIM_TYPES.EXTERNAL_FACT,
+    [CLAIM_CLASSES.INFERENCE]: CLAIM_TYPES.INFERENCE,
+    [CLAIM_CLASSES.PERSPECTIVE]: CLAIM_TYPES.PERSPECTIVE,
+    [CLAIM_CLASSES.HYPOTHETICAL]: CLAIM_TYPES.HYPOTHETICAL,
+  })[classifyMaterialClaim(value)] || CLAIM_TYPES.SOURCE_FACT;
 };
 
 const isMaterialFactualClaim = (text) => {
   const value = String(text || "").trim();
   if (!value) return false;
   return numericFacts(value).length > 0 ||
-    /\b(?:act|bill|rule|regulation|notification|order|policy|section|clause|article|schedule|authority|government|ministry|department|court|commission|board|institution|jurisdiction)\b/i.test(value) ||
+    /\b(?:act|bill|ordinance|rule|regulation|notification|order|policy|section|clause|article|schedule|authority|government|ministry|department|court|commission|board|institution|jurisdiction)\b/i.test(value) ||
     /\b(?:shall|must|required|prohibited|permitted|liable|penalty|fine|deadline|effective|commence|amend|repeal|exempt|obligation|entitlement|power|duty)\b/i.test(value);
 };
 
@@ -347,7 +358,8 @@ const extractClaims = (answer) => String(answer || "")
     return {
       ...item,
       type,
-      material: type === CLAIM_TYPES.SOURCE_FACT && isMaterialFactualClaim(item.text),
+      material: [CLAIM_TYPES.SOURCE_FACT, CLAIM_TYPES.EXTERNAL_FACT].includes(type) &&
+        isMaterialFactualClaim(item.text),
       citations: extractCitationLabels(item.text),
     };
   });
@@ -405,11 +417,11 @@ const citationSupportsClaim = (claimText, evidence, config = safetyConfig()) => 
   };
 };
 
-const validateClaims = (claims, evidence = []) => {
+const validateClaims = (claims, evidence = [], options = {}) => {
   const config = safetyConfig();
   const byCitation = evidenceMap(evidence);
   return claims.map((claim) => {
-    if (claim.type !== CLAIM_TYPES.SOURCE_FACT) {
+    if (![CLAIM_TYPES.SOURCE_FACT, CLAIM_TYPES.EXTERNAL_FACT].includes(claim.type)) {
       return { ...claim, state: CLAIM_STATES.SUPPORTED, support: [] };
     }
     if (claim.material === false) {
@@ -418,6 +430,15 @@ const validateClaims = (claims, evidence = []) => {
         state: CLAIM_STATES.SUPPORTED,
         support: [],
         verificationScope: "non_material",
+      };
+    }
+    if (claim.type === CLAIM_TYPES.EXTERNAL_FACT && options.allowStableGeneralKnowledge &&
+        !/\b(currently|today|latest|presently|as of \d{4}|now in force|current regulator)\b/i.test(claim.text)) {
+      return {
+        ...claim,
+        state: CLAIM_STATES.SUPPORTED,
+        support: [],
+        verificationScope: "stable_general_knowledge",
       };
     }
     if (!claim.citations.length) {
@@ -442,7 +463,8 @@ const validateClaims = (claims, evidence = []) => {
 
 const deterministicRepair = (answer, validatedClaims) => {
   const unsafeLines = new Set(validatedClaims
-    .filter((claim) => claim.type === CLAIM_TYPES.SOURCE_FACT && claim.state === CLAIM_STATES.UNSUPPORTED)
+    .filter((claim) => [CLAIM_TYPES.SOURCE_FACT, CLAIM_TYPES.EXTERNAL_FACT].includes(claim.type) &&
+      claim.state === CLAIM_STATES.UNSUPPORTED)
     .map((claim) => claim.index));
   return String(answer || "").split(/\n+/)
     .filter((_, index) => !unsafeLines.has(index))
@@ -462,7 +484,7 @@ const verifyAndRepairAnswer = async (answer, evidence = [], options = {}) => {
     verifierFallback = true;
     claims = extractClaims(answer);
   }
-  let validated = validateClaims(claims, evidence);
+  let validated = validateClaims(claims, evidence, options);
   let repairedAnswer = String(answer || "").trim();
   let repairAttempts = 0;
   const unsupportedBeforeRepair = validated.filter((claim) => claim.state === CLAIM_STATES.UNSUPPORTED).length;
@@ -473,12 +495,37 @@ const verifyAndRepairAnswer = async (answer, evidence = [], options = {}) => {
         .then(() => options.repair(repairedAnswer, validated))
         .catch(() => "")
       : deterministicRepair(repairedAnswer, validated);
-    validated = validateClaims(extractClaims(repairedAnswer), evidence);
+    validated = validateClaims(extractClaims(repairedAnswer), evidence, options);
   }
   const unsupportedAfterRepair = validated.filter((claim) => claim.state === CLAIM_STATES.UNSUPPORTED).length;
   const supportedFacts = validated.filter((claim) =>
-    claim.type === CLAIM_TYPES.SOURCE_FACT && claim.state === CLAIM_STATES.SUPPORTED,
+    [CLAIM_TYPES.SOURCE_FACT, CLAIM_TYPES.EXTERNAL_FACT].includes(claim.type) &&
+      claim.state === CLAIM_STATES.SUPPORTED,
   ).length;
+  const analyticalTrace = validated
+    .filter((claim) => [
+      CLAIM_TYPES.INFERENCE,
+      CLAIM_TYPES.PERSPECTIVE,
+      CLAIM_TYPES.HYPOTHETICAL,
+      CLAIM_TYPES.RECOMMENDATION,
+    ].includes(claim.type))
+    .map((claim) => {
+      const priorFacts = validated
+        .filter((candidate) => candidate.index <= claim.index &&
+          [CLAIM_TYPES.SOURCE_FACT, CLAIM_TYPES.EXTERNAL_FACT].includes(candidate.type) &&
+          candidate.state === CLAIM_STATES.SUPPORTED)
+        .slice(-2);
+      return {
+        statement: claim.text,
+        claimType: claim.type,
+        supportingCitations: [
+          ...new Set([
+            ...claim.citations,
+            ...priorFacts.flatMap((candidate) => candidate.citations),
+          ]),
+        ],
+      };
+    });
   const needsAbstention = !repairedAnswer || unsupportedAfterRepair > 0 ||
     (unsupportedBeforeRepair > 0 && supportedFacts === 0);
   return {
@@ -492,6 +539,7 @@ const verifyAndRepairAnswer = async (answer, evidence = [], options = {}) => {
     unsupportedBeforeRepair,
     unsupportedAfterRepair,
     supportedFacts,
+    analyticalTrace,
     repairAttempts,
     abstained: needsAbstention,
     verifierFallback,
@@ -503,6 +551,9 @@ const summarizeVerification = (verification = {}) => ({
   unsupportedBeforeRepair: Number(verification.unsupportedBeforeRepair || 0),
   unsupportedAfterRepair: Number(verification.unsupportedAfterRepair || 0),
   supportedFacts: Number(verification.supportedFacts || 0),
+  analyticalTraceCount: Array.isArray(verification.analyticalTrace)
+    ? verification.analyticalTrace.length
+    : 0,
   repairAttempts: Number(verification.repairAttempts || 0),
   abstained: Boolean(verification.abstained),
   verifierFallback: Boolean(verification.verifierFallback),
@@ -550,17 +601,29 @@ const verifyStructuredComparison = (generated, citations = []) => {
     value[section] = items.filter((item) => {
       const text = item.point || item.analysis || item.impact || item.event || item.clause || "";
       const labels = Array.isArray(item.citations) ? item.citations.map(canonicalCitationLabel) : [];
+      const claimType = classifyClaim(text);
+      const analytical = [
+        CLAIM_TYPES.INFERENCE,
+        CLAIM_TYPES.PERSPECTIVE,
+        CLAIM_TYPES.HYPOTHETICAL,
+        CLAIM_TYPES.RECOMMENDATION,
+      ].includes(claimType);
+      const citedEvidence = labels.map((label) => byCitation.get(label)).filter(Boolean);
+      const citedNumbers = new Set(citedEvidence.flatMap((source) => numericFacts(evidenceText(source))));
+      const analyticalPremisesAvailable = analytical && citedEvidence.some(evidenceTextIsReliable) &&
+        numericFacts(text).every((number) => citedNumbers.has(number));
       const supported = labels.some((label) => {
         const source = byCitation.get(label);
         return source && citationSupportsClaim(text, source).partial;
-      });
+      }) || analyticalPremisesAvailable;
       if (!supported) removed += 1;
       return supported;
     });
   }
   const summaryClaims = validateClaims(extractClaims(value.executiveSummary || ""), evidence);
   const summaryIsGrounded = summaryClaims.length > 0 && summaryClaims.every((claim) =>
-    claim.type !== CLAIM_TYPES.SOURCE_FACT || claim.state !== CLAIM_STATES.UNSUPPORTED,
+    ![CLAIM_TYPES.SOURCE_FACT, CLAIM_TYPES.EXTERNAL_FACT].includes(claim.type) ||
+      claim.state !== CLAIM_STATES.UNSUPPORTED,
   );
   if (!summaryIsGrounded) {
     value.executiveSummary = removed > 0

@@ -19,6 +19,7 @@ Detailed references:
 
 - [Project understanding](docs/PROJECT_UNDERSTANDING.md)
 - [Architecture v2](docs/ARCHITECTURE_V2.md)
+- [Adaptive Grounded Intelligence V1](docs/ADAPTIVE_GROUNDED_INTELLIGENCE_V1.md)
 - [Legislative data catalogue](docs/DATA_CATALOG.md)
 - [Legislative ingestion architecture](docs/LEGISLATIVE_INGESTION_ARCHITECTURE.md)
 - [Policy platform architecture](docs/POLICY_PLATFORM_ARCHITECTURE.md)

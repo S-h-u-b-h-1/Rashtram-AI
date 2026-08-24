@@ -10,6 +10,10 @@ const {
 } = require("../document/recommendationService");
 const { discoverKnowledgeCandidates } = require("../graph/knowledgeLayerService");
 const { assessEvidenceSufficiency, SUFFICIENCY_LEVELS } = require("../retrieval/evidenceSafetyService");
+const {
+  assessCurrentVerification,
+  loadDocumentSourceFreshness,
+} = require("../document/temporalLegalService");
 
 const normalizeSpace = (value, maximum = 600) => String(value || "")
   .normalize("NFKC").replace(/\s+/g, " ").trim().slice(0, maximum);
@@ -147,6 +151,25 @@ const shapeComplianceResult = ({ input, recommendations, knowledge, documentRuns
     evidenceBackedObligations: obligations,
     evidenceBackedRegistrationsPermissions: permissions,
     potentialPenalties: penalties,
+    operationalConsiderations: [
+      obligations.length ? {
+        analysis: "Possible operational impact: the cited obligations may require workflow, record-keeping, ownership, or reporting changes. The precise burden depends on verified applicability.",
+        supportingCitations: obligations.slice(0, 4).flatMap((item) => item.citations),
+      } : null,
+      permissions.length ? {
+        analysis: "Possible implementation consideration: verify registrations, permissions, and approval sequencing before changing operations.",
+        supportingCitations: permissions.slice(0, 4).flatMap((item) => item.citations),
+      } : null,
+      penalties.length ? {
+        analysis: "Risk consideration: prioritise controls around the cited penalty-triggering duties, while checking whether later amendments change the position.",
+        supportingCitations: penalties.slice(0, 4).flatMap((item) => item.citations),
+      } : null,
+    ].filter(Boolean),
+    currentApplicability: documentRuns.map((run) => ({
+      documentId: String(run.document.id),
+      title: run.document.title,
+      ...run.currentVerification,
+    })),
     stateSpecificConsiderations: candidateDocuments.filter((item) =>
       item.jurisdiction && !/^india$/i.test(item.jurisdiction)),
     questionsRequiringProfessionalVerification: [
@@ -203,7 +226,8 @@ const runComplianceCopilot = async (userId, payload = {}, adapters = {}) => {
   const documentRuns = (await Promise.all(recommendations.map(async (recommendation) => {
     const document = await loadDocument(recommendation.id);
     if (!document) return null;
-    const retrieval = await retrieve(
+    const [retrieval, sourceFreshness] = await Promise.all([
+      retrieve(
       document.documentType || document.type,
       document.id,
       `What obligations, permissions, regulators, deadlines, and penalties are relevant to this business problem: ${input.problem}`,
@@ -223,13 +247,21 @@ const runComplianceCopilot = async (userId, payload = {}, adapters = {}) => {
           comparisonIsolation: false,
           plannerVersion: "compliance-copilot-lexical-first-v1",
         },
+        freshnessRequired: true,
       },
-    );
+      ),
+      loadDocumentSourceFreshness(document).catch(() => ({ status: "error" })),
+    ]);
     const passages = retrieval.passages || [];
     return {
       document,
       recommendation,
       passages,
+      currentVerification: assessCurrentVerification({
+        document,
+        passages,
+        freshness: sourceFreshness,
+      }),
       sufficiency: assessEvidenceSufficiency(input.problem, passages, {
         retrievalVerified: retrieval.retrievalVerified,
       }),

@@ -1878,7 +1878,7 @@ const retrieveDocumentContext = async (
   const metadataPromise = plan.useMetadata
     ? timed("metadata", () => metadataSearch(documentId, options.document))
     : Promise.resolve([]);
-  const temporalPromise = plan.queryType === "TIMELINE"
+  const temporalPromise = plan.queryType === "TIMELINE" || options.freshnessRequired
     ? timed("temporal", () => temporalSearch(documentId, message))
     : Promise.resolve([]);
   const lexicalLimit = plan.queryType === "EXACT_REFERENCE"
@@ -1962,9 +1962,18 @@ const retrieveDocumentContext = async (
   );
   timings.fusionMs = Date.now() - fusionStartedAt;
   const rerankStartedAt = Date.now();
-  const reranked = flags.reranker
+  const rerankedBase = flags.reranker
     ? rerankPassages(fused, message, { topK })
     : fused.slice(0, topK).map((passage, index) => ({ ...passage, passage: index + 1 }));
+  const reranked = rerankedBase.map((passage) => ({
+    ...passage,
+    publicationDate: passage.publicationDate || options.document?.publicationDate || null,
+    effectiveDate: passage.effectiveDate || options.document?.effectiveDate || null,
+    commencementDate: passage.commencementDate || options.document?.commencementDate || null,
+    indexedAt: passage.indexedAt || options.document?.retrievalVerifiedAt ||
+      options.document?.processedAt || options.document?.updatedAt || null,
+    sourceAuthority: passage.sourceAuthority || options.document?.authority || null,
+  }));
   timings.rerankMs = Date.now() - rerankStartedAt;
   const hasLexical = ftsPassages.length > 0 || localPassages.length > 0;
   const retrievalMode = vectorPassages.length > 0 && (hasLexical || metadataPassages.length > 0)
@@ -1985,6 +1994,7 @@ const retrieveDocumentContext = async (
       lexical: Boolean(plan.useLexical),
       vector: shouldUseVector,
       graph: Boolean(plan.useGraph),
+      freshness: Boolean(options.freshnessRequired),
     },
     candidateLimits,
     candidateCounts: {

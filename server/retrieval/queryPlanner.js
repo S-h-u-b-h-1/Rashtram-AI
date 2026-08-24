@@ -24,6 +24,9 @@ const classifyQuery = (query, options = {}) => {
   )) {
     return QUERY_TYPES.EXACT_REFERENCE;
   }
+  if (matches(text, /\b(current(?:ly)?|present status|latest|still (?:valid|active|applicable|operative|pending|in force)|now (?:an? )?(?:act|law|rule)|has .* (?:passed|lapsed|expired|been amended|been repealed|been superseded)|is .* (?:pending|operative|active)|who currently|what currently)\b/i)) {
+    return QUERY_TYPES.TIMELINE;
+  }
   if (matches(text, /\b(timeline|chronolog|before|after|when|commencement|effective date|sequence|history|in force|applied|applicable|which version|as of|during fy)\b/i)) {
     return QUERY_TYPES.TIMELINE;
   }

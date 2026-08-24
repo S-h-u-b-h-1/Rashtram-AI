@@ -1,4 +1,9 @@
 const { query } = require("../db");
+const { sourceNameGroup } = require("../lib/ingestion/core/sourceIdentity");
+const {
+  SOURCE_AUTHORITY,
+  classifySourceAuthority,
+} = require("../retrieval/sourceAuthority");
 
 const DATE_KINDS = Object.freeze([
   ["published", "publication_date"],
@@ -55,7 +60,8 @@ const parseTemporalIntent = (question) => {
     targetDate,
     range,
     asksApplicability: /\b(applied|applicable|in force|which version|as of)\b/i.test(text),
-    asksChange: /\b(changed?|before|after|amend|repeal|supersed)\b/i.test(text),
+    asksCurrentStatus: /\b(current(?:ly)?|present status|latest|still (?:valid|active|applicable|operative|pending|in force)|now (?:an? )?(?:act|law|rule)|has .* (?:passed|lapsed|expired|been amended|been repealed|been superseded)|is .* (?:pending|operative|active))\b/i.test(text),
+    asksChange: /\b(changed?|before|after|amend|repeal|supersed|current(?:ly)?|present status|latest|still (?:valid|active|applicable|operative|pending|in force))\b/i.test(text),
   };
 };
 
@@ -97,6 +103,7 @@ const applicabilityAt = (document, targetDate) => {
 const loadTemporalContext = async (documentId, queryFn = query) => {
   const documentResult = await queryFn(`SELECT current.id, current.title,
        current.document_type, current.jurisdiction, current.canonical_url,
+       current.canonical_source, current.source_name, current.updated_at,
        current.publication_date, current.introduced_date, current.passed_date,
        current.assent_date,
        COALESCE(current.notified_date, legacy.notified_date) AS notified_date,
@@ -197,6 +204,12 @@ const loadRelatedTemporalEvidence = async (context, question, queryFn = query) =
       retrievalMode: "temporal_fts",
       temporalRole: role,
       relationshipType: relationship?.type || null,
+      authorityClass: classifySourceAuthority({
+        sourceUrl: metadata.sourceUrl || row.canonical_url || relationship?.sourceUrl,
+        source: row.title,
+      }),
+      publicationDate: relationship?.events?.find((event) => event.kind === "published")?.date || null,
+      effectiveDate: relationship?.events?.find((event) => event.kind === "effective_from")?.date || null,
     };
   }).filter((passage) => passage.content);
 };
@@ -223,8 +236,11 @@ const retrieveTemporalPassages = async (documentId, question, queryFn = query) =
   const relatedEvidence = intent.asksChange
     ? await loadRelatedTemporalEvidence(context, question, queryFn)
     : [];
-  const applicability = intent.targetDate
-    ? applicabilityAt(context.document, intent.targetDate) : null;
+  const applicabilityDate = intent.targetDate || (intent.asksCurrentStatus
+    ? new Date().toISOString().slice(0, 10)
+    : null);
+  const applicability = applicabilityDate
+    ? applicabilityAt(context.document, applicabilityDate) : null;
   const ownEvents = context.events.map((event, index) => ({
     passage: index + 1,
     score: 1,
@@ -252,19 +268,25 @@ const retrieveTemporalPassages = async (documentId, question, queryFn = query) =
       retrievalMode: "temporal",
       temporal: event,
       relationshipType: relationship.type,
+      authorityClass: classifySourceAuthority({
+        sourceUrl: relationship.sourceUrl || event.sourceUrl,
+        source: relationship.title,
+      }),
+      publicationDate: relationship.events.find((item) => item.kind === "published")?.date || null,
+      effectiveDate: relationship.events.find((item) => item.kind === "effective_from")?.date || null,
     })));
   if (applicability) ownEvents.unshift({
     passage: 0,
     score: 1,
     lexicalScore: 1,
-    chunkIndex: `temporal-applicability:${intent.targetDate}`,
-    content: `Applicability assessment for ${intent.targetDate}: ${applicability.status}. Reason: ${applicability.reason || applicability.caveat || "recorded interval"}. Publication date is not treated as commencement.`,
+    chunkIndex: `temporal-applicability:${applicabilityDate}`,
+    content: `Applicability assessment for ${applicabilityDate}: ${applicability.status}. Reason: ${applicability.reason || applicability.caveat || "recorded interval"}. Publication date is not treated as commencement, and absence of a recorded later instrument is not proof that none exists.`,
     source: "Recorded temporal metadata assessment",
     documentId: String(documentId),
     sourceUrl: context.document.canonical_url || null,
     structuralType: "temporal_assessment",
     retrievalMode: "temporal",
-    temporal: { targetDate: intent.targetDate, ...applicability },
+    temporal: { targetDate: applicabilityDate, ...applicability },
   });
   const limitation = intent.asksChange && context.relationships.length && !relatedEvidence.length
     ? [{
@@ -286,11 +308,113 @@ const retrieveTemporalPassages = async (documentId, question, queryFn = query) =
   }));
 };
 
+const loadDocumentSourceFreshness = async (document, queryFn = query) => {
+  const source = String(document?.canonical_source || document?.canonicalSource ||
+    document?.source_name || document?.sourceName || document?.source || "").trim();
+  if (!source) return {
+    status: "not_checked",
+    checkedThrough: null,
+    sourceNames: [],
+  };
+  const sourceNames = sourceNameGroup(source);
+  try {
+    const result = await queryFn(
+      `SELECT health.source_name, health.status, health.reachable,
+              health.parser_status, health.last_checked_at,
+              health.last_successful_run_at, health.last_failed_run_at,
+              health.consecutive_failures, registry.ingestion_frequency
+         FROM source_health health
+         LEFT JOIN source_registry registry ON registry.source_name = health.source_name
+        WHERE health.source_name = ANY($1::TEXT[])
+        ORDER BY health.last_checked_at DESC NULLS LAST`,
+      [sourceNames],
+    );
+    if (!result.rows.length) return {
+      status: "not_checked",
+      checkedThrough: null,
+      sourceNames,
+    };
+    const maximumAgeMs = (frequency) => {
+      const value = String(frequency || "").toLowerCase();
+      if (value.includes("hour")) return 12 * 60 * 60 * 1_000;
+      if (value.includes("daily")) return 2 * 24 * 60 * 60 * 1_000;
+      if (value.includes("weekly")) return 10 * 24 * 60 * 60 * 1_000;
+      return 30 * 24 * 60 * 60 * 1_000;
+    };
+    const stale = result.rows.some((row) => {
+      const last = row.last_successful_run_at || row.last_checked_at;
+      return !last || Date.now() - new Date(last).getTime() > maximumAgeMs(row.ingestion_frequency);
+    });
+    const degraded = result.rows.some((row) =>
+      row.reachable === false || Number(row.consecutive_failures || 0) > 0 ||
+      /^(failed|error|stale|degraded|blocked)$/i.test(String(row.status || "")) ||
+      /^(failed|changed|blocked)$/i.test(String(row.parser_status || "")),
+    );
+    const checkedThrough = result.rows
+      .map((row) => row.last_successful_run_at || row.last_checked_at)
+      .filter(Boolean)
+      .sort((left, right) => new Date(right) - new Date(left))[0] || null;
+    return {
+      status: degraded ? "degraded" : stale ? "stale" : "fresh",
+      checkedThrough: checkedThrough ? new Date(checkedThrough).toISOString() : null,
+      sourceNames,
+      sources: result.rows.map((row) => ({
+        sourceName: row.source_name,
+        status: row.status,
+        parserStatus: row.parser_status,
+        reachable: row.reachable,
+        lastCheckedAt: row.last_checked_at,
+        lastSuccessfulRunAt: row.last_successful_run_at,
+      })),
+    };
+  } catch (error) {
+    return {
+      status: "error",
+      checkedThrough: null,
+      sourceNames,
+      error: "Source freshness could not be checked.",
+    };
+  }
+};
+
+const assessCurrentVerification = ({ document = {}, passages = [], freshness = {} } = {}) => {
+  const temporalPassages = passages.filter((passage) =>
+    passage.retrievalMode === "temporal" || passage.retrievalMode === "temporal_fts",
+  );
+  const laterAuthoritativeEvidence = temporalPassages.filter((passage) =>
+    (passage.temporalRole === "later_version" ||
+      ["AMENDED_BY", "REPEALED_BY", "SUPERSEDED_BY", "REPLACED_BY"].includes(passage.relationshipType)) &&
+    [SOURCE_AUTHORITY.PRIMARY_OFFICIAL, SOURCE_AUTHORITY.OFFICIAL_SECONDARY]
+      .includes(passage.authorityClass || classifySourceAuthority(passage)),
+  );
+  const checkedAt = new Date().toISOString();
+  const verified = freshness.status === "fresh" && laterAuthoritativeEvidence.length > 0;
+  return {
+    required: true,
+    status: verified ? "VERIFIED_CURRENT" :
+      temporalPassages.length || freshness.checkedThrough ? "PARTIALLY_VERIFIED" : "UNVERIFIED",
+    checkedAt,
+    checkedThrough: freshness.checkedThrough || null,
+    connectorStatus: freshness.status || "not_checked",
+    connectorWarning: ["degraded", "error", "stale", "not_checked"].includes(freshness.status)
+      ? "Freshness could not be fully verified for the selected source."
+      : null,
+    laterEvidenceCount: laterAuthoritativeEvidence.length,
+    temporalEvidenceCount: temporalPassages.length,
+    selectedDocumentDate: document.publicationDate || document.publication_date || null,
+    limitation: verified
+      ? null
+      : "The indexed corpus does not establish that no later amendment, repeal, or superseding instrument exists.",
+  };
+};
+
 module.exports = {
   applicabilityAt,
   buildBeforeAfterComparison,
   loadTemporalContext,
   loadRelatedTemporalEvidence,
+  loadDocumentSourceFreshness,
+  assessCurrentVerification,
   parseTemporalIntent,
   retrieveTemporalPassages,
   temporalEventsFromDocument,

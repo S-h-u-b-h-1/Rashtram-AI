@@ -11,6 +11,13 @@ const {
   isRateLimitError,
   retryAfterSecondsFrom,
 } = require("./rateLimitedQueue");
+const {
+  buildAdaptivePromptLayers,
+  classifyAnswerIntent,
+  classifyFreshness,
+  detectAnswerStyle,
+  generationProfileFor,
+} = require("../retrieval/adaptiveIntelligenceService");
 
 const EMBEDDING_DIMENSION = 768;
 const EMBEDDING_BATCH_SIZE = 50;
@@ -444,6 +451,12 @@ const providerConfig = () => ({
   embeddingModelConfigured: Boolean(EMBEDDING_MODEL),
   credentialsConfigured: providerCredentialsConfigured(),
   embeddingCredentialsConfigured: embeddingCredentialsConfigured(),
+  generationProfiles: {
+    factual: generationProfileFor({ intent: "SOURCE_FACT", freshnessClass: "DOCUMENT_BOUND" }),
+    analytical: generationProfileFor({ intent: "ANALYSIS", freshnessClass: "DOCUMENT_BOUND" }),
+    comparison: generationProfileFor({ task: "comparison", intent: "COMPARISON" }),
+    policyDraft: generationProfileFor({ task: "policy_draft", intent: "POLICY_DRAFT" }),
+  },
 });
 
 const validateAIProvider = async ({ force = false } = {}) => {
@@ -1044,12 +1057,38 @@ const normalizeResponseLanguage = (value, prompt = "") => {
 const generateResponse = async (
   prompt,
   context = "",
-  { responseLanguage = "Auto" } = {},
+  {
+    responseLanguage = "Auto",
+    task = "document_chat",
+    intent: suppliedIntent,
+    freshnessClass: suppliedFreshness,
+    currentVerification = {},
+    conversationHistory = "",
+    strictCompliance = false,
+  } = {},
 ) => {
   const language = normalizeResponseLanguage(responseLanguage, prompt);
+  const intent = suppliedIntent || classifyAnswerIntent(prompt, {
+    task: task === "comparison_chat" ? "comparison" : undefined,
+  });
+  const freshnessClass = suppliedFreshness || classifyFreshness(prompt, intent);
+  const profile = generationProfileFor({ task: task.includes("comparison") ? "comparison" : "chat",
+    intent, freshnessClass });
+  const adaptiveLayers = buildAdaptivePromptLayers({
+    task,
+    question: prompt,
+    intent,
+    freshnessClass,
+    answerStyle: detectAnswerStyle(prompt),
+    currentVerification,
+    conversationHistory,
+    strictCompliance,
+  });
   const fullPrompt = `
 You are Rashtram AI, an assistant for researching Indian legislative, legal,
-and Gazette documents. Answer using the supplied document context.
+Gazette, regulatory, and public-policy documents.
+
+${adaptiveLayers}
 
 Document context:
 ${context}
@@ -1057,12 +1096,11 @@ ${context}
 User question:
 ${prompt}
 
-Give a concise but useful research answer. Use stated facts first, then clearly
-label any direct implication as "Implication:" when the user asks for risks,
-objectives, affected institutions, or implementation issues that are not named
-as headings in the source. Do not invent provisions, dates, figures, named
-institutions, or citations. If the context gives only partial evidence, answer
-with the partial evidence and say what is not identified.
+Give a useful research answer in the requested style. Use stated facts first,
+then reason from those facts when the user asks for explanation, implications,
+critique, perspective, trade-offs, or a hypothetical. Do not pretend that an
+interpretation is quoted from the source. If context is partial, use it and name
+the evidence gap instead of refusing all analysis.
 
 When the user asks about the impact on a group that is not explicitly named,
 do not stop after saying that direct evidence is absent. Provide a structured
@@ -1081,17 +1119,11 @@ substantive claim. Prefer 3-6 short bullets for analytical questions. Respond
 in ${language}. Preserve quoted source text in its original language and explain
 it in ${language} when needed.
 
-Grounding rules are mandatory:
-1. Treat only the labelled retrieved source passages as factual evidence.
-2. Document briefs, earlier assistant messages, graph inferences, and general
-   model knowledge are not proof of a legal or policy fact.
-3. Attach an exact retrieved citation label to every factual statement.
-4. Clearly prefix interpretation with "Analytical implication:" and state its
-   uncertainty; do not rewrite an inference as a source fact.
-5. If the passages do not support the answer, say that the available sources
-   are insufficient. Never invent a section, date, amendment, legal effect,
-   institution, page, clause, or source relationship.
-6. A page marked estimated must remain described as estimated.
+Evidence rules are mandatory: cite material document facts using exact supplied
+labels; do not use briefs, conversation history, or model memory as proof of a
+document fact. General knowledge is allowed only for stable concepts. Changing
+facts require the current-verification evidence described above. A page marked
+estimated must remain described as estimated.
 `;
 
   return runGeneration("generateContentStream", fullPrompt, {
@@ -1103,8 +1135,9 @@ Grounding rules are mandatory:
     maxRetryAfterMs: Number(process.env.CHAT_AI_MAX_RETRY_AFTER_MS || 0),
     attempts: Number(process.env.CHAT_AI_ATTEMPTS || 1),
     generationConfig: {
-      temperature: Number(process.env.CHAT_AI_TEMPERATURE || 0.2),
-      maxOutputTokens: Number(process.env.CHAT_AI_MAX_OUTPUT_TOKENS || 900),
+      temperature: Number(process.env.CHAT_AI_TEMPERATURE || profile.temperature),
+      topP: Number(process.env.CHAT_AI_TOP_P || profile.topP),
+      maxOutputTokens: Number(process.env.CHAT_AI_MAX_OUTPUT_TOKENS || profile.maxOutputTokens),
     },
   });
 };
@@ -1115,14 +1148,22 @@ const generatePolicyDraft = async (
   { responseLanguage = "English" } = {},
 ) => {
   const language = normalizeResponseLanguage(responseLanguage, prompt);
+  const profile = generationProfileFor({ task: "policy_draft", intent: "POLICY_DRAFT",
+    freshnessClass: "DOCUMENT_BOUND" });
+  const adaptiveLayers = buildAdaptivePromptLayers({
+    task: "policy_draft", question: prompt, intent: "POLICY_DRAFT",
+    freshnessClass: "DOCUMENT_BOUND",
+  });
   const fullPrompt = `
 You are Rashtram AI's policy drafting copilot for researchers and think tanks.
-Draft a practical, evidence-led public policy proposal using only the supplied
-brief and source material. This is a research draft, not legal advice and not
+Draft a practical, evidence-led public policy proposal from the supplied brief
+and source material. This is a research draft, not legal advice and not
 an official government position. Clearly separate evidence from proposed
 recommendations. Never invent statistics, laws, budgets, institutions, dates,
 or commitments. If evidence is missing, write "To be validated" and add it to
 the open questions section.
+
+${adaptiveLayers}
 
 Return a polished Markdown policy draft with exactly these sections:
 # Policy Draft
@@ -1165,8 +1206,9 @@ ${context}
     maxRetryAfterMs: Number(process.env.POLICY_DRAFT_AI_MAX_RETRY_AFTER_MS || 0),
     attempts: Number(process.env.POLICY_DRAFT_AI_ATTEMPTS || 1),
     generationConfig: {
-      temperature: Number(process.env.POLICY_DRAFT_AI_TEMPERATURE || 0.25),
-      maxOutputTokens: Number(process.env.POLICY_DRAFT_AI_MAX_OUTPUT_TOKENS || 2_400),
+      temperature: Number(process.env.POLICY_DRAFT_AI_TEMPERATURE || profile.temperature),
+      topP: Number(process.env.POLICY_DRAFT_AI_TOP_P || profile.topP),
+      maxOutputTokens: Number(process.env.POLICY_DRAFT_AI_MAX_OUTPUT_TOKENS || profile.maxOutputTokens),
     },
   });
 };
@@ -1179,6 +1221,11 @@ an official government position. Never invent statistics, laws, budgets,
 institutions, dates, duties, or commitments. Clearly distinguish verified
 evidence from proposed recommendations. If evidence is missing, say "To be
 validated" in the relevant content and record the gap under evidenceLimitations.
+
+${buildAdaptivePromptLayers({
+    task: "policy_draft", question: prompt, intent: "POLICY_DRAFT",
+    freshnessClass: "DOCUMENT_BOUND",
+  })}
 
 Return only valid JSON. Do not use Markdown fences. Use this exact shape:
 {
@@ -1212,6 +1259,8 @@ const generatePolicyDraftStructured = async (
   { responseLanguage = "English" } = {},
 ) => {
   const language = normalizeResponseLanguage(responseLanguage, prompt);
+  const profile = generationProfileFor({ task: "policy_draft", intent: "POLICY_DRAFT",
+    freshnessClass: "DOCUMENT_BOUND" });
   const response = await runGeneration("generateContent", policyDraftJsonPrompt({
     prompt,
     context,
@@ -1225,9 +1274,10 @@ const generatePolicyDraftStructured = async (
     maxRetryAfterMs: Number(process.env.POLICY_DRAFT_AI_MAX_RETRY_AFTER_MS || 0),
     attempts: Number(process.env.POLICY_DRAFT_AI_ATTEMPTS || 1),
     generationConfig: {
-      temperature: Number(process.env.POLICY_DRAFT_AI_TEMPERATURE || 0.2),
+      temperature: Number(process.env.POLICY_DRAFT_AI_TEMPERATURE || profile.temperature),
+      topP: Number(process.env.POLICY_DRAFT_AI_TOP_P || profile.topP),
       responseMimeType: "application/json",
-      maxOutputTokens: Number(process.env.POLICY_DRAFT_AI_MAX_OUTPUT_TOKENS || 3_200),
+      maxOutputTokens: Number(process.env.POLICY_DRAFT_AI_MAX_OUTPUT_TOKENS || profile.maxOutputTokens),
     },
   });
   return responseText(response);
@@ -1475,6 +1525,22 @@ const generateDocumentComparison = async ({
   documents,
   context,
 }) => {
+  const comparisonIntent = classifyAnswerIntent(userQuestion || "Compare the selected documents", {
+    task: "comparison",
+    documentCount: Array.isArray(documents) ? documents.length : 2,
+  });
+  const freshnessClass = classifyFreshness(userQuestion || "", comparisonIntent);
+  const profile = generationProfileFor({
+    task: "comparison",
+    intent: comparisonIntent,
+    freshnessClass,
+  });
+  const adaptiveLayers = buildAdaptivePromptLayers({
+    task: "comparison",
+    question: userQuestion || "Compare the selected documents",
+    intent: comparisonIntent,
+    freshnessClass,
+  });
   const responseLanguage =
     language === "hindi"
       ? "Hindi"
@@ -1482,8 +1548,8 @@ const generateDocumentComparison = async ({
         ? "English"
         : "the language used in the focused question, otherwise English";
   const buildPrompt = (sourceContext) => `
-Compare the supplied Indian legislative and public-policy documents using only
-the labelled source passages. Never use a document title as evidence. Every
+Compare the supplied Indian legislative and public-policy documents from the
+labelled source passages. Never use a document title as evidence. Every
 substantive claim must include one or more citation labels exactly as supplied
 (for example "[D1-C2]"). If evidence is absent, say "Not identified in the
 retrieved text." Keep the documents distinct and do not merge their provisions.
@@ -1508,10 +1574,15 @@ Be detailed and research-useful: each item should state what changed, who is
 affected, why it matters, and which cited passage supports it. Avoid generic
 phrases such as "processed through Rashtram AI" unless the provider fallback is
 used outside this prompt.
-Clearly label analytical inference and uncertainty. Earlier assistant text,
-document summaries, and model knowledge are not evidence. Never invent missing
+Underlying document features must come from evidence, but you may reason about
+which approach is more business-friendly, centralised, difficult to implement,
+or administratively burdensome. Clearly label analytical inference and
+uncertainty. Earlier assistant text, document summaries, and model knowledge
+are not evidence. Never invent missing
 pages, sections, dates, amendments, institutions, or legal effects. If sources
 conflict, describe both cited positions and do not silently select one.
+
+${adaptiveLayers}
 
 Comparison mode: ${mode}
 Response language: ${responseLanguage}
@@ -1563,12 +1634,13 @@ ${sourceContext}
           overrides.maxModels || process.env.COMPARISON_AI_MAX_MODELS || 1,
         ),
         generationConfig: {
-          temperature: Number(process.env.COMPARISON_AI_TEMPERATURE || 0.1),
+          temperature: Number(process.env.COMPARISON_AI_TEMPERATURE || profile.temperature),
+          topP: Number(process.env.COMPARISON_AI_TOP_P || profile.topP),
           responseMimeType: "application/json",
           maxOutputTokens: Number(
             overrides.maxOutputTokens ||
               process.env.COMPARISON_AI_MAX_OUTPUT_TOKENS ||
-              3_200,
+              profile.maxOutputTokens,
           ),
         },
       },

@@ -231,3 +231,14 @@ test("structured comparison removes unsupported items and repairs an unsafe summ
   assert.equal(result.report.executiveSummaryRepaired, true);
   assert.match(result.generated.executiveSummary, /unsupported generated points were removed/i);
 });
+
+test("structured comparison verifies analytical premises without demanding the inference verbatim", () => {
+  const result = verifyStructuredComparison({
+    executiveSummary: "The cited rule creates quarterly reporting duties. [D1-C1]",
+    impactAssessment: [{
+      point: "From a small-business perspective, quarterly reporting could increase administrative workload.",
+      citations: ["D1-C1"],
+    }],
+  }, [{ id: "D1-C1", snippet: "The rule requires every regulated entity to file a quarterly report." }]);
+  assert.equal(result.generated.impactAssessment.length, 1);
+});
