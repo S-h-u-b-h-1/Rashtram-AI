@@ -1167,6 +1167,7 @@ ${adaptiveLayers}
 
 Return a polished Markdown policy draft with exactly these sections:
 # Policy Draft
+## Executive Summary
 ## Problem and Evidence
 ## Policy Objectives
 ## Target Groups and Equity Considerations

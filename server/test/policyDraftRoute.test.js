@@ -18,11 +18,19 @@ test("policy drafting reads readiness from the canonical document schema", () =>
     /JOIN documents catalogue_document ON catalogue_document\.id = d\.id/,
   );
   assert.doesNotMatch(routeSource, /AND d\.research_ready = TRUE/);
+  assert.match(routeSource, /state\.search_ready = TRUE/);
+  assert.match(routeSource, /state\.text_ready = TRUE/);
+  assert.match(routeSource, /state\.chunks_count > 0/);
+  assert.match(routeSource, /state\.failure_code IS NULL/);
+  assert.match(routeSource, /EMBEDDING_PROVIDER_ERROR.*VECTOR_STORE_ERROR/s);
+  assert.match(routeSource, /FROM document_text_chunks usable_chunk/);
 });
 
-test("policy drafting can use a stored executive summary without claiming full-text evidence", () => {
-  assert.match(routeSource, /LENGTH\(BTRIM\(COALESCE\(a\.english_summary/);
+test("policy drafting combines a stored summary with retrieved source passages", () => {
   assert.match(routeSource, /\[Catalogue summary:/);
+  assert.match(routeSource, /retrieveDocumentContext/);
+  assert.match(routeSource, /retrieveFtsPassages/);
+  assert.match(routeSource, /retrieveLocalTextPassages/);
   assert.match(vectorSource, /catalogue summary is secondary\s+context/i);
 });
 
@@ -34,8 +42,14 @@ test("policy drafting bypasses unrelated generation circuit failures", () => {
   assert.match(policyDraftBlock, /useCircuitBreaker: false/);
 });
 
-test("policy drafting persists canonical JSON and never implicitly renders an object", () => {
+test("policy drafting streams markdown, persists canonical JSON, and avoids object coercion", () => {
   assert.match(routeSource, /draft_json = \$2::jsonb/);
-  assert.match(routeSource, /generateValidatedPolicyDraft/);
+  assert.match(routeSource, /for await \(const chunk of stream\)/);
+  assert.match(routeSource, /policyDraftMarkdownToCanonical/);
   assert.doesNotMatch(routeSource, /draftText \+= chunk/);
+});
+
+test("policy drafting never prepares documents in the generation request", () => {
+  assert.doesNotMatch(routeSource, /prepareDocument|processDocument/);
+  assert.match(routeSource, /no longer ready to use/);
 });

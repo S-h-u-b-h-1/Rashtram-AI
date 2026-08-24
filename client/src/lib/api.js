@@ -267,6 +267,7 @@ export const createPolicyDraft = async ({
   sourceIds = [],
   onChunk,
   onMeta,
+  onStatus,
   signal,
 }) => {
   const token = getAuthToken();
@@ -304,6 +305,8 @@ export const createPolicyDraft = async ({
         draftId = event.draftId || null;
         citations = event.citations || [];
         onMeta?.(event);
+      } else if (event.type === "status") {
+        onStatus?.(event);
       } else if (event.type === "content") {
         const content = streamEventText(event.content);
         fullText += content;

@@ -110,6 +110,31 @@ const policyDraftToMarkdown = (draft) => {
   return parts.filter(Boolean).join("\n\n").replace(/\[object Object\]/gi, "");
 };
 
+const policyDraftMarkdownToCanonical = (value, fallbackTitle = "Policy Draft") => {
+  const markdown = text(value, 100_000).replace(/\[object Object\]/gi, "").trim();
+  if (!markdown) throw new Error("Policy draft response was empty.");
+  const titleMatch = markdown.match(/^#\s+(.+)$/m);
+  const blocks = [...markdown.matchAll(/^##\s+(.+)\n([\s\S]*?)(?=^##\s+|$(?![\s\S]))/gm)]
+    .map((match) => ({ heading: text(match[1], 240), content: text(match[2], 20_000) }))
+    .filter((item) => item.heading && item.content);
+  const executive = blocks.find((item) => /executive summary/i.test(item.heading));
+  const substantive = blocks.filter((item) => !/executive summary/i.test(item.heading));
+  const executiveSummary = executive?.content || substantive[0]?.content ||
+    "This working draft is based on the selected evidence and the researcher's stated objective.";
+  if (!substantive.length) {
+    substantive.push({ heading: "Policy Analysis", content: markdown });
+  }
+  return normalizePolicyDraft({
+    title: titleMatch?.[1] || fallbackTitle,
+    executiveSummary,
+    sections: substantive,
+    recommendations: [],
+    implementation: [],
+    risks: [],
+    evidenceLimitations: [],
+  });
+};
+
 const groundedDraftFallback = ({ brief = {}, title, evidenceLabels = [], reason } = {}) => {
   const objective = text(brief.objective, 1_500) || "the stated policy problem";
   const audience = text(brief.audience, 500) || "the intended beneficiaries and implementing institutions";
@@ -175,5 +200,6 @@ module.exports = {
   groundedDraftFallback,
   normalizePolicyDraft,
   parsePolicyDraftJson,
+  policyDraftMarkdownToCanonical,
   policyDraftToMarkdown,
 };

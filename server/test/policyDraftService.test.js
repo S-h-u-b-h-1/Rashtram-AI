@@ -4,6 +4,7 @@ const {
   generateValidatedPolicyDraft,
   groundedDraftFallback,
   parsePolicyDraftJson,
+  policyDraftMarkdownToCanonical,
   policyDraftToMarkdown,
 } = require("../policy/policyDraftService");
 
@@ -26,6 +27,23 @@ test("canonical policy drafts render readable Markdown without implicit object c
   assert.match(markdown, /# University Research Policy/);
   assert.match(markdown, /Catalogue document: Research report/);
   assert.doesNotMatch(markdown, /\[object Object\]/i);
+});
+
+test("streamed Markdown becomes canonical draft JSON without object coercion", () => {
+  const draft = policyDraftMarkdownToCanonical(`# Evidence-led tax policy
+
+## Executive Summary
+This is the proposed approach.
+
+## Problem and Evidence
+The selected evidence establishes the problem.
+
+## Implementation Plan
+Phase the implementation.`);
+  assert.equal(draft.title, "Evidence-led tax policy");
+  assert.equal(draft.executiveSummary, "This is the proposed approach.");
+  assert.equal(draft.sections.length, 2);
+  assert.doesNotMatch(JSON.stringify(draft), /\[object Object\]/);
 });
 
 test("structured policy draft parser accepts fenced JSON and validates required content", () => {

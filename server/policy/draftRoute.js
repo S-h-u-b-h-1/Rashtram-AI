@@ -1,21 +1,29 @@
 const express = require("express");
 const { query } = require("../db");
-const DocumentRepository = require("../document/DocumentRepository");
 const { getSourceContext } = require("../research/sourceService");
+const { generatePolicyDraft } = require("../lib/vectordb");
 const {
-  generatePolicyDraftStructured,
-  repairPolicyDraftStructured,
-} = require("../lib/vectordb");
+  mergePassagesByChunk,
+  rerankPassages,
+  retrieveDocumentContext,
+  retrieveFtsPassages,
+  retrieveLocalTextPassages,
+} = require("../document/documentResearchService");
 const { sanitizeProviderError } = require("../lib/providerErrorSanitizer");
 const { generationLimiter } = require("../middleware/security");
 const { completeSSE, errorSSE, sendSSE, startSSE } = require("../lib/sse");
 const { sendError } = require("../lib/httpResponse");
-const { generateValidatedPolicyDraft } = require("./policyDraftService");
+const {
+  groundedDraftFallback,
+  policyDraftMarkdownToCanonical,
+  policyDraftToMarkdown,
+} = require("./policyDraftService");
 
 const router = express.Router();
 const MAX_DOCUMENTS = 8;
 const MAX_SOURCES = 20;
-const MAX_CONTEXT_CHARS = 48_000;
+const MAX_CONTEXT_CHARS = 28_000;
+const DRAFT_PASSAGES_PER_DOCUMENT = 6;
 
 const safeIds = (values, maximum) =>
   [...new Set((Array.isArray(values) ? values : [])
@@ -38,39 +46,99 @@ const mapDraft = (row) => ({
   updatedAt: row.updated_at,
 });
 
-const loadCatalogueContext = async (ids) => {
+const loadLexicalDraftPassages = async (documentId, objective) => {
+  const fts = await retrieveFtsPassages(documentId, objective, 12);
+  if (fts.length >= DRAFT_PASSAGES_PER_DOCUMENT) {
+    return rerankPassages(fts, objective, { topK: DRAFT_PASSAGES_PER_DOCUMENT });
+  }
+  const local = await retrieveLocalTextPassages(documentId, objective, 12);
+  return rerankPassages(
+    mergePassagesByChunk(fts, local),
+    objective,
+    { topK: DRAFT_PASSAGES_PER_DOCUMENT },
+  );
+};
+
+const loadCatalogueContext = async (ids, objective, userId) => {
   if (!ids.length) return { context: "", citations: [], documents: [] };
   const rows = await query(
     `SELECT d.id, d.title, d.document_type, d.canonical_source,
             d.source_name, d.canonical_url, d.source_url, d.authority,
             d.ministry, d.publication_date,
-            LEFT(COALESCE(a.original_text, ''), 12000) AS original_text,
-            LEFT(COALESCE(a.english_summary, ''), 3200) AS english_summary
+            LEFT(COALESCE(a.english_summary, ''), 1600) AS english_summary,
+            state.search_ready, state.semantic_ready, state.chunks_count,
+            state.retrieval_verified, state.retrieval_verified_at
        FROM legislative_documents d
        JOIN documents catalogue_document ON catalogue_document.id = d.id
+       JOIN document_processing_state state ON state.document_id = d.id
        LEFT JOIN document_text_artifacts a ON a.document_id = d.id
       WHERE d.id = ANY($1::BIGINT[])
         AND catalogue_document.visibility_status = 'public'
+        AND catalogue_document.research_ready = TRUE
+        AND state.search_ready = TRUE
+        AND state.text_ready = TRUE
+        AND state.processing_status = 'ready'
+        AND state.extraction_status = 'ready'
+        AND state.chunking_status = 'ready'
+        AND state.chunks_count > 0
         AND (
-          catalogue_document.research_ready = TRUE
-          OR LENGTH(BTRIM(COALESCE(a.english_summary, ''))) >= 80
+          (state.failure_code IS NULL
+            AND NULLIF(BTRIM(COALESCE(state.error_message, '')), '') IS NULL)
+          OR state.failure_code IN ('EMBEDDING_PROVIDER_ERROR', 'VECTOR_STORE_ERROR')
+        )
+        AND EXISTS (
+          SELECT 1 FROM document_text_chunks usable_chunk
+          WHERE usable_chunk.document_id = d.id
+            AND LENGTH(BTRIM(COALESCE(usable_chunk.original_text, usable_chunk.translated_text, ''))) > 0
         )
       ORDER BY array_position($1::BIGINT[], d.id)
       LIMIT ${MAX_DOCUMENTS}`,
     [ids],
   );
-  const context = [];
-  const citations = [];
-  for (const row of rows.rows) {
-    const usingSummary = !String(row.original_text || "").trim();
-    const label = usingSummary
-      ? `[Catalogue summary: ${row.title}]`
-      : `[Catalogue document: ${row.title}]`;
-    const evidence = String(row.original_text || row.english_summary || "")
-      .replace(/\s+/g, " ")
-      .trim();
-    if (evidence) context.push(`${label}\n${evidence}`);
-    citations.push({
+  if (rows.rows.length !== ids.length) {
+    const error = new Error(
+      "One or more selected catalogue documents are no longer ready to use. Refresh the references and choose a Ready to use document.",
+    );
+    error.status = 422;
+    throw error;
+  }
+  const loaded = await Promise.all(rows.rows.map(async (row) => {
+    let retrieval;
+    if (row.semantic_ready) {
+      try {
+        retrieval = await retrieveDocumentContext(
+          row.document_type,
+          row.id,
+          objective,
+          {
+            topK: DRAFT_PASSAGES_PER_DOCUMENT,
+            vectorTimeBudgetMs: 600,
+            accountId: userId,
+            document: row,
+          },
+        );
+      } catch (error) {
+        console.warn(`Draft hybrid retrieval degraded for ${row.id}: ${error.message}`);
+      }
+    }
+    const passages = retrieval?.passages?.length
+      ? retrieval.passages.slice(0, DRAFT_PASSAGES_PER_DOCUMENT)
+      : await loadLexicalDraftPassages(row.id, objective);
+    if (!passages.length) {
+      const error = new Error(`${row.title} no longer has usable drafting passages.`);
+      error.status = 422;
+      throw error;
+    }
+    const documentLabel = `[Catalogue document: ${row.title}]`;
+    const summary = String(row.english_summary || "").replace(/\s+/g, " ").trim();
+    const evidence = [
+      summary ? `[Catalogue summary: ${row.title}]\n${summary}` : "",
+      ...passages.map((passage, index) => {
+        const content = String(passage.content || "").replace(/\s+/g, " ").trim().slice(0, 1_100);
+        return content ? `${documentLabel} Passage ${index + 1}\n${content}` : "";
+      }),
+    ].filter(Boolean).join("\n\n");
+    return { evidence, citation: {
       sourceType: "catalogue",
       documentId: String(row.id),
       title: row.title,
@@ -79,11 +147,13 @@ const loadCatalogueContext = async (ids) => {
       sourceUrl: row.canonical_url || row.source_url || null,
       ministry: row.ministry || null,
       publicationDate: row.publication_date || null,
-    });
-  }
+      retrievalMode: retrieval?.retrievalMode || "local_text",
+      passageCount: passages.length,
+    } };
+  }));
   return {
-    context: context.join("\n\n").slice(0, MAX_CONTEXT_CHARS),
-    citations,
+    context: loaded.map((item) => item.evidence).join("\n\n").slice(0, MAX_CONTEXT_CHARS),
+    citations: loaded.map((item) => item.citation),
     documents: rows.rows,
   };
 };
@@ -91,11 +161,6 @@ const loadCatalogueContext = async (ids) => {
 const evidenceLabelsFromContext = (context) => [...new Set(
   String(context || "").match(/\[(?:Catalogue document|Catalogue summary|User source):[^\]]+\]/g) || [],
 )];
-
-const streamMarkdown = (res, markdown) => {
-  const chunks = String(markdown || "").match(/[\s\S]{1,700}(?:\n\n|$)|[\s\S]{1,700}/g) || [];
-  for (const content of chunks) sendSSE(res, { type: "content", content });
-};
 
 router.get("/", async (req, res) => {
   try {
@@ -140,8 +205,10 @@ router.post("/generate", generationLimiter, async (req, res) => {
   try {
     const documentIds = safeIds(req.body?.documentIds, MAX_DOCUMENTS);
     const sourceIds = safeIds(req.body?.sourceIds, MAX_SOURCES);
-    const catalogue = await loadCatalogueContext(documentIds);
-    const userSources = await getSourceContext(req.user.id, sourceIds, brief.objective);
+    const [catalogue, userSources] = await Promise.all([
+      loadCatalogueContext(documentIds, brief.objective, req.user.id),
+      getSourceContext(req.user.id, sourceIds, brief.objective),
+    ]);
     const context = [
       catalogue.context,
       userSources.context,
@@ -174,6 +241,7 @@ router.post("/generate", generationLimiter, async (req, res) => {
       citations,
       metadata: { documentCount: catalogue.citations.length, sourceCount: userSources.sources.length },
     });
+    sendSSE(res, { type: "status", status: "Preparing evidence…" });
     const prompt = [
       `Policy title: ${title}`,
       `Problem or objective: ${brief.objective}`,
@@ -182,35 +250,45 @@ router.post("/generate", generationLimiter, async (req, res) => {
       brief.requirements ? `Researcher requirements: ${brief.requirements}` : "",
     ].filter(Boolean).join("\n");
     try {
-      const generated = await generateValidatedPolicyDraft({
-        prompt,
-        context,
-        brief,
-        title,
-        evidenceLabels: evidenceLabelsFromContext(context),
-        generate: ({ prompt: value, context: sourceContext, responseLanguage }) =>
-          generatePolicyDraftStructured(value, sourceContext, { responseLanguage }),
-        repair: ({ raw, responseLanguage }) =>
-          repairPolicyDraftStructured(raw, { responseLanguage }),
-      });
-      sendSSE(res, {
-        type: "status",
-        status: generated.generationMode === "grounded_fallback"
-          ? "A grounded fallback draft was prepared."
-          : "The structured policy draft is ready.",
-        generationMode: generated.generationMode,
-      });
-      streamMarkdown(res, generated.markdown);
+      let markdown = "";
+      let generationMode = "generated";
+      try {
+        const stream = await generatePolicyDraft(prompt, context, {
+          responseLanguage: brief.responseLanguage,
+        });
+        sendSSE(res, { type: "status", status: "Writing your policy draft…" });
+        for await (const chunk of stream) {
+          if (res.destroyed || res.writableEnded) break;
+          const content = typeof chunk.text === "function" ? chunk.text() : chunk.text || "";
+          if (!content) continue;
+          markdown += content;
+          sendSSE(res, { type: "content", content });
+        }
+        if (!markdown.trim()) throw new Error("The policy draft provider returned no text.");
+      } catch (generationError) {
+        if (markdown.trim()) throw generationError;
+        const fallback = groundedDraftFallback({
+          brief,
+          title,
+          evidenceLabels: evidenceLabelsFromContext(context),
+          reason: generationError.message,
+        });
+        markdown = policyDraftToMarkdown(fallback);
+        generationMode = "grounded_fallback";
+        sendSSE(res, { type: "status", status: "A grounded fallback draft was prepared." });
+        sendSSE(res, { type: "content", content: markdown });
+      }
+      const canonicalDraft = policyDraftMarkdownToCanonical(markdown, title);
       await query(
         `UPDATE policy_drafts SET draft_text = $1, draft_json = $2::jsonb,
            status = 'ready', error_message = NULL, updated_at = NOW()
          WHERE id = $3 AND user_id = $4`,
-        [generated.markdown, JSON.stringify(generated.draft), draftId, req.user.id],
+        [markdown, JSON.stringify(canonicalDraft), draftId, req.user.id],
       );
       completeSSE(res, {
         persisted: true,
         draftId: String(draftId),
-        generationMode: generated.generationMode,
+        generationMode,
       });
     } catch (error) {
       const safeError = sanitizeProviderError(error);

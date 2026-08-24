@@ -926,6 +926,7 @@ const validateProblemRequest = (payload = {}) => {
     topic: String(payload.topic || "").normalize("NFKC").trim().slice(0, 160),
     documentTypes: normalizeTypes(payload.documentTypes),
     limit: clampInteger(payload.limit, 20, 1, 20),
+    draftOnly: payload.draftOnly === true,
   };
 };
 
@@ -962,7 +963,7 @@ const getProblemRecommendations = async (userId, payload) => {
   // Sector-specific compliance intent already has precise lexical expansion.
   // Avoid a paid query embedding on that hot path; semantic retrieval remains
   // available for unclassified natural-language problems.
-  if (!inferred.sectors.length) {
+  if (!inferred.sectors.length && !input.draftOnly) {
     try {
       semanticIds = (await searchAcrossIndexedDocuments(
         searchText,
@@ -980,6 +981,30 @@ const getProblemRecommendations = async (userId, payload) => {
        candidate.research_ready, candidate.quality_score,
        candidate.source_authority_tier,
        candidate.visibility_status, candidate.metadata_json,
+       state.processing_status, state.extraction_status,
+       state.embedding_status, state.chunking_status,
+       state.chunks_count, state.embeddings_count,
+       state.search_ready, state.semantic_ready,
+       state.readiness_class, state.readiness_reason,
+       (
+         candidate.research_ready = TRUE
+         AND state.search_ready = TRUE
+         AND state.text_ready = TRUE
+         AND state.processing_status = 'ready'
+         AND state.extraction_status = 'ready'
+         AND state.chunking_status = 'ready'
+         AND state.chunks_count > 0
+         AND (
+           (state.failure_code IS NULL
+             AND NULLIF(BTRIM(COALESCE(state.error_message, '')), '') IS NULL)
+           OR state.failure_code IN ('EMBEDDING_PROVIDER_ERROR', 'VECTOR_STORE_ERROR')
+         )
+         AND EXISTS (
+           SELECT 1 FROM document_text_chunks usable_chunk
+           WHERE usable_chunk.document_id = candidate.id
+             AND LENGTH(BTRIM(COALESCE(usable_chunk.original_text, usable_chunk.translated_text, ''))) > 0
+         )
+       ) AS draft_usable,
        TS_RANK_CD(
          candidate.search_vector,
          WEBSEARCH_TO_TSQUERY('simple', $1)
@@ -996,10 +1021,30 @@ const getProblemRecommendations = async (userId, payload) => {
        ,candidate.id = ANY($6::BIGINT[]) AS semantic_match
      FROM documents candidate
      JOIN legislative_documents legacy ON legacy.id = candidate.id
+     LEFT JOIN document_processing_state state ON state.document_id = candidate.id
      WHERE candidate.visibility_status = 'public'
        AND candidate.quality_score >= 50
        AND candidate.title IS NOT NULL
        AND candidate.canonical_url IS NOT NULL
+       AND (NOT $7::BOOLEAN OR (
+         candidate.research_ready = TRUE
+         AND state.search_ready = TRUE
+         AND state.text_ready = TRUE
+         AND state.processing_status = 'ready'
+         AND state.extraction_status = 'ready'
+         AND state.chunking_status = 'ready'
+         AND state.chunks_count > 0
+         AND (
+           (state.failure_code IS NULL
+             AND NULLIF(BTRIM(COALESCE(state.error_message, '')), '') IS NULL)
+           OR state.failure_code IN ('EMBEDDING_PROVIDER_ERROR', 'VECTOR_STORE_ERROR')
+         )
+         AND EXISTS (
+           SELECT 1 FROM document_text_chunks usable_chunk
+           WHERE usable_chunk.document_id = candidate.id
+             AND LENGTH(BTRIM(COALESCE(usable_chunk.original_text, usable_chunk.translated_text, ''))) > 0
+         )
+       ))
        AND (CARDINALITY($4::TEXT[]) = 0
          OR candidate.document_type = ANY($4::TEXT[]))
        AND (
@@ -1026,6 +1071,7 @@ const getProblemRecommendations = async (userId, payload) => {
       input.documentTypes,
       Math.max(input.limit * 3, 30),
       semanticIds,
+      input.draftOnly,
     ],
   );
   const candidates = result.rows
@@ -1047,6 +1093,9 @@ const getProblemRecommendations = async (userId, payload) => {
       const recommendation = shapeRecommendation(row, signals);
       return {
         ...recommendation,
+        draftUsable: Boolean(row.draft_usable),
+        searchReady: Boolean(row.search_ready),
+        semanticReady: Boolean(row.semantic_ready),
         score: relevance.score,
         confidence:
           relevance.tier === RELEVANCE_TIERS.HIGH
@@ -1068,12 +1117,12 @@ const getProblemRecommendations = async (userId, payload) => {
       right.relevance.documentTypeScore - left.relevance.documentTypeScore,
     );
   const recommendations = candidates
-    .filter((item) => item.researchReady && [RELEVANCE_TIERS.HIGH, RELEVANCE_TIERS.MEDIUM].includes(item.relevanceTier))
+    .filter((item) => item.researchReady && (!input.draftOnly || item.draftUsable) && [RELEVANCE_TIERS.HIGH, RELEVANCE_TIERS.MEDIUM].includes(item.relevanceTier))
     .slice(0, input.limit);
   const lowerConfidenceRecommendations = candidates
-    .filter((item) => item.researchReady && item.relevanceTier === RELEVANCE_TIERS.LOW)
+    .filter((item) => item.researchReady && (!input.draftOnly || item.draftUsable) && item.relevanceTier === RELEVANCE_TIERS.LOW)
     .slice(0, Math.min(8, input.limit));
-  const preparationCandidates = candidates
+  const preparationCandidates = input.draftOnly ? [] : candidates
     .filter((item) => !item.researchReady && [RELEVANCE_TIERS.HIGH, RELEVANCE_TIERS.MEDIUM].includes(item.relevanceTier))
     .slice(0, Math.min(5, input.limit));
   const problemHash = crypto

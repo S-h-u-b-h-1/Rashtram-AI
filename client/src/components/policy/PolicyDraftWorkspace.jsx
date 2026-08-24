@@ -23,13 +23,8 @@ import {
   createPolicyDraft,
   deleteResearchSource,
   getResearchSources,
-  prepareDocumentForComparison,
   recommendForProblem,
 } from "@/lib/api";
-import {
-  canPrepareDocumentForResearch,
-  isResearchReady,
-} from "@/lib/document-readiness";
 import { StudySourcesPanel } from "@/components/document-chat/StudySourcesPanel";
 import { MobileWorkspaceSheet } from "@/components/workspace/MobileWorkspaceSheet";
 
@@ -52,6 +47,7 @@ export function PolicyDraftWorkspace() {
   const [draft, setDraft] = useState("");
   const [citations, setCitations] = useState([]);
   const [drafting, setDrafting] = useState(false);
+  const [draftingStage, setDraftingStage] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [sourcesOpen, setSourcesOpen] = useState(true);
@@ -85,14 +81,16 @@ export function PolicyDraftWorkspace() {
             .join(". "),
           documentTypes: ["policy", "report", "act", "bill", "gazette"],
           limit: 12,
+          draftOnly: true,
         });
         if (!active) return;
-        const candidates = [
-          ...(response.recommendations || []),
-          ...(response.preparationCandidates || []),
-        ];
+        const candidates = response.recommendations || [];
         setDocuments(candidates.filter((candidate, index, all) =>
+          candidate.draftUsable &&
           all.findIndex((item) => String(item.id) === String(candidate.id)) === index,
+        ));
+        setSelectedDocumentIds((current) => current.filter((id) =>
+          candidates.some((candidate) => candidate.draftUsable && String(candidate.id) === id),
         ));
       } catch {
         if (active) setDocuments([]);
@@ -138,6 +136,7 @@ export function PolicyDraftWorkspace() {
       return;
     }
     setDrafting(true);
+    setDraftingStage("Preparing evidence…");
     setDraft("");
     setCitations([]);
     setError("");
@@ -145,29 +144,16 @@ export function PolicyDraftWorkspace() {
       const selectedDocuments = documents.filter((document) =>
         selectedDocumentIds.includes(String(document.id)),
       );
-      const documentsToPrepare = selectedDocuments.filter(
-        (document) =>
-          !isResearchReady(document) && canPrepareDocumentForResearch(document),
-      );
-      for (let index = 0; index < documentsToPrepare.length; index += 2) {
-        const results = await Promise.allSettled(
-          documentsToPrepare
-            .slice(index, index + 2)
-            .map((document) => prepareDocumentForComparison(document.id)),
-        );
-        const failure = results.find((result) => result.status === "rejected");
-        if (failure) {
-          throw new Error(
-            failure.reason?.message ||
-              "One of the selected documents could not be prepared for drafting.",
-          );
-        }
+      if (selectedDocuments.length !== selectedDocumentIds.length ||
+          selectedDocuments.some((document) => !document.draftUsable)) {
+        throw new Error("A selected reference is no longer ready to use. Refresh the list and choose another document.");
       }
       const result = await createPolicyDraft({
         ...brief,
         documentIds: selectedDocumentIds,
         sourceIds: selectedSourceIds,
         onMeta: (meta) => setCitations(meta.citations || []),
+        onStatus: (event) => setDraftingStage(event.status || "Writing your policy draft…"),
         onChunk: (chunk) => setDraft((current) => current + chunk),
       });
       if (result.draftText) setDraft(result.draftText);
@@ -175,6 +161,7 @@ export function PolicyDraftWorkspace() {
       setError(requestError.message || "The policy draft could not be generated.");
     } finally {
       setDrafting(false);
+      setDraftingStage("");
     }
   };
 
@@ -209,11 +196,10 @@ export function PolicyDraftWorkspace() {
         {!loading && !filteredDocuments.length ? <div className="rounded-2xl border border-dashed border-[#8f1d2c]/15 bg-white px-4 py-8 text-center text-xs leading-5 text-[#8a8277]">{brief.objective.trim().length < 12 ? "Describe the policy problem to see relevant references." : "No strongly related references were found. Add the sector, audience, or jurisdiction to the policy problem."}</div> : null}
         {filteredDocuments.map((document) => {
           const selected = selectedDocumentIds.includes(String(document.id));
-          const available = isResearchReady(document) || canPrepareDocumentForResearch(document);
-          return <button key={document.id} type="button" disabled={!available} onClick={() => toggleDocument(document.id)} className={`w-full rounded-2xl border p-3 text-left transition ${selected ? "border-[#8f1d2c]/35 bg-[#fffaf0] shadow-sm" : "border-[#8f1d2c]/8 bg-white hover:border-[#8f1d2c]/20"} disabled:cursor-not-allowed disabled:opacity-50`}>
+          return <button key={document.id} type="button" onClick={() => toggleDocument(document.id)} className={`w-full rounded-2xl border p-3 text-left transition ${selected ? "border-[#8f1d2c]/35 bg-[#fffaf0] shadow-sm" : "border-[#8f1d2c]/8 bg-white hover:border-[#8f1d2c]/20"}`}>
             <div className="flex items-start gap-2">
               <span className={`mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded-md border ${selected ? "border-[#8f1d2c] bg-[#8f1d2c] text-white" : "border-[#b8afa2] text-transparent"}`}><Check className="h-3 w-3" /></span>
-              <span className="min-w-0 flex-1"><span className="line-clamp-3 block text-xs font-semibold leading-5 text-[#29312d]">{document.title}</span><span className="mt-1 block text-[10px] uppercase tracking-[0.1em] text-[#8a8277]">{document.type} · {document.ministry || document.authority || "India"}</span><span className="mt-1 block text-[10px] text-[#874047]">{isResearchReady(document) ? "Ready to use" : available ? "Prepared when drafting" : "Source link only"}</span></span>
+              <span className="min-w-0 flex-1"><span className="line-clamp-3 block text-xs font-semibold leading-5 text-[#29312d]">{document.title}</span><span className="mt-1 block text-[10px] uppercase tracking-[0.1em] text-[#8a8277]">{document.type} · {document.ministry || document.authority || "India"}</span><span className="mt-1 block text-[10px] font-semibold text-[#34725b]">Ready to use</span></span>
             </div>
           </button>;
         })}
@@ -234,9 +220,9 @@ export function PolicyDraftWorkspace() {
           <div className="grid gap-4 sm:grid-cols-2"><div><label className="mb-1.5 block text-xs font-semibold text-[#514d46]" htmlFor="draft-audience">Who is it for?</label><input id="draft-audience" value={brief.audience} onChange={(event) => updateBrief("audience", event.target.value)} className={fieldClass} placeholder="States, municipalities, households…" /></div><div><label className="mb-1.5 block text-xs font-semibold text-[#514d46]" htmlFor="draft-geography">Where does it apply?</label><input id="draft-geography" value={brief.geography} onChange={(event) => updateBrief("geography", event.target.value)} className={fieldClass} placeholder="India, or a state or sector" /></div></div>
           <div><label className="mb-1.5 block text-xs font-semibold text-[#514d46]" htmlFor="draft-requirements">What should the draft include?</label><textarea id="draft-requirements" rows={3} value={brief.requirements} onChange={(event) => updateBrief("requirements", event.target.value)} className={`${fieldClass} resize-y`} placeholder="Budget constraints, implementation timeline, equity lens, indicators…" /></div>
           {error && <p className="rounded-xl bg-[#f8e5e2] px-3 py-2 text-xs leading-5 text-[#9b3b40]">{error}</p>}
-          <button type="submit" disabled={drafting || !brief.objective.trim()} className="inline-flex items-center gap-2 rounded-xl bg-[#8f1d2c] px-5 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-[#751623] disabled:cursor-not-allowed disabled:opacity-45">{drafting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}{drafting ? "Drafting from your sources…" : "Generate policy draft"}</button>
+          <button type="submit" disabled={drafting || !brief.objective.trim()} className="inline-flex items-center gap-2 rounded-xl bg-[#8f1d2c] px-5 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-[#751623] disabled:cursor-not-allowed disabled:opacity-45">{drafting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}{drafting ? draftingStage || "Preparing evidence…" : "Generate policy draft"}</button>
         </form>
-        <section className="mt-5 rounded-3xl border border-[#8f1d2c]/10 bg-[#fffaf0] p-4 sm:p-6"><div className="flex items-center justify-between gap-3"><div><p className="text-[10px] font-bold uppercase tracking-[0.18em] text-[#874047]">Working document</p><h2 className="mt-1 font-serif text-2xl text-[#8f1d2c]">{draft ? "Your policy draft" : "Your draft will appear here"}</h2></div><div className="flex items-center gap-2">{draft && !drafting ? <button type="button" onClick={downloadDraft} className="inline-flex items-center gap-1.5 rounded-xl border border-[#8f1d2c]/15 bg-white px-3 py-2 text-xs font-semibold text-[#874047] transition hover:bg-[#f4eae4]"><Download className="h-3.5 w-3.5" /> Download text</button> : null}{drafting && <span className="inline-flex items-center gap-1.5 text-xs text-[#874047]"><Loader2 className="h-3.5 w-3.5 animate-spin" /> Writing</span>}</div></div>{draft ? <div className="prose prose-sm mt-5 max-w-none prose-headings:font-serif prose-headings:text-[#8f1d2c] prose-p:text-[#514d46] prose-li:text-[#514d46] prose-strong:text-[#29312d]"><ReactMarkdown remarkPlugins={[remarkGfm]}>{draft}</ReactMarkdown></div> : <div className="mt-5 rounded-2xl border border-dashed border-[#8f1d2c]/15 px-5 py-10 text-center text-sm leading-6 text-[#8a8277]">Choose references, describe the policy problem, and generate a source-grounded first draft.</div>}</section>
+        <section className="mt-5 rounded-3xl border border-[#8f1d2c]/10 bg-[#fffaf0] p-4 sm:p-6"><div className="flex items-center justify-between gap-3"><div><p className="text-[10px] font-bold uppercase tracking-[0.18em] text-[#874047]">Working document</p><h2 className="mt-1 font-serif text-2xl text-[#8f1d2c]">{draft ? "Your policy draft" : "Your draft will appear here"}</h2></div><div className="flex items-center gap-2">{draft && !drafting ? <button type="button" onClick={downloadDraft} className="inline-flex items-center gap-1.5 rounded-xl border border-[#8f1d2c]/15 bg-white px-3 py-2 text-xs font-semibold text-[#874047] transition hover:bg-[#f4eae4]"><Download className="h-3.5 w-3.5" /> Download text</button> : null}{drafting && <span className="inline-flex items-center gap-1.5 text-xs text-[#874047]"><Loader2 className="h-3.5 w-3.5 animate-spin" /> {draftingStage || "Writing"}</span>}</div></div>{draft ? <div className="prose prose-sm mt-5 max-w-none prose-headings:font-serif prose-headings:text-[#8f1d2c] prose-p:text-[#514d46] prose-li:text-[#514d46] prose-strong:text-[#29312d]"><ReactMarkdown remarkPlugins={[remarkGfm]}>{draft}</ReactMarkdown></div> : <div className="mt-5 rounded-2xl border border-dashed border-[#8f1d2c]/15 px-5 py-10 text-center text-sm leading-6 text-[#8a8277]">Choose references, describe the policy problem, and generate a source-grounded first draft.</div>}</section>
         {citations.length > 0 && <section className="mt-5 rounded-3xl border border-[#8f1d2c]/10 bg-white p-4 sm:p-6"><div className="flex items-center gap-2"><BookOpen className="h-4 w-4 text-[#8f1d2c]" /><h2 className="text-sm font-semibold text-[#29312d]">Evidence used in this draft</h2></div><div className="mt-3 grid gap-2 sm:grid-cols-2">{citations.map((citation, index) => <div key={`${citation.sourceId || citation.documentId || "source"}-${index}`} className="rounded-xl bg-[#f7f2eb] px-3 py-2.5"><p className="line-clamp-2 text-xs font-semibold text-[#29312d]">{citation.title}</p><p className="mt-1 text-[10px] uppercase tracking-[0.08em] text-[#8a8277]">{citation.sourceType === "catalogue" ? `${citation.documentType || "document"} · ${citation.authority || "Rashtram catalogue"}` : "Your study source"}</p></div>)}</div></section>}
       </div>
     </main>
