@@ -6,6 +6,7 @@ const {
   applicabilityAt,
   buildBeforeAfterComparison,
   parseTemporalIntent,
+  resolveCanonicalTemporalStatus,
   retrieveTemporalPassages,
   temporalEventsFromDocument,
   verifiedRelationship,
@@ -62,6 +63,23 @@ test("date events remain separate and unknown dates are omitted", () => {
   ]);
 });
 
+test("canonical temporal status prefers dated lifecycle truth and caveats undated labels", () => {
+  assert.deepEqual(resolveCanonicalTemporalStatus({
+    status: "Passed",
+    passed_date: "2025-08-12",
+  }), {
+    status: "PASSED",
+    date: "2025-08-12",
+    basis: "passed_date",
+    verificationStatus: "catalogue_recorded",
+    limitation: null,
+  });
+  const undated = resolveCanonicalTemporalStatus({ status: "Passed" });
+  assert.equal(undated.status, "PASSED");
+  assert.equal(undated.verificationStatus, "catalogue_recorded_unverified");
+  assert.match(undated.limitation, /no source-backed lifecycle date/i);
+});
+
 test("only explicit source-backed relationships enter temporal reasoning", () => {
   assert.equal(verifiedRelationship({ relationship_source: "heuristic", relationship_evidence: {} }), false);
   assert.equal(verifiedRelationship({ relationship_source: "source_explicit", relationship_evidence: {} }), true);
@@ -92,4 +110,22 @@ test("temporal retrieval states uncertainty and keeps source identity", async ()
   assert.match(passages[0].content, /Publication date is not treated as commencement/);
   assert.equal(passages[0].sourceUrl, "https://official.example/rule");
   assert.ok(passages.some((passage) => passage.temporal?.dateBasis === "publication_date"));
+});
+
+test("current-status retrieval exposes catalogue status without promoting it to verified truth", async () => {
+  let call = 0;
+  const queryFn = async () => {
+    call += 1;
+    return call === 1 ? { rows: [{
+      id: 30,
+      title: "Taxation Laws Amendment Bill",
+      status: "Passed",
+      canonical_url: "https://official.example/bill",
+      temporal_metadata_json: {},
+    }] } : { rows: [] };
+  };
+  const passages = await retrieveTemporalPassages(30, "Is this Bill currently pending?", queryFn);
+  const status = passages.find((passage) => passage.structuralType === "temporal_status");
+  assert.match(status.content, /Canonical catalogue status: PASSED/);
+  assert.match(status.content, /catalogue_recorded_unverified/);
 });

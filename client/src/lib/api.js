@@ -1,6 +1,6 @@
 
 
-import { consumeSSEStream, streamEventText } from "@/lib/chat-stream";
+import { consumeSSEStream, mergeSSEMeta, streamEventText } from "@/lib/chat-stream";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5001/api';
 const DEFAULT_GET_CACHE_TTL_MS = Number(
@@ -554,8 +554,7 @@ export const sendCrossDocumentChat = async (
     signal,
     onEvent: (event) => {
       if (event.type === "meta") {
-        sources = event.sources || [];
-        metadata = event.metadata || {};
+        ({ sources, metadata } = mergeSSEMeta({ sources, metadata }, event));
       } else if (event.type === "content") {
         fullResponse += event.content || "";
         onChunk?.(event.content || "");
@@ -743,8 +742,7 @@ export const sendDocumentChatMessage = async (
     signal,
     onEvent: (event) => {
       if (event.type === "meta") {
-        sources = event.sources || [];
-        metadata = event.metadata || {};
+        ({ sources, metadata } = mergeSSEMeta({ sources, metadata }, event));
       } else if (event.type === "content") {
         fullResponse += event.content || "";
         onChunk?.(event.content || "");

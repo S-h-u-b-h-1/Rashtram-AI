@@ -159,6 +159,8 @@ test("private-source discovery remains account scoped in SQL and parameters", as
   });
   assert.match(captured.sql, /node\.owner_user_id IS NULL OR node\.owner_user_id = \$2/);
   assert.match(captured.sql, /evidence\.owner_user_id IS NULL OR evidence\.owner_user_id = \$2/);
+  assert.match(captured.sql, /AS tokens\(token\)/);
+  assert.match(captured.sql, /LENGTH\(tokens\.token\)/);
   assert.equal(captured.params[1], 73);
 });
 

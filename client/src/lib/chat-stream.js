@@ -5,6 +5,16 @@ export const streamEventText = (value) => {
   return "";
 };
 
+export const mergeSSEMeta = (current = {}, event = {}) => ({
+  sources: Array.isArray(event.sources) && event.sources.length
+    ? event.sources
+    : Array.isArray(current.sources) ? current.sources : [],
+  metadata: {
+    ...(current.metadata && typeof current.metadata === "object" ? current.metadata : {}),
+    ...(event.metadata && typeof event.metadata === "object" ? event.metadata : {}),
+  },
+});
+
 export const consumeSSEStream = async (
   response,
   { onEvent, signal } = {},

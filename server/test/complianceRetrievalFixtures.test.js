@@ -202,4 +202,31 @@ test("no evidence abstains and secondary-only evidence exposes a primary-source 
   });
   assert.match(secondary.primarySourceGap, /primary official source/i);
   assert.equal(secondary.evidence[0].pageStart, null);
+  assert.equal(secondary.evidenceStatus, "insufficient_relevant_evidence");
+  assert.match(secondary.abstention, /primary-official, normative passage/i);
+});
+
+test("descriptive or secondary passages never make a compliance run complete", () => {
+  const input = { problem: "I operate an EV battery recycling facility in Gujarat." };
+  const result = shapeComplianceResult({
+    input,
+    recommendations: [{
+      id: "301", title: "Battery Recycling Outlook", documentType: "report",
+      jurisdiction: "Gujarat", authority: "Research Institute",
+      relevanceTier: RELEVANCE_TIERS.HIGH, authorityClass: "SECONDARY_RESEARCH",
+    }],
+    knowledge: { concepts: [] },
+    documentRuns: [{
+      document: { id: "301", title: "Battery Recycling Outlook" },
+      recommendation: { relevanceTier: RELEVANCE_TIERS.HIGH, authorityClass: "SECONDARY_RESEARCH" },
+      passages: [{
+        content: "Battery recycling operators in Gujarat must study evolving collection practices.",
+        authorityClass: "SECONDARY_RESEARCH",
+      }],
+      sufficiency: { level: "HIGH", decision: "SUFFICIENT", reasons: [] },
+    }],
+  });
+  assert.equal(result.evidence.length, 1);
+  assert.deepEqual(result.evidenceBackedObligations, []);
+  assert.equal(result.evidenceStatus, "insufficient_relevant_evidence");
 });

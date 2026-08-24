@@ -22,6 +22,23 @@ const VERIFIED_RELATIONSHIP_SOURCES = new Set(["official_source", "source_explic
 const BEFORE_RELATIONSHIPS = new Set(["AMENDS", "REPEALS", "SUPERSEDES", "REPLACES"]);
 const AFTER_RELATIONSHIPS = new Set(["AMENDED_BY", "REPEALED_BY", "SUPERSEDED_BY", "REPLACED_BY"]);
 
+const STATUS_ALIASES = Object.freeze({
+  draft: "DRAFT",
+  introduced: "INTRODUCED",
+  pending: "PENDING",
+  passed: "PASSED",
+  enacted: "ENACTED",
+  assented: "ENACTED",
+  notified: "NOTIFIED",
+  active: "IN_FORCE",
+  operative: "IN_FORCE",
+  "in force": "IN_FORCE",
+  repealed: "REPEALED",
+  superseded: "SUPERSEDED",
+  expired: "EXPIRED",
+  lapsed: "LAPSED",
+});
+
 const isoDate = (value) => {
   if (!value) return null;
   const parsed = new Date(value);
@@ -77,6 +94,44 @@ const temporalEventsFromDocument = (document = {}) => DATE_KINDS
   }))
   .filter((event) => event.date);
 
+const resolveCanonicalTemporalStatus = (document = {}) => {
+  const datedStates = [
+    ["REPEALED", document.repealed_date || document.repealedDate, "repealed_date"],
+    ["SUPERSEDED", document.superseded_date || document.supersededDate, "superseded_date"],
+    ["EXPIRED", document.expiry_date || document.expiryDate, "expiry_date"],
+    ["IN_FORCE", document.effective_date || document.effectiveDate, "effective_date"],
+    ["IN_FORCE", document.commencement_date || document.commencementDate, "commencement_date"],
+    ["NOTIFIED", document.notified_date || document.notifiedDate, "notified_date"],
+    ["ENACTED", document.assent_date || document.assentDate, "assent_date"],
+    ["PASSED", document.passed_date || document.passedDate, "passed_date"],
+    ["INTRODUCED", document.introduced_date || document.introducedDate, "introduced_date"],
+  ];
+  const dated = datedStates.find(([, value]) => isoDate(value));
+  if (dated) return {
+    status: dated[0],
+    date: isoDate(dated[1]),
+    basis: dated[2],
+    verificationStatus: "catalogue_recorded",
+    limitation: null,
+  };
+  const raw = String(document.status || "").normalize("NFKC").trim().toLowerCase();
+  const status = STATUS_ALIASES[raw] || null;
+  if (!status) return {
+    status: "UNKNOWN",
+    date: null,
+    basis: "no_recorded_status",
+    verificationStatus: "unknown",
+    limitation: "No source-backed lifecycle status is recorded for this document.",
+  };
+  return {
+    status,
+    date: null,
+    basis: "catalogue_status",
+    verificationStatus: "catalogue_recorded_unverified",
+    limitation: "The catalogue records this status, but no source-backed lifecycle date is available to independently verify it.",
+  };
+};
+
 const verifiedRelationship = (row) => row.relationship_evidence?.sourceVerified === true ||
   VERIFIED_RELATIONSHIP_SOURCES.has(String(row.relationship_source || ""));
 
@@ -101,7 +156,7 @@ const applicabilityAt = (document, targetDate) => {
 };
 
 const loadTemporalContext = async (documentId, queryFn = query) => {
-  const documentResult = await queryFn(`SELECT current.id, current.title,
+  const documentResult = await queryFn(`SELECT current.id, current.title, current.status,
        current.document_type, current.jurisdiction, current.canonical_url,
        COALESCE(registry.source_name, legacy.canonical_source, legacy.source_name)
          AS canonical_source,
@@ -258,6 +313,22 @@ const retrieveTemporalPassages = async (documentId, question, queryFn = query) =
     retrievalMode: "temporal",
     temporal: event,
   }));
+  if (intent.asksCurrentStatus) {
+    const canonicalStatus = resolveCanonicalTemporalStatus(context.document);
+    ownEvents.unshift({
+      passage: 0,
+      score: 1,
+      lexicalScore: 1,
+      chunkIndex: "temporal-canonical-status",
+      content: `Canonical catalogue status: ${canonicalStatus.status}. Basis: ${canonicalStatus.basis}${canonicalStatus.date ? ` (${canonicalStatus.date})` : ""}. Verification: ${canonicalStatus.verificationStatus}. ${canonicalStatus.limitation || ""}`.trim(),
+      source: "Canonical document lifecycle metadata",
+      documentId: String(documentId),
+      sourceUrl: context.document.canonical_url || null,
+      structuralType: "temporal_status",
+      retrievalMode: "temporal",
+      temporal: canonicalStatus,
+    });
+  }
   const related = context.relationships.flatMap((relationship) =>
     relationship.events.map((event) => ({
       passage: 0,
@@ -420,6 +491,7 @@ module.exports = {
   loadDocumentSourceFreshness,
   assessCurrentVerification,
   parseTemporalIntent,
+  resolveCanonicalTemporalStatus,
   retrieveTemporalPassages,
   temporalEventsFromDocument,
   verifiedRelationship,

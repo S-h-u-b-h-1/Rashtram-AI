@@ -113,6 +113,8 @@ const shapeComplianceResult = ({ input, recommendations, knowledge, documentRuns
       };
     }))
     .filter((item) => item.snippet && item.passageGate.relevant);
+  const complianceEvidence = evidence.filter((item) =>
+    item.passageGate.normative && item.authorityClass === "PRIMARY_OFFICIAL");
   const candidateDocuments = recommendations.slice(0, 8).map((item) => ({
     documentId: String(item.id),
     title: item.title,
@@ -129,9 +131,9 @@ const shapeComplianceResult = ({ input, recommendations, knowledge, documentRuns
       (passage.authorityClass || run.recommendation?.authorityClass) === "PRIMARY_OFFICIAL"))
     .map((run) => String(run.document.id)));
   const primaryDocuments = candidateDocuments.filter((item) => primaryDocumentIds.has(item.documentId));
-  const obligations = evidenceMatches(evidence, NORMATIVE_PATTERNS.obligation, 10);
-  const permissions = evidenceMatches(evidence, NORMATIVE_PATTERNS.permission, 8);
-  const penalties = evidenceMatches(evidence, NORMATIVE_PATTERNS.penalty, 6);
+  const obligations = evidenceMatches(complianceEvidence, NORMATIVE_PATTERNS.obligation, 10);
+  const permissions = evidenceMatches(complianceEvidence, NORMATIVE_PATTERNS.permission, 8);
+  const penalties = evidenceMatches(complianceEvidence, NORMATIVE_PATTERNS.penalty, 6);
   const result = {
     businessProfile: input,
     knowledgeConcepts: (knowledge.concepts || []).slice(0, 12),
@@ -180,7 +182,7 @@ const shapeComplianceResult = ({ input, recommendations, knowledge, documentRuns
     missingEvidence: [
       !candidateDocuments.length ? "No sufficiently relevant research-ready catalogue record was found." : null,
       !primaryDocuments.length ? "No primary-official source was verified among the retrieved candidates." : null,
-      !obligations.length ? "No explicit obligation passage was retrieved." : null,
+      !obligations.length ? "No explicit obligation passage from a primary official source was retrieved." : null,
       !permissions.length ? "No explicit registration, licence, permission, or approval passage was retrieved." : null,
       !penalties.length ? "No explicit penalty passage was retrieved; this is not evidence that no penalty exists." : null,
       usableRuns.length !== documentRuns.length ? "One or more candidate documents had insufficient or conflicting evidence." : null,
@@ -194,10 +196,10 @@ const shapeComplianceResult = ({ input, recommendations, knowledge, documentRuns
       decision: run.sufficiency.decision, reasons: run.sufficiency.reasons,
       relevanceTier: run.recommendation?.relevanceTier || RELEVANCE_TIERS.REJECTED,
     })),
-    evidenceStatus: evidence.length ? "sufficient_relevant_evidence" : "insufficient_relevant_evidence",
-    abstention: evidence.length
+    evidenceStatus: complianceEvidence.length ? "sufficient_relevant_evidence" : "insufficient_relevant_evidence",
+    abstention: complianceEvidence.length
       ? null
-      : "Insufficient relevant evidence. No compliance obligation has been generated.",
+      : "Insufficient relevant evidence: no current, primary-official, normative passage was verified. No compliance obligation has been generated.",
     primarySourceGap: candidateDocuments.length && !primaryDocuments.length
       ? "Relevant secondary material was found, but a primary official source has not yet been verified."
       : null,

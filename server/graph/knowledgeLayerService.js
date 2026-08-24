@@ -351,10 +351,11 @@ const discoverKnowledgeCandidates = async (searchQuery, options = {}) => {
            @@ plainto_tsquery('simple', $3)
          OR node.canonical_name ILIKE '%' || $3 || '%'
          OR EXISTS (
-           SELECT 1 FROM UNNEST(regexp_split_to_array($3, '\\s+')) token
-           WHERE LENGTH(token) >= 3
+           SELECT 1
+           FROM UNNEST(regexp_split_to_array($3, '\\s+')) AS tokens(token)
+           WHERE LENGTH(tokens.token) >= 3
              AND (node.canonical_name || ' ' || COALESCE(node.description, ''))
-               ILIKE '%' || token || '%'
+               ILIKE '%' || tokens.token || '%'
          )
        )
      ORDER BY CASE node.verification_status
