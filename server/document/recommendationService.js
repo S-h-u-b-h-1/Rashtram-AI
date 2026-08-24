@@ -409,20 +409,21 @@ const scoreRecommendation = (signals = {}) => {
 };
 
 const DOCUMENT_TITLE_STOP_WORDS = new Set([
-  "act", "amendment", "bill", "central", "draft", "india", "law", "laws",
-  "ordinance", "regulation", "regulations", "rule", "rules", "second",
-  "state", "the", "union", "territory",
+  "act", "amendment", "and", "bill", "central", "draft", "for", "india",
+  "law", "laws", "of", "ordinance", "other", "regulation", "regulations",
+  "rule", "rules", "second", "state", "the", "to", "union", "territory",
 ]);
 
 const DOCUMENT_SUMMARY_STOP_WORDS = new Set([
   ...DOCUMENT_TITLE_STOP_WORDS,
-  "according", "affected", "aim", "aims", "amend", "amended", "amending",
+  "according", "affected", "aim", "aims", "also", "amend", "amended", "amending",
   "amendments", "authority", "chapter", "document", "economic", "fiscal",
   "existing", "framework", "give", "government", "implementation", "including",
   "institution", "introduce", "introduced", "issue", "ministry", "objective",
-  "objectives", "persons", "power", "powers", "provide", "provides",
-  "provision", "provisions", "public", "section", "shall", "stable", "summary",
-  "under", "using", "year",
+  "necessary", "new", "objectives", "persons", "power", "powers", "primary",
+  "propose", "proposed", "proposes", "provide", "provides", "provision",
+  "provisions", "public", "related", "section", "seeks", "shall", "stable",
+  "summary", "under", "using", "various", "year",
 ]);
 
 const hasDocumentTitleSubjectOverlap = (leftTitle, rightTitle) => {
@@ -442,14 +443,23 @@ const hasDocumentSummarySubjectOverlap = (leftSummary, rightSummary) => {
       !DOCUMENT_SUMMARY_STOP_WORDS.has(token) &&
       !/^\d+$/.test(token),
     );
-  const left = new Set(subjectTokens(leftSummary));
-  const right = new Set(subjectTokens(rightSummary));
+  const leftOrdered = subjectTokens(leftSummary);
+  const rightOrdered = subjectTokens(rightSummary);
+  const left = new Set(leftOrdered);
+  const right = new Set(rightOrdered);
   if (left.size < 8 || right.size < 8) return false;
   const shared = [...left].filter((token) => right.has(token)).length;
+  const bigrams = (tokens) => new Set(tokens.slice(0, -1).map((token, index) =>
+    `${token} ${tokens[index + 1]}`));
+  const leftBigrams = bigrams(leftOrdered);
+  const rightBigrams = bigrams(rightOrdered);
+  const sharedBigrams = [...leftBigrams].filter((phrase) => rightBigrams.has(phrase)).length;
   // Summaries of legislation share a large legal boilerplate vocabulary. A
-  // recommendation needs a dense subject overlap, not six generic words from
-  // two otherwise unrelated instruments.
-  return shared >= 8 && shared / Math.min(left.size, right.size) >= 0.22;
+  // recommendation needs both a dense token overlap and repeated subject
+  // phrases, not generic words from two otherwise unrelated instruments.
+  return shared >= 8 && sharedBigrams >= 3 &&
+    shared / Math.min(left.size, right.size) >= 0.22 &&
+    shared / new Set([...left, ...right]).size >= 0.08;
 };
 
 // Broad catalogue metadata is useful for ranking, but it must never be enough
@@ -463,7 +473,6 @@ const hasSubstantiveRecommendationAffinity = (signals = {}) => {
       signals.purposeMatch ||
       signals.topicMatch ||
       (signals.semanticMatch && Boolean(
-        signals.sameCategory || signals.sameAuthority ||
         signals.titleMatch || signals.summaryMatch || signals.purposeMatch || signals.topicMatch
       )),
   );
