@@ -32,6 +32,7 @@ const {
   createComparison,
   deleteComparison,
   getComparison,
+  regenerateComparison,
 } = require("./documentComparisonService");
 const {
   getComparisonRecommendations,
@@ -230,6 +231,58 @@ router.post("/compare", generationLimiter, async (req, res) => {
     });
   } catch (error) {
     return sendError(res, error, "Document comparison failed");
+  }
+});
+
+const logComparisonRegeneration = (event, metadata = {}) => {
+  console.info(`[comparison-regeneration] ${JSON.stringify({
+    event,
+    comparisonId: metadata.comparisonId ? String(metadata.comparisonId) : null,
+    documentCount: Number(metadata.documentCount || 0),
+    durationMs: Number(metadata.durationMs || 0),
+    failureStage: metadata.failureStage || null,
+  })}`);
+};
+
+router.post("/compare/:comparisonId/regenerate", generationLimiter, async (req, res) => {
+  const startedAt = Date.now();
+  const comparisonId = String(req.params.comparisonId);
+  logComparisonRegeneration("comparison_regenerate_requested", {
+    comparisonId,
+    documentCount: Array.isArray(req.body?.documentIds)
+      ? req.body.documentIds.length
+      : 0,
+  });
+  try {
+    const comparison = await regenerateComparison(
+      req.user.id,
+      comparisonId,
+      req.body,
+      {
+        onStage: (event, metadata) =>
+          logComparisonRegeneration(event, metadata),
+      },
+    );
+    return res.json({
+      comparison,
+      comparisonId: comparison.id,
+      documents: comparison.result.documents || [],
+      summary: comparison.result.executiveSummary || "",
+      ...comparison.result,
+      recommendedDocuments: comparison.recommendedDocuments,
+      createdAt: comparison.createdAt,
+    });
+  } catch (error) {
+    logComparisonRegeneration("comparison_regenerate_failed", {
+      comparisonId,
+      documentCount: Array.isArray(req.body?.documentIds)
+        ? req.body.documentIds.length
+        : 0,
+      durationMs: Date.now() - startedAt,
+      failureStage: error.failureStage || error.details?.failureStage ||
+        (error.status === 422 ? "evidence" : error.status === 503 ? "generation" : "request"),
+    });
+    return sendError(res, error, "Comparison regeneration failed");
   }
 });
 

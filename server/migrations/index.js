@@ -159,4 +159,8 @@ module.exports = [
     name: "040_product_reliability_v4.js",
     migration: require("./040_product_reliability_v4"),
   },
+  {
+    name: "041_comparison_regeneration_versions.js",
+    migration: require("./041_comparison_regeneration_versions"),
+  },
 ];

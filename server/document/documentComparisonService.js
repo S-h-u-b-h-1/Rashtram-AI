@@ -1,4 +1,4 @@
-const { query } = require("../db");
+const { getPool, query } = require("../db");
 const DocumentRepository = require("./DocumentRepository");
 const {
   retrieveDocumentContext,
@@ -42,6 +42,7 @@ const MODE_ALIASES = {
 const LANGUAGES = new Set(["auto", "english", "hindi"]);
 const EMPTY_FIELD_PATTERN =
   /^(not identified|none identified|not available|no evidence|not found|not specified|n\/a)/i;
+const REGENERATION_CLAIM_TIMEOUT_MINUTES = 5;
 
 const validationError = (message, status = 400) => {
   const error = new Error(message);
@@ -78,6 +79,44 @@ const normalizeRequest = (payload = {}) => {
     throw validationError("The focused comparison question is too long.");
   }
   return { documentIds, mode, language, userQuestion };
+};
+
+const sameDocumentScope = (left = [], right = []) =>
+  left.length === right.length && left.every((id, index) =>
+    String(id) === String(right[index]));
+
+const resolveRegenerationRequest = (comparison, payload = {}) => {
+  if (!comparison) throw validationError("Comparison not found.", 404);
+  const requestedIds = Array.isArray(payload.documentIds)
+    ? payload.documentIds.map((id) => String(id || "").trim()).filter(Boolean)
+    : comparison.documentIds.map(String);
+  if (!sameDocumentScope(requestedIds, comparison.documentIds.map(String))) {
+    throw validationError(
+      "Regeneration must use the documents already saved in this comparison.",
+      409,
+    );
+  }
+  return normalizeRequest({
+    documentIds: comparison.documentIds,
+    comparisonMode: payload.comparisonMode ?? payload.mode ?? comparison.mode,
+    language: payload.language ?? comparison.language,
+    userQuestion: Object.prototype.hasOwnProperty.call(payload, "userQuestion")
+      ? payload.userQuestion
+      : comparison.userQuestion,
+  });
+};
+
+const assertCitationDocumentScope = (result, documentIds) => {
+  const selected = new Set(documentIds.map(String));
+  const outside = (result?.citations || []).filter((citation) =>
+    !selected.has(String(citation.documentId)));
+  if (outside.length) {
+    const error = new Error("Comparison verification produced an out-of-scope citation.");
+    error.status = 500;
+    error.failureStage = "citation_scope";
+    throw error;
+  }
+  return true;
 };
 
 const readinessReason = (document) => {
@@ -676,6 +715,9 @@ const mapComparison = (row) => row && ({
     row.recommended_documents_json ||
     row.result_json?.recommendedDocuments ||
     [],
+  currentVersion: Number(row.current_version || 1),
+  regenerationStatus: row.regeneration_status || "idle",
+  lastRegeneratedAt: row.last_regenerated_at || null,
   createdAt: row.created_at,
   updatedAt: row.updated_at,
 });
@@ -760,8 +802,116 @@ const extractiveComparisonFallback = ({
   };
 };
 
-const createComparison = async (userId, payload) => {
+const persistInitialComparison = async ({
+  userId, title, documentIds, mode, language, userQuestion, result,
+  recommendedDocuments,
+}) => {
+  const client = await getPool().connect();
+  try {
+    await client.query("BEGIN");
+    const inserted = await client.query(
+      `INSERT INTO document_comparisons (
+         user_id, title, document_ids_json, mode, language, user_question,
+         result_json, recommended_documents_json, current_version
+       )
+       VALUES ($1, $2, $3::jsonb, $4, $5, $6, $7::jsonb, $8::jsonb, 1)
+       RETURNING *`,
+      [
+        userId, title, JSON.stringify(documentIds), mode, language,
+        userQuestion || null, JSON.stringify(result),
+        JSON.stringify(recommendedDocuments),
+      ],
+    );
+    const row = inserted.rows[0];
+    await client.query(
+      `INSERT INTO document_comparison_versions (
+         comparison_id, version_number, document_ids_json, mode, language,
+         user_question, result_json, generation_mode, timings_json
+       ) VALUES ($1, 1, $2::jsonb, $3, $4, $5, $6::jsonb, $7, $8::jsonb)
+       ON CONFLICT (comparison_id, version_number) DO NOTHING`,
+      [
+        row.id, JSON.stringify(documentIds), mode, language,
+        userQuestion || null, JSON.stringify(result), result.generationMode || null,
+        JSON.stringify(result.telemetry || {}),
+      ],
+    );
+    await client.query("COMMIT");
+    return mapComparison(row);
+  } catch (error) {
+    await client.query("ROLLBACK").catch(() => undefined);
+    throw error;
+  } finally {
+    client.release();
+  }
+};
+
+const persistRegeneratedComparison = async ({
+  userId, comparisonId, title, documentIds, mode, language, userQuestion,
+  result, recommendedDocuments,
+}) => {
+  assertCitationDocumentScope(result, documentIds);
+  const client = await getPool().connect();
+  try {
+    await client.query("BEGIN");
+    const locked = await client.query(
+      `SELECT * FROM document_comparisons
+        WHERE id::TEXT = $1 AND user_id = $2
+        FOR UPDATE`,
+      [comparisonId, userId],
+    );
+    const current = locked.rows[0];
+    if (!current) throw validationError("Comparison not found.", 404);
+    if (!sameDocumentScope(
+      (current.document_ids_json || []).map(String),
+      documentIds.map(String),
+    )) {
+      throw validationError("The saved comparison document scope changed during regeneration.", 409);
+    }
+    const version = Number(current.current_version || 1) + 1;
+    await client.query(
+      `INSERT INTO document_comparison_versions (
+         comparison_id, version_number, document_ids_json, mode, language,
+         user_question, result_json, generation_mode, timings_json
+       ) VALUES ($1, $2, $3::jsonb, $4, $5, $6, $7::jsonb, $8, $9::jsonb)`,
+      [
+        current.id, version, JSON.stringify(documentIds), mode, language,
+        userQuestion || null, JSON.stringify(result), result.generationMode || null,
+        JSON.stringify(result.telemetry || {}),
+      ],
+    );
+    const updated = await client.query(
+      `UPDATE document_comparisons
+          SET title = $3, mode = $4, language = $5, user_question = $6,
+              result_json = $7::jsonb,
+              recommended_documents_json = $8::jsonb,
+              current_version = $9,
+              regeneration_status = 'idle',
+              regeneration_started_at = NULL,
+              regeneration_failure_stage = NULL,
+              last_regenerated_at = NOW(),
+              updated_at = NOW()
+        WHERE id::TEXT = $1 AND user_id = $2
+        RETURNING *`,
+      [
+        comparisonId, userId, title, mode, language, userQuestion || null,
+        JSON.stringify(result), JSON.stringify(recommendedDocuments), version,
+      ],
+    );
+    await client.query("COMMIT");
+    return mapComparison(updated.rows[0]);
+  } catch (error) {
+    await client.query("ROLLBACK").catch(() => undefined);
+    throw error;
+  } finally {
+    client.release();
+  }
+};
+
+const createComparison = async (userId, payload, options = {}) => {
   const startedAt = Date.now();
+  const forceGeneration = options.forceGeneration === true;
+  const comparisonId = options.comparisonId ? String(options.comparisonId) : null;
+  const onStage = typeof options.onStage === "function" ? options.onStage : () => undefined;
   const { documentIds, mode, language, userQuestion } =
     normalizeRequest(payload);
   const loaded = await Promise.all(
@@ -807,6 +957,11 @@ const createComparison = async (userId, payload) => {
       };
     }),
   );
+  onStage("comparison_regenerate_retrieval_complete", {
+    comparisonId,
+    documentCount: documents.length,
+    durationMs: Date.now() - startedAt,
+  });
 
   const citations = [];
   const context = groups
@@ -904,7 +1059,12 @@ const createComparison = async (userId, payload) => {
       embeddingVersion: providerConfig().embeddingModel,
     },
   }) : null;
-  const cachedAnalysis = analysisKey ? caches.analysis.get(analysisKey) : null;
+  // Regeneration intentionally rebuilds the AI analysis from the currently
+  // valid evidence. Extraction/chunk caches remain reusable, but the previous
+  // generated comparison must never be returned as the regenerated version.
+  const cachedAnalysis = !forceGeneration && analysisKey
+    ? caches.analysis.get(analysisKey)
+    : null;
   let generationLatencyMs = 0;
   let verificationLatencyMs = 0;
   let generated;
@@ -966,6 +1126,13 @@ const createComparison = async (userId, payload) => {
       });
     } finally {
       generationLatencyMs = Date.now() - generationStartedAt;
+      if (comparisonId) {
+        onStage("comparison_regenerate_generation_complete", {
+          comparisonId,
+          documentCount: documents.length,
+          durationMs: generationLatencyMs,
+        });
+      }
     }
   }
   let claimVerification = cachedAnalysis?.claimVerification || {
@@ -987,6 +1154,13 @@ const createComparison = async (userId, payload) => {
     claimVerification = verified.report;
     verificationLatencyMs = Date.now() - verificationStartedAt;
     if (analysisKey) caches.analysis.set(analysisKey, { generated, claimVerification });
+  }
+  if (comparisonId) {
+    onStage("comparison_regenerate_verified", {
+      comparisonId,
+      documentCount: documents.length,
+      durationMs: Date.now() - startedAt,
+    });
   }
   const recommendedDocuments = [
     ...new Map(
@@ -1065,30 +1239,21 @@ const createComparison = async (userId, payload) => {
       promptVersion: "document-comparison-v3",
       model,
     },
-    telemetry: { totalLatencyMs: Date.now() - startedAt },
+    telemetry: {
+      retrievalLatencyMs: Math.max(
+        ...groups.map((group) => group.retrievalDiagnostics?.timings?.totalMs || 0),
+        0,
+      ),
+      graphLatencyMs,
+      generationLatencyMs,
+      verificationLatencyMs,
+      totalLatencyMs: Date.now() - startedAt,
+    },
   };
   const title = `Comparison: ${documents
     .map((document) => document.title)
     .join(" vs ")
     .slice(0, 450)}`;
-  const inserted = await query(
-    `INSERT INTO document_comparisons (
-       user_id, title, document_ids_json, mode, language, user_question,
-       result_json, recommended_documents_json
-     )
-     VALUES ($1, $2, $3::jsonb, $4, $5, $6, $7::jsonb, $8::jsonb)
-     RETURNING *`,
-    [
-      userId,
-      title,
-      JSON.stringify(documentIds),
-      mode,
-      language,
-      userQuestion || null,
-      JSON.stringify(result),
-      JSON.stringify(recommendedDocuments),
-    ],
-  );
   const retrievalDiagnostics = groups.map((group) => group.retrievalDiagnostics);
   await recordResearchTelemetry({
     userId,
@@ -1128,7 +1293,15 @@ const createComparison = async (userId, payload) => {
       htmlEvidenceCount: comparisonEvidence.filter((item) => item.resourceType === "html").length,
     },
   });
-  return mapComparison(inserted.rows[0]);
+  return comparisonId
+    ? persistRegeneratedComparison({
+        userId, comparisonId, title, documentIds, mode, language,
+        userQuestion, result, recommendedDocuments,
+      })
+    : persistInitialComparison({
+        userId, title, documentIds, mode, language, userQuestion, result,
+        recommendedDocuments,
+      });
 };
 
 const getComparison = async (userId, comparisonId) => {
@@ -1139,6 +1312,77 @@ const getComparison = async (userId, comparisonId) => {
     [String(comparisonId), userId],
   );
   return mapComparison(result.rows[0]);
+};
+
+const claimComparisonRegeneration = async (userId, comparisonId) => {
+  const result = await query(
+    `UPDATE document_comparisons
+        SET regeneration_status = 'processing',
+            regeneration_started_at = NOW(),
+            regeneration_failure_stage = NULL
+      WHERE id::TEXT = $1 AND user_id = $2
+        AND (
+          regeneration_status <> 'processing'
+          OR regeneration_started_at IS NULL
+          OR regeneration_started_at < NOW() - ($3::TEXT || ' minutes')::INTERVAL
+        )
+      RETURNING *`,
+    [comparisonId, userId, String(REGENERATION_CLAIM_TIMEOUT_MINUTES)],
+  );
+  if (result.rows[0]) return mapComparison(result.rows[0]);
+  const existing = await getComparison(userId, comparisonId);
+  if (!existing) throw validationError("Comparison not found.", 404);
+  throw validationError(
+    "This comparison is already being regenerated. Please wait for it to finish.",
+    409,
+  );
+};
+
+const releaseFailedRegeneration = async (
+  userId,
+  comparisonId,
+  failureStage = "unknown",
+) => {
+  await query(
+    `UPDATE document_comparisons
+        SET regeneration_status = 'failed',
+            regeneration_started_at = NULL,
+            regeneration_failure_stage = $3,
+            updated_at = NOW()
+      WHERE id::TEXT = $1 AND user_id = $2`,
+    [comparisonId, userId, String(failureStage || "unknown").slice(0, 80)],
+  ).catch(() => undefined);
+};
+
+const regenerateComparison = async (userId, comparisonId, payload = {}, options = {}) => {
+  const existing = await getComparison(userId, comparisonId);
+  const request = resolveRegenerationRequest(existing, payload);
+  await claimComparisonRegeneration(userId, comparisonId);
+  try {
+    return await createComparison(userId, request, {
+      comparisonId,
+      forceGeneration: true,
+      onStage: options.onStage,
+    });
+  } catch (error) {
+    await releaseFailedRegeneration(
+      userId,
+      comparisonId,
+      error.failureStage || error.details?.failureStage ||
+        (error.status === 422 ? "evidence" : error.status === 503 ? "generation" : "unknown"),
+    );
+    if (error.status === 503) {
+      error.publicMessage =
+        "There was a temporary AI-generation problem. Your previous comparison has been preserved.";
+    } else if (error.status === 422 && error.details?.needsPreparation) {
+      error.message =
+        "The selected documents are being prepared. Try again shortly. Your previous comparison has been preserved.";
+    } else if (error.status === 422) {
+      error.message =
+        "The available evidence was insufficient to regenerate this comparison. Your previous comparison has been preserved.";
+    }
+    throw error;
+  }
 };
 
 const getComparisons = async (userId, limit = 30) => {
@@ -1167,6 +1411,7 @@ module.exports = {
   LANGUAGES,
   MODES,
   createComparison,
+  regenerateComparison,
   deleteComparison,
   allowExtractiveComparisonFallback,
   buildComparisonCitation,
@@ -1175,5 +1420,8 @@ module.exports = {
   getComparison,
   getComparisons,
   normalizeRequest,
+  resolveRegenerationRequest,
+  sameDocumentScope,
+  assertCitationDocumentScope,
   readinessReason,
 };

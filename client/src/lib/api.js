@@ -347,6 +347,16 @@ export const createDocumentComparison = async (payload) => {
   });
 };
 
+export const regenerateDocumentComparison = async (comparisonId, payload) => {
+  return apiRequest(
+    `/documents/compare/${encodeURIComponent(comparisonId)}/regenerate`,
+    {
+      method: "POST",
+      body: JSON.stringify(payload),
+    },
+  );
+};
+
 export const getDocumentComparison = async (comparisonId) => {
   return apiRequest(
     `/documents/compare/${encodeURIComponent(comparisonId)}`,

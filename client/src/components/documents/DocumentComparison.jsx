@@ -13,6 +13,7 @@ import {
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   createDocumentComparison,
+  regenerateDocumentComparison,
   getDocumentComparison,
   getDocumentReadiness,
   prepareDocumentForComparison,
@@ -22,6 +23,7 @@ import {
   trackActivity,
 } from "@/lib/api";
 import { useComparison } from "@/context/ComparisonContext";
+import { comparisonActionState } from "@/lib/comparison-regeneration.mjs";
 import { RecommendationSection } from "@/components/recommendations/RecommendationSection";
 import { MultiDocumentChat } from "@/components/documents/MultiDocumentChat";
 
@@ -110,11 +112,13 @@ export function DocumentComparison() {
   const [selectionReadiness, setSelectionReadiness] = useState({});
   const [readinessLoading, setReadinessLoading] = useState(false);
   const [loading, setLoading] = useState(Boolean(comparisonId));
+  const [regenerating, setRegenerating] = useState(false);
   const [error, setError] = useState("");
   const [chatDraft, setChatDraft] = useState(null);
   const [reportLoading, setReportLoading] = useState(false);
   const [reportError, setReportError] = useState("");
   const initialRequest = useRef("");
+  const regenerationInFlight = useRef(false);
   const chatSectionRef = useRef(null);
 
   const readinessKey = ids.join(",");
@@ -137,12 +141,23 @@ export function DocumentComparison() {
   const canRunComparison =
     ids.length >= 2 &&
     !loading &&
+    !regenerating &&
     !readinessLoading &&
     readinessComplete &&
     !blockingReadiness;
+  const comparisonAction = comparisonActionState({
+    hasComparison: Boolean(comparison),
+    loading,
+    regenerating,
+    readinessLoading,
+    ready: canRunComparison,
+  });
 
   const runComparison = async () => {
-    if (ids.length < 2 || loading || readinessLoading) return;
+    if (
+      ids.length < 2 || loading || regenerating || readinessLoading ||
+      regenerationInFlight.current
+    ) return;
     if (!readinessComplete) {
       setError("Checking selected documents before comparison.");
       return;
@@ -151,41 +166,52 @@ export function DocumentComparison() {
       setError(selectionNotReadyMessage);
       return;
     }
-    clearComparisonSelection();
-    setLoading(true);
+    const regeneratingExisting = Boolean(comparison?.id);
+    if (regeneratingExisting) {
+      regenerationInFlight.current = true;
+      setRegenerating(true);
+    } else {
+      clearComparisonSelection();
+      setLoading(true);
+    }
     setError("");
     try {
-      const response = await createDocumentComparison({
+      const payload = {
         documentIds: ids,
         comparisonMode: mode,
         language,
         userQuestion,
-      });
+      };
+      const response = regeneratingExisting
+        ? await regenerateDocumentComparison(comparison.id, payload)
+        : await createDocumentComparison(payload);
       setComparison(response.comparison);
-      trackActivity({
-        event_type: "comparison_created",
-        entity_type: "document_comparison",
-        entity_id: response.comparison.id,
-        page_path: "/app/compare",
-        metadata_json: {
-          comparisonMode: mode,
-          documentCount: ids.length,
-          documentIds: ids,
-        },
-      });
-      ids.forEach((documentId) => {
+      if (!regeneratingExisting) {
         trackActivity({
-          event_type: "documents_compared",
-          entity_type: "document",
-          entity_id: documentId,
-          document_id: documentId,
+          event_type: "comparison_created",
+          entity_type: "document_comparison",
+          entity_id: response.comparison.id,
           page_path: "/app/compare",
           metadata_json: {
-            comparisonId: response.comparison.id,
             comparisonMode: mode,
+            documentCount: ids.length,
+            documentIds: ids,
           },
         });
-      });
+        ids.forEach((documentId) => {
+          trackActivity({
+            event_type: "documents_compared",
+            entity_type: "document",
+            entity_id: documentId,
+            document_id: documentId,
+            page_path: "/app/compare",
+            metadata_json: {
+              comparisonId: response.comparison.id,
+              comparisonMode: mode,
+            },
+          });
+        });
+      }
       router.replace(
         `/app/compare?comparison=${response.comparison.id}&ids=${ids.join(",")}`,
         { scroll: false },
@@ -193,7 +219,12 @@ export function DocumentComparison() {
     } catch (requestError) {
       setError(requestError.message);
     } finally {
-      setLoading(false);
+      if (regeneratingExisting) {
+        regenerationInFlight.current = false;
+        setRegenerating(false);
+      } else {
+        setLoading(false);
+      }
     }
   };
 
@@ -208,6 +239,12 @@ export function DocumentComparison() {
           setMode(response.comparison.mode);
           setLanguage(response.comparison.language);
           setUserQuestion(response.comparison.userQuestion || "");
+          if (!ids.length && response.comparison.documentIds?.length) {
+            router.replace(
+              `/app/compare?comparison=${response.comparison.id}&ids=${response.comparison.documentIds.join(",")}`,
+              { scroll: false },
+            );
+          }
         }
       })
       .catch((requestError) => active && setError(requestError.message))
@@ -215,10 +252,10 @@ export function DocumentComparison() {
     return () => {
       active = false;
     };
-  }, [comparisonId]);
+  }, [comparisonId, ids.length, router]);
 
   useEffect(() => {
-    if (!ids.length || comparisonId) {
+    if (!ids.length) {
       setSelectionReadiness({});
       setReadinessLoading(false);
       return;
@@ -252,7 +289,7 @@ export function DocumentComparison() {
     return () => {
       active = false;
     };
-  }, [comparisonId, ids, readinessKey]);
+  }, [ids, readinessKey]);
 
   useEffect(() => {
     if (!ids.length) {
@@ -398,7 +435,7 @@ export function DocumentComparison() {
               <span className="sr-only">Comparison mode</span>
               <select
                 value={mode}
-                disabled={loading}
+                disabled={loading || regenerating}
                 onChange={(event) => setMode(event.target.value)}
                 className="h-10 rounded-xl bg-white/10 px-3 text-white outline-none"
               >
@@ -415,7 +452,7 @@ export function DocumentComparison() {
               <span className="sr-only">Response language</span>
               <select
                 value={language}
-                disabled={loading}
+                disabled={loading || regenerating}
                 onChange={(event) => setLanguage(event.target.value)}
                 className="h-10 rounded-xl bg-white/10 px-3 text-white outline-none"
               >
@@ -431,11 +468,7 @@ export function DocumentComparison() {
                 onClick={runComparison}
                 className="rounded-xl bg-[#fffaf0] px-4 py-2 text-xs font-semibold text-[#8f1d2c] disabled:opacity-50"
               >
-                {loading
-                  ? "Comparing…"
-                  : readinessLoading
-                    ? "Checking readiness…"
-                    : "Run with these settings"}
+                {comparisonAction.label}
               </button>
             )}
             {chatIds && (
@@ -465,7 +498,7 @@ export function DocumentComparison() {
             </span>
             <textarea
               value={userQuestion}
-              disabled={loading}
+              disabled={loading || regenerating}
               onChange={(event) => setUserQuestion(event.target.value)}
               maxLength={1500}
               rows={2}
@@ -474,6 +507,15 @@ export function DocumentComparison() {
             />
           </label>
         </div>
+        {regenerating && (
+          <p
+            role="status"
+            aria-live="polite"
+            className="bg-[#f6eadf] px-5 py-3 text-sm text-[#754e14]"
+          >
+            Regenerating comparison… Your current comparison will remain visible until the new version is verified.
+          </p>
+        )}
         {error && (
           <p role="alert" className="bg-[#f4dfdc] px-5 py-3 text-sm text-[#85434a]">
             {error}
@@ -497,11 +539,11 @@ export function DocumentComparison() {
             {ids.length >= 2 && (
               <button
                 type="button"
-                disabled={loading || readinessLoading}
+                disabled={loading || regenerating || readinessLoading}
                 onClick={runComparison}
                 className="rounded-xl bg-[#8f1d2c] px-4 py-2 text-xs font-semibold text-white disabled:opacity-50"
               >
-                Regenerate with AI
+                {regenerating ? "Regenerating comparison…" : "Regenerate with AI"}
               </button>
             )}
           </div>

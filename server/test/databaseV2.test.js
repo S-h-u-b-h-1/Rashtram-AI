@@ -36,7 +36,19 @@ test("database migrations are versioned and ordered", () => {
   assert.ok(files.includes("015_normalize_failure_pipeline_stage.js"));
   assert.ok(files.includes("016_processing_audit_log.js"));
   assert.ok(files.includes("017_normalize_download_failure_codes.js"));
-  assert.equal(files.at(-1), "040_product_reliability_v4.js");
+  assert.equal(files.at(-1), "041_comparison_regeneration_versions.js");
+});
+
+test("comparison regeneration migration preserves immutable versions and single-flight state", () => {
+  const source = fs.readFileSync(
+    path.join(__dirname, "../migrations/041_comparison_regeneration_versions.js"),
+    "utf8",
+  );
+  assert.match(source, /document_comparison_versions/);
+  assert.match(source, /current_version/);
+  assert.match(source, /regeneration_status/);
+  assert.match(source, /UNIQUE \(comparison_id, version_number\)/);
+  assert.doesNotMatch(source, /\b(?:DROP|TRUNCATE)\s|\bDELETE\s+FROM\b/i);
 });
 
 test("database verifier derives the expected latest migration from the registry", () => {
