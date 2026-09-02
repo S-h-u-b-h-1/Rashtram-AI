@@ -500,8 +500,8 @@ export function DocumentChatLayout({
     setSelectedSourceIds((current) => current.includes(String(source.id)) ? current : [...current, String(source.id)]);
   };
 
-  const addPdfSource = async (file) => {
-    const result = await addResearchPdfSource(file);
+  const addPdfSource = async (file, options) => {
+    const result = await addResearchPdfSource(file, options);
     const source = result.source;
     setStudySources((current) => [source, ...current.filter((item) => item.id !== source.id)]);
     setSelectedSourceIds((current) => current.includes(String(source.id)) ? current : [...current, String(source.id)]);

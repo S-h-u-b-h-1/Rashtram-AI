@@ -231,7 +231,27 @@ export const addResearchUrlSource = async (url) =>
     body: JSON.stringify({ url }),
   });
 
-export const addResearchPdfSource = async (file) => {
+const sha256File = async (file) => {
+  const digest = await globalThis.crypto.subtle.digest("SHA-256", await file.arrayBuffer());
+  return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
+};
+
+const uploadFileDirectly = (uploadUrl, file, onProgress) => new Promise((resolve, reject) => {
+  const request = new XMLHttpRequest();
+  request.open("PUT", uploadUrl);
+  request.setRequestHeader("Content-Type", file.type || "application/pdf");
+  request.upload.onprogress = (event) => {
+    if (event.lengthComputable) onProgress?.(Math.round((event.loaded / event.total) * 100));
+  };
+  request.onload = () => {
+    if (request.status >= 200 && request.status < 300) resolve();
+    else reject(new Error("Private PDF upload failed. Check your connection and try again."));
+  };
+  request.onerror = () => reject(new Error("Private PDF upload could not reach storage. Please retry."));
+  request.send(file);
+});
+
+const legacySmallPdfUpload = async (file) => {
   const contentBase64 = await new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = () => resolve(String(reader.result || "").split(",").pop() || "");
@@ -248,6 +268,40 @@ export const addResearchPdfSource = async (file) => {
   });
 };
 
+export const addResearchPdfSource = async (file, { onProgress, onStatus } = {}) => {
+  const maximumBytes = 50 * 1024 * 1024;
+  if (file.size > maximumBytes) throw new Error("PDF uploads are limited to 50 MB.");
+  if (!file.size) throw new Error("The selected PDF is empty.");
+  onStatus?.("Checking PDF…");
+  const checksumSha256 = await sha256File(file);
+  const intent = await apiRequest("/research-sources/upload-intent", {
+    method: "POST",
+    body: JSON.stringify({
+      fileName: file.name,
+      mimeType: file.type || "application/pdf",
+      sizeBytes: file.size,
+      checksumSha256,
+    }),
+  });
+  onStatus?.("Uploading privately…");
+  try {
+    await uploadFileDirectly(intent.uploadUrl, file, onProgress);
+  } catch (uploadError) {
+    await deleteResearchSource(intent.source.id).catch(() => undefined);
+    if (file.size <= 3 * 1024 * 1024) {
+      onStatus?.("Using secure compatibility upload…");
+      return legacySmallPdfUpload(file);
+    }
+    throw uploadError;
+  }
+  onProgress?.(100);
+  onStatus?.("Reading pages and preparing evidence…");
+  return apiRequest(`/research-sources/${encodeURIComponent(intent.source.id)}/process`, {
+    method: "POST",
+    body: JSON.stringify({}),
+  });
+};
+
 export const deleteResearchSource = async (sourceId) =>
   apiRequest(`/research-sources/${encodeURIComponent(sourceId)}`, {
     method: "DELETE",
@@ -255,6 +309,21 @@ export const deleteResearchSource = async (sourceId) =>
 
 export const getPolicyDrafts = async (limit = 20) =>
   apiRequest(`/policy-drafts?limit=${encodeURIComponent(limit)}`);
+
+export const downloadPolicyDraftDocx = async (draftId) => {
+  const token = getAuthToken();
+  if (!token) throw new Error("No authentication token found. Please login.");
+  const response = await fetch(`${API_BASE_URL}/policy-drafts/${encodeURIComponent(draftId)}/export.docx`, {
+    headers: { "auth-token": token },
+  });
+  if (!response.ok) {
+    const payload = await response.json().catch(() => ({}));
+    throw new Error(payload.error || "The Word document could not be created.");
+  }
+  const disposition = response.headers.get("content-disposition") || "";
+  const fileName = disposition.match(/filename="([^"]+)"/i)?.[1] || "rashtram-policy-draft.docx";
+  return { blob: await response.blob(), fileName };
+};
 
 export const createPolicyDraft = async ({
   title,

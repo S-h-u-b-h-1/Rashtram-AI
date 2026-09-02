@@ -6,7 +6,8 @@ const DEFAULT_CHUNK_SIZE = 1_800;
 const MIN_RESEARCH_TEXT = 120;
 const BOILERPLATE_SELECTOR = [
   "script", "style", "noscript", "template", "svg", "canvas", "iframe",
-  "nav", "header", "footer", "aside", "form", "dialog",
+  "nav", "header", "footer", "aside", "dialog",
+  "input", "button", "select", "textarea",
   "[role='navigation']", "[role='banner']", "[role='contentinfo']",
   "[aria-modal='true']", ".cookie", ".cookie-banner", ".newsletter",
   ".social-share", ".share-buttons", ".related-posts", ".sidebar",
@@ -51,6 +52,8 @@ const selectMainRoot = ($) => {
   for (const selector of [
     "#single-entry-content", "article", "main", "[role='main']",
     ".entry-content", ".article-content", ".post-content",
+    ".innner-page-main-about-us-content-right-part", "#main-content",
+    ".press-release", ".report-content",
     "[data-testid*='article']",
   ]) {
     $(selector).each((_, element) => {
@@ -246,6 +249,26 @@ const extractStructuredHtml = ({ html, url, preferredTitle = "", description = "
       (() => { try { return new URL(url).hostname; } catch { return "Source document"; } })(),
     300,
   );
+  const publicationDate = cleanText(
+    $("meta[property='article:published_time']").attr("content") ||
+      $("meta[name='date']").attr("content") ||
+      $("meta[name='DC.date']").attr("content") ||
+      $("time[datetime]").first().attr("datetime"),
+    120,
+  ) || null;
+  const sourceAuthority = cleanText(
+    $("meta[name='author']").attr("content") ||
+      $("meta[property='article:author']").attr("content") ||
+      $("meta[name='DC.creator']").attr("content"),
+    240,
+  ) || null;
+  let canonicalUrl = url || null;
+  try {
+    const canonicalHref = $("link[rel='canonical']").attr("href");
+    if (canonicalHref) canonicalUrl = new URL(canonicalHref, url).href;
+  } catch {
+    canonicalUrl = url || null;
+  }
   $(BOILERPLATE_SELECTOR).remove();
   const root = selectMainRoot($);
   let blocks = extractBlocks($, root);
@@ -293,6 +316,9 @@ const extractStructuredHtml = ({ html, url, preferredTitle = "", description = "
     pageCount: null,
     extractionMethod: structured.length ? "structured_html" : "source_html",
     sourceUrl: url || null,
+    canonicalUrl,
+    publicationDate,
+    sourceAuthority,
   };
 };
 

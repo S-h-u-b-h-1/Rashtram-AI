@@ -50,6 +50,9 @@ const itemText = (item) => {
     item.event,
     item.analysis,
     item.impact,
+    item.finding,
+    item.description,
+    item.content,
   ]
     .filter(Boolean)
     .join(" — ");
@@ -346,6 +349,13 @@ export function DocumentComparison() {
   ]);
 
   const result = comparison?.result;
+  const comparisonSections = useMemo(() => SECTION_CONFIG
+    .map(([key, title]) => ({
+      key,
+      title,
+      items: Array.isArray(result?.[key]) ? result[key] : [],
+    }))
+    .filter((section) => section.items.some((item) => itemText(item).trim())), [result]);
   const isFallbackComparison = result?.generationMode === "extractive_fallback";
   const citationMap = useMemo(
     () =>
@@ -420,24 +430,24 @@ export function DocumentComparison() {
   return (
     <div className="min-w-0 space-y-5 pb-5">
       <section className="surface-card overflow-hidden">
-        <div className="bg-[#8f1d2c] p-5 text-white sm:p-7">
-          <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-white/55">
+        <div className={`${result ? "bg-white text-[#29312d]" : "bg-[#8f1d2c] text-white"} p-5 sm:p-7`}>
+          <p className={`text-[10px] font-bold uppercase tracking-[0.2em] ${result ? "text-[#874047]" : "text-white/55"}`}>
             Grounded document comparison
           </p>
-          <h2 className="mt-2 font-serif text-3xl">
+          <h2 className={`mt-2 font-serif ${result ? "text-2xl text-[#8f1d2c]" : "text-3xl"}`}>
             {comparison?.title ||
               (readinessLoading
                 ? "Checking selected documents"
                 : "Preparing comparison")}
           </h2>
-          <div className="mt-5 flex flex-wrap gap-3">
+          <div className={`${result ? "mt-4 border-t border-[#8f1d2c]/10 pt-4" : "mt-5"} flex flex-wrap gap-3`}>
             <label className="text-xs">
               <span className="sr-only">Comparison mode</span>
               <select
                 value={mode}
                 disabled={loading || regenerating}
                 onChange={(event) => setMode(event.target.value)}
-                className="h-10 rounded-xl bg-white/10 px-3 text-white outline-none"
+                className={`h-10 rounded-xl px-3 outline-none ${result ? "border border-[#8f1d2c]/15 bg-[#fffaf0] text-[#514d46]" : "bg-white/10 text-white"}`}
               >
                 {["full", "summary", "clause", "impact", "timeline", "compliance"].map(
                   (value) => (
@@ -454,7 +464,7 @@ export function DocumentComparison() {
                 value={language}
                 disabled={loading || regenerating}
                 onChange={(event) => setLanguage(event.target.value)}
-                className="h-10 rounded-xl bg-white/10 px-3 text-white outline-none"
+                className={`h-10 rounded-xl px-3 outline-none ${result ? "border border-[#8f1d2c]/15 bg-[#fffaf0] text-[#514d46]" : "bg-white/10 text-white"}`}
               >
                 <option value="auto" className="text-black">Auto</option>
                 <option value="english" className="text-black">English</option>
@@ -466,7 +476,7 @@ export function DocumentComparison() {
                 type="button"
                 disabled={!canRunComparison}
                 onClick={runComparison}
-                className="rounded-xl bg-[#fffaf0] px-4 py-2 text-xs font-semibold text-[#8f1d2c] disabled:opacity-50"
+                className={`rounded-xl px-4 py-2 text-xs font-semibold disabled:opacity-50 ${result ? "bg-[#8f1d2c] text-white" : "bg-[#fffaf0] text-[#8f1d2c]"}`}
               >
                 {comparisonAction.label}
               </button>
@@ -476,7 +486,7 @@ export function DocumentComparison() {
                 <button
                   type="button"
                   onClick={focusEmbeddedChat}
-                  className="inline-flex items-center gap-2 rounded-xl bg-white/10 px-4 py-2 text-xs font-semibold transition hover:bg-white/15"
+                  className={`inline-flex items-center gap-2 rounded-xl px-4 py-2 text-xs font-semibold transition ${result ? "border border-[#8f1d2c]/15 text-[#8f1d2c] hover:bg-[#f4eae4]" : "bg-white/10 hover:bg-white/15"}`}
                 >
                   <MessageSquareText className="h-4 w-4" />
                   Ask follow-up questions
@@ -492,7 +502,7 @@ export function DocumentComparison() {
               )
             )}
           </div>
-          <label className="mt-4 block max-w-3xl">
+          {!result && <label className="mt-4 block max-w-3xl">
             <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-white/60">
               Optional focused question
             </span>
@@ -505,7 +515,7 @@ export function DocumentComparison() {
               placeholder="For example: How do their compliance obligations and implementation timelines differ?"
               className="mt-2 w-full resize-none rounded-xl border border-white/10 bg-white/10 px-3 py-2 text-sm text-white placeholder:text-white/35 outline-none focus:border-white/30"
             />
-          </label>
+          </label>}
         </div>
         {regenerating && (
           <p
@@ -602,14 +612,13 @@ export function DocumentComparison() {
             </div>
             {reportError && <p role="alert" className="mt-3 text-xs text-[#9a2637]">{reportError}</p>}
             <div className="mt-4 grid gap-3 lg:grid-cols-2">
-              {(result.documents || []).map((document) => (
+              {(result.documents || []).map((document, index) => (
                 <article
                   key={document.id}
                   className="rounded-xl border border-[#8f1d2c]/8 bg-[#f7f2eb] p-4"
                 >
-                  <p className="text-sm font-semibold text-[#29312d]">
-                    {document.title}
-                  </p>
+                  <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-[#8f1d2c]">D{index + 1}</p>
+                  <p className="mt-1 text-sm font-semibold text-[#29312d]">{document.title}</p>
                   <p className="mt-2 text-[10px] uppercase tracking-[0.1em] text-[#81796e]">
                     {[document.type, document.ministry || document.authority,
                       document.state || document.jurisdiction,
@@ -672,46 +681,42 @@ export function DocumentComparison() {
                 ["Shared authorities", "sharedAuthorities"],
                 ["Shared jurisdictions", "sharedJurisdictions"],
                 ["Shared topics", "sharedTopics"],
-              ].map(([label, key]) => (
+              ].filter(([, key]) => result.relationshipIntelligence?.[key]?.length).map(([label, key]) => (
                 <div key={key} className="rounded-xl bg-[#fffaf0] p-3">
                   <dt className="text-[9px] uppercase tracking-[0.1em] text-[#81796e]">
                     {label}
                   </dt>
                   <dd className="mt-1 text-xs text-[#514d46]">
-                    {result.relationshipIntelligence?.[key]?.join(", ") ||
-                      "None identified"}
+                    {result.relationshipIntelligence?.[key]?.join(", ")}
                   </dd>
                 </div>
               ))}
             </dl>
           </section>
 
-          <div className="grid gap-5 xl:grid-cols-2">
-            {SECTION_CONFIG.map(([key, title]) => (
-              <section key={key} className="surface-card p-5 sm:p-6">
-                <h3 className="font-serif text-xl text-[#8f1d2c]">{title}</h3>
-                <ul className="mt-3 space-y-3">
-                  {(result[key] || []).map((item, index) => (
-                    <li
-                      key={`${key}-${index}`}
-                      className="rounded-xl bg-[#f7f2eb] p-3 text-sm leading-6 text-[#514d46]"
-                    >
-                      {itemText(item)}
-                      <CitationLinks
-                        ids={item?.citations}
-                        citationMap={citationMap}
-                      />
-                    </li>
-                  ))}
-                  {!result[key]?.length && (
-                    <li className="text-sm text-[#81796e]">
-                      Not identified in the retrieved text.
-                    </li>
-                  )}
-                </ul>
-              </section>
-            ))}
-          </div>
+          {comparisonSections.length > 0 && <section className="surface-card overflow-hidden">
+            <div className="border-b border-[#8f1d2c]/10 p-5 sm:p-6">
+              <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-[#874047]">Comparative analysis</p>
+              <h3 className="mt-1 font-serif text-2xl text-[#8f1d2c]">Differences, overlap, and practical effect</h3>
+            </div>
+            <div className="divide-y divide-[#8f1d2c]/10">
+              {comparisonSections.map(({ key, title, items }) => (
+                <div key={key} className="grid gap-3 p-5 sm:p-6 lg:grid-cols-[210px_minmax(0,1fr)]">
+                  <h4 className="font-serif text-lg text-[#8f1d2c]">{title}</h4>
+                  <ul className="space-y-3">
+                    {items.map((item, index) => {
+                      const text = itemText(item);
+                      if (!text) return null;
+                      return <li key={`${key}-${index}`} className="rounded-xl bg-[#f7f2eb] p-3 text-sm leading-6 text-[#514d46]">
+                        {text}
+                        <CitationLinks ids={item?.citations} citationMap={citationMap} />
+                      </li>;
+                    })}
+                  </ul>
+                </div>
+              ))}
+            </div>
+          </section>}
 
           <section className="surface-card p-5 sm:p-6">
             <h3 className="font-serif text-xl text-[#8f1d2c]">

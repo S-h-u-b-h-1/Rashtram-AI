@@ -28,6 +28,10 @@ export function StudySourcesPanel({
   const [url, setUrl] = useState("");
   const [adding, setAdding] = useState(false);
   const [error, setError] = useState("");
+  const [uploadName, setUploadName] = useState("");
+  const [uploadSize, setUploadSize] = useState(0);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [uploadStage, setUploadStage] = useState("");
   const fileInputRef = useRef(null);
 
   const submitUrl = async (event) => {
@@ -49,12 +53,25 @@ export function StudySourcesPanel({
     const file = event.target.files?.[0];
     event.target.value = "";
     if (!file) return;
+    if (file.size > 50 * 1024 * 1024) {
+      setError("PDF uploads are limited to 50 MB.");
+      return;
+    }
     setAdding(true);
     setError("");
+    setUploadName(file.name);
+    setUploadSize(file.size);
+    setUploadProgress(0);
+    setUploadStage("Checking PDF…");
     try {
-      await onAddPdf(file);
+      await onAddPdf(file, {
+        onProgress: setUploadProgress,
+        onStatus: setUploadStage,
+      });
+      setUploadStage("Ready to use");
     } catch (requestError) {
       setError(requestError.message || "The PDF could not be added.");
+      setUploadStage("Upload failed");
     } finally {
       setAdding(false);
     }
@@ -122,6 +139,7 @@ export function StudySourcesPanel({
             <Upload className="h-3.5 w-3.5" />
             Add a PDF to study
           </button>
+          <p className="text-[10px] text-[#8a8277]">Maximum PDF size: 50 MB</p>
           <input
             ref={fileInputRef}
             type="file"
@@ -130,6 +148,18 @@ export function StudySourcesPanel({
             className="hidden"
           />
         </form>
+        {uploadName && (
+          <div className="mt-3 rounded-xl border border-[#8f1d2c]/10 bg-white p-3" aria-live="polite">
+            <div className="flex items-center justify-between gap-2 text-[10px]">
+              <span className="min-w-0 truncate font-semibold text-[#514d46]">{uploadName}</span>
+              <span className="shrink-0 text-[#8a8277]">{(uploadSize / 1024 / 1024).toFixed(1)} MB</span>
+            </div>
+            <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-[#eee0dc]">
+              <div className="h-full rounded-full bg-[#8f1d2c] transition-[width] duration-200" style={{ width: `${uploadProgress}%` }} />
+            </div>
+            <p className="mt-2 text-[10px] text-[#874047]">{uploadStage}{uploadProgress > 0 && uploadProgress < 100 ? ` · ${uploadProgress}%` : ""}</p>
+          </div>
+        )}
         {error && <p className="mt-2 text-[11px] leading-4 text-[#a33d42]">{error}</p>}
       </div>
 
@@ -159,6 +189,11 @@ export function StudySourcesPanel({
                 <div className="min-w-0 flex-1">
                   <p className="line-clamp-2 text-xs font-semibold leading-5 text-[#29312d]">{source.title}</p>
                   <p className="mt-1 truncate text-[10px] uppercase tracking-[0.1em] text-[#8a8277]">{sourceLabel(source)}{source.languageCode ? ` · ${source.languageCode}` : ""}</p>
+                  <p className={`mt-1 text-[10px] font-semibold ${source.status === "ready" ? "text-[#34725b]" : source.status === "failed" ? "text-[#a33d42]" : "text-[#a06b42]"}`}>
+                    {source.status === "ready"
+                      ? `${source.metadata?.partialValid ? "Partially ready" : "Ready to use"}${source.metadata?.pageCount ? ` · ${source.metadata.pageCount} pages` : ""}`
+                      : source.status === "failed" ? "Preparation failed" : "Preparing evidence"}
+                  </p>
                 </div>
                 <button
                   type="button"
@@ -177,6 +212,7 @@ export function StudySourcesPanel({
               {source.metadata?.storageWarning && (
                 <p className="mt-2 pl-7 text-[10px] leading-4 text-[#a06b42]">{source.metadata.storageWarning}</p>
               )}
+              {source.errorMessage && <p className="mt-2 pl-7 text-[10px] leading-4 text-[#a33d42]">{source.errorMessage}</p>}
             </article>
           );
         })}

@@ -18,6 +18,7 @@ const {
   policyDraftMarkdownToCanonical,
   policyDraftToMarkdown,
 } = require("./policyDraftService");
+const { buildPolicyDraftDocx } = require("./policyDraftDocxService");
 
 const router = express.Router();
 const MAX_DOCUMENTS = 8;
@@ -188,6 +189,31 @@ router.get("/:draftId", async (req, res) => {
     return res.json({ draft: mapDraft(result.rows[0]) });
   } catch (error) {
     return sendError(res, error, "Policy draft could not be loaded");
+  }
+});
+
+router.get("/:draftId/export.docx", async (req, res) => {
+  try {
+    const result = await query(
+      `SELECT * FROM policy_drafts WHERE id = $1 AND user_id = $2 AND status = 'ready' LIMIT 1`,
+      [req.params.draftId, req.user.id],
+    );
+    const row = result.rows[0];
+    if (!row) return res.status(404).json({ error: "Ready policy draft not found." });
+    const buffer = await buildPolicyDraftDocx({
+      draft: row.draft_json,
+      citations: row.citations_json || [],
+      brief: row.brief_json || {},
+      createdAt: row.created_at,
+    });
+    const name = String(row.title || "rashtram-policy-draft")
+      .toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 100);
+    res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.wordprocessingml.document");
+    res.setHeader("Content-Disposition", `attachment; filename="${name || "rashtram-policy-draft"}.docx"`);
+    res.setHeader("Cache-Control", "private, no-store");
+    return res.status(200).send(buffer);
+  } catch (error) {
+    return sendError(res, error, "Policy DOCX could not be created");
   }
 });
 

@@ -1,6 +1,22 @@
 const assert = require("node:assert/strict");
 const test = require("node:test");
-const { assertPublicUrl, extractHtml } = require("../research/sourceService");
+const {
+  MAX_LEGACY_UPLOAD_BYTES,
+  MAX_SOURCE_BYTES,
+  assertPublicUrl,
+  extractHtml,
+  findLinkedPdfUrl,
+} = require("../research/sourceService");
+const { userSourceObjectKey } = require("../lib/storage/objectStorage");
+
+test("direct PDF uploads expose a truthful 50 MB limit and a Vercel-safe legacy fallback", () => {
+  assert.equal(MAX_SOURCE_BYTES, 50 * 1024 * 1024);
+  assert.equal(MAX_LEGACY_UPLOAD_BYTES, 3 * 1024 * 1024);
+  assert.equal(
+    userSourceObjectKey({ userId: 42, uploadId: "123e4567-e89b-12d3-a456-426614174000" }),
+    "rashtram/user-sources/42/123e4567-e89b-12d3-a456-426614174000.pdf",
+  );
+});
 
 test("research source URL guard rejects local and credential-bearing URLs", async () => {
   await assert.rejects(() => assertPublicUrl("http://127.0.0.1:5001/private"));
@@ -48,4 +64,21 @@ test("external HTML extraction reads structured article data from script-rendere
 
   assert.match(extracted.text, /publish quarterly implementation reports/);
   assert.equal(extracted.extractionMethod, "structured_html");
+});
+
+test("official ASP.NET form wrappers retain publication text instead of being discarded", () => {
+  const extracted = extractHtml(Buffer.from(`<!doctype html><html><body>
+    <form method="post"><main><h1>Official consultation</h1>
+    <p>The regulator invites comments on proposed reporting, implementation, and review requirements for regulated entities.</p>
+    <p>Responses should address administrative capacity, consumer safeguards, and phased commencement.</p>
+    </main></form></body></html>`), "https://regulator.example.gov.in/report.aspx?id=42");
+  assert.match(extracted.text, /invites comments/);
+  assert.equal(extracted.quality.valid, true);
+});
+
+test("official publication pages can resolve a linked PDF regardless of wrapper extension", () => {
+  const url = findLinkedPdfUrl(Buffer.from(`
+    <a href="/web/?file=https%3A%2F%2Fregulator.example.gov.in%2Ffiles%2Fconsultation.pdf%23page%3D2">Open report</a>
+  `), "https://regulator.example.gov.in/publication.aspx?id=42");
+  assert.equal(url, "https://regulator.example.gov.in/files/consultation.pdf#page=2");
 });

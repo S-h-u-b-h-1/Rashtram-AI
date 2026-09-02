@@ -6,6 +6,7 @@ const {
   PutObjectCommand,
   S3Client,
 } = require("@aws-sdk/client-s3");
+const { getSignedUrl } = require("@aws-sdk/s3-request-presigner");
 const { NodeHttpHandler } = require("@smithy/node-http-handler");
 
 const ARTIFACT_KINDS = new Set([
@@ -20,6 +21,17 @@ const ARTIFACT_KINDS = new Set([
 
 const sha256 = (body) =>
   crypto.createHash("sha256").update(body).digest("hex");
+
+const userSourceObjectKey = ({ userId, uploadId, extension = "pdf" }) => {
+  const normalizedUserId = String(userId || "");
+  const normalizedUploadId = String(uploadId || "").toLowerCase();
+  const safeExtension = String(extension).toLowerCase().replace(/[^a-z0-9]/g, "");
+  if (!/^\d+$/.test(normalizedUserId) || !/^[a-f0-9-]{36}$/.test(normalizedUploadId)) {
+    throw new Error("User-source object identity is invalid.");
+  }
+  if (!safeExtension) throw new Error("User-source object extension is invalid.");
+  return `rashtram/user-sources/${normalizedUserId}/${normalizedUploadId}.${safeExtension}`;
+};
 
 const artifactKey = ({ kind, hash, extension = "bin" }) => {
   if (!ARTIFACT_KINDS.has(kind)) {
@@ -93,6 +105,17 @@ const createObjectStorage = ({ env = process.env, client } = {}) => {
   const bucket = config.bucket || env.OBJECT_STORAGE_BUCKET;
 
   return {
+    async createPresignedUpload({ key, contentType, expiresIn = 600 }) {
+      const ttl = Math.min(Math.max(Number(expiresIn) || 600, 60), 900);
+      const command = new PutObjectCommand({
+        Bucket: bucket,
+        Key: key,
+        ContentType: contentType || "application/pdf",
+      });
+      const uploadUrl = await getSignedUrl(storageClient, command, { expiresIn: ttl });
+      return { key, uploadUrl, expiresIn: ttl };
+    },
+
     async putArtifact({ kind, body, contentType, extension, metadata = {} }) {
       const buffer = Buffer.isBuffer(body) ? body : Buffer.from(body);
       const hash = sha256(buffer);
@@ -221,4 +244,5 @@ module.exports = {
   sanitizedObjectStorageStatus,
   runObjectStorageSmokeTest,
   sha256,
+  userSourceObjectKey,
 };

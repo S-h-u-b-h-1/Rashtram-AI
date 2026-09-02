@@ -1,6 +1,10 @@
 const bcrypt = require("bcryptjs");
 const { connectDB, getPool, query } = require("../db");
 const { normalizePayload } = require("../onboarding/onboardingService");
+const {
+  createObjectStorage,
+  objectStorageConfig,
+} = require("../lib/storage/objectStorage");
 
 const text = (value, max = 500) => {
   const normalized = String(value ?? "").trim();
@@ -669,6 +673,7 @@ const revokeSession = async (userId, sessionId) => {
 const deleteAccount = async (userId, payload = {}) => {
   await connectDB();
   const client = await getPool().connect();
+  let uploadedObjectKeys = [];
   try {
     await client.query("BEGIN");
     const userResult = await client.query(
@@ -726,6 +731,18 @@ const deleteAccount = async (userId, payload = {}) => {
       deletions[table] = result.rowCount;
     };
 
+    if (await relationExists("research_sources")) {
+      const storedSources = await client.query(
+        `SELECT object_key
+         FROM research_sources
+         WHERE user_id = $1 AND object_key IS NOT NULL`,
+        [userId],
+      );
+      uploadedObjectKeys = storedSources.rows
+        .map((row) => row.object_key)
+        .filter(Boolean);
+    }
+
     await deleteOwned("research_collection_items", `collection_id IN (
       SELECT id FROM research_collections WHERE user_id = $1
     )`);
@@ -748,6 +765,7 @@ const deleteAccount = async (userId, payload = {}) => {
     await deleteOwned("user_activity_events");
     await deleteOwned("user_sessions");
     await deleteOwned("document_chats");
+    await deleteOwned("research_sources");
     await deleteOwned("policy_chats");
     await deleteOwned("egazette_chats");
     await deleteOwned("act_chats");
@@ -793,6 +811,16 @@ const deleteAccount = async (userId, payload = {}) => {
       [userId],
     );
     await client.query("COMMIT");
+
+    // The database transaction is the authoritative account deletion. Remove
+    // private upload objects afterwards so a temporary storage outage cannot
+    // prevent the user from deleting their account.
+    if (uploadedObjectKeys.length && objectStorageConfig().configured) {
+      const storage = createObjectStorage();
+      await Promise.allSettled(
+        uploadedObjectKeys.map((objectKey) => storage.deleteArtifact(objectKey)),
+      );
+    }
     return {
       deleted: Boolean(deleted.rows[0]),
       userId: String(userId),

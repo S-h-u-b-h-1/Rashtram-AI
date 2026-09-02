@@ -1165,21 +1165,33 @@ the open questions section.
 
 ${adaptiveLayers}
 
-Return a polished Markdown policy draft with exactly these sections:
+Return a polished Markdown policy document. Use the relevant sections below;
+omit a section only when it is genuinely inapplicable, and never invent missing
+facts merely to fill a heading:
 # Policy Draft
 ## Executive Summary
+## Background and Context
 ## Problem and Evidence
+## Purpose and Scope
 ## Policy Objectives
+## Definitions
+## Policy Principles
 ## Target Groups and Equity Considerations
 ## Policy Options
 ## Recommended Approach
-## Implementation Plan
+## Policy Provisions and Measures
+## Implementation Framework and Timeline
 ## Institutions and Responsibilities
 ## Funding and Delivery Model
-## Monitoring, Evaluation, and Learning
+## Governance and Oversight
+## Compliance, Monitoring, Evaluation, and Learning
+## Reporting and Review
 ## Risks and Mitigations
+## Exceptions and Limitations
+## Review and Amendment
 ## Consultation Questions
 ## Evidence Notes
+## References
 
 Use concise tables or bullets where useful. Cite supplied labels such as
 [Catalogue document: ...], [Catalogue summary: ...], and [User source: ...]
@@ -1239,9 +1251,12 @@ Return only valid JSON. Do not use Markdown fences. Use this exact shape:
   "evidenceLimitations": [{"content":"string","citations":[]}]
 }
 
-Include substantive sections for problem/evidence, objectives, target groups and
-equity, policy options, recommended approach, implementation, institutions,
-funding/delivery, monitoring/evaluation, risks, consultation, and evidence notes.
+Include relevant substantive sections for background, problem/evidence, purpose,
+scope, objectives, definitions, principles, target groups and equity, policy
+options, recommended provisions, implementation and timeline, institutions,
+funding/delivery, governance, compliance, monitoring/evaluation, reporting,
+risks, limitations, review/amendment, consultation, and evidence notes. Do not
+force an irrelevant heading; explain material gaps under evidenceLimitations.
 Every factual source claim must cite a supplied label exactly. A catalogue
 summary is secondary context and cannot prove a clause. Proposed policy choices
 need not appear in a source, but must be described as proposals. Write in

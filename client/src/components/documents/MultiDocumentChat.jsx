@@ -185,8 +185,8 @@ export function MultiDocumentChat({
     setSelectedSourceIds((current) => current.includes(String(result.source.id)) ? current : [...current, String(result.source.id)]);
   };
 
-  const addPdfSource = async (file) => {
-    const result = await addResearchPdfSource(file);
+  const addPdfSource = async (file, options) => {
+    const result = await addResearchPdfSource(file, options);
     setStudySources((current) => [result.source, ...current.filter((item) => item.id !== result.source.id)]);
     setSelectedSourceIds((current) => current.includes(String(result.source.id)) ? current : [...current, String(result.source.id)]);
   };

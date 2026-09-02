@@ -22,6 +22,7 @@ import {
   addResearchUrlSource,
   createPolicyDraft,
   deleteResearchSource,
+  downloadPolicyDraftDocx,
   getResearchSources,
   recommendForProblem,
 } from "@/lib/api";
@@ -45,6 +46,7 @@ export function PolicyDraftWorkspace() {
     requirements: "",
   });
   const [draft, setDraft] = useState("");
+  const [draftId, setDraftId] = useState(null);
   const [citations, setCitations] = useState([]);
   const [drafting, setDrafting] = useState(false);
   const [draftingStage, setDraftingStage] = useState("");
@@ -138,6 +140,7 @@ export function PolicyDraftWorkspace() {
     setDrafting(true);
     setDraftingStage("Preparing evidence…");
     setDraft("");
+    setDraftId(null);
     setCitations([]);
     setError("");
     try {
@@ -157,6 +160,7 @@ export function PolicyDraftWorkspace() {
         onChunk: (chunk) => setDraft((current) => current + chunk),
       });
       if (result.draftText) setDraft(result.draftText);
+      if (result.draftId) setDraftId(result.draftId);
     } catch (requestError) {
       setError(requestError.message || "The policy draft could not be generated.");
     } finally {
@@ -178,6 +182,22 @@ export function PolicyDraftWorkspace() {
     anchor.download = `${fileName || "rashtram-policy-draft"}.md`;
     anchor.click();
     URL.revokeObjectURL(url);
+  };
+
+  const downloadDocx = async () => {
+    if (!draftId) return;
+    setError("");
+    try {
+      const { blob, fileName } = await downloadPolicyDraftDocx(draftId);
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = fileName;
+      anchor.click();
+      URL.revokeObjectURL(url);
+    } catch (requestError) {
+      setError(requestError.message || "The Word document could not be downloaded.");
+    }
   };
 
   const libraryPanel = (
@@ -209,7 +229,7 @@ export function PolicyDraftWorkspace() {
   );
 
   return <div className={`grid min-h-[calc(100dvh-8rem)] overflow-hidden rounded-[1.5rem] border border-[#8f1d2c]/10 bg-[#f7f2eb] shadow-sm ${sourcesOpen && libraryOpen ? "lg:grid-cols-[280px_minmax(0,1fr)_320px]" : sourcesOpen ? "lg:grid-cols-[280px_minmax(0,1fr)]" : libraryOpen ? "lg:grid-cols-[minmax(0,1fr)_320px]" : "lg:grid-cols-1"}`}>
-    {sourcesOpen && <aside className="hidden min-h-0 overflow-hidden border-r border-[#8f1d2c]/10 lg:block"><StudySourcesPanel sources={sources} selectedIds={selectedSourceIds} onToggle={toggleSource} onAddUrl={async (url) => addSource((await addResearchUrlSource(url)).source)} onAddPdf={async (file) => addSource((await addResearchPdfSource(file)).source)} onDelete={async (id) => { await deleteResearchSource(id); setSources((current) => current.filter((source) => String(source.id) !== String(id))); setSelectedSourceIds((current) => current.filter((sourceId) => sourceId !== String(id))); }} /></aside>}
+    {sourcesOpen && <aside className="hidden min-h-0 overflow-hidden border-r border-[#8f1d2c]/10 lg:block"><StudySourcesPanel sources={sources} selectedIds={selectedSourceIds} onToggle={toggleSource} onAddUrl={async (url) => addSource((await addResearchUrlSource(url)).source)} onAddPdf={async (file, options) => addSource((await addResearchPdfSource(file, options)).source)} onDelete={async (id) => { await deleteResearchSource(id); setSources((current) => current.filter((source) => String(source.id) !== String(id))); setSelectedSourceIds((current) => current.filter((sourceId) => sourceId !== String(id))); }} /></aside>}
     <main className="app-scrollbar min-h-0 overflow-y-auto p-4 sm:p-6">
       <div className="mx-auto max-w-3xl">
         <div className="flex items-start gap-3"><span className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-[#8f1d2c] text-white"><PenLine className="h-5 w-5" /></span><div className="min-w-0 flex-1"><p className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#874047]">Policy drafting studio</p><h1 className="mt-1 font-serif text-2xl text-[#8f1d2c] sm:text-3xl">Draft from evidence, not a blank page</h1><p className="mt-2 max-w-2xl text-sm leading-6 text-[#706a61]">Bring together Rashtram documents, public research, and your own PDFs or links. The draft keeps evidence and recommendations clearly separated.</p></div><div className="flex shrink-0 items-center gap-1.5"><button type="button" onClick={() => setMobilePanel("sources")} className="grid h-10 w-10 place-items-center rounded-xl border border-[#8f1d2c]/12 bg-white text-[#874047] lg:hidden" aria-label="Open websites and PDFs"><PanelLeftOpen className="h-4 w-4" /></button><button type="button" onClick={() => setMobilePanel("library")} className="grid h-10 w-10 place-items-center rounded-xl border border-[#8f1d2c]/12 bg-white text-[#874047] lg:hidden" aria-label="Open policy references"><PanelRightOpen className="h-4 w-4" /></button><div className="hidden items-center gap-1.5 lg:flex"><button type="button" onClick={() => setSourcesOpen((open) => !open)} className="grid h-8 w-8 place-items-center rounded-lg border border-[#8f1d2c]/12 bg-white text-[#874047] transition hover:bg-[#eee0dc]" aria-label={sourcesOpen ? "Collapse sources" : "Expand sources"} title={sourcesOpen ? "Collapse sources" : "Expand sources"}>{sourcesOpen ? <PanelLeftClose className="h-4 w-4" /> : <PanelLeftOpen className="h-4 w-4" />}</button><button type="button" onClick={() => setLibraryOpen((open) => !open)} className="grid h-8 w-8 place-items-center rounded-lg border border-[#8f1d2c]/12 bg-white text-[#874047] transition hover:bg-[#eee0dc]" aria-label={libraryOpen ? "Collapse policy references" : "Expand policy references"} title={libraryOpen ? "Collapse policy references" : "Expand policy references"}>{libraryOpen ? <PanelRightClose className="h-4 w-4" /> : <PanelRightOpen className="h-4 w-4" />}</button></div></div></div>
@@ -222,13 +242,13 @@ export function PolicyDraftWorkspace() {
           {error && <p className="rounded-xl bg-[#f8e5e2] px-3 py-2 text-xs leading-5 text-[#9b3b40]">{error}</p>}
           <button type="submit" disabled={drafting || !brief.objective.trim()} className="inline-flex items-center gap-2 rounded-xl bg-[#8f1d2c] px-5 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-[#751623] disabled:cursor-not-allowed disabled:opacity-45">{drafting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}{drafting ? draftingStage || "Preparing evidence…" : "Generate policy draft"}</button>
         </form>
-        <section className="mt-5 rounded-3xl border border-[#8f1d2c]/10 bg-[#fffaf0] p-4 sm:p-6"><div className="flex items-center justify-between gap-3"><div><p className="text-[10px] font-bold uppercase tracking-[0.18em] text-[#874047]">Working document</p><h2 className="mt-1 font-serif text-2xl text-[#8f1d2c]">{draft ? "Your policy draft" : "Your draft will appear here"}</h2></div><div className="flex items-center gap-2">{draft && !drafting ? <button type="button" onClick={downloadDraft} className="inline-flex items-center gap-1.5 rounded-xl border border-[#8f1d2c]/15 bg-white px-3 py-2 text-xs font-semibold text-[#874047] transition hover:bg-[#f4eae4]"><Download className="h-3.5 w-3.5" /> Download text</button> : null}{drafting && <span className="inline-flex items-center gap-1.5 text-xs text-[#874047]"><Loader2 className="h-3.5 w-3.5 animate-spin" /> {draftingStage || "Writing"}</span>}</div></div>{draft ? <div className="prose prose-sm mt-5 max-w-none prose-headings:font-serif prose-headings:text-[#8f1d2c] prose-p:text-[#514d46] prose-li:text-[#514d46] prose-strong:text-[#29312d]"><ReactMarkdown remarkPlugins={[remarkGfm]}>{draft}</ReactMarkdown></div> : <div className="mt-5 rounded-2xl border border-dashed border-[#8f1d2c]/15 px-5 py-10 text-center text-sm leading-6 text-[#8a8277]">Choose references, describe the policy problem, and generate a source-grounded first draft.</div>}</section>
+        <section className="mt-5 rounded-3xl border border-[#8f1d2c]/10 bg-[#fffaf0] p-4 sm:p-6"><div className="flex flex-wrap items-center justify-between gap-3"><div><p className="text-[10px] font-bold uppercase tracking-[0.18em] text-[#874047]">Working document</p><h2 className="mt-1 font-serif text-2xl text-[#8f1d2c]">{draft ? "Your policy draft" : "Your draft will appear here"}</h2></div><div className="flex flex-wrap items-center gap-2">{draft && !drafting ? <><button type="button" onClick={downloadDraft} className="inline-flex items-center gap-1.5 rounded-xl border border-[#8f1d2c]/15 bg-white px-3 py-2 text-xs font-semibold text-[#874047] transition hover:bg-[#f4eae4]"><Download className="h-3.5 w-3.5" /> Download text</button><button type="button" onClick={downloadDocx} disabled={!draftId} className="inline-flex items-center gap-1.5 rounded-xl bg-[#8f1d2c] px-3 py-2 text-xs font-semibold text-white transition hover:bg-[#751623] disabled:opacity-45"><FileText className="h-3.5 w-3.5" /> Download DOCX</button></> : null}{drafting && <span className="inline-flex items-center gap-1.5 text-xs text-[#874047]"><Loader2 className="h-3.5 w-3.5 animate-spin" /> {draftingStage || "Writing"}</span>}</div></div>{draft ? <div className="prose prose-sm mt-5 max-w-none prose-headings:font-serif prose-headings:text-[#8f1d2c] prose-p:text-[#514d46] prose-li:text-[#514d46] prose-strong:text-[#29312d]"><ReactMarkdown remarkPlugins={[remarkGfm]}>{draft}</ReactMarkdown></div> : <div className="mt-5 rounded-2xl border border-dashed border-[#8f1d2c]/15 px-5 py-10 text-center text-sm leading-6 text-[#8a8277]">Choose references, describe the policy problem, and generate a source-grounded first draft.</div>}</section>
         {citations.length > 0 && <section className="mt-5 rounded-3xl border border-[#8f1d2c]/10 bg-white p-4 sm:p-6"><div className="flex items-center gap-2"><BookOpen className="h-4 w-4 text-[#8f1d2c]" /><h2 className="text-sm font-semibold text-[#29312d]">Evidence used in this draft</h2></div><div className="mt-3 grid gap-2 sm:grid-cols-2">{citations.map((citation, index) => <div key={`${citation.sourceId || citation.documentId || "source"}-${index}`} className="rounded-xl bg-[#f7f2eb] px-3 py-2.5"><p className="line-clamp-2 text-xs font-semibold text-[#29312d]">{citation.title}</p><p className="mt-1 text-[10px] uppercase tracking-[0.08em] text-[#8a8277]">{citation.sourceType === "catalogue" ? `${citation.documentType || "document"} · ${citation.authority || "Rashtram catalogue"}` : "Your study source"}</p></div>)}</div></section>}
       </div>
     </main>
     {libraryOpen && <aside className="hidden min-h-0 overflow-hidden border-l border-[#8f1d2c]/10 lg:block">{libraryPanel}</aside>}
     <MobileWorkspaceSheet open={Boolean(mobilePanel)} title={mobilePanel === "sources" ? "Add websites and PDFs" : "Choose Rashtram documents"} onClose={() => setMobilePanel(null)}>
-      {mobilePanel === "sources" ? <StudySourcesPanel sources={sources} selectedIds={selectedSourceIds} onToggle={toggleSource} onAddUrl={async (url) => addSource((await addResearchUrlSource(url)).source)} onAddPdf={async (file) => addSource((await addResearchPdfSource(file)).source)} onDelete={async (id) => { await deleteResearchSource(id); setSources((current) => current.filter((source) => String(source.id) !== String(id))); setSelectedSourceIds((current) => current.filter((sourceId) => sourceId !== String(id))); }} /> : libraryPanel}
+      {mobilePanel === "sources" ? <StudySourcesPanel sources={sources} selectedIds={selectedSourceIds} onToggle={toggleSource} onAddUrl={async (url) => addSource((await addResearchUrlSource(url)).source)} onAddPdf={async (file, options) => addSource((await addResearchPdfSource(file, options)).source)} onDelete={async (id) => { await deleteResearchSource(id); setSources((current) => current.filter((source) => String(source.id) !== String(id))); setSelectedSourceIds((current) => current.filter((sourceId) => sourceId !== String(id))); }} /> : libraryPanel}
     </MobileWorkspaceSheet>
   </div>;
 }

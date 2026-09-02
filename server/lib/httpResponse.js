@@ -19,6 +19,7 @@ const sendError = (res, error, context) => {
   }
   return res.status(status).json({
     error: error.message,
+    ...(error.failureCode ? { code: error.failureCode } : {}),
     ...(error.details ? { details: error.details } : {}),
   });
 };
