@@ -27,21 +27,31 @@ import { comparisonActionState } from "@/lib/comparison-regeneration.mjs";
 import { RecommendationSection } from "@/components/recommendations/RecommendationSection";
 
 const SECTION_CONFIG = [
-  ["similarities", "Similarities"],
-  ["differences", "Differences"],
-  ["keyClauses", "Key clauses"],
-  ["stakeholders", "Stakeholders"],
-  ["complianceImpact", "Compliance and policy impact"],
-  ["timeline", "Timeline"],
-  ["authorityDifferences", "Authority differences"],
-  ["impactAssessment", "Impact assessment"],
-  ["keyFindings", "Key findings"],
+  ["purpose", "Purpose / objective", ["purpose"]],
+  ["scope", "Scope", ["scope"]],
+  ["applicability", "Applicability", ["applicability"]],
+  ["keyProvisions", "Key provisions", ["keyProvisions", "keyClauses"]],
+  ["similarities", "Major similarities", ["similarities"]],
+  ["differences", "Key differences", ["differences"]],
+  ["obligations", "Obligations / requirements", ["obligations", "complianceImpact"]],
+  ["rights", "Rights / protections", ["rights"]],
+  ["definitions", "Definitions", ["definitions"]],
+  ["legalEffect", "Authority / legal effect", ["legalEffect", "authorityDifferences"]],
+  ["timeline", "Dates / timeline", ["timeline"]],
+  ["stakeholderImpact", "Stakeholder impact", ["stakeholderImpact", "stakeholders"]],
+  ["whatChanged", "What changed", ["whatChanged"]],
+  ["practicalImplications", "Practical implications", ["practicalImplications", "impactAssessment"]],
+  ["keyTakeaways", "Key takeaways", ["keyTakeaways", "keyFindings"]],
 ];
 
 const itemText = (item) => {
   if (typeof item === "string") return item;
   return [
     item.topic,
+    item.dimension,
+    item.term,
+    item.documentA,
+    item.documentB,
     item.date,
     item.name,
     item.clause,
@@ -52,6 +62,11 @@ const itemText = (item) => {
     item.finding,
     item.description,
     item.content,
+    item.significance,
+    item.whyItMatters,
+    item.synthesis,
+    item.value,
+    item.focus,
   ]
     .filter(Boolean)
     .join(" — ");
@@ -347,12 +362,13 @@ export function DocumentComparison() {
 
   const result = comparison?.result;
   const comparisonSections = useMemo(() => SECTION_CONFIG
-    .map(([key, title]) => ({
-      key,
-      title,
-      items: Array.isArray(result?.[key]) ? result[key] : [],
-    }))
-    .filter((section) => section.items.some((item) => itemText(item).trim())), [result]);
+    .map(([key, title, aliases]) => {
+      const sourceKey = aliases.find((alias) => Array.isArray(result?.[alias]) && result[alias].length) || aliases[0];
+      const items = Array.isArray(result?.[sourceKey]) ? result[sourceKey] : [];
+      const status = result?.sectionStatus?.[key] || (items.some((item) => itemText(item).trim()) ? "available" : "insufficient_evidence");
+      return { key, title, items, status };
+    })
+    .filter((section) => section.status !== "not_applicable" || section.items.length), [result]);
   const isFallbackComparison = result?.generationMode === "extractive_fallback";
   const citationMap = useMemo(
     () =>
@@ -690,22 +706,28 @@ export function DocumentComparison() {
           {comparisonSections.length > 0 && <section className="surface-card overflow-hidden">
             <div className="border-b border-[#8f1d2c]/10 p-5 sm:p-6">
               <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-[#874047]">Comparative analysis</p>
-              <h3 className="mt-1 font-serif text-2xl text-[#8f1d2c]">Differences, overlap, and practical effect</h3>
+              <h3 className="mt-1 font-serif text-2xl text-[#8f1d2c]">What differs, what changed, and why it matters</h3>
             </div>
             <div className="divide-y divide-[#8f1d2c]/10">
-              {comparisonSections.map(({ key, title, items }) => (
+              {comparisonSections.map(({ key, title, items, status }) => (
                 <div key={key} className="grid gap-3 p-5 sm:p-6 lg:grid-cols-[210px_minmax(0,1fr)]">
                   <h4 className="font-serif text-lg text-[#8f1d2c]">{title}</h4>
-                  <ul className="space-y-3">
-                    {items.map((item, index) => {
-                      const text = itemText(item);
-                      if (!text) return null;
-                      return <li key={`${key}-${index}`} className="rounded-xl bg-[#f7f2eb] p-3 text-sm leading-6 text-[#514d46]">
-                        {text}
-                        <CitationLinks ids={item?.citations} citationMap={citationMap} />
-                      </li>;
-                    })}
-                  </ul>
+                  {items.length ? (
+                    <ul className="space-y-3">
+                      {items.map((item, index) => {
+                        const text = itemText(item);
+                        if (!text) return null;
+                        return <li key={`${key}-${index}`} className="rounded-xl bg-[#f7f2eb] p-3 text-sm leading-6 text-[#514d46]">
+                          {text}
+                          <CitationLinks ids={item?.citations} citationMap={citationMap} />
+                        </li>;
+                      })}
+                    </ul>
+                  ) : status === "not_applicable" ? (
+                    <p className="rounded-xl border border-dashed border-[#8f1d2c]/12 bg-[#fffaf0] p-3 text-sm leading-6 text-[#81796e]">Not materially applicable to this comparison.</p>
+                  ) : (
+                    <p className="rounded-xl border border-dashed border-[#8f1d2c]/12 bg-[#fffaf0] p-3 text-sm leading-6 text-[#81796e]">Insufficient evidence in the selected sources to compare this reliably.</p>
+                  )}
                 </div>
               ))}
             </div>
@@ -713,8 +735,9 @@ export function DocumentComparison() {
 
           <section className="surface-card p-5 sm:p-6">
             <h3 className="font-serif text-xl text-[#8f1d2c]">
-              Original source snippets
+            Supporting evidence
             </h3>
+            <p className="mt-2 text-sm leading-6 text-[#706a61]">Open a citation to inspect the source passage behind the analysis. Retrieved text is kept separate from the synthesized comparison.</p>
             <div className="mt-4 grid gap-3 lg:grid-cols-2">
               {(result.citations || []).map((citation) => (
                 <article

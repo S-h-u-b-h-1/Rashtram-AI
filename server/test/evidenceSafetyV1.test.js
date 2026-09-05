@@ -249,3 +249,26 @@ test("structured comparison verifies analytical premises without demanding the i
   }, [{ id: "D1-C1", snippet: "The rule requires every regulated entity to file a quarterly report." }]);
   assert.equal(result.generated.impactAssessment.length, 1);
 });
+
+test("structured comparison verifier also guards the quality-v2 fields", () => {
+  const result = verifyStructuredComparison({
+    executiveSummary: "The sources differ in reporting cadence. [D1-C1] [D2-C1]",
+    scope: [{
+      dimension: "Reporting cadence",
+      documentA: "Document A requires monthly reporting.",
+      documentB: "Document B identifies an annual review.",
+      significance: "The difference changes the operating calendar.",
+      citations: ["D1-C1", "D2-C1"],
+    }],
+    practicalImplications: [{
+      point: "Unsupported claim about a separate tax rate.",
+      citations: ["D1-C1"],
+    }],
+  }, [
+    { id: "D1-C1", snippet: "Document A requires monthly reporting." },
+    { id: "D2-C1", snippet: "Document B identifies an annual review." },
+  ]);
+  assert.equal(result.generated.scope.length, 1);
+  assert.equal(result.generated.practicalImplications.length, 0);
+  assert.equal(result.report.removedUnsupportedItems, 1);
+});

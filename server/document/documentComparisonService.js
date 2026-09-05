@@ -41,7 +41,31 @@ const MODE_ALIASES = {
 };
 const LANGUAGES = new Set(["auto", "english", "hindi"]);
 const EMPTY_FIELD_PATTERN =
-  /^(not identified|none identified|not available|no evidence|not found|not specified|n\/a)/i;
+  /^(not identified|none identified|not available|no evidence|not found|not specified|n\/a|not materially applicable|insufficient evidence|unable to compare)/i;
+const COMPARISON_SECTION_KEYS = Object.freeze([
+  "purpose",
+  "scope",
+  "applicability",
+  "keyProvisions",
+  "similarities",
+  "differences",
+  "obligations",
+  "rights",
+  "definitions",
+  "legalEffect",
+  "timeline",
+  "stakeholderImpact",
+  "whatChanged",
+  "practicalImplications",
+  "keyTakeaways",
+  // Legacy keys remain part of the persisted API contract.
+  "keyClauses",
+  "stakeholders",
+  "complianceImpact",
+  "authorityDifferences",
+  "impactAssessment",
+  "keyFindings",
+]);
 const REGENERATION_CLAIM_TIMEOUT_MINUTES = 5;
 
 const validationError = (message, status = 400) => {
@@ -268,6 +292,12 @@ const itemTextValue = (item) => {
   if (!item || typeof item !== "object") return "";
   return [
     item.topic,
+    item.dimension,
+    item.term,
+    item.heading,
+    item.title,
+    item.documentA,
+    item.documentB,
     item.date,
     item.name,
     item.clause,
@@ -275,6 +305,14 @@ const itemTextValue = (item) => {
     item.event,
     item.analysis,
     item.impact,
+    item.significance,
+    item.whyItMatters,
+    item.synthesis,
+    item.content,
+    item.value,
+    item.focus,
+    item.reason,
+    item.rationale,
   ]
     .filter(Boolean)
     .join(" ");
@@ -293,8 +331,7 @@ const sanitizeCitationIds = (ids, validCitationIds) =>
     .slice(0, 5);
 
 const normalizeComparisonArray = (items, validCitationIds) =>
-  Array.isArray(items)
-    ? items
+  (Array.isArray(items) ? items : items == null || items === "" ? [] : [items])
         .filter((item) => item && itemTextValue(item).trim())
         .filter((item) => !EMPTY_FIELD_PATTERN.test(itemTextValue(item).trim()))
         .map((item) =>
@@ -304,8 +341,7 @@ const normalizeComparisonArray = (items, validCitationIds) =>
                 ...item,
                 citations: sanitizeCitationIds(item.citations, validCitationIds),
               },
-        )
-    : [];
+        );
 
 const mergeComparisonItems = (primary, fallback, limit) => {
   const seen = new Set();
@@ -405,7 +441,9 @@ const buildDocumentFocus = (group) => {
   };
 };
 
-const comparisonSectionBackfill = ({ documents, groups, citations, generated }) => {
+// Retained only as a reference for the pre-V1 extractive behavior. It is no
+// longer called because retrieved passages are evidence, not comparison prose.
+const legacyExtractiveComparisonBackfill = ({ documents, groups, citations, generated }) => {
   const validCitationIds = new Set(citations.map((citation) => citation.id));
   const normalized = { ...(generated || {}) };
   const normalizedFields = [
@@ -702,33 +740,162 @@ const comparisonSectionBackfill = ({ documents, groups, citations, generated }) 
   return normalized;
 };
 
+const comparisonSectionBackfill = ({ citations = [], generated = {} }) => {
+  const validCitationIds = new Set(citations.map((citation) => String(citation.id)));
+  const normalized = { ...generated };
+  const fields = [...COMPARISON_SECTION_KEYS, "suggestedQuestions"];
+  fields.forEach((field) => {
+    normalized[field] = field === "suggestedQuestions"
+      ? (Array.isArray(normalized[field]) ? normalized[field].filter(Boolean).slice(0, 6) : [])
+      : normalizeComparisonArray(normalized[field], validCitationIds);
+  });
+  const sectionStatus = { ...(normalized.sectionStatus || {}) };
+  COMPARISON_SECTION_KEYS.forEach((field) => {
+    if (hasUsefulItems(normalized[field])) {
+      sectionStatus[field] = "available";
+    } else if (normalized.sectionStatus?.[field] === "not_applicable") {
+      sectionStatus[field] = "not_applicable";
+    } else {
+      sectionStatus[field] = sectionStatus[field] === "not_applicable"
+        ? "not_applicable"
+        : "insufficient_evidence";
+    }
+  });
+  normalized.sectionStatus = sectionStatus;
+  normalized.quality = {
+    ...(normalized.quality || {}),
+    normalized: true,
+    normalizedSections: COMPARISON_SECTION_KEYS.filter((field) =>
+      sectionStatus[field] === "available"),
+  };
+  return normalized;
+};
+
+const normalizeComparisonText = (value) => String(value || "")
+  .toLowerCase()
+  .replace(/\s+/g, " ")
+  .trim();
+
+const comparisonItemCitations = (item, validCitationIds) =>
+  sanitizeCitationIds(item?.citations, validCitationIds);
+
+const comparisonCitationLabelsInText = (text) =>
+  [...String(text || "").matchAll(/\[(D\d+-C\d+)\]/gi)].map((match) => match[1].toUpperCase());
+
+const comparisonEvidenceOverlap = (item, citations) => {
+  const value = normalizeComparisonText(itemTextValue(item));
+  if (!value || value.length < 40) return false;
+  const itemTokens = new Set(value.split(/[^a-z0-9]+/).filter((token) => token.length > 3));
+  if (!itemTokens.size) return false;
+  return (citations || []).some((citation) => {
+    const evidenceTokens = new Set(normalizeComparisonText(citation.snippet || citation.content)
+      .split(/[^a-z0-9]+/).filter((token) => token.length > 3));
+    if (!evidenceTokens.size) return false;
+    const overlap = [...itemTokens].filter((token) => evidenceTokens.has(token)).length;
+    return overlap / itemTokens.size >= 0.88;
+  });
+};
+
 const validateComparisonOutput = (generated = {}, citations = []) => {
   const summary = String(generated.executiveSummary || "").trim();
-  const citationIds = new Set((citations || []).map((citation) => String(citation.id)));
-  const analyticalSections = [
-    "similarities", "differences", "keyClauses", "stakeholders",
-    "complianceImpact", "timeline", "authorityDifferences",
-    "impactAssessment", "keyFindings",
-  ];
-  const substantiveSections = analyticalSections.filter((section) =>
-    hasUsefulItems(generated[section]),
+  const validCitationIds = new Set((citations || []).map((citation) => String(citation.id)));
+  const analyticalSections = COMPARISON_SECTION_KEYS.filter((section) =>
+    section !== "keyProvisions" || generated.keyProvisions || generated.keyClauses,
   );
-  const citedItems = analyticalSections.flatMap((section) =>
-    (Array.isArray(generated[section]) ? generated[section] : [])
-      .filter((item) => Array.isArray(item?.citations) && item.citations.some((id) => citationIds.has(String(id)))),
-  ).length;
-  if (!summary) return { valid: false, status: "GENERATION_FAILED", reason: "EMPTY_SUMMARY" };
-  if (generated.generationMode === "evidence_abstention") {
-    return { valid: true, status: "INSUFFICIENT_EVIDENCE", reason: null };
+  const sectionItems = analyticalSections.flatMap((section) => {
+    const source = section === "keyProvisions"
+      ? generated.keyProvisions || generated.keyClauses
+      : section === "stakeholderImpact"
+        ? generated.stakeholderImpact || generated.stakeholders
+        : section === "obligations"
+          ? generated.obligations || generated.complianceImpact
+          : section === "legalEffect"
+            ? generated.legalEffect || generated.authorityDifferences
+            : section === "practicalImplications"
+              ? generated.practicalImplications || generated.impactAssessment
+              : section === "keyTakeaways"
+                ? generated.keyTakeaways || generated.keyFindings
+                : generated[section];
+    return (Array.isArray(source) ? source : []).map((item) => ({ item, section }));
+  });
+  const substantive = sectionItems.filter(({ item }) => {
+    const value = itemTextValue(item).trim();
+    return value && !EMPTY_FIELD_PATTERN.test(value);
+  });
+  const citedSubstantive = substantive.filter(({ item }) =>
+    comparisonItemCitations(item, validCitationIds).length,
+  );
+  const citedItems = citedSubstantive.length;
+  const citationDocuments = new Map(
+    (citations || []).map((citation) => [String(citation.id), String(citation.documentId || "")]),
+  );
+  const representedDocuments = new Set(citedSubstantive.flatMap(({ item }) =>
+    comparisonItemCitations(item, validCitationIds)
+      .map((id) => citationDocuments.get(id))
+      .filter(Boolean),
+  ));
+  const comparativeSections = new Set([
+    "similarities", "differences", "scope", "applicability", "obligations",
+    "rights", "legalEffect", "whatChanged", "practicalImplications", "keyTakeaways",
+    "complianceImpact", "authorityDifferences", "impactAssessment", "keyFindings",
+  ]);
+  const comparativeItems = citedSubstantive.filter(({ section }) => comparativeSections.has(section));
+  const comparativeText = comparativeItems.map(({ item }) => itemTextValue(item)).join(" ");
+  const crossDocumentItem = comparativeItems.some(({ item }) => {
+    const docs = new Set(comparisonItemCitations(item, validCitationIds)
+      .map((id) => citationDocuments.get(id)).filter(Boolean));
+    return docs.size >= 2 || (item?.documentA && item?.documentB);
+  });
+  const materialUncited = substantive.filter(({ item }) =>
+    itemTextValue(item).length >= 40 && !comparisonItemCitations(item, validCitationIds).length,
+  );
+  const normalizedKeys = substantive.map(({ item }) => normalizeComparisonText(itemTextValue(item)).slice(0, 220));
+  const duplicateCount = normalizedKeys.length - new Set(normalizedKeys).size;
+  const rawEvidenceCount = citedSubstantive.filter(({ item }) => comparisonEvidenceOverlap(item, citations)).length;
+  const isExtractiveFallback = generated.generationMode === "extractive_fallback";
+  if (!summary) {
+    return { valid: false, status: "GENERATION_FAILED", reason: "EMPTY_SUMMARY" };
   }
-  if (!substantiveSections.length || !citedItems) {
+  if (generated.generationMode === "evidence_abstention") {
+    return { valid: true, status: "INSUFFICIENT_EVIDENCE", reason: null, citedItems: 0 };
+  }
+  if (!substantive.length || !citedItems) {
     return { valid: false, status: "INSUFFICIENT_EVIDENCE", reason: "ANALYTICALLY_EMPTY" };
+  }
+  if (summary.length < 20 || /^(comparison (completed|generated)|documents compared\.?$)/i.test(summary)) {
+    return { valid: false, status: "GENERATION_FAILED", reason: "EMPTY_SUMMARY" };
+  }
+  if (!isExtractiveFallback) {
+    const summaryLabels = comparisonCitationLabelsInText(summary);
+    if (!summaryLabels.length) {
+      return { valid: false, status: "INSUFFICIENT_EVIDENCE", reason: "UNCITED_SUMMARY" };
+    }
+    if (summaryLabels.some((label) => !validCitationIds.has(label))) {
+      return { valid: false, status: "INSUFFICIENT_EVIDENCE", reason: "INVALID_SUMMARY_CITATION" };
+    }
+  }
+  if (!isExtractiveFallback && materialUncited.length) {
+    return { valid: false, status: "INSUFFICIENT_EVIDENCE", reason: "UNCITED_ANALYSIS" };
+  }
+  if (!isExtractiveFallback && representedDocuments.size < 2) {
+    return { valid: false, status: "PARTIAL_EVIDENCE", reason: "MISSING_SECOND_DOCUMENT_EVIDENCE" };
+  }
+  if (!isExtractiveFallback && (!comparativeItems.length || !crossDocumentItem ||
+    !/\b(differs?|difference|similar|whereas|while|contrast|change(?:d)?|compared|unlike|more|less)\b/i.test(comparativeText))) {
+    return { valid: false, status: "INSUFFICIENT_EVIDENCE", reason: "NON_COMPARATIVE_ANALYSIS" };
+  }
+  if (!isExtractiveFallback && duplicateCount > Math.max(1, Math.floor(substantive.length * 0.3))) {
+    return { valid: false, status: "INSUFFICIENT_EVIDENCE", reason: "DUPLICATED_ANALYSIS" };
+  }
+  if (!isExtractiveFallback && rawEvidenceCount > Math.max(1, Math.floor(citedSubstantive.length * 0.65))) {
+    return { valid: false, status: "PARTIAL_EVIDENCE", reason: "EXTRACTIVE_ONLY" };
   }
   return {
     valid: true,
-    status: generated.generationMode === "extractive_fallback" ? "PARTIAL_EVIDENCE" : "SUCCESS",
+    status: isExtractiveFallback ? "PARTIAL_EVIDENCE" : "SUCCESS",
     reason: null,
-    substantiveSections,
+    substantiveSections: [...new Set(substantive.map(({ section }) => section))],
+    representedDocuments: [...representedDocuments],
     citedItems,
   };
 };
@@ -998,12 +1165,23 @@ const createComparison = async (userId, payload, options = {}) => {
   const context = groups
     .map(({ document, passages, documentIndex }) => {
       const documentLabel = `D${documentIndex + 1}`;
+      const metadata = [
+        document.type,
+        document.authority || document.ministry,
+        document.jurisdiction || document.state,
+        document.year || document.publicationDate,
+      ].filter(Boolean).join(" · ");
       return [
         `=== ${documentLabel}: ${document.title} (${document.type}) ===`,
+        `Document brief (orientation only; do not use metadata as proof): ${metadata || "Metadata unavailable"}`,
         ...passages.map((passage, passageIndex) => {
           const label = `${documentLabel}-C${passageIndex + 1}`;
           citations.push(buildComparisonCitation({ label, document, passage }));
-          return `[${label}] ${passage.content.slice(0, passageCharLimit)}`;
+          const location = [
+            passage.pageStart ? `page ${passage.pageStart}${passage.pageEnd && passage.pageEnd !== passage.pageStart ? `-${passage.pageEnd}` : ""}` : null,
+            passage.sectionTitle || passage.heading || passage.sectionId,
+          ].filter(Boolean).join(" · ");
+          return `[${label}]${location ? ` (${location})` : ""} ${passage.content.slice(0, passageCharLimit)}`;
         }),
       ].join("\n\n");
     })
@@ -1196,12 +1374,23 @@ const createComparison = async (userId, payload, options = {}) => {
   const outputValidation = validateComparisonOutput(generated, citations);
   if (!outputValidation.valid) {
     generated = {
-      ...generated,
       generationMode: "evidence_abstention",
       executiveSummary: buildAbstentionResponse(sufficiency, {
         documentTitles: comparisonDocuments.map((document) => document.title),
       }),
-      quality: { ...(generated.quality || {}), outputValidation },
+      ...Object.fromEntries(COMPARISON_SECTION_KEYS.map((field) => [field, []])),
+      suggestedQuestions: [
+        "Which additional official source should be prepared?",
+        "Can the comparison be narrowed to a specific provision or date?",
+      ],
+      sectionStatus: Object.fromEntries(
+        COMPARISON_SECTION_KEYS.map((field) => [field, "insufficient_evidence"]),
+      ),
+      limitations: [{
+        content: "The selected evidence did not support a complete comparative synthesis. No unsupported conclusion was shown.",
+        citations: [],
+      }],
+      quality: { outputValidation },
     };
   } else {
     generated.quality = { ...(generated.quality || {}), outputValidation };
@@ -1230,6 +1419,7 @@ const createComparison = async (userId, payload, options = {}) => {
   ].slice(0, 8);
   const result = {
     ...generated,
+    comparisonSchemaVersion: "comparison-quality-v2",
     evidenceSufficiency: sufficiency,
     claimVerification,
     documents: documents.map(

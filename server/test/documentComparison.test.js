@@ -10,7 +10,7 @@ const {
 } = require("../document/documentComparisonService");
 
 test("comparison output validator rejects analytically empty success", () => {
-  const citations = [{ id: "D1-C1" }, { id: "D2-C1" }];
+  const citations = [{ id: "D1-C1", documentId: "101" }, { id: "D2-C1", documentId: "102" }];
   const empty = validateComparisonOutput({
     generationMode: "ai",
     executiveSummary: "Comparison completed.",
@@ -20,8 +20,15 @@ test("comparison output validator rejects analytically empty success", () => {
   assert.equal(empty.reason, "ANALYTICALLY_EMPTY");
   const useful = validateComparisonOutput({
     generationMode: "ai",
-    executiveSummary: "The instruments differ in scope.",
-    differences: [{ analysis: "D1 applies to reporting.", citations: ["D1-C1"] }],
+    executiveSummary: "D1 differs from D2 in reporting duties and practical scope [D1-C1] [D2-C1].",
+    differences: [{
+      topic: "Reporting scope",
+      documentA: "D1 applies to periodic reporting.",
+      documentB: "D2 does not identify the same reporting duty.",
+      significance: "The difference matters for implementation planning.",
+      analysis: "D1 differs from D2 because its reporting duty is explicit, whereas D2 does not identify an equivalent duty.",
+      citations: ["D1-C1", "D2-C1"],
+    }],
   }, citations);
   assert.equal(useful.valid, true);
   assert.equal(useful.status, "SUCCESS");
@@ -211,7 +218,7 @@ test("comparison readiness distinguishes pending and unusable text", () => {
   );
 });
 
-test("comparison section backfill fills sparse AI output from cited passages", () => {
+test("comparison section normalization never promotes raw passages into analysis", () => {
   const documents = [
     {
       id: "101",
@@ -287,20 +294,12 @@ test("comparison section backfill fills sparse AI output from cited passages", (
     },
   });
 
-  assert.ok(repaired.executiveSummary.includes("D1"));
-  assert.ok(repaired.similarities.length >= 1);
-  assert.ok(repaired.differences.length >= 2);
-  assert.ok(repaired.keyClauses.length >= 2);
-  assert.ok(repaired.stakeholders.length >= 2);
-  assert.ok(repaired.complianceImpact.length >= 2);
-  assert.ok(repaired.timeline.length >= 2);
-  assert.ok(repaired.authorityDifferences.length >= 2);
-  assert.ok(repaired.impactAssessment.length >= 2);
-  assert.ok(repaired.keyFindings.length >= 1);
-  assert.ok(
-    repaired.stakeholders.every((item) => Array.isArray(item.citations)),
-  );
-  assert.ok(repaired.quality.backfilled);
+  assert.equal(repaired.executiveSummary, "Not identified in the retrieved text.");
+  assert.equal(repaired.differences.length, 0);
+  assert.equal(repaired.keyClauses.length, 0);
+  assert.equal(repaired.sectionStatus.differences, "insufficient_evidence");
+  assert.equal(repaired.sectionStatus.timeline, "insufficient_evidence");
+  assert.equal(repaired.quality.normalized, true);
 });
 
 test("comparison backfill never attributes one document's ministry to every document", () => {
@@ -357,14 +356,80 @@ test("comparison backfill never attributes one document's ministry to every docu
     ),
     false,
   );
-  assert.ok(
-    repaired.differences.some((item) =>
-      String(item.analysis).includes("RTI administration"),
-    ),
-  );
-  assert.ok(
-    repaired.differences.some((item) =>
-      String(item.analysis).includes("Ayurveda standards"),
-    ),
-  );
+  assert.equal(repaired.differences.length, 0);
+  assert.equal(repaired.sectionStatus.differences, "insufficient_evidence");
+});
+
+test("comparison validator requires cross-document cited synthesis", () => {
+  const citations = [
+    { id: "D1-C1", documentId: "101", snippet: "D1 requires a monthly report." },
+    { id: "D2-C1", documentId: "102", snippet: "D2 describes an annual review." },
+  ];
+  const extractive = validateComparisonOutput({
+    generationMode: "ai",
+    executiveSummary: "D1 requires a monthly report. D2 describes an annual review. [D1-C1] [D2-C1]",
+    differences: [
+      { topic: "Reporting", analysis: "D1 requires a monthly report.", citations: ["D1-C1"] },
+      { topic: "Review", analysis: "D2 describes an annual review.", citations: ["D2-C1"] },
+    ],
+  }, citations);
+  assert.equal(extractive.valid, false);
+  assert.equal(extractive.reason, "NON_COMPARATIVE_ANALYSIS");
+
+  const synthesized = validateComparisonOutput({
+    generationMode: "ai",
+    executiveSummary: "D1 requires monthly reporting whereas D2 uses an annual review, changing the operational cadence [D1-C1] [D2-C1].",
+    differences: [{
+      topic: "Reporting cadence",
+      documentA: "D1 requires monthly reporting.",
+      documentB: "D2 uses an annual review.",
+      significance: "The different cadence changes the control calendar for affected operators.",
+      analysis: "D1 differs from D2 in reporting cadence: monthly controls are required under D1, whereas D2 identifies an annual review.",
+      citations: ["D1-C1", "D2-C1"],
+    }],
+  }, citations);
+  assert.equal(synthesized.valid, true);
+  assert.equal(synthesized.status, "SUCCESS");
+  assert.deepEqual(synthesized.representedDocuments.sort(), ["101", "102"]);
+});
+
+test("comparison validator rejects citation-free and extractive-only success", () => {
+  const citations = [
+    { id: "D1-C1", documentId: "101", snippet: "D1 sets a permit requirement." },
+    { id: "D2-C1", documentId: "102", snippet: "D2 sets a reporting requirement." },
+  ];
+  const uncited = validateComparisonOutput({
+    generationMode: "ai",
+    executiveSummary: "D1 differs from D2 in implementation [D1-C1] [D2-C1].",
+    differences: [{
+      topic: "Implementation",
+      analysis: "D1 differs from D2 in the way the requirement is implemented.",
+      citations: [],
+    }, {
+      topic: "Reporting",
+      analysis: "D1 differs from D2 in reporting cadence, which changes the control calendar.",
+      citations: ["D1-C1", "D2-C1"],
+    }],
+  }, citations);
+  assert.equal(uncited.valid, false);
+  assert.equal(uncited.reason, "UNCITED_ANALYSIS");
+});
+
+test("comparison validator rejects citation labels that are not in the evidence set", () => {
+  const result = validateComparisonOutput({
+    generationMode: "ai",
+    executiveSummary: "Document A differs from Document B in reporting scope [D1-C9] [D2-C1].",
+    differences: [{
+      topic: "Reporting scope",
+      documentA: "Document A requires monthly reporting.",
+      documentB: "Document B identifies an annual review.",
+      significance: "The difference changes the operating calendar.",
+      citations: ["D1-C1", "D2-C1"],
+    }],
+  }, [
+    { id: "D1-C1", documentId: "101", snippet: "Document A requires monthly reporting." },
+    { id: "D2-C1", documentId: "102", snippet: "Document B identifies an annual review." },
+  ]);
+  assert.equal(result.valid, false);
+  assert.equal(result.reason, "INVALID_SUMMARY_CITATION");
 });

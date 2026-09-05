@@ -1565,19 +1565,33 @@ const generateDocumentComparison = async ({
         : "the language used in the focused question, otherwise English";
   const buildPrompt = (sourceContext) => `
 Compare the supplied Indian legislative and public-policy documents from the
-labelled source passages. Never use a document title as evidence. Every
-substantive claim must include one or more citation labels exactly as supplied
-(for example "[D1-C2]"). If evidence is absent, say "Not identified in the
-retrieved text." Keep the documents distinct and do not merge their provisions.
-Do not leave a section empty when the supplied passages contain relevant
-evidence. Do not treat public availability, an India-wide jurisdiction,
-government authorship, or a shared broad document type as a substantive policy
-similarity. When documents concern unrelated subjects, state that plainly and
-compare their distinct purposes, institutions, instruments and implementation
-implications without inventing an overlap. For each major section, produce as many useful non-duplicative cited
-items as the evidence supports; prefer 4-8 items for similarities, differences,
-stakeholders, compliance impact, authority differences, impact assessment and
-key findings, and 2-5 timeline items when dates exist.
+labelled source passages. Retrieved passages are evidence, not final answers:
+reason across both documents and write a genuinely comparative analysis rather
+than a pair of independent summaries. Never use a document title as evidence.
+Every substantive claim, including the executive summary, must include one or
+more citation labels exactly as supplied (for example "[D1-C2]"). If evidence
+is absent, mark the section as "insufficient_evidence" and explain that the
+selected sources do not support a reliable comparison. If a section genuinely
+does not apply, mark it "not_applicable" and use the exact user-facing message
+"Not materially applicable to this comparison." Never leave an applicable
+section empty.
+
+Keep the documents distinct and do not merge their provisions. Do not treat
+public availability, an India-wide jurisdiction, government authorship, or a
+shared broad document type as a substantive policy similarity. When documents
+concern unrelated subjects, state that plainly and compare their distinct
+purposes, instruments and implementation implications without inventing an
+overlap. For each major section, produce non-duplicative cited synthesis as the
+evidence supports; each difference should say what differs, why it differs, who
+is affected, why it matters, and which passages support the conclusion.
+
+Use document-type-aware emphasis: a Bill versus Act should foreground what
+changed before enactment; an Act versus Rules should explain how the statute is
+operationalized; a regulation versus circular should distinguish binding
+requirements from interpretive or operational guidance; an amendment versus
+original should identify added, removed or modified obligations and dates; and
+policy comparisons should focus on objectives, instruments, implementation and
+stakeholder trade-offs. Do not make unsupported claims about legal effect.
 Identify stakeholders from cited text such as Government, Council, proper
 officer, Appellate Authority/Tribunal, registered persons, taxable persons,
 manufacturers, suppliers, sectors or institutions. Identify timeline items from
@@ -1586,10 +1600,11 @@ or year evidence. Authority differences should explain how powers, duties,
 rule-making, enforcement, appeal or administration differ between documents.
 Compliance and impact items should explain practical consequences for taxpayers,
 regulated entities, administrators and affected sectors.
-Be detailed and research-useful: each item should state what changed, who is
-affected, why it matters, and which cited passage supports it. Avoid generic
-phrases such as "processed through Rashtram AI" unless the provider fallback is
-used outside this prompt.
+Be detailed and research-useful. Do not copy a retrieved paragraph into an
+analytical field, and do not repeat the same passage as several pseudo-findings.
+Raw evidence belongs in the citations list and the separate evidence panel,
+not as the primary comparison prose. Avoid generic phrases such as "processed
+through Rashtram AI" unless the provider fallback is used outside this prompt.
 Underlying document features must come from evidence, but you may reason about
 which approach is more business-friendly, centralised, difficult to implement,
 or administratively burdensome. Clearly label analytical inference and
@@ -1609,16 +1624,30 @@ ${JSON.stringify(documents)}
 Return only valid JSON with this shape:
 {
   "executiveSummary": "string",
+  "purpose": [{"documentId":"string","point":"string","citations":["D1-C1"]}],
+  "scope": [{"dimension":"string","documentA":"string","documentB":"string","significance":"string","citations":["D1-C1","D2-C1"]}],
+  "applicability": [{"dimension":"string","documentA":"string","documentB":"string","significance":"string","citations":["D1-C1","D2-C1"]}],
+  "keyProvisions": [{"documentId":"string","point":"string","citations":["D1-C1"]}],
   "similarities": [{"point":"string","citations":["D1-C1"]}],
-  "differences": [{"topic":"string","analysis":"string","citations":["D1-C1","D2-C1"]}],
+  "differences": [{"topic":"string","documentA":"string","documentB":"string","significance":"string","analysis":"string","citations":["D1-C1","D2-C1"]}],
   "keyClauses": [{"documentId":"string","clause":"string","analysis":"string","citations":["D1-C1"]}],
+  "obligations": [{"topic":"string","documentA":"string","documentB":"string","significance":"string","citations":["D1-C1","D2-C1"]}],
+  "rights": [{"topic":"string","documentA":"string","documentB":"string","significance":"string","citations":["D1-C1","D2-C1"]}],
+  "definitions": [{"term":"string","documentA":"string","documentB":"string","significance":"string","citations":["D1-C1","D2-C1"]}],
+  "legalEffect": [{"point":"string","citations":["D1-C1","D2-C1"]}],
   "stakeholders": [{"name":"string","impact":"string","citations":["D1-C1"]}],
   "complianceImpact": [{"point":"string","citations":["D1-C1"]}],
   "timeline": [{"date":"string","event":"string","documentId":"string","citations":["D1-C1"]}],
   "authorityDifferences": [{"point":"string","citations":["D1-C1"]}],
   "impactAssessment": [{"point":"string","citations":["D1-C1"]}],
+  "stakeholderImpact": [{"name":"string","impact":"string","citations":["D1-C1"]}],
+  "whatChanged": [{"topic":"string","documentA":"string","documentB":"string","significance":"string","citations":["D1-C1","D2-C1"]}],
+  "practicalImplications": [{"point":"string","citations":["D1-C1","D2-C1"]}],
+  "keyTakeaways": [{"point":"string","citations":["D1-C1","D2-C1"]}],
   "keyFindings": [{"point":"string","citations":["D1-C1"]}],
-  "suggestedQuestions": ["string"]
+  "limitations": [{"content":"string","citations":[]}],
+  "suggestedQuestions": ["string"],
+  "sectionStatus": {"purpose":"available|not_applicable|insufficient_evidence"}
 }
 
 Source passages:

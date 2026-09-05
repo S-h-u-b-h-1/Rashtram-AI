@@ -615,16 +615,34 @@ const verifyStructuredComparison = (generated, citations = []) => {
   }));
   const byCitation = evidenceMap(evidence);
   const sections = [
-    "similarities", "differences", "keyClauses", "stakeholders",
+    "purpose", "scope", "applicability", "keyProvisions",
+    "similarities", "differences", "obligations", "rights", "definitions",
+    "legalEffect", "keyClauses", "stakeholders", "stakeholderImpact",
     "complianceImpact", "timeline", "authorityDifferences",
-    "impactAssessment", "keyFindings",
+    "impactAssessment", "whatChanged", "practicalImplications",
+    "keyTakeaways", "keyFindings",
   ];
   let removed = 0;
   const value = { ...generated };
   for (const section of sections) {
     const items = Array.isArray(value[section]) ? value[section] : [];
     value[section] = items.filter((item) => {
-      const text = item.point || item.analysis || item.impact || item.event || item.clause || "";
+      const text = [
+        item.point,
+        item.analysis,
+        item.impact,
+        item.event,
+        item.clause,
+        item.topic,
+        item.dimension,
+        item.term,
+        item.name,
+        item.documentA,
+        item.documentB,
+        item.significance,
+        item.whyItMatters,
+        item.synthesis,
+      ].filter(Boolean).join(" ");
       const labels = Array.isArray(item.citations) ? item.citations.map(canonicalCitationLabel) : [];
       const claimType = classifyClaim(text);
       const analytical = [
