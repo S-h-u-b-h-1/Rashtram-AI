@@ -7,6 +7,7 @@ const { getPool, query } = require("../db");
 const { pdfProcessor } = require("../lib/pdfProcessor");
 const {
   createObjectStorage,
+  isMissingObjectError,
   objectStorageConfig,
   userSourceObjectKey,
   userSourceIntentObjectKey,
@@ -85,6 +86,13 @@ const storageUnavailableError = (cause) => {
   error.failureCode = "STORAGE_UNAVAILABLE";
   error.publicCode = error.failureCode;
   error.cause = cause;
+  return error;
+};
+
+const uploadNotReadyError = () => {
+  const error = new Error("The PDF upload has not completed yet. Finish the private upload and try again.");
+  error.status = 409;
+  error.failureCode = "NOT_READY";
   return error;
 };
 
@@ -1422,6 +1430,7 @@ const completePdfUploadUnlocked = async (userId, sourceId) => {
     try {
       head = await storage.headArtifact(row.object_key);
     } catch (cause) {
+      if (isMissingObjectError(cause)) throw uploadNotReadyError();
       throw storageUnavailableError(cause);
     }
     if (Number(head.bytes) !== Number(row.size_bytes) || Number(head.bytes) > MAX_SOURCE_BYTES) {
@@ -1728,6 +1737,7 @@ module.exports = {
   assertPdfUploadStorageAvailable,
   isOwnedUserSourceObjectKey,
   storageUnavailableError,
+  uploadNotReadyError,
   safeProcessingFailure,
   withUserSourceLifecycleLock,
   storeOriginal,

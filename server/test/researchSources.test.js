@@ -21,6 +21,7 @@ const {
   reservePdfUploadIntentRecord,
   safeProcessingFailure,
   storeOriginal,
+  uploadNotReadyError,
   sweepStalePdfUploadIntents,
   validatePdfUploadIntent,
 } = require("../research/sourceService");
@@ -134,6 +135,13 @@ test("missing object storage reports a safe 503 STORAGE_UNAVAILABLE contract", (
       return true;
     },
   );
+});
+
+test("an upload that has not reached storage reports 409 NOT_READY", () => {
+  const error = uploadNotReadyError();
+  assert.equal(error.status, 409);
+  assert.equal(error.failureCode, "NOT_READY");
+  assert.match(error.message, /upload has not completed/i);
 });
 
 const fakePool = (respond) => {

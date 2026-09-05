@@ -395,6 +395,7 @@ module.exports = {
   ARTIFACT_KINDS,
   artifactKey,
   createObjectStorage,
+  isMissingObjectError,
   listExactObjectVersions,
   objectStorageConfig,
   sanitizedObjectStorageStatus,
