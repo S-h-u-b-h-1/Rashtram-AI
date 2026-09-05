@@ -124,7 +124,7 @@ Reason: the integrated code is present and locally regression-tested, but the re
 ## V1 Finalization
 
 1. **Original main SHA:** `94df6e7f36cfd036a42c9d28e470b29d3fbea70f`.
-2. **Final redesign branch SHA:** source redesign `728d236`; clean integrated branch tip `a14fafc`.
+2. **Final redesign branch SHA:** source redesign `728d236`; integrated code commit `e7550ed` (documentation follow-ups `7fcc938` and `a14fafc`).
 3. **Integration method:** clean local clone, three-way `--no-commit --no-ff` merge of the redesign onto main, conflict resolved manually, then an evidence-only report commit.
 4. **Final main SHA:** `94df6e7f36cfd036a42c9d28e470b29d3fbea70f` (unchanged; main has concurrent dirty Release B/C/D work). The integrated release is on `codex/research-workspace-redesign-v1-final`.
 5. **Merge/conflict result:** one conflict in `server/document/documentsRoute.js`; retained main’s stricter freshness fail-closed rule and V1’s source-selection/history behavior. No force push or reset was used.
