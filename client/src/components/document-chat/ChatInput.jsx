@@ -28,6 +28,7 @@ export function ChatInput({
               }
             }}
             disabled={disabled}
+            maxLength={20000}
             placeholder={
               disabled
                 ? "Grounded chat becomes available after the PDF is indexed"
@@ -88,7 +89,8 @@ export function ChatInput({
             <button
               type="button"
               onClick={onClear}
-              className="inline-flex min-h-9 items-center gap-1 rounded-lg px-2 text-[10px] font-semibold text-[#874047]"
+              disabled={sending}
+              className="inline-flex min-h-9 items-center gap-1 rounded-lg px-2 text-[10px] font-semibold text-[#874047] disabled:opacity-40"
               aria-label="Clear conversation"
             >
               <Trash2 className="h-3 w-3" />

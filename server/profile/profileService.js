@@ -676,6 +676,10 @@ const deleteAccount = async (userId, payload = {}) => {
   let uploadedObjectKeys = [];
   try {
     await client.query("BEGIN");
+    await client.query(
+      "SELECT pg_advisory_xact_lock(hashtextextended('research-source-upload:' || $1::text, 0))",
+      [userId],
+    );
     const userResult = await client.query(
       `SELECT id, email, password
        FROM users
@@ -733,14 +737,28 @@ const deleteAccount = async (userId, payload = {}) => {
 
     if (await relationExists("research_sources")) {
       const storedSources = await client.query(
-        `SELECT object_key
+        `SELECT object_key,
+                metadata_json->>'durableObjectKeyPlanned' AS durable_object_key_planned,
+                metadata_json->>'temporaryObjectKeyToDelete' AS temporary_object_key_to_delete
          FROM research_sources
-         WHERE user_id = $1 AND object_key IS NOT NULL`,
+         WHERE user_id = $1`,
         [userId],
       );
-      uploadedObjectKeys = storedSources.rows
-        .map((row) => row.object_key)
-        .filter(Boolean);
+      uploadedObjectKeys = [...new Set(storedSources.rows.flatMap((row) => [
+        row.object_key,
+        row.durable_object_key_planned,
+        row.temporary_object_key_to_delete,
+      ]).filter(Boolean))];
+      if (uploadedObjectKeys.some((objectKey) => ![
+        `rashtram/user-sources/${String(userId)}/`,
+        `rashtram/user-source-intents/${String(userId)}/`,
+      ].some((prefix) => String(objectKey).startsWith(prefix)))) {
+        const error = new Error("A private source failed its ownership check. Account deletion was not completed.");
+        error.status = 409;
+        error.publicMessage = error.message;
+        error.failureCode = "UPLOAD_OBJECT_OWNERSHIP_INVALID";
+        throw error;
+      }
     }
 
     await deleteOwned("research_collection_items", `collection_id IN (
@@ -810,17 +828,33 @@ const deleteAccount = async (userId, payload = {}) => {
        RETURNING id, email`,
       [userId],
     );
-    await client.query("COMMIT");
-
-    // The database transaction is the authoritative account deletion. Remove
-    // private upload objects afterwards so a temporary storage outage cannot
-    // prevent the user from deleting their account.
-    if (uploadedObjectKeys.length && objectStorageConfig().configured) {
+    if (uploadedObjectKeys.length) {
+      if (!objectStorageConfig().configured) {
+        const error = new Error(
+          "Private document storage is temporarily unavailable. Please retry account deletion later.",
+        );
+        error.status = 503;
+        error.publicMessage = error.message;
+        error.failureCode = "STORAGE_UNAVAILABLE";
+        throw error;
+      }
       const storage = createObjectStorage();
-      await Promise.allSettled(
-        uploadedObjectKeys.map((objectKey) => storage.deleteArtifact(objectKey)),
-      );
+      try {
+        await Promise.all(
+          uploadedObjectKeys.map((objectKey) => storage.deleteArtifact(objectKey)),
+        );
+      } catch (cause) {
+        const error = new Error(
+          "Private document storage is temporarily unavailable. Please retry account deletion later.",
+        );
+        error.status = 503;
+        error.publicMessage = error.message;
+        error.failureCode = "STORAGE_UNAVAILABLE";
+        error.cause = cause;
+        throw error;
+      }
     }
+    await client.query("COMMIT");
     return {
       deleted: Boolean(deleted.rows[0]),
       userId: String(userId),

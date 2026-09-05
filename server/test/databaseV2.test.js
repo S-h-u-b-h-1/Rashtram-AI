@@ -36,7 +36,18 @@ test("database migrations are versioned and ordered", () => {
   assert.ok(files.includes("015_normalize_failure_pipeline_stage.js"));
   assert.ok(files.includes("016_processing_audit_log.js"));
   assert.ok(files.includes("017_normalize_download_failure_codes.js"));
-  assert.equal(files.at(-1), "041_comparison_regeneration_versions.js");
+  assert.equal(files.at(-1), "043_document_chat_conversation_epoch.js");
+});
+
+test("maintenance cron bounds chat replay storage without replacing upload cleanup", () => {
+  const source = fs.readFileSync(
+    path.join(__dirname, "../internal/cronRoute.js"),
+    "utf8",
+  );
+  assert.match(source, /cleanupGenerationClaims\(\{/);
+  assert.match(source, /batchSize: 500/);
+  assert.match(source, /replayDays: 7/);
+  assert.match(source, /sweepStalePdfUploadIntents/);
 });
 
 test("comparison regeneration migration preserves immutable versions and single-flight state", () => {

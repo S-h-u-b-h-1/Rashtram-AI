@@ -6,7 +6,9 @@ require("dotenv").config({
 });
 const {
   GetBucketCorsCommand,
+  GetBucketLifecycleConfigurationCommand,
   PutBucketCorsCommand,
+  PutBucketLifecycleConfigurationCommand,
   S3Client,
 } = require("@aws-sdk/client-s3");
 const { NodeHttpHandler } = require("@smithy/node-http-handler");
@@ -59,12 +61,61 @@ const expectedRule = {
   if (!active || !active.AllowedOrigins?.includes("https://rashtram-ai.vercel.app") || !active.AllowedMethods?.includes("PUT")) {
     throw new Error("The source-upload CORS rule could not be verified after writing it.");
   }
+  let lifecycleRules = [];
+  try {
+    lifecycleRules = (await client.send(new GetBucketLifecycleConfigurationCommand({
+      Bucket: config.bucket,
+    }))).Rules || [];
+  } catch (error) {
+    if (!["NoSuchLifecycleConfiguration", "NoSuchConfiguration"].includes(error.name) &&
+        Number(error.$metadata?.httpStatusCode || 0) !== 404) throw error;
+  }
+  const lifecycleRule = {
+    ID: "rashtram-abandoned-private-upload-intents",
+    Status: "Enabled",
+    Filter: { Prefix: "rashtram/user-source-intents/" },
+    Expiration: { Days: 2 },
+    NoncurrentVersionExpiration: { NoncurrentDays: 2 },
+    AbortIncompleteMultipartUpload: { DaysAfterInitiation: 1 },
+  };
+  const deleteMarkerRule = {
+    ID: "rashtram-abandoned-private-upload-delete-markers",
+    Status: "Enabled",
+    Filter: { Prefix: "rashtram/user-source-intents/" },
+    Expiration: { ExpiredObjectDeleteMarker: true },
+  };
+  await client.send(new PutBucketLifecycleConfigurationCommand({
+    Bucket: config.bucket,
+    LifecycleConfiguration: {
+      Rules: [
+        ...lifecycleRules.filter((rule) =>
+          ![lifecycleRule.ID, deleteMarkerRule.ID].includes(rule.ID),
+        ),
+        lifecycleRule,
+        deleteMarkerRule,
+      ],
+    },
+  }));
+  const verifiedLifecycle = (await client.send(new GetBucketLifecycleConfigurationCommand({
+    Bucket: config.bucket,
+  }))).Rules || [];
+  const verifiedExpiry = verifiedLifecycle.find((rule) => rule.ID === lifecycleRule.ID);
+  const verifiedMarkers = verifiedLifecycle.find((rule) => rule.ID === deleteMarkerRule.ID);
+  if (verifiedExpiry?.Expiration?.Days !== 2 ||
+      verifiedExpiry?.NoncurrentVersionExpiration?.NoncurrentDays !== 2 ||
+      verifiedExpiry?.AbortIncompleteMultipartUpload?.DaysAfterInitiation !== 1 ||
+      verifiedMarkers?.Expiration?.ExpiredObjectDeleteMarker !== true) {
+    throw new Error("The source-upload versioned lifecycle rules could not be verified after writing them.");
+  }
   console.log(JSON.stringify({
     configured: true,
     ruleId: active.ID,
     origins: active.AllowedOrigins,
     methods: active.AllowedMethods,
     publicReadEnabled: false,
+    abandonedIntentLifecycleDays: lifecycleRule.Expiration.Days,
+    noncurrentIntentLifecycleDays: lifecycleRule.NoncurrentVersionExpiration.NoncurrentDays,
+    expiredDeleteMarkerCleanup: true,
   }, null, 2));
 })().catch((error) => {
   console.error(JSON.stringify({ message: error.message, code: error.Code || error.name || null }));

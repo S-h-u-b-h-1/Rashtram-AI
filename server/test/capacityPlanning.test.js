@@ -220,11 +220,13 @@ test("object storage is explicitly disabled for absent or partial configuration"
 
 test("object-storage smoke test uploads, verifies bytes, deletes, and confirms absence", async () => {
   let stored = null;
+  let versions = [];
   const client = {
     send: async (command) => {
       const name = command.constructor.name;
       if (name === "PutObjectCommand") {
         stored = Buffer.from(command.input.Body);
+        versions = [{ Key: command.input.Key, VersionId: "v1" }];
         return {};
       }
       if (name === "GetObjectCommand") {
@@ -235,8 +237,12 @@ test("object-storage smoke test uploads, verifies bytes, deletes, and confirms a
         };
       }
       if (name === "DeleteObjectCommand") {
-        stored = null;
+        versions = versions.filter((item) => item.VersionId !== command.input.VersionId);
+        if (!versions.length) stored = null;
         return {};
+      }
+      if (name === "ListObjectVersionsCommand") {
+        return { Versions: versions, DeleteMarkers: [], IsTruncated: false };
       }
       if (name === "HeadObjectCommand") {
         if (!stored) {
@@ -258,8 +264,55 @@ test("object-storage smoke test uploads, verifies bytes, deletes, and confirms a
   });
   assert.equal(smoke.checksumVerified, true);
   assert.equal(smoke.byteEqualityVerified, true);
+  assert.equal(smoke.versionInventoryBeforeDelete, 1);
+  assert.equal(smoke.versionInventoryAfterDelete, 0);
+  assert.equal(smoke.permanentDeletionVerified, true);
   assert.equal(smoke.leftoverObject, false);
   assert.equal(stored, null);
+});
+
+test("permanent object deletion removes versions and delete markers and is retry safe", async () => {
+  const key = "rashtram/user-sources/42/exact.pdf";
+  const prefixNeighbor = `${key}.not-the-same-object`;
+  const entries = [
+    { Key: key, VersionId: "v1", kind: "version" },
+    { Key: key, VersionId: "v2", kind: "version" },
+    { Key: key, VersionId: "m1", kind: "marker" },
+    { Key: prefixNeighbor, VersionId: "neighbor", kind: "version" },
+  ];
+  const client = {
+    async send(command) {
+      if (command.constructor.name === "ListObjectVersionsCommand") {
+        return {
+          Versions: entries.filter((item) => item.kind === "version"),
+          DeleteMarkers: entries.filter((item) => item.kind === "marker"),
+          IsTruncated: false,
+        };
+      }
+      if (command.constructor.name === "DeleteObjectCommand") {
+        const index = entries.findIndex((item) =>
+          item.Key === command.input.Key && item.VersionId === command.input.VersionId);
+        if (index >= 0) entries.splice(index, 1);
+        return {};
+      }
+      throw new Error(`Unexpected command ${command.constructor.name}`);
+    },
+  };
+  const storage = createObjectStorage({
+    env: { OBJECT_STORAGE_BUCKET: "private-test" },
+    client,
+  });
+  const [first, concurrent] = await Promise.all([
+    storage.deleteArtifact(key),
+    storage.deleteArtifact(key),
+  ]);
+  assert.equal(first.permanentDeletionVerified, true);
+  assert.equal(concurrent.permanentDeletionVerified, true);
+  assert.deepEqual(await storage.listArtifactVersions(key), []);
+  assert.ok(entries.some((item) => item.VersionId === "neighbor"));
+  const repeated = await storage.deleteArtifact(key);
+  assert.equal(repeated.deletedVersions, 0);
+  assert.equal(repeated.permanentDeletionVerified, true);
 });
 
 test("artifact migration records a reference only after object verification", async () => {

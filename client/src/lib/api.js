@@ -1,6 +1,11 @@
 
 
 import { consumeSSEStream, mergeSSEMeta, streamEventText } from "@/lib/chat-stream";
+import {
+  MAX_COMPATIBILITY_PDF_BYTES,
+  normalizeResearchUploadError,
+  validateResearchPdfCandidate,
+} from "@/lib/research-upload.mjs";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5001/api';
 const DEFAULT_GET_CACHE_TTL_MS = Number(
@@ -32,6 +37,17 @@ export const clearApiCache = () => {
   getRequestCache.clear();
   pendingGetRequests.clear();
 };
+
+export class ApiRequestError extends Error {
+  constructor(message, { status, code, details, requestId } = {}) {
+    super(message);
+    this.name = "ApiRequestError";
+    this.status = status;
+    this.code = code;
+    this.details = details;
+    this.requestId = requestId;
+  }
+}
 
 let authCapabilitiesCache;
 let pendingAuthCapabilitiesRequest;
@@ -147,10 +163,16 @@ export const apiRequest = async (endpoint, options = {}) => {
           throw new Error('Session expired. Please login again.');
         }
         const error = await response.json().catch(() => ({}));
-        throw new Error(
+        throw new ApiRequestError(
           error.message ||
             error.error ||
-            `Request failed with status ${response.status}`
+            `Request failed with status ${response.status}`,
+          {
+            status: response.status,
+            code: error.code,
+            details: error.details,
+            requestId: error.requestId,
+          },
         );
       }
 
@@ -225,6 +247,9 @@ export const getDocumentResearch = async (documentType, documentId) => {
 export const getResearchSources = async () =>
   apiRequest("/research-sources");
 
+export const getResearchSourceCapabilities = async () =>
+  apiRequest("/research-sources/capabilities");
+
 export const addResearchUrlSource = async (url) =>
   apiRequest("/research-sources/url", {
     method: "POST",
@@ -236,10 +261,16 @@ const sha256File = async (file) => {
   return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
 };
 
-const uploadFileDirectly = (uploadUrl, file, onProgress) => new Promise((resolve, reject) => {
+const uploadFileDirectly = (uploadUrl, file, onProgress, requiredHeaders = {}) => new Promise((resolve, reject) => {
   const request = new XMLHttpRequest();
   request.open("PUT", uploadUrl);
-  request.setRequestHeader("Content-Type", file.type || "application/pdf");
+  const headers = {
+    "Content-Type": file.type || "application/pdf",
+    ...requiredHeaders,
+  };
+  Object.entries(headers).forEach(([name, value]) => {
+    if (value != null && String(value)) request.setRequestHeader(name, String(value));
+  });
   request.upload.onprogress = (event) => {
     if (event.lengthComputable) onProgress?.(Math.round((event.loaded / event.total) * 100));
   };
@@ -269,42 +300,88 @@ const legacySmallPdfUpload = async (file) => {
 };
 
 export const addResearchPdfSource = async (file, { onProgress, onStatus } = {}) => {
-  const maximumBytes = 50 * 1024 * 1024;
-  if (file.size > maximumBytes) throw new Error("PDF uploads are limited to 50 MB.");
-  if (!file.size) throw new Error("The selected PDF is empty.");
+  validateResearchPdfCandidate(file);
   onStatus?.("Checking PDF…");
-  const checksumSha256 = await sha256File(file);
-  const intent = await apiRequest("/research-sources/upload-intent", {
-    method: "POST",
-    body: JSON.stringify({
-      fileName: file.name,
-      mimeType: file.type || "application/pdf",
-      sizeBytes: file.size,
-      checksumSha256,
-    }),
-  });
+  let capabilities;
+  try {
+    capabilities = await getResearchSourceCapabilities();
+  } catch (error) {
+    throw normalizeResearchUploadError(error);
+  }
+  const compatibilityLimit = Number(
+    capabilities.maxCompatibilityPdfBytes || MAX_COMPATIBILITY_PDF_BYTES,
+  );
+  if (!capabilities.directUpload) {
+    if (capabilities.compatibilityUpload && file.size <= compatibilityLimit) {
+      onStatus?.("Using secure compatibility upload…");
+      try {
+        const result = await legacySmallPdfUpload(file);
+        onProgress?.(100);
+        return result;
+      } catch (error) {
+        throw normalizeResearchUploadError(error);
+      }
+    }
+    throw normalizeResearchUploadError(
+      new ApiRequestError(
+        "Private document storage is temporarily unavailable. Please retry later.",
+        { status: 503, code: "STORAGE_UNAVAILABLE" },
+      ),
+    );
+  }
+  let intent;
+  try {
+    const checksumSha256 = await sha256File(file);
+    intent = await apiRequest("/research-sources/upload-intent", {
+      method: "POST",
+      body: JSON.stringify({
+        fileName: file.name,
+        mimeType: file.type || "application/pdf",
+        sizeBytes: file.size,
+        checksumSha256,
+      }),
+    });
+  } catch (error) {
+    throw normalizeResearchUploadError(error);
+  }
   onStatus?.("Uploading privately…");
   try {
-    await uploadFileDirectly(intent.uploadUrl, file, onProgress);
+    await uploadFileDirectly(intent.uploadUrl, file, onProgress, intent.requiredHeaders);
   } catch (uploadError) {
     await deleteResearchSource(intent.source.id).catch(() => undefined);
-    if (file.size <= 3 * 1024 * 1024) {
+    if (file.size <= MAX_COMPATIBILITY_PDF_BYTES) {
       onStatus?.("Using secure compatibility upload…");
-      return legacySmallPdfUpload(file);
+      try {
+        const result = await legacySmallPdfUpload(file);
+        onProgress?.(100);
+        return result;
+      } catch (fallbackError) {
+        throw normalizeResearchUploadError(fallbackError);
+      }
     }
-    throw uploadError;
+    throw normalizeResearchUploadError(uploadError);
   }
   onProgress?.(100);
   onStatus?.("Reading pages and preparing evidence…");
-  return apiRequest(`/research-sources/${encodeURIComponent(intent.source.id)}/process`, {
-    method: "POST",
-    body: JSON.stringify({}),
-  });
+  try {
+    return await apiRequest(`/research-sources/${encodeURIComponent(intent.source.id)}/process`, {
+      method: "POST",
+      body: JSON.stringify({}),
+    });
+  } catch (error) {
+    throw normalizeResearchUploadError(error);
+  }
 };
 
 export const deleteResearchSource = async (sourceId) =>
   apiRequest(`/research-sources/${encodeURIComponent(sourceId)}`, {
     method: "DELETE",
+  });
+
+export const retryResearchPdfSource = async (sourceId) =>
+  apiRequest(`/research-sources/${encodeURIComponent(sourceId)}/process`, {
+    method: "POST",
+    body: JSON.stringify({}),
   });
 
 export const getPolicyDrafts = async (limit = 20) =>
@@ -769,12 +846,15 @@ export const sendDocumentChatFeedback = async ({
 export const sendDocumentChatMessage = async (
   {
     message,
+    displayMessage,
     documentType,
     documentId,
     onChunk,
     responseLanguage = "English",
     sourceIds = [],
     workflow,
+    requestId,
+    conversationEpoch,
     signal,
   },
 ) => {
@@ -791,11 +871,14 @@ export const sendDocumentChatMessage = async (
     },
     body: JSON.stringify({
       message,
+      displayMessage,
       documentType,
       documentId,
       responseLanguage,
       sourceIds,
       workflow,
+      requestId,
+      conversationEpoch,
     }),
     signal,
   });
@@ -823,6 +906,12 @@ export const sendDocumentChatMessage = async (
       }
     },
   });
+  if (metadata.persistence?.saved !== true) {
+    throw new Error(
+      "The response completed, but durable chat history could not be confirmed. Please retry before leaving this page.",
+    );
+  }
+  clearApiCache();
   return { response: fullResponse, sources, metadata };
 };
 

@@ -163,4 +163,12 @@ module.exports = [
     name: "041_comparison_regeneration_versions.js",
     migration: require("./041_comparison_regeneration_versions"),
   },
+  {
+    name: "042_document_chat_generation_idempotency.js",
+    migration: require("./042_document_chat_generation_idempotency"),
+  },
+  {
+    name: "043_document_chat_conversation_epoch.js",
+    migration: require("./043_document_chat_conversation_epoch"),
+  },
 ];

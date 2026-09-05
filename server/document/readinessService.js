@@ -627,8 +627,8 @@ const prepareDocument = async (
   }
 };
 
-const runReadinessAudit = async () => {
-  const inserted = await query(`
+const runReadinessReconciliation = async ({ queryFn = query } = {}) => {
+  const inserted = await queryFn(`
     INSERT INTO document_processing_state (
       document_id, processing_status, extraction_status, embedding_status,
       summary_status, ocr_status, error_message, chunks_count,
@@ -683,7 +683,7 @@ const runReadinessAudit = async () => {
     ON CONFLICT (document_id) DO NOTHING
     RETURNING document_id
   `);
-  const result = await query(`
+  const result = await queryFn(`
     WITH computed AS (
       SELECT
         document.id,
@@ -872,7 +872,7 @@ const runReadinessAudit = async () => {
       )
     RETURNING state.readiness_class
   `);
-  await query(`
+  await queryFn(`
     UPDATE documents document
     SET research_ready = state.research_ready,
         comparison_ready = state.comparison_ready,
@@ -884,7 +884,7 @@ const runReadinessAudit = async () => {
         OR document.comparison_ready IS DISTINCT FROM state.comparison_ready
       )
   `);
-  await query(`
+  await queryFn(`
     UPDATE document_processing_state state
     SET catalogued = TRUE,
         resource_ready = EXISTS (
@@ -933,7 +933,7 @@ const runReadinessAudit = async () => {
       state.comparison_ready
     )
   `);
-  const sanitizedFailures = await query(`
+  const sanitizedFailures = await queryFn(`
     WITH unsafe AS (
       SELECT state.document_id
       FROM document_processing_state state
@@ -962,7 +962,7 @@ const runReadinessAudit = async () => {
     WHERE state.document_id = unsafe.document_id
     RETURNING state.document_id
   `);
-  await query(`
+  await queryFn(`
     UPDATE legislative_documents legacy
     SET processing_error = 'AI generation provider unavailable.',
         updated_at = NOW()
@@ -976,7 +976,7 @@ const runReadinessAudit = async () => {
       (summary[row.readiness_class] || 0) + 1;
     return summary;
   }, {});
-  const reconciled = await query(`
+  const reconciled = await queryFn(`
     UPDATE document_processing_jobs job
     SET status = 'dead_letter', completed_at = COALESCE(completed_at, NOW()),
         updated_at = NOW()
@@ -986,10 +986,12 @@ const runReadinessAudit = async () => {
       AND job.status = 'failed'
     RETURNING job.id
   `);
-  const audited = await query(
+  const audited = await queryFn(
     "SELECT COUNT(*)::INTEGER AS documents FROM document_processing_state",
   );
   return {
+    mode: "reconcile",
+    explicitApply: true,
     audited: Number(audited.rows[0]?.documents || 0),
     updatedStates: result.rows.length,
     createdStates: inserted.rows.length,
@@ -997,6 +999,186 @@ const runReadinessAudit = async () => {
     sanitizedFailures: sanitizedFailures.rows.length,
     counts,
   };
+};
+
+const READINESS_FINGERPRINT_SQL = `
+  SELECT JSON_BUILD_OBJECT(
+    'processingState', (
+      SELECT JSON_BUILD_OBJECT(
+        'rows', COUNT(*),
+        'hash', MD5(COALESCE(STRING_AGG(
+          MD5(ROW_TO_JSON(fingerprint_row)::TEXT),
+          '' ORDER BY document_id
+        ), ''))
+      )
+      FROM (
+        SELECT
+          document_id, processing_status, extraction_status, embedding_status,
+          summary_status, ocr_status, error_message, chunks_count,
+          pdf_status, chunking_status, embeddings_count, retrieval_mode,
+          retrieval_verified, retrieval_verified_at, research_ready,
+          comparison_ready, readiness_class, readiness_reason, failure_reason,
+          catalogued, resource_ready, text_ready, search_ready, semantic_ready,
+          chat_ready, capability_comparison_ready, capabilities_updated_at,
+          updated_at
+        FROM document_processing_state
+      ) fingerprint_row
+    ),
+    'documents', (
+      SELECT JSON_BUILD_OBJECT(
+        'rows', COUNT(*),
+        'hash', MD5(COALESCE(STRING_AGG(
+          MD5(ROW_TO_JSON(fingerprint_row)::TEXT),
+          '' ORDER BY id
+        ), ''))
+      )
+      FROM (
+        SELECT id, research_ready, comparison_ready, updated_at
+        FROM documents
+      ) fingerprint_row
+    ),
+    'legacyDocuments', (
+      SELECT JSON_BUILD_OBJECT(
+        'rows', COUNT(*),
+        'hash', MD5(COALESCE(STRING_AGG(
+          MD5(ROW_TO_JSON(fingerprint_row)::TEXT),
+          '' ORDER BY id
+        ), ''))
+      )
+      FROM (
+        SELECT id, processing_error, updated_at
+        FROM legislative_documents
+      ) fingerprint_row
+    ),
+    'processingJobs', (
+      SELECT JSON_BUILD_OBJECT(
+        'rows', COUNT(*),
+        'hash', MD5(COALESCE(STRING_AGG(
+          MD5(ROW_TO_JSON(fingerprint_row)::TEXT),
+          '' ORDER BY id
+        ), ''))
+      )
+      FROM (
+        SELECT id, status, completed_at, updated_at
+        FROM document_processing_jobs
+      ) fingerprint_row
+    )
+  ) AS fingerprint
+`;
+
+const READINESS_DIAGNOSTICS_SQL = `
+  SELECT
+    (SELECT COUNT(*)::INTEGER FROM documents) AS documents,
+    (
+      SELECT COUNT(*)::INTEGER
+      FROM documents document
+      LEFT JOIN document_processing_state state
+        ON state.document_id = document.id
+      WHERE state.document_id IS NULL
+    ) AS missing_states,
+    (
+      SELECT COUNT(*)::INTEGER
+      FROM documents document
+      JOIN document_processing_state state
+        ON state.document_id = document.id
+      WHERE document.research_ready IS DISTINCT FROM state.research_ready
+         OR document.comparison_ready IS DISTINCT FROM state.comparison_ready
+    ) AS document_flag_mismatches,
+    (
+      SELECT COUNT(*)::INTEGER
+      FROM document_processing_jobs job
+      JOIN document_processing_state state
+        ON state.document_id = job.document_id
+      WHERE state.readiness_class = 'processing_failed_permanent'
+        AND job.status = 'failed'
+    ) AS dead_letters_eligible,
+    (
+      SELECT COUNT(*)::INTEGER
+      FROM document_processing_state state
+      WHERE COALESCE(
+        state.error_message,
+        state.failure_reason,
+        state.readiness_reason,
+        ''
+      ) ~* '(api[ -]?key|credential|secret|token|authorization|authentication|billing|quota|AQ\\.|sk-)'
+    ) AS unsafe_failure_rows,
+    COALESCE((
+      SELECT JSON_AGG(JSON_BUILD_OBJECT(
+        'classification', grouped.readiness_class,
+        'documents', grouped.documents
+      ) ORDER BY grouped.documents DESC, grouped.readiness_class)
+      FROM (
+        SELECT readiness_class, COUNT(*)::INTEGER AS documents
+        FROM document_processing_state
+        GROUP BY readiness_class
+      ) grouped
+    ), '[]'::JSON) AS classifications
+`;
+
+const normalizeFingerprint = (result) => {
+  const fingerprint = result?.rows?.[0]?.fingerprint;
+  if (!fingerprint || typeof fingerprint !== "object") {
+    throw new Error("Readiness audit could not capture a database fingerprint.");
+  }
+  return fingerprint;
+};
+
+const stableFingerprint = (fingerprint) => JSON.stringify(fingerprint);
+
+const runReadinessAudit = async ({ queryFn = null } = {}) => {
+  let client = null;
+  let execute = queryFn;
+  if (!execute) {
+    client = await getPool().connect();
+    execute = client.query.bind(client);
+  }
+
+  try {
+    // The database itself enforces the safety contract. If a future edit adds
+    // INSERT/UPDATE/DELETE to the default audit path, PostgreSQL rejects it.
+    await execute("BEGIN TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY");
+    const before = normalizeFingerprint(await execute(READINESS_FINGERPRINT_SQL));
+    const diagnostics = (await execute(READINESS_DIAGNOSTICS_SQL)).rows[0] || {};
+    const after = normalizeFingerprint(await execute(READINESS_FINGERPRINT_SQL));
+    const unchanged = stableFingerprint(before) === stableFingerprint(after);
+    if (!unchanged) {
+      throw new Error(
+        "Read-only readiness audit detected a database fingerprint change.",
+      );
+    }
+    await execute("COMMIT");
+    return {
+      mode: "audit",
+      readOnly: true,
+      audited: Number(diagnostics.documents || 0),
+      diagnostics: {
+        missingStates: Number(diagnostics.missing_states || 0),
+        documentFlagMismatches: Number(
+          diagnostics.document_flag_mismatches || 0,
+        ),
+        deadLettersEligible: Number(diagnostics.dead_letters_eligible || 0),
+        unsafeFailureRows: Number(diagnostics.unsafe_failure_rows || 0),
+        classifications: Array.isArray(diagnostics.classifications)
+          ? diagnostics.classifications.map((item) => ({
+            classification: item.classification,
+            documents: Number(item.documents || 0),
+          }))
+          : [],
+      },
+      mutationCounts: { created: 0, updated: 0, deleted: 0 },
+      fingerprint: { before, after, unchanged },
+      applyHint: "Run process:audit with the exact --apply flag to reconcile readiness state.",
+    };
+  } catch (error) {
+    try {
+      await execute("ROLLBACK");
+    } catch {
+      // Preserve the original audit failure.
+    }
+    throw error;
+  } finally {
+    if (client) client.release();
+  }
 };
 
 const getProcessingStatus = async () => {
@@ -1329,4 +1511,5 @@ module.exports = {
   prepareDocument,
   processDocumentBatch,
   runReadinessAudit,
+  runReadinessReconciliation,
 };

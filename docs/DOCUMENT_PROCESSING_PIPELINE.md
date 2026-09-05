@@ -102,6 +102,17 @@ npm run process:documents --prefix server -- --limit=500 --resume --concurrency=
 npm run process:policies --prefix server -- --limit=25
 ```
 
+`process:audit` is strictly read-only and verifies before/after fingerprints
+inside a PostgreSQL read-only transaction. It never reconciles state. When an
+operator has reviewed the diagnostics and intentionally wants to apply the
+readiness reconciliation, use the separately named command:
+
+```bash
+npm run process:reconcile --prefix server
+```
+
+Reconciliation is a mutating production operation; audit is not.
+
 The batch order prioritizes interacted-with documents, comparison selections,
 recommendations, graph degree, policies, Bills, Acts, Gazette records, recency,
 quality, and PDF-size cost efficiency. Use small batches first after any

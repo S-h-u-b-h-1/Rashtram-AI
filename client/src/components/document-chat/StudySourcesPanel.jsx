@@ -12,6 +12,11 @@ import {
   Upload,
   X,
 } from "lucide-react";
+import {
+  normalizeResearchUploadError,
+  researchUploadFailureStage,
+  validateResearchPdfCandidate,
+} from "@/lib/research-upload.mjs";
 
 const sourceLabel = (source) =>
   source.sourceType === "pdf_upload" ? "PDF upload" : "Web source";
@@ -23,6 +28,7 @@ export function StudySourcesPanel({
   onAddUrl,
   onAddPdf,
   onDelete,
+  onRetry,
   onCollapse,
 }) {
   const [url, setUrl] = useState("");
@@ -32,6 +38,7 @@ export function StudySourcesPanel({
   const [uploadSize, setUploadSize] = useState(0);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [uploadStage, setUploadStage] = useState("");
+  const [retryingId, setRetryingId] = useState(null);
   const fileInputRef = useRef(null);
 
   const submitUrl = async (event) => {
@@ -53,8 +60,12 @@ export function StudySourcesPanel({
     const file = event.target.files?.[0];
     event.target.value = "";
     if (!file) return;
-    if (file.size > 50 * 1024 * 1024) {
-      setError("PDF uploads are limited to 50 MB.");
+    try {
+      validateResearchPdfCandidate(file);
+    } catch (validationError) {
+      const uploadError = normalizeResearchUploadError(validationError);
+      setError(uploadError.message);
+      setUploadStage(researchUploadFailureStage(uploadError));
       return;
     }
     setAdding(true);
@@ -70,10 +81,25 @@ export function StudySourcesPanel({
       });
       setUploadStage("Ready to use");
     } catch (requestError) {
-      setError(requestError.message || "The PDF could not be added.");
-      setUploadStage("Upload failed");
+      const uploadError = normalizeResearchUploadError(requestError);
+      setError(uploadError.message);
+      setUploadStage(researchUploadFailureStage(uploadError));
     } finally {
       setAdding(false);
+    }
+  };
+
+  const retrySource = async (sourceId) => {
+    if (!onRetry || retryingId) return;
+    setRetryingId(String(sourceId));
+    setError("");
+    try {
+      await onRetry(sourceId);
+    } catch (requestError) {
+      const uploadError = normalizeResearchUploadError(requestError);
+      setError(uploadError.message);
+    } finally {
+      setRetryingId(null);
     }
   };
 
@@ -160,7 +186,7 @@ export function StudySourcesPanel({
             <p className="mt-2 text-[10px] text-[#874047]">{uploadStage}{uploadProgress > 0 && uploadProgress < 100 ? ` · ${uploadProgress}%` : ""}</p>
           </div>
         )}
-        {error && <p className="mt-2 text-[11px] leading-4 text-[#a33d42]">{error}</p>}
+        {error && <p className="mt-2 text-[11px] leading-4 text-[#a33d42]" role="alert">{error}</p>}
       </div>
 
       <div className="app-scrollbar min-h-0 flex-1 space-y-2 overflow-y-auto p-3">
@@ -180,8 +206,9 @@ export function StudySourcesPanel({
               <div className="flex items-start gap-2">
                 <button
                   type="button"
-                  onClick={() => onToggle(String(source.id))}
-                  className={`mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded-md border ${selected ? "border-[#8f1d2c] bg-[#8f1d2c] text-white" : "border-[#b8afa2] bg-white text-transparent"}`}
+                  onClick={() => source.status === "ready" && onToggle(String(source.id))}
+                  disabled={source.status !== "ready"}
+                  className={`mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded-md border disabled:cursor-not-allowed disabled:opacity-35 ${selected ? "border-[#8f1d2c] bg-[#8f1d2c] text-white" : "border-[#b8afa2] bg-white text-transparent"}`}
                   aria-label={selected ? `Remove ${source.title} from context` : `Use ${source.title} in context`}
                 >
                   <Check className="h-3 w-3" />
@@ -194,6 +221,21 @@ export function StudySourcesPanel({
                       ? `${source.metadata?.partialValid ? "Partially ready" : "Ready to use"}${source.metadata?.pageCount ? ` · ${source.metadata.pageCount} pages` : ""}`
                       : source.status === "failed" ? "Preparation failed" : "Preparing evidence"}
                   </p>
+                  {source.status === "failed" &&
+                    source.metadata?.durableOriginal === true &&
+                    source.metadata?.uploadStage === "failed_retryable" && (
+                      <button
+                        type="button"
+                        onClick={() => retrySource(source.id)}
+                        disabled={Boolean(retryingId)}
+                        className="mt-2 inline-flex items-center gap-1 rounded-lg border border-[#8f1d2c]/15 px-2 py-1 text-[10px] font-semibold text-[#874047] disabled:opacity-45"
+                      >
+                        {retryingId === String(source.id) && (
+                          <Loader2 className="h-3 w-3 animate-spin" />
+                        )}
+                        Retry preparation
+                      </button>
+                    )}
                 </div>
                 <button
                   type="button"

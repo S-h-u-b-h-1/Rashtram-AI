@@ -3,6 +3,7 @@ const {
   DeleteObjectCommand,
   GetObjectCommand,
   HeadObjectCommand,
+  ListObjectVersionsCommand,
   PutObjectCommand,
   S3Client,
 } = require("@aws-sdk/client-s3");
@@ -32,6 +33,12 @@ const userSourceObjectKey = ({ userId, uploadId, extension = "pdf" }) => {
   if (!safeExtension) throw new Error("User-source object extension is invalid.");
   return `rashtram/user-sources/${normalizedUserId}/${normalizedUploadId}.${safeExtension}`;
 };
+
+const userSourceIntentObjectKey = ({ userId, uploadId, extension = "pdf" }) =>
+  userSourceObjectKey({ userId, uploadId, extension }).replace(
+    "rashtram/user-sources/",
+    "rashtram/user-source-intents/",
+  );
 
 const artifactKey = ({ kind, hash, extension = "bin" }) => {
   if (!ARTIFACT_KINDS.has(kind)) {
@@ -85,6 +92,46 @@ const sanitizedObjectStorageStatus = (env = process.env) => {
   };
 };
 
+const listExactObjectVersions = async ({
+  client,
+  bucket,
+  key,
+  maxPages = 100,
+}) => {
+  const exactKey = String(key || "");
+  if (!exactKey) throw new Error("Object-storage key is required for version listing.");
+  const matches = [];
+  let keyMarker;
+  let versionIdMarker;
+  for (let page = 0; page < maxPages; page += 1) {
+    const result = await client.send(new ListObjectVersionsCommand({
+      Bucket: bucket,
+      Prefix: exactKey,
+      MaxKeys: 1000,
+      ...(keyMarker ? { KeyMarker: keyMarker } : {}),
+      ...(versionIdMarker ? { VersionIdMarker: versionIdMarker } : {}),
+    }));
+    for (const item of result.Versions || []) {
+      if (item.Key === exactKey && item.VersionId != null) {
+        matches.push({ key: exactKey, versionId: String(item.VersionId), kind: "version" });
+      }
+    }
+    for (const item of result.DeleteMarkers || []) {
+      if (item.Key === exactKey && item.VersionId != null) {
+        matches.push({ key: exactKey, versionId: String(item.VersionId), kind: "delete_marker" });
+      }
+    }
+    if (!result.IsTruncated) return matches;
+    if (!result.NextKeyMarker ||
+        result.NextKeyMarker === keyMarker && result.NextVersionIdMarker === versionIdMarker) {
+      throw new Error("Object-version listing did not advance safely.");
+    }
+    keyMarker = result.NextKeyMarker;
+    versionIdMarker = result.NextVersionIdMarker;
+  }
+  throw new Error("Object-version listing exceeded the bounded pagination limit.");
+};
+
 const createObjectStorage = ({ env = process.env, client } = {}) => {
   const config = objectStorageConfig(env);
   if (!config.configured && !client) {
@@ -105,15 +152,68 @@ const createObjectStorage = ({ env = process.env, client } = {}) => {
   const bucket = config.bucket || env.OBJECT_STORAGE_BUCKET;
 
   return {
-    async createPresignedUpload({ key, contentType, expiresIn = 600 }) {
-      const ttl = Math.min(Math.max(Number(expiresIn) || 600, 60), 900);
+    async createPresignedUpload({
+      key,
+      contentType,
+      contentLength,
+      checksumSha256,
+      expiresIn = 300,
+    }) {
+      const ttl = Math.min(Math.max(Number(expiresIn) || 300, 60), 300);
+      const checksumBase64 = /^[a-f0-9]{64}$/i.test(String(checksumSha256 || ""))
+        ? Buffer.from(checksumSha256, "hex").toString("base64")
+        : null;
       const command = new PutObjectCommand({
         Bucket: bucket,
         Key: key,
         ContentType: contentType || "application/pdf",
+        ...(Number.isSafeInteger(Number(contentLength)) && Number(contentLength) > 0
+          ? { ContentLength: Number(contentLength) }
+          : {}),
+        ...(checksumBase64 ? { ChecksumSHA256: checksumBase64 } : {}),
+        Metadata: {
+          ...(Number.isSafeInteger(Number(contentLength))
+            ? { expectedsize: String(contentLength) }
+            : {}),
+          ...(checksumSha256 ? { expectedsha256: String(checksumSha256).toLowerCase() } : {}),
+        },
       });
       const uploadUrl = await getSignedUrl(storageClient, command, { expiresIn: ttl });
-      return { key, uploadUrl, expiresIn: ttl };
+      return {
+        key,
+        uploadUrl,
+        expiresIn: ttl,
+        requiredHeaders: {
+          "Content-Type": contentType || "application/pdf",
+        },
+      };
+    },
+
+    async putUserSourceArtifact({
+      userId,
+      uploadId = crypto.randomUUID(),
+      body,
+      contentType,
+      extension,
+      metadata = {},
+    }) {
+      const buffer = Buffer.isBuffer(body) ? body : Buffer.from(body);
+      const hash = sha256(buffer);
+      const key = userSourceObjectKey({ userId, uploadId, extension });
+      await storageClient.send(new PutObjectCommand({
+        Bucket: bucket,
+        Key: key,
+        Body: buffer,
+        ContentType: contentType || "application/octet-stream",
+        ChecksumSHA256: Buffer.from(hash, "hex").toString("base64"),
+        Metadata: {
+          ...Object.fromEntries(
+            Object.entries(metadata).map(([name, value]) => [name, String(value)]),
+          ),
+          sha256: hash,
+        },
+      }));
+      return { key, hash, bytes: buffer.length };
     },
 
     async putArtifact({ kind, body, contentType, extension, metadata = {} }) {
@@ -164,9 +264,54 @@ const createObjectStorage = ({ env = process.env, client } = {}) => {
       };
     },
 
+    async listArtifactVersions(key) {
+      return listExactObjectVersions({ client: storageClient, bucket, key });
+    },
+
     async deleteArtifact(key) {
-      await storageClient.send(new DeleteObjectCommand({ Bucket: bucket, Key: key }));
-      return { key, deleted: true };
+      const exactKey = String(key || "");
+      if (!exactKey) throw new Error("Object-storage key is required for permanent deletion.");
+      const maxPasses = 10;
+      let deletedVersions = 0;
+      for (let pass = 0; pass < maxPasses; pass += 1) {
+        const versions = await listExactObjectVersions({
+          client: storageClient,
+          bucket,
+          key: exactKey,
+        });
+        if (!versions.length) {
+          return {
+            key: exactKey,
+            deleted: true,
+            deletedVersions,
+            permanentDeletionVerified: true,
+          };
+        }
+        for (const version of versions) {
+          await storageClient.send(new DeleteObjectCommand({
+            Bucket: bucket,
+            Key: exactKey,
+            VersionId: version.versionId,
+          }));
+          deletedVersions += 1;
+        }
+      }
+      const remaining = await listExactObjectVersions({
+        client: storageClient,
+        bucket,
+        key: exactKey,
+      });
+      if (remaining.length) {
+        const error = new Error("Object-storage permanent deletion could not be verified.");
+        error.code = "OBJECT_STORAGE_DELETE_INCOMPLETE";
+        throw error;
+      }
+      return {
+        key: exactKey,
+        deleted: true,
+        deletedVersions,
+        permanentDeletionVerified: true,
+      };
     },
   };
 };
@@ -204,7 +349,14 @@ const runObjectStorageSmokeTest = async ({ env = process.env, client } = {}) => 
       error.code = "OBJECT_STORAGE_SMOKE_VERIFICATION_FAILED";
       throw error;
     }
-    await storage.deleteArtifact(key);
+    const versionInventoryBeforeDelete = await storage.listArtifactVersions(key);
+    const deletion = await storage.deleteArtifact(key);
+    const versionInventoryAfterDelete = await storage.listArtifactVersions(key);
+    if (!deletion.permanentDeletionVerified || versionInventoryAfterDelete.length) {
+      const error = new Error("Object-storage version inventory remained after deletion.");
+      error.code = "OBJECT_STORAGE_SMOKE_DELETE_FAILED";
+      throw error;
+    }
     try {
       await storage.headArtifact(key);
       const error = new Error("Object-storage smoke-test object remained after deletion.");
@@ -221,6 +373,9 @@ const runObjectStorageSmokeTest = async ({ env = process.env, client } = {}) => 
       providerName: objectStorageConfig(env).provider,
       checksumVerified: true,
       byteEqualityVerified: true,
+      versionInventoryBeforeDelete: versionInventoryBeforeDelete.length,
+      versionInventoryAfterDelete: versionInventoryAfterDelete.length,
+      permanentDeletionVerified: true,
       leftoverObject: false,
     };
   } catch (error) {
@@ -240,9 +395,11 @@ module.exports = {
   ARTIFACT_KINDS,
   artifactKey,
   createObjectStorage,
+  listExactObjectVersions,
   objectStorageConfig,
   sanitizedObjectStorageStatus,
   runObjectStorageSmokeTest,
   sha256,
   userSourceObjectKey,
+  userSourceIntentObjectKey,
 };

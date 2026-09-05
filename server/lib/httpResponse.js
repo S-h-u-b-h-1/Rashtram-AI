@@ -14,6 +14,7 @@ const sendError = (res, error, context) => {
     console.error(`${context} [${requestId}]:`, error);
     return res.status(status).json({
       error: error.publicMessage || "Internal server error.",
+      ...(error.publicCode ? { code: error.publicCode } : {}),
       requestId,
     });
   }

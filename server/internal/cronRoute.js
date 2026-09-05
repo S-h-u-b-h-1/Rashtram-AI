@@ -10,9 +10,12 @@ const { getPool } = require("../db");
 const { runRetention } = require("../lib/database/maintenance");
 const { readStorageStatus } = require("../lib/database/capacity");
 const {
+  objectStorageConfig,
   runObjectStorageSmokeTest,
   sanitizedObjectStorageStatus,
 } = require("../lib/storage/objectStorage");
+const { sweepStalePdfUploadIntents } = require("../research/sourceService");
+const { cleanupGenerationClaims } = require("../models/DocumentChat");
 
 const router = express.Router();
 
@@ -102,7 +105,31 @@ router.get("/maintenance", async (req, res, next) => {
       batchSize: 250,
       maxBatches: 4,
     });
-    return res.json({ ok: true, storage, retention });
+    const uploadCleanup = objectStorageConfig().configured
+      ? sweepStalePdfUploadIntents({ limit: 100 })
+      : Promise.resolve({ skipped: true, reason: "object_storage_unavailable" });
+    const chatCleanup = cleanupGenerationClaims({
+        perDocument: 200,
+        replayDays: 7,
+        batchSize: 500,
+      });
+    const [uploadResult, chatResult] = await Promise.allSettled([
+      uploadCleanup,
+      chatCleanup,
+    ]);
+    const researchUploadCleanup = uploadResult.status === "fulfilled"
+      ? uploadResult.value
+      : { skipped: false, failed: true, code: "STORAGE_UNAVAILABLE" };
+    const chatGenerationCleanup = chatResult.status === "fulfilled"
+      ? chatResult.value
+      : { failed: true, code: "CHAT_GENERATION_CLEANUP_FAILED" };
+    return res.json({
+      ok: true,
+      storage,
+      retention,
+      researchUploadCleanup,
+      chatGenerationCleanup,
+    });
   } catch (error) {
     return next(error);
   }

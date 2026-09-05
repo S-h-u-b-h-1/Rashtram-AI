@@ -1,4 +1,5 @@
 const express = require("express");
+const crypto = require("node:crypto");
 const { generationLimiter } = require("../middleware/security");
 const DocumentChat = require("../models/DocumentChat");
 const {
@@ -59,6 +60,189 @@ const {
 
 const router = express.Router();
 
+const CHAT_REQUEST_LIMITS = Object.freeze({
+  questionChars: 20_000,
+  displayMessageChars: 20_000,
+  workflowIdChars: 80,
+  workflowTitleChars: 120,
+  workflowGroupChars: 80,
+  responseLanguageChars: 40,
+  sourceIds: 20,
+  sourceIdChars: 120,
+});
+
+const chatRequestError = (status, failureCode, message) => {
+  const error = new Error(message);
+  error.status = status;
+  error.failureCode = failureCode;
+  return error;
+};
+
+const validateGeneratedChatPayload = (body = {}) => {
+  if (typeof body.message !== "string") {
+    throw chatRequestError(
+      422,
+      "INVALID_CHAT_PAYLOAD",
+      "Message must be text.",
+    );
+  }
+  const message = body.message.trim();
+  if (!message) {
+    throw chatRequestError(400, "MESSAGE_REQUIRED", "Message is required.");
+  }
+  if (message.length > CHAT_REQUEST_LIMITS.questionChars) {
+    throw chatRequestError(
+      413,
+      "CHAT_MESSAGE_TOO_LARGE",
+      `Questions are limited to ${CHAT_REQUEST_LIMITS.questionChars.toLocaleString("en-US")} characters.`,
+    );
+  }
+
+  if (
+    body.displayMessage !== undefined &&
+    typeof body.displayMessage !== "string"
+  ) {
+    throw chatRequestError(
+      422,
+      "INVALID_CHAT_PAYLOAD",
+      "Display message must be text.",
+    );
+  }
+  const displayMessage = String(body.displayMessage || message).trim() || message;
+  if (displayMessage.length > CHAT_REQUEST_LIMITS.displayMessageChars) {
+    throw chatRequestError(
+      413,
+      "CHAT_DISPLAY_MESSAGE_TOO_LARGE",
+      `Displayed questions are limited to ${CHAT_REQUEST_LIMITS.displayMessageChars.toLocaleString("en-US")} characters.`,
+    );
+  }
+
+  let workflow = null;
+  if (body.workflow !== undefined && body.workflow !== null) {
+    if (
+      typeof body.workflow !== "object" ||
+      Array.isArray(body.workflow)
+    ) {
+      throw chatRequestError(
+        422,
+        "INVALID_CHAT_WORKFLOW",
+        "Workflow must be a structured object.",
+      );
+    }
+    const fields = [
+      ["id", CHAT_REQUEST_LIMITS.workflowIdChars],
+      ["title", CHAT_REQUEST_LIMITS.workflowTitleChars],
+      ["group", CHAT_REQUEST_LIMITS.workflowGroupChars],
+    ];
+    for (const [field, maximum] of fields) {
+      if (
+        body.workflow[field] !== undefined &&
+        typeof body.workflow[field] !== "string"
+      ) {
+        throw chatRequestError(
+          422,
+          "INVALID_CHAT_WORKFLOW",
+          `Workflow ${field} must be text.`,
+        );
+      }
+      if (String(body.workflow[field] || "").length > maximum) {
+        throw chatRequestError(
+          413,
+          "CHAT_WORKFLOW_TOO_LARGE",
+          `Workflow ${field} exceeds the supported limit.`,
+        );
+      }
+    }
+    workflow = {
+      id: String(body.workflow.id || ""),
+      title: String(body.workflow.title || ""),
+      group: String(body.workflow.group || ""),
+    };
+  }
+
+  if (body.sourceIds !== undefined && !Array.isArray(body.sourceIds)) {
+    throw chatRequestError(
+      422,
+      "INVALID_CHAT_SOURCES",
+      "Selected source IDs must be an array.",
+    );
+  }
+  const sourceIds = body.sourceIds || [];
+  if (sourceIds.length > CHAT_REQUEST_LIMITS.sourceIds) {
+    throw chatRequestError(
+      413,
+      "CHAT_SOURCES_TOO_LARGE",
+      `A chat turn can use at most ${CHAT_REQUEST_LIMITS.sourceIds} selected sources.`,
+    );
+  }
+  const normalizedSourceIds = sourceIds.map((sourceId) => {
+    if (!(["string", "number"].includes(typeof sourceId))) {
+      throw chatRequestError(
+        422,
+        "INVALID_CHAT_SOURCES",
+        "Every selected source must have a valid ID.",
+      );
+    }
+    const normalized = String(sourceId).trim();
+    if (!normalized) {
+      throw chatRequestError(
+        422,
+        "INVALID_CHAT_SOURCES",
+        "Every selected source must have a valid ID.",
+      );
+    }
+    if (normalized.length > CHAT_REQUEST_LIMITS.sourceIdChars) {
+      throw chatRequestError(
+        413,
+        "CHAT_SOURCES_TOO_LARGE",
+        "A selected source ID exceeds the supported limit.",
+      );
+    }
+    return normalized;
+  });
+
+  if (
+    body.responseLanguage !== undefined &&
+    typeof body.responseLanguage !== "string"
+  ) {
+    throw chatRequestError(
+      422,
+      "INVALID_CHAT_PAYLOAD",
+      "Response language must be text.",
+    );
+  }
+  const responseLanguage = String(body.responseLanguage || "Auto").trim() || "Auto";
+  if (responseLanguage.length > CHAT_REQUEST_LIMITS.responseLanguageChars) {
+    throw chatRequestError(
+      413,
+      "CHAT_RESPONSE_LANGUAGE_TOO_LARGE",
+      "Response language exceeds the supported limit.",
+    );
+  }
+
+  let conversationEpoch = null;
+  if (body.conversationEpoch !== undefined && body.conversationEpoch !== null) {
+    const candidate = Number(body.conversationEpoch);
+    if (!Number.isSafeInteger(candidate) || candidate < 0) {
+      throw chatRequestError(
+        422,
+        "INVALID_CHAT_CONVERSATION_EPOCH",
+        "Conversation version is invalid.",
+      );
+    }
+    conversationEpoch = candidate;
+  }
+
+  return {
+    conversationEpoch,
+    displayMessage,
+    message,
+    responseLanguage,
+    sourceIds: [...new Set(normalizedSourceIds)],
+    workflow,
+  };
+};
+
 const compactText = (value, maxLength = 1_200) =>
   String(value || "")
     .normalize("NFKC")
@@ -84,6 +268,14 @@ const responseChunks = (value, maximum = 160) => {
     remaining = remaining.slice(end);
   }
   return chunks;
+};
+
+const sendGeneratedChatError = (res, error) => {
+  if (!res.headersSent) {
+    return sendError(res, error, "Unified document chat failed");
+  }
+  errorSSE(res, error);
+  return undefined;
 };
 
 const conversationContext = (chat, currentMessage) => (chat?.messages || [])
@@ -362,6 +554,298 @@ const addMessageWithSessionRecovery = async ({
   );
 };
 
+const chatPersistenceError = (publicMessage) => {
+  const error = new Error(publicMessage);
+  error.status = 500;
+  error.publicMessage = publicMessage;
+  error.failureCode = "CHAT_PERSISTENCE_FAILED";
+  error.publicCode = "CHAT_PERSISTENCE_FAILED";
+  return error;
+};
+
+const normalizeTurnRequestId = (value) => {
+  const requestId = String(value || "")
+    .trim()
+    .replace(/[^a-zA-Z0-9._:-]/g, "-")
+    .slice(0, 80);
+  return requestId || crypto.randomUUID();
+};
+
+const generationInProgressError = () => {
+  const error = new Error(
+    "This answer is already being generated. Please retry shortly.",
+  );
+  error.status = 409;
+  error.failureCode = "CHAT_GENERATION_IN_PROGRESS";
+  error.publicCode = "CHAT_GENERATION_IN_PROGRESS";
+  return error;
+};
+
+const waitForGenerationResult = async ({
+  userId,
+  documentType,
+  documentId,
+  requestId,
+  documentChat = DocumentChat,
+  timeoutMs = 30_000,
+  pollIntervalMs = 75,
+  wait = (duration) => new Promise((resolve) => setTimeout(resolve, duration)),
+}) => {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() <= deadline) {
+    const generation = await documentChat.getGeneration(
+      userId,
+      documentType,
+      documentId,
+      requestId,
+    );
+    if (generation?.status === "completed" && generation.response_json) {
+      return generation.response_json;
+    }
+    if (!generation || generation.status === "failed") return null;
+    await wait(pollIntervalMs);
+  }
+  throw generationInProgressError();
+};
+
+const beginGeneratedChatTurn = async ({
+  userId,
+  documentType,
+  documentId,
+  document,
+  message,
+  displayMessage,
+  requestId,
+  responseLanguage,
+  sourceIds = [],
+  workflow = null,
+  conversationEpoch = null,
+  documentChat = DocumentChat,
+}) => {
+  const turnId = normalizeTurnRequestId(requestId);
+  const session = await documentChat.findOrCreate(userId, {
+    ...document,
+    documentType,
+    documentId,
+    summary: document?.summary || null,
+  });
+  if (!session) {
+    throw chatPersistenceError(
+      "The research conversation could not be created. Please retry.",
+    );
+  }
+  const activeConversationEpoch = Number(session.conversationEpoch || 0);
+  if (
+    conversationEpoch !== null &&
+    Number(conversationEpoch) !== activeConversationEpoch
+  ) {
+    throw chatRequestError(
+      409,
+      "CHAT_CONVERSATION_CLEARED",
+      "This conversation was cleared. Please submit the question again.",
+    );
+  }
+  const claim = typeof documentChat.claimGeneration === "function"
+    ? await documentChat.claimGeneration(
+      userId,
+      documentType,
+      documentId,
+      turnId,
+      activeConversationEpoch,
+    )
+    : { claimAcquired: true, owner_token: crypto.randomUUID() };
+  if (!claim?.claimAcquired) {
+    const reusedResponse = claim?.status === "completed" && claim.response_json
+      ? claim.response_json
+      : await waitForGenerationResult({
+        userId,
+        documentType,
+        documentId,
+        requestId: turnId,
+        documentChat,
+      });
+    if (reusedResponse) {
+      return {
+        chat: session,
+        turnId,
+        userMessageId: `${turnId}:user`,
+        assistantMessageId: turnId,
+        claimAcquired: false,
+        reusedResponse,
+      };
+    }
+    throw generationInProgressError();
+  }
+  const userMessageId = `${turnId}:user`;
+  // Keep the assistant ID identical to the optimistic stream ID so feedback,
+  // export, and post-refresh message actions all address the same message.
+  const assistantMessageId = turnId;
+  const chat = await documentChat.addMessage(
+    userId,
+    documentType,
+    documentId,
+    {
+      id: userMessageId,
+      text: String(displayMessage || message),
+      sender: "user",
+      timestamp: new Date().toISOString(),
+      metadata: {
+        requestId: turnId,
+        responseLanguage: responseLanguage || "Auto",
+        sourceIds: sourceIds.map(String),
+        ...(workflow
+          ? {
+              workflowId: workflow.id,
+              workflowTitle: workflow.title,
+              workflowGroup: workflow.group,
+              executionPrompt: message,
+            }
+          : {}),
+      },
+      conversationEpoch: activeConversationEpoch,
+    },
+  );
+  if (!chat) {
+    if (typeof documentChat.failGeneration === "function") {
+      await documentChat.failGeneration(
+        userId,
+        documentType,
+        documentId,
+        turnId,
+        claim.owner_token,
+      ).catch(() => undefined);
+    }
+    const current = typeof documentChat.findOne === "function"
+      ? await documentChat.findOne(userId, documentType, documentId)
+        .catch(() => null)
+      : null;
+    if (current && Number(current.conversationEpoch || 0) !== activeConversationEpoch) {
+      throw chatRequestError(
+        409,
+        "CHAT_CONVERSATION_CLEARED",
+        "This conversation was cleared. Please submit the question again.",
+      );
+    }
+    throw chatPersistenceError(
+      "The research question could not be saved. Please retry.",
+    );
+  }
+  return {
+    chat,
+    turnId,
+    userMessageId,
+    assistantMessageId,
+    claimAcquired: true,
+    ownerToken: claim.owner_token,
+    conversationEpoch: activeConversationEpoch,
+  };
+};
+
+const persistGeneratedChatResponse = async ({
+  lifecycle,
+  userId,
+  documentType,
+  documentId,
+  text,
+  sources = [],
+  metadata = {},
+  documentChat = DocumentChat,
+}) => {
+  const storedMetadata = {
+    ...metadata,
+    requestId: lifecycle.turnId,
+    ...(metadata.workflow
+      ? {
+          workflowId: metadata.workflow.id,
+          workflowTitle: metadata.workflow.title,
+          workflowGroup: metadata.workflow.group,
+        }
+      : {}),
+  };
+  const assistantMessage = {
+    id: lifecycle.assistantMessageId,
+    text,
+    sender: "assistant",
+    timestamp: new Date().toISOString(),
+    sources,
+    metadata: storedMetadata,
+  };
+  if (typeof documentChat.completeGeneratedResponse === "function") {
+    const completed = await documentChat.completeGeneratedResponse({
+      userId,
+      documentType,
+      documentId,
+      requestId: lifecycle.turnId,
+      ownerToken: lifecycle.ownerToken,
+      conversationEpoch: lifecycle.conversationEpoch,
+      messageData: assistantMessage,
+    });
+    if (!completed?.persistence) {
+      throw chatPersistenceError(
+        "The answer was generated, but it could not be saved. Please retry before leaving this page.",
+      );
+    }
+    lifecycle.completed = true;
+    return completed.persistence;
+  }
+  const chat = await documentChat.addMessage(
+    userId,
+    documentType,
+    documentId,
+    assistantMessage,
+  );
+  if (!chat) {
+    throw chatPersistenceError(
+      "The answer was generated, but it could not be saved. Please retry before leaving this page.",
+    );
+  }
+  const persistence = {
+    saved: true,
+    chatId: chat.id,
+    conversationId: chat.id,
+    turnId: lifecycle.turnId,
+    userMessageId: lifecycle.userMessageId,
+    assistantMessageId: lifecycle.assistantMessageId,
+  };
+  if (typeof documentChat.completeGeneration === "function") {
+    const completed = await documentChat.completeGeneration(
+      userId,
+      documentType,
+      documentId,
+      lifecycle.turnId,
+      lifecycle.ownerToken,
+      { text, sources, metadata: storedMetadata, persistence },
+    );
+    if (!completed) {
+      throw chatPersistenceError(
+        "The answer was saved, but its request state could not be finalized. Please retry.",
+      );
+    }
+  }
+  lifecycle.completed = true;
+  return persistence;
+};
+
+const sendReusedGeneratedChatResponse = (res, lifecycle) => {
+  const response = lifecycle.reusedResponse;
+  startSSE(res);
+  sendSSE(res, {
+    type: "meta",
+    sources: response.sources || [],
+    metadata: {
+      ...(response.metadata || {}),
+      persistence: response.persistence,
+      replayed: true,
+    },
+  });
+  for (const content of responseChunks(String(response.text || ""))) {
+    sendSSE(res, { type: "content", content });
+  }
+  completeSSE(res, {
+    metadata: { persistence: response.persistence, replayed: true },
+  });
+};
+
 router.post("/message", async (req, res) => {
   try {
     const { documentType, documentId } = identity(req);
@@ -549,30 +1033,78 @@ router.get("/export/report", async (req, res) => {
 });
 
 router.post("/", generationLimiter, async (req, res) => {
+  let lifecycle = null;
   try {
     const { documentType, documentId } = identity(req);
-    const message = String(req.body.message || "").trim();
-    if (!message) {
-      return res.status(400).json({ error: "Message is required." });
+    const {
+      displayMessage,
+      message,
+      responseLanguage,
+      sourceIds,
+      workflow,
+      conversationEpoch,
+    } = validateGeneratedChatPayload(req.body);
+    const document = await DocumentRepository.getById(documentId);
+    if (!document) {
+      return res.status(404).json({ error: "Document not found." });
+    }
+    lifecycle = await beginGeneratedChatTurn({
+      userId: req.user.id,
+      documentType,
+      documentId,
+      document,
+      message,
+      displayMessage,
+      requestId: req.body.requestId,
+      responseLanguage,
+      sourceIds,
+      workflow,
+      conversationEpoch,
+    });
+    if (lifecycle.reusedResponse) {
+      sendReusedGeneratedChatResponse(res, lifecycle);
+      return undefined;
     }
     if (isPdfExportRequest(message)) {
-      const chat = await DocumentChat.findOne(
-        req.user.id,
-        documentType,
-        documentId,
-      );
+      const chat = lifecycle.chat;
       const report = [...(chat?.messages || [])]
         .reverse()
         .find(isExportableReportMessage);
-      startSSE(res);
       if (!report) {
+        const answer = "Create a research answer or brief first, then ask me to export it as a PDF.";
+        const persistence = await persistGeneratedChatResponse({
+          lifecycle,
+          userId: req.user.id,
+          documentType,
+          documentId,
+          text: answer,
+          metadata: { exportReady: false, exportFormat: "pdf" },
+        });
+        startSSE(res);
         sendSSE(res, {
           type: "content",
-          content: "Create a research answer or brief first, then ask me to export it as a PDF.",
+          content: answer,
         });
-        completeSSE(res);
+        sendSSE(res, { type: "meta", metadata: { persistence } });
+        completeSSE(res, { metadata: { persistence } });
         return undefined;
       }
+      const answer = "Your cited PDF brief is ready. Select **Download PDF** below.";
+      const persistence = await persistGeneratedChatResponse({
+        lifecycle,
+        userId: req.user.id,
+        documentType,
+        documentId,
+        text: answer,
+        sources: report.sources || [],
+        metadata: {
+          grounded: true,
+          exportReady: true,
+          exportFormat: "pdf",
+          exportMessageId: String(report._id || report.id),
+        },
+      });
+      startSSE(res);
       sendSSE(res, {
         type: "meta",
         documentType,
@@ -583,26 +1115,16 @@ router.post("/", generationLimiter, async (req, res) => {
           exportReady: true,
           exportFormat: "pdf",
           exportMessageId: String(report._id || report.id),
+          persistence,
         },
       });
       sendSSE(res, {
         type: "content",
-        content: "Your cited PDF brief is ready. Select **Download PDF** below.",
+        content: answer,
       });
-      completeSSE(res);
+      completeSSE(res, { metadata: { persistence } });
       return undefined;
     }
-    const workflow = req.body.workflow && typeof req.body.workflow === "object"
-      ? {
-          id: String(req.body.workflow.id || "").slice(0, 80),
-          title: String(req.body.workflow.title || "").slice(0, 120),
-          group: String(req.body.workflow.group || "").slice(0, 80),
-        }
-      : null;
-    const sourceIds = Array.isArray(req.body.sourceIds)
-      ? req.body.sourceIds.slice(0, 20)
-      : [];
-    const document = await DocumentRepository.getById(documentId);
     const answerIntent = classifyAnswerIntent(message);
     const freshnessClass = classifyFreshness(message, answerIntent);
     const freshnessRequired = requiresCurrentVerification(freshnessClass);
@@ -624,7 +1146,7 @@ router.post("/", generationLimiter, async (req, res) => {
           }
         })()
       : Promise.resolve({ context: "", sources: [], graphGrounded: false });
-    const [retrieval, relationshipContext, textArtifact, existingChat, sourceFreshness] = await Promise.all([
+    const [retrieval, relationshipContext, textArtifact, sourceFreshness] = await Promise.all([
       retrieveDocumentContext(documentType, documentId, message, {
         topK: settings.finalPassages,
         plan,
@@ -635,7 +1157,6 @@ router.post("/", generationLimiter, async (req, res) => {
       }),
       relationshipPromise,
       getTextArtifact(documentId),
-      DocumentChat.findOne(req.user.id, documentType, documentId).catch(() => null),
       freshnessRequired
         ? loadDocumentSourceFreshness(document).catch(() => ({ status: "error" }))
         : Promise.resolve({ status: "not_required", checkedThrough: null }),
@@ -762,6 +1283,7 @@ router.post("/", generationLimiter, async (req, res) => {
       },
     });
 
+    let responsePersistence = null;
     startSSE(res);
     sendSSE(res, {
       type: "meta",
@@ -789,13 +1311,35 @@ router.post("/", generationLimiter, async (req, res) => {
       },
     });
     if (!context.trim()) {
-      await emitTelemetry({ abstained: true });
+      const answer =
+        "I could not find enough grounded context in this document to answer reliably.";
+      responsePersistence = await persistGeneratedChatResponse({
+        lifecycle,
+        userId: req.user.id,
+        documentType,
+        documentId,
+        text: answer,
+        sources,
+        metadata: {
+          grounded: true,
+          abstained: true,
+          generationMode: "no_grounded_context",
+          evidenceSufficiency: sufficiency,
+          answerIntent,
+          freshnessClass,
+          currentVerification,
+        },
+      });
+      await emitTelemetry({ output: answer, abstained: true });
       sendSSE(res, {
         type: "content",
-        content:
-          "I could not find enough grounded context in this document to answer reliably.",
+        content: answer,
       });
-      completeSSE(res);
+      sendSSE(res, {
+        type: "meta",
+        metadata: { persistence: responsePersistence },
+      });
+      completeSSE(res, { metadata: { persistence: responsePersistence } });
       return undefined;
     }
     const explainConflict = [ANSWER_INTENTS.CURRENT_STATUS, ANSWER_INTENTS.TIMELINE]
@@ -808,6 +1352,23 @@ router.post("/", generationLimiter, async (req, res) => {
       const abstention = buildAbstentionResponse(sufficiency, {
         documentTitles: [document?.title].filter(Boolean),
       });
+      responsePersistence = await persistGeneratedChatResponse({
+        lifecycle,
+        userId: req.user.id,
+        documentType,
+        documentId,
+        text: abstention,
+        sources,
+        metadata: {
+          grounded: true,
+          abstained: true,
+          generationMode: "evidence_abstention",
+          evidenceSufficiency: sufficiency,
+          answerIntent,
+          freshnessClass,
+          currentVerification,
+        },
+      });
       sendSSE(res, {
         type: "content",
         content: abstention,
@@ -818,13 +1379,13 @@ router.post("/", generationLimiter, async (req, res) => {
           abstained: true,
           generationMode: "evidence_abstention",
           evidenceSufficiency: sufficiency,
+          persistence: responsePersistence,
         },
       });
       await emitTelemetry({ output: abstention, abstained: true });
-      completeSSE(res);
+      completeSSE(res, { metadata: { persistence: responsePersistence } });
       return undefined;
     }
-    const responseLanguage = req.body.responseLanguage || "Auto";
     try {
       const generationStartedAt = Date.now();
       const stream = await generateResponse(message, context, {
@@ -833,7 +1394,7 @@ router.post("/", generationLimiter, async (req, res) => {
         intent: answerIntent,
         freshnessClass,
         currentVerification,
-        conversationHistory: conversationContext(existingChat, message),
+        conversationHistory: conversationContext(lifecycle.chat, message),
         strictCompliance: answerIntent === ANSWER_INTENTS.COMPLIANCE,
       });
       let generatedAnswer = "";
@@ -858,6 +1419,25 @@ router.post("/", generationLimiter, async (req, res) => {
           };
       const verificationLatency = Date.now() - verificationStartedAt;
       verification.answer = enforceFreshnessGuard(verification.answer, currentVerification);
+      responsePersistence = await persistGeneratedChatResponse({
+        lifecycle,
+        userId: req.user.id,
+        documentType,
+        documentId,
+        text: verification.answer,
+        sources,
+        metadata: {
+          grounded: true,
+          generationMode: verification.abstained ? "verification_abstention" : "ai_verified",
+          verification: summarizeVerification(verification),
+          evidenceSufficiency: sufficiency,
+          retrieval: retrieval.diagnostics,
+          workflow,
+          answerIntent,
+          freshnessClass,
+          currentVerification,
+        },
+      });
       for (const content of responseChunks(verification.answer)) {
         if (res.destroyed || res.writableEnded) break;
         sendSSE(res, { type: "content", content });
@@ -871,6 +1451,7 @@ router.post("/", generationLimiter, async (req, res) => {
           answerIntent,
           freshnessClass,
           currentVerification,
+          persistence: responsePersistence,
         },
       });
       await emitTelemetry({
@@ -886,6 +1467,23 @@ router.post("/", generationLimiter, async (req, res) => {
         `Unified document chat generation unavailable; using extractive fallback: ${providerError}`,
       );
       const fallback = buildGroundedExtractiveAnswer(message, evidence);
+      responsePersistence = await persistGeneratedChatResponse({
+        lifecycle,
+        userId: req.user.id,
+        documentType,
+        documentId,
+        text: fallback,
+        sources,
+        metadata: {
+          grounded: true,
+          generationMode: "extractive_fallback",
+          evidenceSufficiency: sufficiency,
+          workflow,
+          answerIntent,
+          freshnessClass,
+          currentVerification,
+        },
+      });
       sendSSE(res, {
         type: "content",
         content: fallback,
@@ -902,21 +1500,39 @@ router.post("/", generationLimiter, async (req, res) => {
             unsupportedAfterRepair: 0,
             abstained: false,
           },
+          persistence: responsePersistence,
         },
       });
     }
-    if (!res.destroyed && !res.writableEnded) completeSSE(res);
+    if (!res.destroyed && !res.writableEnded) {
+      completeSSE(res, { metadata: { persistence: responsePersistence } });
+    }
     return undefined;
   } catch (error) {
-    console.error("Unified document chat failed:", error);
-    if (!res.headersSent) {
-      return res.status(error.status || 500).json({ error: error.message });
+    if (
+      lifecycle?.claimAcquired &&
+      !lifecycle.completed &&
+      typeof DocumentChat.failGeneration === "function"
+    ) {
+      await DocumentChat.failGeneration(
+        req.user.id,
+        lifecycle.chat.documentType,
+        lifecycle.chat.documentId,
+        lifecycle.turnId,
+        lifecycle.ownerToken,
+      ).catch(() => undefined);
     }
-    errorSSE(res, error);
-    return undefined;
+    return sendGeneratedChatError(res, error);
   }
 });
 
 module.exports = router;
+module.exports.CHAT_REQUEST_LIMITS = CHAT_REQUEST_LIMITS;
+module.exports.beginGeneratedChatTurn = beginGeneratedChatTurn;
+module.exports.persistGeneratedChatResponse = persistGeneratedChatResponse;
 module.exports.resolveDocumentIdentity = identity;
 module.exports.addMessageWithSessionRecovery = addMessageWithSessionRecovery;
+module.exports.sendGeneratedChatError = sendGeneratedChatError;
+module.exports.sendReusedGeneratedChatResponse = sendReusedGeneratedChatResponse;
+module.exports.validateGeneratedChatPayload = validateGeneratedChatPayload;
+module.exports.waitForGenerationResult = waitForGenerationResult;

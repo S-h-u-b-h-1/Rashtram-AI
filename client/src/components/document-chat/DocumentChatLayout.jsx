@@ -23,6 +23,7 @@ import {
   deleteResearchSource,
   pinDocumentChat,
   processDocumentResearch,
+  retryResearchPdfSource,
   saveContent,
   sendDocumentChatFeedback,
   sendDocumentChatMessage,
@@ -94,7 +95,9 @@ export function DocumentChatLayout({
   const [sourcesOpen, setSourcesOpen] = useState(true);
   const [studioOpen, setStudioOpen] = useState(true);
   const [mobilePanel, setMobilePanel] = useState(null);
+  const [conversationEpoch, setConversationEpoch] = useState(0);
   const abortControllerRef = useRef(null);
+  const failedTurnRef = useRef(null);
   const smoothStream = useSmoothMessageStream(setMessages);
   const {
     handleScroll,
@@ -194,20 +197,21 @@ export function DocumentChatLayout({
           page_path: `/app/document/${documentId}`,
           metadata_json: { documentType },
         });
-        if (!canonical.researchReady) {
-          setMessages([]);
-          return;
-        }
         const history = await getDocumentChatHistory(
           documentType,
           documentId,
         ).catch(() => ({ chat: null, notes: [] }));
         if (cancelled) return;
         setNotes(history.notes || []);
+        setConversationEpoch(Number(history.chat?.conversationEpoch || 0));
         if (history.chat?.messages?.length) {
           setMessages(history.chat.messages);
           setSummary(history.chat.summary || "");
           setIsPinned(Boolean(history.chat.isPinned));
+          return;
+        }
+        if (!canonical.researchReady) {
+          setMessages([]);
           return;
         }
 
@@ -223,6 +227,7 @@ export function DocumentChatLayout({
           generatedSummary,
         );
         setIsPinned(Boolean(session.chat?.isPinned));
+        setConversationEpoch(Number(session.chat?.conversationEpoch || 0));
         const welcome = {
           text: `I've prepared **${canonical.title}** for evidence-grounded research. Ask about provisions, implementation, affected institutions, or related records.`,
           sender: "assistant",
@@ -271,7 +276,11 @@ export function DocumentChatLayout({
     if (!text || sending || !chatEnabled) return;
     const displayText = String(options.displayText || text).trim();
     const workflow = options.workflow || null;
+    const retryTurn = options.retryTurn || null;
+    const streamId = retryTurn?.requestId ||
+      `stream-${globalThis.crypto?.randomUUID?.() || Date.now()}`;
     const userMessage = {
+      id: `${streamId}:user`,
       text: displayText,
       sender: "user",
       timestamp: timeLabel(),
@@ -284,7 +293,6 @@ export function DocumentChatLayout({
           }
         : undefined,
     };
-    const streamId = `stream-${Date.now()}`;
     const controller = new AbortController();
     abortControllerRef.current = controller;
     smoothStream.start(streamId);
@@ -293,7 +301,10 @@ export function DocumentChatLayout({
     setSending(true);
     setError("");
     setMessages((current) => [
-      ...current,
+      ...current.filter((item) => ![
+        streamId,
+        `${streamId}:user`,
+      ].includes(String(item._id || item.id || ""))),
       userMessage,
       {
         id: streamId,
@@ -311,17 +322,10 @@ export function DocumentChatLayout({
       page_path: `/app/document/${documentId}`,
       metadata_json: { documentType },
     });
-    const userSavePromise = addDocumentChatMessage(
-      documentType,
-      documentId,
-      userMessage,
-    ).then(
-      () => null,
-      (saveError) => saveError,
-    );
     try {
       const result = await sendDocumentChatMessage({
         message: text,
+        displayMessage: displayText,
         documentType,
         documentId,
         responseLanguage,
@@ -333,50 +337,35 @@ export function DocumentChatLayout({
               group: workflow.groupTitle,
             }
           : undefined,
+        requestId: streamId,
+        conversationEpoch,
         signal: controller.signal,
         onChunk: (chunk) => smoothStream.append(streamId, chunk),
       });
       smoothStream.complete(streamId, result);
-      const assistantMessage = {
-        id: streamId,
-        text: result.response,
-        sender: "assistant",
-        timestamp: timeLabel(),
-        sources: result.sources,
-        metadata: {
-          ...(result.metadata || {}),
-          ...(workflow
-            ? {
-                workflowId: workflow.id,
-                workflowTitle: workflow.title,
-                workflowGroup: workflow.groupTitle,
-              }
-            : {}),
-        },
-        isStreaming: false,
-      };
-      const userSaveError = await userSavePromise;
-      const assistantSaveError = await addDocumentChatMessage(
-          documentType,
-          documentId,
-          assistantMessage,
-        ).then(
-          () => null,
-          (saveError) => saveError,
-        );
-      if (userSaveError || assistantSaveError) {
-        setError(
-          "The response completed, but chat history could not be saved. Please retry before leaving this page.",
-        );
+      failedTurnRef.current = null;
+      if (Number.isSafeInteger(Number(result.metadata?.persistence?.conversationEpoch))) {
+        setConversationEpoch(Number(result.metadata.persistence.conversationEpoch));
       }
     } catch (requestError) {
       const stopped =
         controller.signal.aborted || requestError.name === "AbortError";
       smoothStream.fail(streamId, { stopped });
       if (!stopped) {
-        setError("Response generation was interrupted. Please try again.");
+        failedTurnRef.current = {
+          requestId: streamId,
+          question: text,
+          displayText,
+          workflow,
+        };
+        setError(
+          /chat history|could not be saved|could not be confirmed/i.test(
+            requestError.message || "",
+          )
+            ? requestError.message
+            : "Response generation was interrupted. Please try again.",
+        );
       }
-      await userSavePromise;
     } finally {
       if (abortControllerRef.current === controller) {
         abortControllerRef.current = null;
@@ -386,6 +375,15 @@ export function DocumentChatLayout({
   };
 
   const regenerate = () => {
+    if (failedTurnRef.current) {
+      const failedTurn = failedTurnRef.current;
+      submitQuestion(failedTurn.question, {
+        displayText: failedTurn.displayText,
+        workflow: failedTurn.workflow,
+        retryTurn: failedTurn,
+      });
+      return;
+    }
     const lastQuestion = [...messages]
       .reverse()
       .find((message) => message.sender === "user");
@@ -417,8 +415,10 @@ export function DocumentChatLayout({
   };
 
   const clear = async () => {
-    abortControllerRef.current?.abort();
-    await clearDocumentChat(documentType, documentId);
+    if (sending) return;
+    const response = await clearDocumentChat(documentType, documentId);
+    setConversationEpoch(Number(response.chat?.conversationEpoch || conversationEpoch + 1));
+    failedTurnRef.current = null;
     setMessages([]);
   };
 
@@ -519,6 +519,18 @@ export function DocumentChatLayout({
     setSelectedSourceIds((current) => current.filter((id) => id !== String(sourceId)));
   };
 
+  const retryStudySource = async (sourceId) => {
+    const result = await retryResearchPdfSource(sourceId);
+    const source = result.source;
+    setStudySources((current) => [
+      source,
+      ...current.filter((item) => String(item.id) !== String(source.id)),
+    ]);
+    setSelectedSourceIds((current) => current.includes(String(source.id))
+      ? current
+      : [...current, String(source.id)]);
+  };
+
   if (loading) {
     return (
       <div className="grid h-dvh place-items-center bg-[#e9e3da]">
@@ -595,6 +607,7 @@ export function DocumentChatLayout({
             onAddUrl={addUrlSource}
             onAddPdf={addPdfSource}
             onDelete={removeStudySource}
+            onRetry={retryStudySource}
             onCollapse={() => setSourcesOpen(false)}
           />
         </aside>}
@@ -700,6 +713,7 @@ export function DocumentChatLayout({
                   onAddUrl={addUrlSource}
                   onAddPdf={addPdfSource}
                   onDelete={removeStudySource}
+                  onRetry={retryStudySource}
                 />
         ) : (
                 <StudioPanel

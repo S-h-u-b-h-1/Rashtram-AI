@@ -39,6 +39,7 @@
     "research:reliability-canary": "node cli/productReliabilityCanary.js",
     "compliance:retrieval-audit": "node cli/complianceRetrievalAudit.js",
     "process:audit": "node cli/processAudit.js",
+    "process:reconcile": "node cli/processAudit.js --apply",
     "process:status": "node cli/processStatus.js",
     "process:failures": "node cli/processFailures.js",
     "process:backlog": "node cli/processBacklog.js",

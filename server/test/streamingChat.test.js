@@ -58,13 +58,28 @@ test("SSE streams emit progressive content and an explicit done event", () => {
   assert.equal(response.writableEnded, true);
 });
 
-test("SSE failures terminate with a structured error event", () => {
+test("SSE failures terminate without leaking internal 5xx details", () => {
   const response = responseFixture();
   startSSE(response);
-  errorSSE(response, new Error("stream interrupted"));
+  errorSSE(response, new Error("password=hunter2 in raw database failure"));
   assert.match(response.writes[0], /"type":"error"/);
-  assert.match(response.writes[0], /stream interrupted/);
+  assert.match(response.writes[0], /Response generation failed/);
+  assert.match(response.writes[0], /"requestId":"[^"]+"/);
+  assert.doesNotMatch(response.writes[0], /hunter2|database failure/);
   assert.equal(response.writableEnded, true);
+});
+
+test("SSE persistence failures retain only their explicitly safe recovery message", () => {
+  const response = responseFixture();
+  startSSE(response);
+  const error = new Error("duplicate key value leaks schema detail");
+  error.status = 500;
+  error.publicMessage = "The answer could not be saved. Please retry before leaving this page.";
+  error.publicCode = "CHAT_PERSISTENCE_FAILED";
+  errorSSE(response, error);
+  assert.match(response.writes[0], /The answer could not be saved/);
+  assert.match(response.writes[0], /CHAT_PERSISTENCE_FAILED/);
+  assert.doesNotMatch(response.writes[0], /duplicate key|schema detail/);
 });
 
 test("serverless schema initialization is serialized and versioned", () => {

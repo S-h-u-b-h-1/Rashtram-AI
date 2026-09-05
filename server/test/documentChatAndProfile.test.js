@@ -3,7 +3,17 @@ const assert = require("node:assert/strict");
 
 const {
   ALLOWED_DOCUMENT_TYPES,
+  CLAIM_CHAT_GENERATION_SQL,
+  CHAT_GENERATION_RETENTION,
+  CHAT_STORAGE_LIMITS,
+  CLEAR_CHAT_GENERATIONS_SQL,
+  CLEANUP_CHAT_GENERATIONS_SQL,
+  PRUNE_CHAT_GENERATIONS_SQL,
+  UPSERT_CHAT_MESSAGE_SQL,
+  clear,
+  cleanupGenerationClaims,
   normalizeType,
+  validateChatMessageData,
 } = require("../models/DocumentChat");
 const {
   TYPE_CONFIG,
@@ -19,8 +29,13 @@ const {
   retrievalFamilyForType,
 } = require("../document/documentTypes");
 const {
+  CHAT_REQUEST_LIMITS,
   addMessageWithSessionRecovery,
+  beginGeneratedChatTurn,
+  persistGeneratedChatResponse,
   resolveDocumentIdentity,
+  sendGeneratedChatError,
+  validateGeneratedChatPayload,
 } = require("../document/documentChatRoute");
 const {
   sanitizeList,
@@ -143,6 +158,496 @@ test("chat message persistence does not create duplicate sessions", async () => 
   });
   assert.equal(chat, existing);
   assert.equal(sessionCalls, 0);
+});
+
+test("generated chat lifecycle survives refresh and re-login across document families", async () => {
+  const chats = new Map();
+  const keyFor = (userId, documentType, documentId) =>
+    `${userId}:${documentType}:${documentId}`;
+  const documentChat = {
+    async findOrCreate(userId, document) {
+      const key = keyFor(userId, document.documentType, document.documentId);
+      if (!chats.has(key)) {
+        chats.set(key, {
+          id: `chat-${chats.size + 1}`,
+          documentType: document.documentType,
+          documentId: String(document.documentId),
+          title: document.title,
+          messages: [],
+        });
+      }
+      return chats.get(key);
+    },
+    async addMessage(userId, documentType, documentId, message) {
+      const chat = chats.get(keyFor(userId, documentType, documentId));
+      if (!chat) return null;
+      const normalized = {
+        _id: message.id,
+        text: message.text,
+        sender: message.sender,
+        sources: message.sources || [],
+        metadata: message.metadata || {},
+      };
+      const existing = chat.messages.findIndex(
+        (item) => item._id === normalized._id,
+      );
+      if (existing >= 0) chat.messages[existing] = normalized;
+      else chat.messages.push(normalized);
+      return chat;
+    },
+    async findOne(userId, documentType, documentId) {
+      return chats.get(keyFor(userId, documentType, documentId)) || null;
+    },
+  };
+
+  const families = [
+    "bill",
+    "act",
+    "gazette",
+    "policy",
+    "report",
+    "regulation",
+    "notification",
+    "circular",
+  ];
+  for (const [index, documentType] of families.entries()) {
+    const documentId = String(10_000 + index);
+    const requestId = `refresh-regression-${documentType}`;
+    const question = `What does this ${documentType} establish?`;
+    const displayMessage = documentType === "policy"
+      ? "Run workflow: Executive brief"
+      : question;
+    const lifecycle = await beginGeneratedChatTurn({
+      userId: "account-a",
+      documentType,
+      documentId,
+      document: {
+        title: `${documentType} persistence fixture`,
+        sourceUrl: documentType === "policy"
+          ? "https://www.policyedge.in/p/html-fixture"
+          : "https://example.invalid/source",
+      },
+      message: question,
+      displayMessage,
+      requestId,
+      responseLanguage: "English",
+      documentChat,
+    });
+    const citation = {
+      id: `${documentType}-source-1`,
+      content: `Verified ${documentType} passage`,
+    };
+    await persistGeneratedChatResponse({
+      lifecycle,
+      userId: "account-a",
+      documentType,
+      documentId,
+      text: `Grounded ${documentType} answer`,
+      sources: [citation],
+      metadata: { generationMode: "ai_verified" },
+      documentChat,
+    });
+
+    // A page refresh and a new authenticated browser both resolve history by
+    // the durable account + document identity, not by an in-memory session ID.
+    const afterRefresh = await documentChat.findOne(
+      "account-a",
+      documentType,
+      documentId,
+    );
+    const afterRelogin = await documentChat.findOne(
+      "account-a",
+      documentType,
+      documentId,
+    );
+    assert.equal(afterRefresh, afterRelogin);
+    assert.equal(afterRelogin.messages.length, 2);
+    assert.equal(afterRelogin.messages[0].sender, "user");
+    assert.equal(afterRelogin.messages[0].text, displayMessage);
+    assert.equal(afterRelogin.messages[1].text, `Grounded ${documentType} answer`);
+    assert.deepEqual(afterRelogin.messages[1].sources, [citation]);
+    assert.equal(
+      await documentChat.findOne("account-b", documentType, documentId),
+      null,
+      "chat history must remain account-scoped",
+    );
+
+    // A network retry with the same request ID replaces the same durable turn
+    // instead of duplicating either message.
+    const replayInput = {
+      userId: "account-a",
+      documentType,
+      documentId,
+      document: { title: `${documentType} persistence fixture` },
+      message: question,
+      displayMessage,
+      requestId,
+      documentChat,
+    };
+    const replays = await Promise.all([
+      beginGeneratedChatTurn(replayInput),
+      beginGeneratedChatTurn(replayInput),
+    ]);
+    await Promise.all(replays.map((replay) => persistGeneratedChatResponse({
+      lifecycle: replay,
+      userId: "account-a",
+      documentType,
+      documentId,
+      text: `Grounded ${documentType} answer`,
+      sources: [citation],
+      documentChat,
+    })));
+    assert.equal(afterRelogin.messages.length, 2);
+  }
+});
+
+test("concurrent identical request IDs share one durable generated result", async () => {
+  const chat = {
+    id: "chat-1",
+    documentType: "bill",
+    documentId: "3646",
+    messages: [],
+  };
+  let generation = null;
+  let claimsAcquired = 0;
+  const documentChat = {
+    async findOrCreate() { return chat; },
+    async addMessage(_userId, _type, _id, message) {
+      const normalized = { ...message, _id: message.id };
+      const index = chat.messages.findIndex((item) => item._id === normalized._id);
+      if (index >= 0) chat.messages[index] = normalized;
+      else chat.messages.push(normalized);
+      return chat;
+    },
+    async claimGeneration() {
+      if (!generation || generation.status === "failed") {
+        claimsAcquired += 1;
+        generation = {
+          status: "processing",
+          owner_token: `owner-${claimsAcquired}`,
+        };
+        return { ...generation, claimAcquired: true };
+      }
+      return { ...generation, claimAcquired: false };
+    },
+    async getGeneration() { return generation; },
+    async completeGeneration(_user, _type, _id, _request, owner, response) {
+      assert.equal(owner, generation.owner_token);
+      generation = { status: "completed", response_json: response };
+      return generation;
+    },
+    async failGeneration() {
+      generation = { status: "failed" };
+      return true;
+    },
+  };
+  const input = {
+    userId: "8",
+    documentType: "bill",
+    documentId: "3646",
+    document: { title: "Bill fixture" },
+    message: "What changed?",
+    requestId: "same-request",
+    documentChat,
+  };
+  const owner = await beginGeneratedChatTurn(input);
+  const duplicatePromise = beginGeneratedChatTurn(input);
+  const persistence = await persistGeneratedChatResponse({
+    lifecycle: owner,
+    userId: "8",
+    documentType: "bill",
+    documentId: "3646",
+    text: "One durable answer",
+    sources: [{ id: "D1-C1", content: "Cited text" }],
+    documentChat,
+  });
+  const duplicate = await duplicatePromise;
+  assert.equal(claimsAcquired, 1);
+  assert.equal(duplicate.claimAcquired, false);
+  assert.equal(duplicate.reusedResponse.text, "One durable answer");
+  assert.deepEqual(duplicate.reusedResponse.sources, [
+    { id: "D1-C1", content: "Cited text" },
+  ]);
+  assert.deepEqual(duplicate.reusedResponse.persistence, persistence);
+  assert.equal(chat.messages.length, 2);
+
+  // A failed owner releases the request ID for an explicit retry.
+  generation = { status: "failed" };
+  const retry = await beginGeneratedChatTurn(input);
+  assert.equal(retry.claimAcquired, true);
+  assert.equal(claimsAcquired, 2);
+  assert.match(CLAIM_CHAT_GENERATION_SQL, /status = 'failed'/);
+});
+
+test("generation lifecycle fails explicitly when durable persistence is unavailable", async () => {
+  await assert.rejects(
+    beginGeneratedChatTurn({
+      userId: "8",
+      documentType: "bill",
+      documentId: "3646",
+      document: { title: "Bill fixture" },
+      message: "What changed?",
+      requestId: "persistence-failure",
+      documentChat: {
+        findOrCreate: async () => ({ id: "chat-1" }),
+        addMessage: async () => null,
+      },
+    }),
+    (error) => {
+      assert.equal(error.status, 500);
+      assert.equal(error.failureCode, "CHAT_PERSISTENCE_FAILED");
+      assert.match(error.publicMessage, /could not be saved/i);
+      return true;
+    },
+  );
+});
+
+test("a cleared conversation rejects an in-flight turn from the previous epoch", async () => {
+  await assert.rejects(
+    beginGeneratedChatTurn({
+      userId: "8",
+      documentType: "bill",
+      documentId: "3646",
+      document: { title: "Bill fixture" },
+      message: "What changed?",
+      requestId: "stale-after-clear",
+      conversationEpoch: 3,
+      documentChat: {
+        findOrCreate: async () => ({ id: "chat-1", conversationEpoch: 4 }),
+      },
+    }),
+    (error) => {
+      assert.equal(error.status, 409);
+      assert.equal(error.failureCode, "CHAT_CONVERSATION_CLEARED");
+      return true;
+    },
+  );
+});
+
+test("generated chat request limits reject oversized and malformed payloads", () => {
+  const valid = validateGeneratedChatPayload({
+    message: "Explain section 7",
+    displayMessage: "Explain section 7",
+    responseLanguage: "English",
+    sourceIds: [1, "2", "2"],
+    workflow: { id: "brief", title: "Executive brief", group: "analysis" },
+  });
+  assert.equal(valid.message, "Explain section 7");
+  assert.deepEqual(valid.sourceIds, ["1", "2"]);
+  assert.equal(valid.conversationEpoch, null);
+
+  const rejects = (payload, status, code) => assert.throws(
+    () => validateGeneratedChatPayload(payload),
+    (error) => {
+      assert.equal(error.status, status);
+      assert.equal(error.failureCode, code);
+      return true;
+    },
+  );
+  rejects({ message: { unsafe: true } }, 422, "INVALID_CHAT_PAYLOAD");
+  rejects({
+    message: "x".repeat(CHAT_REQUEST_LIMITS.questionChars + 1),
+  }, 413, "CHAT_MESSAGE_TOO_LARGE");
+  rejects({
+    message: "valid",
+    displayMessage: "x".repeat(CHAT_REQUEST_LIMITS.displayMessageChars + 1),
+  }, 413, "CHAT_DISPLAY_MESSAGE_TOO_LARGE");
+  rejects({ message: "valid", workflow: [] }, 422, "INVALID_CHAT_WORKFLOW");
+  rejects({
+    message: "valid",
+    workflow: { title: "x".repeat(CHAT_REQUEST_LIMITS.workflowTitleChars + 1) },
+  }, 413, "CHAT_WORKFLOW_TOO_LARGE");
+  rejects({ message: "valid", sourceIds: "1,2" }, 422, "INVALID_CHAT_SOURCES");
+  rejects({ message: "valid", conversationEpoch: -1 }, 422, "INVALID_CHAT_CONVERSATION_EPOCH");
+  rejects({ message: "valid", conversationEpoch: 1.2 }, 422, "INVALID_CHAT_CONVERSATION_EPOCH");
+  rejects({
+    message: "valid",
+    sourceIds: Array.from(
+      { length: CHAT_REQUEST_LIMITS.sourceIds + 1 },
+      (_, index) => index + 1,
+    ),
+  }, 413, "CHAT_SOURCES_TOO_LARGE");
+});
+
+test("chat storage rejects oversized answer text, citations, and metadata", () => {
+  const rejects = (message, status, code) => assert.throws(
+    () => validateChatMessageData(message),
+    (error) => {
+      assert.equal(error.status, status);
+      assert.equal(error.failureCode, code);
+      return true;
+    },
+  );
+  assert.deepEqual(validateChatMessageData({
+    text: "Grounded answer",
+    sender: "assistant",
+  }), {
+    metadata: {},
+    sources: [],
+  });
+  rejects({
+    text: "x".repeat(CHAT_STORAGE_LIMITS.messageChars + 1),
+    sender: "assistant",
+  }, 413, "CHAT_MESSAGE_TOO_LARGE");
+  rejects({
+    text: "answer",
+    sender: "assistant",
+    sources: Array.from(
+      { length: CHAT_STORAGE_LIMITS.sources + 1 },
+      (_, index) => ({ id: `source-${index}` }),
+    ),
+  }, 413, "CHAT_SOURCES_TOO_LARGE");
+  rejects({
+    text: "answer",
+    sender: "assistant",
+    sources: [{ content: "x".repeat(CHAT_STORAGE_LIMITS.sourcesBytes) }],
+  }, 413, "CHAT_SOURCES_TOO_LARGE");
+  rejects({
+    text: "answer",
+    sender: "assistant",
+    metadata: { diagnostics: "x".repeat(CHAT_STORAGE_LIMITS.metadataBytes) },
+  }, 413, "CHAT_METADATA_TOO_LARGE");
+  rejects({ text: "answer", sender: "assistant", metadata: [] }, 422, "INVALID_CHAT_METADATA");
+  rejects({ text: "answer", sender: "system" }, 422, "INVALID_CHAT_SENDER");
+  rejects({
+    text: "answer",
+    sender: "user",
+    id: "invalid message id",
+  }, 422, "INVALID_CHAT_MESSAGE_ID");
+  rejects({
+    text: "answer",
+    sender: "user",
+    timestamp: "not-a-date",
+  }, 422, "INVALID_CHAT_TIMESTAMP");
+  assert.equal(CHAT_STORAGE_LIMITS.messagesPerChat, 200);
+  assert.match(UPSERT_CHAT_MESSAGE_SQL, /candidate_count - \$6::integer/);
+  assert.match(UPSERT_CHAT_MESSAGE_SQL, /conversation_epoch = \$7::bigint/);
+});
+
+test("generation-result cleanup is bounded and never removes active claims", async () => {
+  const calls = [];
+  const result = await cleanupGenerationClaims({
+    perDocument: 99_999,
+    replayDays: 0,
+    batchSize: 99_999,
+    queryFn: async (sql, params) => {
+      calls.push({ sql, params });
+      return { rowCount: 17 };
+    },
+  });
+  assert.deepEqual(result, {
+    deleted: 17,
+    perDocument: 500,
+    replayDays: CHAT_GENERATION_RETENTION.replayDays,
+    batchSize: 1_000,
+    staleProcessingMinutes: CHAT_GENERATION_RETENTION.staleProcessingMinutes,
+  });
+  assert.deepEqual(calls[0].params, [500, 7, 60, 1_000]);
+  assert.match(CLEANUP_CHAT_GENERATIONS_SQL, /status IN \('completed', 'failed'\)/);
+  assert.match(CLEANUP_CHAT_GENERATIONS_SQL, /status = 'processing'/);
+  assert.match(CLEANUP_CHAT_GENERATIONS_SQL, /LIMIT \$4::integer/);
+  assert.match(PRUNE_CHAT_GENERATIONS_SQL, /OFFSET \$4::integer/);
+});
+
+test("clear chat atomically removes messages and generation replay payloads", async () => {
+  const calls = [];
+  const client = {
+    async query(sql, params) {
+      calls.push({ sql, params });
+      if (/UPDATE document_chats/.test(sql)) {
+        return {
+          rows: [{
+            id: 1,
+            document_type: "bill",
+            document_id: "3646",
+            document_title: "Fixture",
+            messages: [],
+            metadata_json: {},
+          }],
+        };
+      }
+      return { rows: [], rowCount: 1 };
+    },
+    release() { calls.push({ sql: "RELEASE" }); },
+  };
+  const cleared = await clear("8", "bill", "3646", {
+    ensureDb: async () => undefined,
+    pool: { connect: async () => client },
+  });
+  assert.deepEqual(cleared.messages, []);
+  assert.equal(calls[0].sql, "BEGIN");
+  assert.match(calls[1].sql, /SET messages = '\[\]'::jsonb/);
+  assert.match(calls[1].sql, /conversation_epoch = conversation_epoch \+ 1/);
+  assert.equal(calls[2].sql, CLEAR_CHAT_GENERATIONS_SQL);
+  assert.deepEqual(calls[2].params, ["8", "bill", "3646"]);
+  assert.equal(calls[3].sql, "COMMIT");
+  assert.equal(calls[4].sql, "RELEASE");
+});
+
+test("clear chat rolls back message removal when replay cleanup fails", async () => {
+  const calls = [];
+  const client = {
+    async query(sql) {
+      calls.push(sql);
+      if (sql === CLEAR_CHAT_GENERATIONS_SQL) throw new Error("cleanup failed");
+      if (/UPDATE document_chats/.test(sql)) return { rows: [{ messages: [] }] };
+      return { rows: [] };
+    },
+    release() { calls.push("RELEASE"); },
+  };
+  await assert.rejects(
+    clear("8", "bill", "3646", {
+      ensureDb: async () => undefined,
+      pool: { connect: async () => client },
+    }),
+    /cleanup failed/,
+  );
+  assert.ok(calls.includes("ROLLBACK"));
+  assert.ok(!calls.includes("COMMIT"));
+  assert.equal(calls.at(-1), "RELEASE");
+});
+
+test("generated chat hides pre-stream persistence and database errors", () => {
+  const response = {
+    headersSent: false,
+    statusCode: null,
+    body: null,
+    status(code) {
+      this.statusCode = code;
+      return this;
+    },
+    json(body) {
+      this.body = body;
+      return this;
+    },
+  };
+  const error = new Error("duplicate key value exposes production schema detail");
+  sendGeneratedChatError(response, error);
+  assert.equal(response.statusCode, 500);
+  assert.equal(response.body.error, "Internal server error.");
+  assert.ok(response.body.requestId);
+  assert.doesNotMatch(JSON.stringify(response.body), /schema detail/);
+
+  const streamed = {
+    headersSent: true,
+    destroyed: false,
+    writableEnded: false,
+    writes: [],
+    write(value) {
+      this.writes.push(value);
+      return true;
+    },
+    end() {
+      this.writableEnded = true;
+    },
+  };
+  sendGeneratedChatError(
+    streamed,
+    new Error("password=hunter2 leaked after SSE headers"),
+  );
+  assert.match(streamed.writes[0], /Response generation failed/);
+  assert.match(streamed.writes[0], /requestId/);
+  assert.doesNotMatch(streamed.writes[0], /hunter2|leaked after SSE/);
 });
 
 test("universal document types use aliases and one retrieval mapping", () => {

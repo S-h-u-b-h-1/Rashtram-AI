@@ -22,12 +22,26 @@ router.get("/", async (req, res) => {
   }
 });
 
-router.get("/capabilities", (req, res) => res.json({
-  directUpload: objectStorageConfig().configured,
-  maxPdfBytes: MAX_SOURCE_BYTES,
-  maxPdfMegabytes: Math.floor(MAX_SOURCE_BYTES / 1024 / 1024),
-  acceptedMimeTypes: ["application/pdf"],
-}));
+router.get("/capabilities", (req, res) => {
+  const directUpload = objectStorageConfig().configured;
+  return res.json({
+    directUpload,
+    compatibilityUpload: directUpload,
+    maxCompatibilityPdfBytes: MAX_LEGACY_UPLOAD_BYTES,
+    storageStatus: directUpload ? "available" : "unavailable",
+    maxPdfBytes: MAX_SOURCE_BYTES,
+    maxPdfMegabytes: Math.floor(MAX_SOURCE_BYTES / 1024 / 1024),
+    acceptedMimeTypes: ["application/pdf"],
+    uploadIntegrity: {
+      presignedUrlExpiresInSeconds: 300,
+      providerEnforcesSignedContentLength: "provider-dependent",
+      checksumSigned: true,
+      postUploadHeadAndChecksumVerification: true,
+      durableOriginalAfterProcessing: true,
+      abandonedIntentCleanup: "bounded-lazy-and-scheduled",
+    },
+  });
+});
 
 router.post("/url", async (req, res) => {
   try {

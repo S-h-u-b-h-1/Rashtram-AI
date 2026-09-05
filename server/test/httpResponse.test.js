@@ -25,6 +25,20 @@ test("5xx errors never leak the raw error message, but include a request ID", ()
   assert.ok(!JSON.stringify(res.body).includes("hunter2"));
 });
 
+test("5xx errors may expose an explicitly safe public code and message", () => {
+  const res = responseFixture();
+  const error = new Error("provider secret detail must not leak");
+  error.status = 503;
+  error.publicMessage = "Private document storage is temporarily unavailable. Please retry later.";
+  error.publicCode = "STORAGE_UNAVAILABLE";
+  sendError(res, error, "context");
+  assert.equal(res.statusCode, 503);
+  assert.equal(res.body.error, error.publicMessage);
+  assert.equal(res.body.code, "STORAGE_UNAVAILABLE");
+  assert.ok(res.body.requestId);
+  assert.ok(!JSON.stringify(res.body).includes("provider secret"));
+});
+
 test("4xx errors pass the message through since it's meant for the client", () => {
   const res = responseFixture();
   const error = new Error("Document not found.");
