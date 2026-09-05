@@ -60,6 +60,8 @@ Before: a model response with an empty summary could be “repaired” by placin
 
 After: the same response fails `ANALYTICALLY_EMPTY` or `NON_COMPARATIVE_ANALYSIS`; the user sees an evidence-abstention summary, per-section “Insufficient evidence…” messages, source limitations, and a question asking for a narrower provision/date or another official source.
 
+The requested eight-case live comparison matrix is recorded as pending (not falsely marked pass): Act vs Bill; Act vs amendment; Regulation vs Circular; Policy vs Policy; long document vs long document; related documents with different scope; unrelated documents; and insufficient/one-sided evidence. The first six are the representative relationship/scale cases, while the last two verify honest abstention and non-comparative rejection. The live browser/API run was blocked by the host approval gate.
+
 ## 4. Suggested Documents: root cause
 
 The previous recommender had useful deterministic retrieval and authority signals, but the product surface started at a flat list of documents. It did not tell the user how the problem had been interpreted, what research areas should be checked, why a source mattered for this activity/location, or when the catalogue lacked a ready primary official source. Generic reasons made secondary material look interchangeable with governing sources.
@@ -83,6 +85,8 @@ The endpoint now returns `problemUnderstanding`, `researchPlan`, and `recommenda
 Automated coverage confirms that plain-language intent and research-plan helpers are deterministic, authority labels are friendly, weak metadata-only matches remain rejected, grounded catalogue signals still improve ranking, and existing eligibility/comparison-request validation is preserved.
 
 The UI QA checklist covers ten cases: broad problem, specific business activity, state-specific request, regulator named, time-sensitive request, primary official source available, official source gap, background-only results, no results, and adjust-query/search-library/add-source recovery. Local component tests/build pass; live browser/API proof is pending the same environment usage gate.
+
+For repeatable acceptance, those ten cases should record: interpreted problem, research areas, grouped output, authority label, relevance explanation, and whether a primary-source gap is disclosed. The first six are expected to return a grounded reading path; the gap/background/no-result cases must remain explicit and offer recovery actions. None is claimed as a live production pass in this environment.
 
 ### Before / after example
 
