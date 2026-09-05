@@ -19,7 +19,7 @@ than hidden.
 | A — Production foundation | RA-T001, RA-T002, RA-T013, RA-T014 | PRODUCTION_VERIFIED |
 | B — Corpus and semantic recovery | RA-T003, RA-T004 | PARTIAL |
 | C — Source freshness | RA-T005, RA-T007 | DEPLOYED — production smoke healthy; feature-level live verification remains partial |
-| D — Intelligence quality | RA-T006, RA-T009, RA-T010 | OPEN |
+| D — Intelligence quality | RA-T006, RA-T009, RA-T010 | PARTIAL — bounded code fixes verified; live canaries pending |
 | E — Outputs and UX | RA-T008, RA-T011, RA-T012, RA-T015, RA-T016, RA-T017 | OPEN |
 
 ## Defect tracker
@@ -31,11 +31,11 @@ than hidden.
 | RA-T003 | S1 | The readiness headline counted theoretically processable records without applying source retry controls, active-job exclusion, or actual file support; SQL `NOT IN` also excluded null legacy readiness values | Corpus recovery/audit services, worker selection, canonical resource selection, source retry controls, queue reconciliation, and focused tests | Added the exact 16-class readiness audit, null-safe selection, PDF/PolicyEdge-only eligibility, cost/source-aware bounded recovery, exact lexical probes, and explicit blocker counts | Recovery, readiness, source-circuit, queue, resource-selection, and retrieval fallback fixtures | Release B focused tests pass; bounded production validation recovered one of five distinct-source attempts and all seven chunks passed integrity/retrieval probes | Withheld: repository-wide gate has one unrelated, user-owned workspace-shell contract failure | Production database validation completed; source acquisition failed for four of five distinct hosts without retry, so broad recovery remains externally/data-quality constrained | PARTIAL | 15,147 documents are eligible for an attempt now, but 1,332 carry recorded acquisition failures; catalogue SEARCH_READY is 3,665/20,144 |
 | RA-T004 | S1 | Semantic readiness flags, PostgreSQL references, Pinecone contents, namespaces, hashes, and legacy vector IDs were treated as equivalent although they are not | Semantic backfill/reconciliation services, vector identity, Pinecone adapter, audit/backfill CLIs, and focused tests | Added canonical content/version identities, exact cross-store inventory, non-destructive classifications, readiness-truth reconciliation, bounded backfill, and lexical fallback | Semantic coverage, content-hash, canonical identity, reconciliation, and Pinecone-failure fallback fixtures | Reconciled 2,010 flags to 28 exact documents, then a 25/25 canary raised exact semantic readiness to 53 with zero mismatch | Withheld: repository-wide gate has one unrelated, user-owned workspace-shell contract failure | Active Gemini namespace verified; no vector deleted; 21,460 old-namespace and 3,070 stale references remain classified | PARTIAL | Exact semantic coverage is 53/3,665 SEARCH_READY documents (1.45%); PG/Pinecone active-reference delta remains -4,481 |
 | RA-T005 | S1 | Connector health mixed stale scheduler state, partial multi-collection success, upstream drift, and external TLS/access failures into ambiguous labels | Source policy/health, ingestion health/persistence, dashboard diagnostics, UIDAI and state-legislature connectors, temporal freshness safety, audit CLI and focused tests | Added cadence-aware final states, exact failure taxonomy, truthful attempt/success/change timestamps, partial-state aggregation, current-status degradation, source labels, UIDAI canonical listing repair, and a read-only 36-connector census | 95 focused connector, freshness, TLS/SSRF, temporal, PolicyEdge and source tests passed; 11-record bounded production-data canary succeeded | Release C focused suite, DB integrity, read-only audit, release verifier, lint and Webpack production build pass | Backend dpl_G7BQ4Da4xdn7eeAoxdMUiqJGZ441 and frontend dpl_DBH3oEVr5xxBBRLcgTn7c7agkHtU are Ready production deployments; aliases are live | UIDAI and PolicyEdge production-data canaries passed against production services; backend and frontend root smoke checks returned HTTP 200. Feature-level authenticated current-status checks were not run in this bounded release | PARTIAL | Digital Sansad and state legislature remain degraded; eGazette, state gazette, NMC and CBIC have external TLS-chain failures; Parliament pages require JavaScript; no unsafe bypass was added |
-| RA-T006 | S2 | Recommendation/compliance relevance gating and taxonomy ranking require confirmation | None | Pending Release D | Pending | Not started | Not deployed | Not verified | OPEN | Common valid problems return no results; implausible input can match |
+| RA-T006 | S2 | Recommendation/compliance relevance gating and taxonomy ranking require confirmation | `server/document/recommendationService.js`; focused recommendation/compliance tests | Preserved multi-signal relevance and authority/evidence gates; validated output/no-match contracts | Focused recommendation/compliance suites pass | Code-level verification passed | Not deployed separately; included in current production branch | Live benchmark not executed | PARTIAL | Run the frozen 75-query benchmark before production verification |
 | RA-T007 | S2 | External-source extraction success was treated as authority, and user-selected web URLs were promoted to trusted evidence | External-source quality service, source service/API, retrieval authority, document chat/research routes, source label UI and focused tests | Separated fetch, extraction, verified-host/connector authority and purpose-aware evidence usability; generic web is limited for research and rejected for legal/compliance/current-status claims; low-quality official extraction is not promoted | Official government, regulator, institutional, generic, low-quality and private/unsafe fixtures pass; canonical URL host/tracking guards pass | 95/95 focused tests pass and Webpack production build succeeds | Backend dpl_G7BQ4Da4xdn7eeAoxdMUiqJGZ441 and frontend dpl_DBH3oEVr5xxBBRLcgTn7c7agkHtU are Ready production deployments; aliases resolve to these builds | Live authenticated user-URL/authority matrix was not run in this bounded release, so production verification remains outstanding | PARTIAL | Run the authenticated production URL matrix before marking PRODUCTION_VERIFIED; preserve SSRF and authority guards |
 | RA-T008 | S2 | Initial research-workspace request waterfall requires profiling | None | Pending Release E | Pending | Not started | Not deployed | Not verified | OPEN | Cold workspace load exceeded 30 seconds in the baseline audit |
-| RA-T009 | S2 | Comparison structured-output validation/fallback and context budget require confirmation | None | Pending Release D | Pending | Not started | Not deployed | Not verified | OPEN | Comparison can be slow or return an analytically empty product |
-| RA-T010 | S2 | Final chat response assembly/completeness validation requires confirmation | None | Pending Release D | Pending | Not started | Not deployed | Not verified | OPEN | Some answers end after promising a supporting passage |
+| RA-T009 | S2 | Comparison structured-output validation/fallback and context budget require confirmation | `server/document/documentComparisonService.js`; focused comparison/regeneration tests | Added deterministic validator rejecting empty summaries, citation-free analytical output and empty-success states; extractive fallback is explicitly partial | Comparison, regeneration and citation suites pass | Code-level verification passed | Not deployed separately; included in current production branch | Live comparison/latency canaries not executed | PARTIAL | Run the frozen 12-case comparison matrix and bounded production canaries |
+| RA-T010 | S2 | Final chat response assembly/completeness validation requires confirmation | `server/retrieval/evidenceSafetyService.js`; `server/document/documentChatRoute.js`; focused evidence/streaming tests | Added deterministic dangling-promise/unfinished-output guard with one safe extractive fallback before persistence | Evidence safety, streaming, persistence and citation suites pass | Code-level verification passed | Not deployed separately; included in current production branch | Live 30-probe completeness matrix not executed | PARTIAL | Run production completeness probes and refresh/re-login persistence checks |
 | RA-T011 | S2 | Report field normalization and PDF serialization permit raw/noisy structures | None | Pending Release E | Pending | Not started | Not deployed | Not verified | OPEN | Raw JSON, mojibake, and passage dumps appeared in exports |
 | RA-T012 | S2 | Draft semantic validation and DOCX serialization permit incomplete content | None | Pending Release E | Pending | Not started | Not deployed | Not verified | OPEN | Empty/truncated sections and an internal source label appeared in exports |
 | RA-T013 | S2 | `runReadinessAudit` directly executed readiness inserts, updates, sanitization writes, document flag synchronization, and dead-letter reconciliation | `server/document/readinessService.js`; `server/cli/processAudit.js`; `server/package.json`; `server/test/processAuditSafety.test.js`; `docs/DOCUMENT_PROCESSING_PIPELINE.md` | Default audit now runs inside a PostgreSQL `REPEATABLE READ READ ONLY` transaction, captures before/after fingerprints, and rejects drift; mutation moved behind the exact `--apply` flag and `process:reconcile` command | Four safety tests plus a post-deployment production fingerprint run | Full suite 595 pass/2 skip; production audit inspected 20,177 documents | Workflow-test backend build `dpl_BHovRN7vySLYqi2dxpHuqXgSCUHK`; alias reverified after documentation sync | All four before/after surfaces had identical row counts and hashes; zero creates, updates or deletes | PRODUCTION_VERIFIED | Reconciliation still requires the exact explicit `--apply` action |
@@ -357,6 +357,46 @@ minutes, below the four-hour release ceiling.
   code is healthy and production-data canaries passed, but the authenticated
   feature-level current-status and user-URL authority matrices were not run in
   this bounded release. Release D must not begin automatically.
+
+## Release D evidence log — 5 September 2026
+
+Release D was bounded to RA-T006, RA-T009 and RA-T010. No corpus recovery,
+vector backfill, connector repair or UX redesign was performed. The existing
+implementation already contained the relevance taxonomy, authority gating,
+comparison section backfill, citation verification and one-attempt repair
+paths. This release added deterministic final-output contracts:
+
+- Chat answers are checked before persistence for empty output, dangling
+  promised passages/lists and unfinished structures. A single safe action
+  replaces an invalid provider ending with already-retrieved extractive
+  evidence; no repair loop is possible.
+- Comparisons are checked after section backfill and citation verification.
+  An empty summary or citation-free/analytically empty result is converted to
+  an explicit evidence-abstention state rather than persisted as `SUCCESS`.
+  Extractive fallbacks are reported as `PARTIAL_EVIDENCE`.
+- Focused regression tests cover the new validators alongside recommendation,
+  compliance, comparison, regeneration, citation, streaming and persistence
+  suites.
+
+### Bounded results
+
+- Focused Release D suites passed (recommendation/compliance, comparison and
+  regeneration, evidence safety, streaming, persistence and citation).
+- Full backend suite was attempted. Five failures were environmental: four
+  local-listener `EPERM` restrictions and one external DNS resolution failure;
+  none was a Release D assertion regression.
+- No authenticated production benchmark credentials were available in this
+  run, so the maximum live canary matrices were not executed. No claim of
+  production verification is made.
+
+### Release D disposition
+
+RA-T006 = `PARTIAL` (code-level relevance/evidence contracts pass; live
+benchmark not executed). RA-T009 = `PARTIAL` (empty-success guard and bounded
+fallback are implemented and tested; live latency/comparison canaries not
+executed). RA-T010 = `PARTIAL` (deterministic completeness guard and safe
+fallback are implemented and tested; live completeness matrix not executed).
+Release E was not started.
 
 ## Status definitions
 
