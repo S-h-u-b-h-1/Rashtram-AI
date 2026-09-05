@@ -101,10 +101,20 @@ const expectedRule = {
   }))).Rules || [];
   const verifiedExpiry = verifiedLifecycle.find((rule) => rule.ID === lifecycleRule.ID);
   const verifiedMarkers = verifiedLifecycle.find((rule) => rule.ID === deleteMarkerRule.ID);
+  const explicitDeleteMarkerCleanup =
+    verifiedMarkers?.Expiration?.ExpiredObjectDeleteMarker === true;
+  // Backblaze maps the paired S3 expiration rules into one native lifecycle
+  // rule and always removes orphan delete markers. Its read-back may therefore
+  // omit the explicit marker half even though the behavior is active.
+  const providerImplicitDeleteMarkerCleanup =
+    config.provider === "backblaze" &&
+    verifiedExpiry?.Expiration?.Days === lifecycleRule.Expiration.Days;
+  const deleteMarkerCleanupVerified =
+    explicitDeleteMarkerCleanup || providerImplicitDeleteMarkerCleanup;
   if (verifiedExpiry?.Expiration?.Days !== 2 ||
       verifiedExpiry?.NoncurrentVersionExpiration?.NoncurrentDays !== 2 ||
       verifiedExpiry?.AbortIncompleteMultipartUpload?.DaysAfterInitiation !== 1 ||
-      verifiedMarkers?.Expiration?.ExpiredObjectDeleteMarker !== true) {
+      !deleteMarkerCleanupVerified) {
     throw new Error("The source-upload versioned lifecycle rules could not be verified after writing them.");
   }
   console.log(JSON.stringify({
@@ -115,7 +125,8 @@ const expectedRule = {
     publicReadEnabled: false,
     abandonedIntentLifecycleDays: lifecycleRule.Expiration.Days,
     noncurrentIntentLifecycleDays: lifecycleRule.NoncurrentVersionExpiration.NoncurrentDays,
-    expiredDeleteMarkerCleanup: true,
+    expiredDeleteMarkerCleanup: deleteMarkerCleanupVerified,
+    providerImplicitDeleteMarkerCleanup,
   }, null, 2));
 })().catch((error) => {
   console.error(JSON.stringify({ message: error.message, code: error.Code || error.name || null }));
