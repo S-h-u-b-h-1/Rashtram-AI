@@ -1,6 +1,15 @@
 const { query } = require("../../../db");
 const { findUnseenSourceRecordIds } = require("./catalogRepository");
 const { PoliteFetcher } = require("./fetcher");
+const { canonicalSourceName } = require("./sourceIdentity");
+const { sourcePolicyFor } = require("./sourcePolicy");
+const {
+  EXTERNALLY_BLOCKED_FAILURES,
+  classifyConnectorState,
+  classifyFailure,
+  hoursSince,
+  publicConnectorStatus,
+} = require("./sourceHealthPolicy");
 
 const PRODUCTION_CONNECTORS = new Set([
   "prs-india",
@@ -169,7 +178,10 @@ const probeConnector = async (
     let status = "connected";
 
     if (!shape.valid) status = "parser changed";
-    else if (blockedDiagnostic || blockedError) status = "blocked";
+    else if ((blockedDiagnostic || blockedError) && discovered === 0 && directoryEntries === 0) {
+      status = "blocked";
+    }
+    else if (blockedDiagnostic || blockedError) status = "degraded";
     else if (!reachable && collection.errors.length) status = "unavailable";
     else if (
       (discovered > 0 || directoryEntries > 0) &&
@@ -210,13 +222,66 @@ const probeConnector = async (
       status = "behind upstream";
     }
 
+    const errorDetail = String(
+      blockedDiagnostic?.message || blockedError?.message ||
+      blockedError?.error || collection.errors?.[0]?.message ||
+      collection.errors?.[0]?.error || shape.reason || "",
+    ).slice(0, 300);
+    let failureClass = classifyFailure({
+      code: collection.errors?.[0]?.code,
+      message: errorDetail,
+      parserMessage: shape.reason,
+    });
+    if (status === "behind upstream") failureClass = "SCHEDULER_STALE";
+    if (status === "parser changed" && (!failureClass || failureClass === "UNKNOWN")) {
+      failureClass = "HTML_STRUCTURE_CHANGED";
+    }
+    const sourcePolicy = sourcePolicyFor(connector.name, {
+      ingestionFrequency: history.ingestionFrequency,
+    });
+    const externalBlock = status === "blocked" && Boolean(
+      blockedDiagnostic || blockedError || EXTERNALLY_BLOCKED_FAILURES.has(failureClass),
+    );
+    const freshnessStatus = classifyConnectorState({
+      sourceName: connector.name,
+      liveStatus: status,
+      lastSuccess: history.lastSuccessfulAt,
+      lastAttempt: history.lastAttemptAt,
+      failureClass,
+      externalBlock,
+      sampleRecordsDiscovered: discovered,
+      sampleDirectoryEntriesDiscovered: directoryEntries,
+      storedSourceRecords: history.documentCount,
+      unseenCount,
+      enabled: history.enabled !== false,
+      ingestionFrequency: history.ingestionFrequency,
+    });
+
     return {
       source: connector.name,
       status,
-      displayStatus:
-        status === "behind upstream"
+      freshnessStatus,
+      displayStatus: PRODUCTION_CONNECTORS.has(connector.name)
+        ? publicConnectorStatus(freshnessStatus)
+        : status === "behind upstream"
           ? "Behind Upstream"
           : displayStatusFor(status, history),
+      failureClass,
+      failureSummary: errorDetail || null,
+      priority: sourcePolicy.priority,
+      authorityClass: sourcePolicy.authorityClass,
+      sourceLabel: sourcePolicy.publicLabel,
+      enabled: history.enabled !== false,
+      expectedCadence: sourcePolicy.cadence,
+      expectedCadenceHours: sourcePolicy.cadenceHours,
+      lastAttempt: history.lastAttemptAt || null,
+      lastSuccess: history.lastSuccessfulAt || null,
+      lastDocumentSeen: history.lastDocumentSeenAt || null,
+      lastChangeSeen: history.lastChangeSeenAt || null,
+      cooldownUntil: history.cooldownUntil || null,
+      collectionResults: Array.isArray(collection.collectionResults)
+        ? collection.collectionResults
+        : [],
       // Surfaced explicitly so operators can see drift without inferring
       // it from a "success" flag that cannot express it.
       sampleRecordsUnseenLocally: unseenCount,
@@ -238,37 +303,53 @@ const probeConnector = async (
       latestIngestionStatus: history.latestRunStatus || null,
       lastSuccessfulIngestion: history.lastSuccessfulAt || null,
       storedSourceRecords: Number(history.documentCount || 0),
+      freshnessAgeHours: hoursSince(history.lastSuccessfulAt),
       refreshAgeHours: history.lastSuccessfulAt
-        ? Math.round(
-            ((Date.now() - new Date(history.lastSuccessfulAt).getTime()) /
-              3_600_000) *
-              10,
-          ) / 10
+        ? Math.round(hoursSince(history.lastSuccessfulAt) * 10) / 10
         : null,
       latestStoredError: history.latestError || null,
       errorCount,
       durationMs: Date.now() - startedAt,
-      error:
-        status === "blocked"
-          ? String(
-              blockedDiagnostic?.message ||
-                blockedError?.message ||
-                blockedError?.error ||
-                "The official source rejected automated catalogue access.",
-            ).slice(0, 300)
-          : status === "unavailable"
-          ? String(
-              collection.errors[0]?.message ||
-                collection.errors[0]?.error ||
-                "Source probe failed before a response was captured.",
-            ).slice(0, 300)
-          : undefined,
+      error: ["blocked", "unavailable", "parser changed"].includes(status)
+        ? errorDetail || "Source probe did not complete successfully."
+        : undefined,
     };
   } catch (error) {
+    const failureClass = classifyFailure(error);
+    const sourcePolicy = sourcePolicyFor(connector.name, {
+      ingestionFrequency: history.ingestionFrequency,
+    });
+    const freshnessStatus = classifyConnectorState({
+      sourceName: connector.name,
+      liveStatus: "unavailable",
+      lastSuccess: history.lastSuccessfulAt,
+      lastAttempt: history.lastAttemptAt,
+      failureClass,
+      externalBlock: EXTERNALLY_BLOCKED_FAILURES.has(failureClass),
+      storedSourceRecords: history.documentCount,
+      enabled: history.enabled !== false,
+      ingestionFrequency: history.ingestionFrequency,
+    });
     return {
       source: connector.name,
       status: "unavailable",
-      displayStatus: displayStatusFor("unavailable", history),
+      freshnessStatus,
+      displayStatus: PRODUCTION_CONNECTORS.has(connector.name)
+        ? publicConnectorStatus(freshnessStatus)
+        : displayStatusFor("unavailable", history),
+      failureClass,
+      failureSummary: String(error.message || "Source probe failed").slice(0, 300),
+      priority: sourcePolicy.priority,
+      authorityClass: sourcePolicy.authorityClass,
+      sourceLabel: sourcePolicy.publicLabel,
+      enabled: history.enabled !== false,
+      expectedCadence: sourcePolicy.cadence,
+      expectedCadenceHours: sourcePolicy.cadenceHours,
+      lastAttempt: history.lastAttemptAt || null,
+      lastSuccess: history.lastSuccessfulAt || null,
+      lastDocumentSeen: history.lastDocumentSeenAt || null,
+      lastChangeSeen: history.lastChangeSeenAt || null,
+      cooldownUntil: history.cooldownUntil || null,
       reachable: false,
       parserShapeValid: null,
       parserStatus: "Not Checked",
@@ -298,12 +379,14 @@ const probeConnector = async (
 
 const loadIngestionHistory = async () => {
   if (!process.env.DATABASE_URL) return new Map();
-  const [runs, successfulRuns, counts] = await Promise.all([
+  const [runs, successfulRuns, counts, registry, persistedHealth] = await Promise.all([
     query(`
       SELECT DISTINCT ON (source_name)
         source_name,
         status,
-        errors_json
+        errors_json,
+        started_at,
+        completed_at
       FROM ingestion_runs
       ORDER BY source_name, started_at DESC
     `),
@@ -315,33 +398,82 @@ const loadIngestionHistory = async () => {
       GROUP BY source_name
     `),
     query(`
-      SELECT source_name, COUNT(*)::INTEGER AS document_count
-      FROM document_sources
-      GROUP BY source_name
+      SELECT ds.source_name, COUNT(*)::INTEGER AS document_count,
+             MAX(d.publication_date) AS last_document_seen_at,
+             MAX(ds.last_seen_at) AS last_change_seen_at
+      FROM document_sources ds
+      LEFT JOIN documents d ON d.id = ds.document_id
+      GROUP BY ds.source_name
+    `),
+    query(`
+      SELECT source_name, enabled, ingestion_frequency
+      FROM source_registry
+    `),
+    query(`
+      SELECT source_name, consecutive_failures, last_checked_at,
+             last_error, metadata_json
+      FROM source_health
     `),
   ]);
   const history = new Map();
+  const merge = (sourceName, values) => {
+    const canonical = canonicalSourceName(sourceName);
+    const current = history.get(canonical) || {};
+    history.set(canonical, { ...current, ...values });
+  };
   for (const row of runs.rows) {
-    history.set(row.source_name, {
-      latestRunStatus: row.status,
-      errorCount: Array.isArray(row.errors_json) ? row.errors_json.length : 0,
-      latestError: Array.isArray(row.errors_json)
-        ? row.errors_json.at(-1)?.message || null
-        : null,
-      documentCount: 0,
-    });
+    const canonical = canonicalSourceName(row.source_name);
+    const current = history.get(canonical) || {};
+    const candidateAttempt = row.completed_at || row.started_at || null;
+    if (!current.lastAttemptAt || (candidateAttempt &&
+        new Date(candidateAttempt) > new Date(current.lastAttemptAt))) {
+      merge(row.source_name, {
+        latestRunStatus: row.status,
+        errorCount: Array.isArray(row.errors_json) ? row.errors_json.length : 0,
+        latestError: Array.isArray(row.errors_json)
+          ? row.errors_json.at(-1)?.message || null
+          : null,
+        documentCount: Number(current.documentCount || 0),
+        lastAttemptAt: candidateAttempt,
+      });
+    }
   }
   for (const row of successfulRuns.rows) {
-    history.set(row.source_name, {
-      ...(history.get(row.source_name) || {}),
-      lastSuccessfulAt: row.last_successful_at,
-    });
+    const canonical = canonicalSourceName(row.source_name);
+    const current = history.get(canonical) || {};
+    const lastSuccessfulAt = [current.lastSuccessfulAt, row.last_successful_at]
+      .filter(Boolean).sort((left, right) => new Date(right) - new Date(left))[0] || null;
+    merge(row.source_name, { lastSuccessfulAt });
   }
   for (const row of counts.rows) {
-    history.set(row.source_name, {
-      ...(history.get(row.source_name) || {}),
-      documentCount: row.document_count,
+    const canonical = canonicalSourceName(row.source_name);
+    const current = history.get(canonical) || {};
+    merge(row.source_name, {
+      documentCount: Number(current.documentCount || 0) + Number(row.document_count || 0),
+      lastDocumentSeenAt: [current.lastDocumentSeenAt, row.last_document_seen_at]
+        .filter(Boolean).sort((left, right) => new Date(right) - new Date(left))[0] || null,
+      lastChangeSeenAt: [current.lastChangeSeenAt, row.last_change_seen_at]
+        .filter(Boolean).sort((left, right) => new Date(right) - new Date(left))[0] || null,
     });
+  }
+  for (const row of registry.rows) {
+    merge(row.source_name, {
+      enabled: row.enabled,
+      ingestionFrequency: row.ingestion_frequency,
+    });
+  }
+  for (const row of persistedHealth.rows) {
+    const canonical = canonicalSourceName(row.source_name);
+    const current = history.get(canonical) || {};
+    if (!current.lastHealthCheckAt || (row.last_checked_at &&
+        new Date(row.last_checked_at) > new Date(current.lastHealthCheckAt))) {
+      merge(row.source_name, {
+        consecutiveFailures: Number(row.consecutive_failures || 0),
+        lastHealthCheckAt: row.last_checked_at || null,
+        latestError: row.last_error || current.latestError || null,
+        cooldownUntil: row.metadata_json?.cooldownUntil || null,
+      });
+    }
   }
   return history;
 };
@@ -361,6 +493,10 @@ const runConnectorHealthChecks = async (connectors, options = {}) => {
     );
   }
   const statusCounts = reports.reduce((counts, report) => {
+    counts[report.freshnessStatus] = (counts[report.freshnessStatus] || 0) + 1;
+    return counts;
+  }, {});
+  const probeStatusCounts = reports.reduce((counts, report) => {
     counts[report.status] = (counts[report.status] || 0) + 1;
     return counts;
   }, {});
@@ -373,6 +509,7 @@ const runConnectorHealthChecks = async (connectors, options = {}) => {
       vectorWrites: false,
     },
     statusCounts,
+    probeStatusCounts,
     sources: reports,
   };
 };

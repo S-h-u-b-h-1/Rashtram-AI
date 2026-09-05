@@ -14,6 +14,15 @@ const {
 const {
   getRecentRecommendations,
 } = require("../document/recommendationService");
+const { sourcePolicyFor } = require("../lib/ingestion/core/sourcePolicy");
+const { canonicalSourceName } = require("../lib/ingestion/core/sourceIdentity");
+const {
+  EXTERNALLY_BLOCKED_FAILURES,
+  classifyConnectorState,
+  classifyFailure,
+  hoursSince,
+  publicConnectorStatus,
+} = require("../lib/ingestion/core/sourceHealthPolicy");
 
 let overviewCache = {
   key: null,
@@ -283,7 +292,7 @@ const getRecentUserChats = async (userId, limit = 8) => {
 };
 
 const getSourceHealth = async () => {
-  const [runs, snapshots, counts] = await Promise.all([
+  const [runs, snapshots, counts, persistedHealth] = await Promise.all([
     query(`
       SELECT DISTINCT ON (source_name)
         source_name,
@@ -308,39 +317,122 @@ const getSourceHealth = async () => {
       ORDER BY source_name, COALESCE(collected_at, fetched_at) DESC
     `),
     query(`
-      SELECT source_name, COUNT(*)::INTEGER AS documents
-      FROM document_sources
-      GROUP BY source_name
+      SELECT ds.source_name, COUNT(*)::INTEGER AS documents,
+             MAX(d.publication_date) AS last_document_seen,
+             MAX(ds.last_seen_at) AS last_change_seen
+      FROM document_sources ds
+      LEFT JOIN documents d ON d.id = ds.document_id
+      GROUP BY ds.source_name
+    `),
+    query(`
+      SELECT health.source_name, health.status, health.reachable,
+             health.parser_status, health.last_checked_at,
+             health.last_successful_run_at, health.last_failed_run_at,
+             health.consecutive_failures, health.last_error,
+             health.metadata_json, registry.enabled,
+             registry.ingestion_frequency
+      FROM source_health health
+      LEFT JOIN source_registry registry
+        ON registry.source_name = health.source_name
     `),
   ]);
 
-  const runBySource = new Map(
-    runs.rows.map((row) => [row.source_name, row]),
+  const latestByCanonical = (rows, dateFields) => {
+    const mapped = new Map();
+    for (const row of rows) {
+      const key = canonicalSourceName(row.source_name);
+      const timestamp = dateFields.map((field) => row[field]).find(Boolean);
+      const previous = mapped.get(key);
+      const previousTimestamp = previous && dateFields
+        .map((field) => previous[field]).find(Boolean);
+      if (!previous || !previousTimestamp ||
+          (timestamp && new Date(timestamp) > new Date(previousTimestamp))) {
+        mapped.set(key, row);
+      }
+    }
+    return mapped;
+  };
+  const runBySource = latestByCanonical(runs.rows, ["started_at", "completed_at"]);
+  const snapshotBySource = latestByCanonical(
+    snapshots.rows,
+    ["collected_at", "fetched_at"],
   );
-  const snapshotBySource = new Map(
-    snapshots.rows.map((row) => [row.source_name, row]),
-  );
-  const countBySource = new Map(
-    counts.rows.map((row) => [row.source_name, row.documents]),
+  const countBySource = new Map();
+  for (const row of counts.rows) {
+    const key = canonicalSourceName(row.source_name);
+    const previous = countBySource.get(key) || { documents: 0 };
+    countBySource.set(key, {
+      documents: Number(previous.documents || 0) + Number(row.documents || 0),
+      last_document_seen: [previous.last_document_seen, row.last_document_seen]
+        .filter(Boolean).sort((left, right) => new Date(right) - new Date(left))[0] || null,
+      last_change_seen: [previous.last_change_seen, row.last_change_seen]
+        .filter(Boolean).sort((left, right) => new Date(right) - new Date(left))[0] || null,
+    });
+  }
+  const healthBySource = latestByCanonical(
+    persistedHealth.rows,
+    ["last_checked_at", "last_successful_run_at"],
   );
 
   return SOURCE_REGISTRY.map((source) => {
     const latestRun = runBySource.get(source.key);
     const latestSnapshot = snapshotBySource.get(source.key);
-    const documentCount = countBySource.get(source.key) || 0;
+    const count = countBySource.get(source.key) || {};
+    const health = healthBySource.get(source.key) || {};
+    const documentCount = Number(count.documents || 0);
+    const policy = sourcePolicyFor(source.key, {
+      ingestionFrequency: health.ingestion_frequency,
+    });
+    const failureClass = classifyFailure({
+      message: health.last_error,
+      latestError: Array.isArray(latestRun?.errors_json)
+        ? latestRun.errors_json.at(-1)?.message
+        : null,
+    });
+    const externalBlock = EXTERNALLY_BLOCKED_FAILURES.has(failureClass) ||
+      /blocked/i.test(String(health.status || ""));
+    const liveStatus = latestRun?.status === "failed"
+      ? "failed"
+      : latestRun?.status === "completed_with_errors"
+        ? "degraded"
+        : documentCount || latestSnapshot
+          ? "connected"
+          : "no data found";
+    const freshnessStatus = classifyConnectorState({
+      sourceName: source.key,
+      liveStatus,
+      lastSuccess: health.last_successful_run_at || latestRun?.completed_at,
+      lastAttempt: health.last_checked_at || latestRun?.started_at,
+      failureClass,
+      externalBlock,
+      sampleRecordsDiscovered: Number(latestRun?.counters_json?.discovered || 0),
+      storedSourceRecords: documentCount,
+      enabled: health.enabled !== false,
+      ingestionFrequency: health.ingestion_frequency,
+    });
     return {
       ...source,
-      status: deriveSourceStatus({
-        documentCount,
-        latestRun,
-        latestSnapshot,
-      }),
+      status: publicConnectorStatus(freshnessStatus),
+      freshnessStatus,
+      failureClass,
+      errorSummary: health.last_error || null,
+      sourceLabel: policy.publicLabel,
+      authorityClass: policy.authorityClass,
+      priority: policy.priority,
+      enabled: health.enabled !== false,
+      expectedCadence: policy.cadence,
+      expectedCadenceHours: policy.cadenceHours,
       documentCount,
-      lastRefresh: toIso(
-        latestRun?.completed_at ||
-          latestSnapshot?.collected_at ||
-          latestSnapshot?.fetched_at,
-      ),
+      lastAttempt: toIso(health.last_checked_at || latestRun?.started_at),
+      lastSuccess: toIso(health.last_successful_run_at),
+      lastDocumentSeen: toIso(count.last_document_seen),
+      lastChangeSeen: toIso(count.last_change_seen),
+      freshnessAgeHours: hoursSince(health.last_successful_run_at),
+      cooldownUntil: toIso(health.metadata_json?.cooldownUntil),
+      consecutiveFailures: Number(health.consecutive_failures || 0),
+      lastRefresh: toIso(health.last_successful_run_at ||
+        latestRun?.completed_at || latestSnapshot?.collected_at ||
+        latestSnapshot?.fetched_at),
       latestRunStatus: latestRun?.status || null,
       latestCollection: latestRun?.collection_name || null,
       latestSnapshotUrl: latestSnapshot?.source_url || null,

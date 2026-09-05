@@ -17,6 +17,27 @@ const {
   chunkStructuredHtml,
   extractStructuredHtml,
 } = require("../document/htmlResourceService");
+const {
+  EVIDENCE_STATUS,
+  EXTRACTION_STATUS,
+  FETCH_STATUS,
+  assessExternalSourceQuality,
+  chooseCanonicalSourceUrl,
+  classifyDetailedAuthority,
+  evidenceStatusFor,
+  extractionStatusFor,
+  publicAuthorityLabel,
+  toRetrievalAuthorityClass,
+} = require("./sourceQuality");
+
+const externalSourceFailureDetails = (
+  fetchStatus = FETCH_STATUS.FAILED,
+  extractionStatus = EXTRACTION_STATUS.FAILED,
+) => ({
+  fetchStatus,
+  extractionStatus,
+  evidenceStatus: EVIDENCE_STATUS.NOT_USABLE,
+});
 
 const MAX_SOURCE_BYTES = 50 * 1024 * 1024;
 const MAX_LEGACY_UPLOAD_BYTES = 3 * 1024 * 1024;
@@ -28,6 +49,7 @@ const DIRECT_UPLOAD_EXPIRES_SECONDS = 300;
 const MAX_SOURCE_TEXT = 500_000;
 const MAX_CONTEXT_CHARS = 9_000;
 const SOURCE_LIFECYCLE_LOCK_NAMESPACE = "research-source-upload:";
+const UPLOADED_SOURCE_IDENTITY = Object.freeze({ authorityClass: "USER_SOURCE" });
 
 const sha256 = (buffer) => crypto.createHash("sha256").update(buffer).digest("hex");
 
@@ -427,12 +449,14 @@ const assertPublicUrl = async (value) => {
     const error = new Error("Enter a valid http or https link.");
     error.status = 422;
     error.failureCode = "URL_INVALID";
+    error.details = externalSourceFailureDetails();
     throw error;
   }
   if (!['http:', 'https:'].includes(parsed.protocol) || parsed.username || parsed.password) {
     const error = new Error("Only public http or https links are supported.");
     error.status = 422;
     error.failureCode = "URL_UNSUPPORTED";
+    error.details = externalSourceFailureDetails();
     throw error;
   }
   const hostname = parsed.hostname.toLowerCase();
@@ -442,6 +466,7 @@ const assertPublicUrl = async (value) => {
     const error = new Error("Private and internal network links are not allowed.");
     error.status = 422;
     error.failureCode = "URL_UNSUPPORTED";
+    error.details = externalSourceFailureDetails();
     throw error;
   }
   try {
@@ -450,6 +475,7 @@ const assertPublicUrl = async (value) => {
       const error = new Error("Private and internal network links are not allowed.");
       error.status = 422;
       error.failureCode = "URL_UNSUPPORTED";
+      error.details = externalSourceFailureDetails();
       throw error;
     }
     Object.defineProperty(parsed, "resolvedAddresses", {
@@ -461,6 +487,7 @@ const assertPublicUrl = async (value) => {
     error.status = 422;
     error.message = "The source link could not be resolved.";
     error.failureCode = "URL_INVALID";
+    error.details = externalSourceFailureDetails();
     throw error;
   }
   return parsed;
@@ -490,6 +517,12 @@ const extractHtml = (buffer, url) => {
     error.failureCode = extracted.quality.dynamicShell
       ? "JAVASCRIPT_REQUIRED"
       : "HTML_EXTRACTION_FAILED";
+    error.details = externalSourceFailureDetails(
+      FETCH_STATUS.SUCCESS,
+      extracted.quality.dynamicShell
+        ? EXTRACTION_STATUS.FAILED
+        : EXTRACTION_STATUS.LOW_QUALITY,
+    );
     throw error;
   }
   return { ...extracted, chunks: chunkStructuredHtml(extracted) };
@@ -522,6 +555,8 @@ const extractPdf = async (buffer, url, fileName = null) => {
   } catch (error) {
     const wrapped = new Error(`This PDF could not be read: ${error.message}`);
     wrapped.status = 422;
+    wrapped.failureCode = "PARSER_FAILED";
+    wrapped.details = externalSourceFailureDetails(FETCH_STATUS.SUCCESS);
     throw wrapped;
   }
   const nativePages = (parsed.pages?.length ? parsed.pages : String(parsed.fullText || "").split(/\f/u));
@@ -571,6 +606,10 @@ const extractPdf = async (buffer, url, fileName = null) => {
     const error = new Error("No readable pages could be recovered from this PDF. Try a clearer or unlocked copy.");
     error.status = 422;
     error.failureCode = "LOW_QUALITY_TEXT";
+    error.details = externalSourceFailureDetails(
+      FETCH_STATUS.SUCCESS,
+      EXTRACTION_STATUS.LOW_QUALITY,
+    );
     throw error;
   }
   const text = validPages.map(({ text: pageText }) => pageText).join("\f");
@@ -650,18 +689,25 @@ const fetchPublicSource = async (initialUrl) => {
         status === 403 ? "UPSTREAM_BLOCKED" :
         status === 429 ? "UPSTREAM_RATE_LIMITED" :
         cause.code === "ECONNABORTED" ? "TIMEOUT" : "UPSTREAM_UNAVAILABLE";
+      error.details = externalSourceFailureDetails(
+        [401, 403, 429].includes(status) ? FETCH_STATUS.BLOCKED : FETCH_STATUS.FAILED,
+      );
       throw error;
     }
     if (response.status < 300) return { response, url: currentUrl.href };
     if (redirect === 3) {
       const error = new Error("The source link redirected too many times.");
       error.status = 422;
+      error.failureCode = "REDIRECT_LOOP";
+      error.details = externalSourceFailureDetails();
       throw error;
     }
     const location = response.headers.location;
     if (!location) {
       const error = new Error("The source link returned an invalid redirect.");
       error.status = 422;
+      error.failureCode = "REDIRECT_CHANGED";
+      error.details = externalSourceFailureDetails();
       throw error;
     }
     currentUrl = await assertPublicUrl(new URL(location, currentUrl.href).href);
@@ -734,6 +780,13 @@ const toPublicSource = (row) => ({
   errorMessage: row.error_message,
   sizeBytes: row.size_bytes == null ? null : Number(row.size_bytes),
   metadata: publicSourceMetadata(row.metadata_json),
+  sourceLabel: row.metadata_json?.publicAuthorityLabel ||
+    publicAuthorityLabel(row.metadata_json?.authorityClass),
+  authorityClass: row.metadata_json?.authorityClass || null,
+  fetchStatus: row.metadata_json?.fetchStatus || null,
+  extractionStatus: row.metadata_json?.extractionStatus || null,
+  evidenceStatus: row.metadata_json?.evidenceStatus || null,
+  canonicalUrl: row.metadata_json?.canonicalUrl || row.source_url || null,
   createdAt: row.created_at,
   updatedAt: row.updated_at,
 });
@@ -851,7 +904,7 @@ const persistSource = async ({
         extractionQuality: extracted.quality || null,
         publicationDate: extracted.publicationDate || null,
         sourceAuthority: extracted.sourceAuthority || null,
-        canonicalUrl: extracted.canonicalUrl || sourceUrl || null,
+        canonicalUrl: metadata.canonicalUrl || extracted.canonicalUrl || sourceUrl || null,
       }),
       ],
       chunks,
@@ -894,6 +947,8 @@ const addUrlSource = async (userId, url) => {
   if (!isPdf && !isHtml) {
     const error = new Error("This link did not return a readable HTML page or PDF.");
     error.status = 422;
+    error.failureCode = "CONTENT_TYPE_MISMATCH";
+    error.details = externalSourceFailureDetails(FETCH_STATUS.SUCCESS);
     throw error;
   }
   let sourceBuffer = buffer;
@@ -921,6 +976,17 @@ const addUrlSource = async (userId, url) => {
       }
     }
   }
+  const canonicalUrl = chooseCanonicalSourceUrl({
+    requestedUrl: parsed.href,
+    finalUrl: resolvedUrl,
+    extractedCanonicalUrl: extracted.canonicalUrl,
+  });
+  const quality = assessExternalSourceQuality({
+    sourceUrl: resolvedUrl,
+    canonicalUrl,
+    sourceType: "external_url",
+    extracted,
+  });
   const source = await persistSource({
     userId,
     title: extracted.title,
@@ -932,6 +998,8 @@ const addUrlSource = async (userId, url) => {
     metadata: {
       fetchedFrom: parsed.href,
       ...(resolvedUrl !== finalUrl ? { publicationPageUrl: finalUrl, linkedPdfResolved: true } : {}),
+      ...quality,
+      canonicalUrl,
     },
   });
   console.log("[research-source] fetch completed", {
@@ -1553,12 +1621,19 @@ const addPdfSource = async (userId, payload) =>
     () => addPdfSourceUnlocked(userId, payload),
   );
 
-const getSourceContext = async (userId, sourceIds = [], search = "") => {
+const getSourceContext = async (
+  userId,
+  sourceIds = [],
+  search = "",
+  options = {},
+) => {
   const ids = [...new Set((Array.isArray(sourceIds) ? sourceIds : []).map((id) => Number(id)).filter((id) => Number.isSafeInteger(id) && id > 0))].slice(0, 20);
   if (!ids.length) return { context: "", sources: [], evidence: [], chunks: 0 };
-  const result = await query(
+  const queryFn = options.queryFn || query;
+  const result = await queryFn(
     `SELECT s.id, s.title, s.source_url, s.file_name, s.source_type,
-            c.chunk_index, c.content, c.metadata_json
+            s.metadata_json AS source_metadata_json,
+            c.chunk_index, c.content, c.metadata_json AS chunk_metadata_json
       FROM research_sources s
       JOIN research_source_chunks c ON c.source_id = s.id
       WHERE s.user_id = $1 AND s.id = ANY($2::BIGINT[]) AND s.status = 'ready'
@@ -1577,52 +1652,110 @@ const getSourceContext = async (userId, sourceIds = [], search = "") => {
   const selected = [];
   const sources = [];
   const evidence = [];
+  const limitations = [];
   for (const row of result.rows) {
     if (remaining <= 0) break;
+    const storedQuality = row.source_metadata_json || {};
+    const canonicalUrl = storedQuality.canonicalUrl || row.source_url || null;
+    const authorityClass = storedQuality.authorityClass || classifyDetailedAuthority({
+      sourceUrl: row.source_url,
+      canonicalUrl,
+      sourceType: row.source_type,
+    });
+    const extractionStatus = storedQuality.extractionStatus ||
+      (row.source_type === "pdf_upload"
+        ? EXTRACTION_STATUS.GOOD
+        : extractionStatusFor({
+            text: row.content,
+            quality: storedQuality.extractionQuality || {},
+            partialValid: storedQuality.partialValid,
+          }));
+    const evidenceStatus = evidenceStatusFor({
+      authorityClass,
+      extractionStatus,
+      purpose: options.purpose || "research",
+      sourceType: row.source_type,
+    });
+    if (evidenceStatus === EVIDENCE_STATUS.NOT_USABLE) {
+      if (!limitations.some((item) => item.sourceId === String(row.id))) {
+        limitations.push({
+          sourceId: String(row.id),
+          documentTitle: row.title,
+          sourceLabel: storedQuality.publicAuthorityLabel ||
+            publicAuthorityLabel(authorityClass),
+          evidenceStatus,
+          reason: ["legal", "compliance", "current_status"]
+            .includes(String(options.purpose || "").toLowerCase())
+            ? "This source is not authoritative enough for the requested legal or current-status claim."
+            : "This source did not pass the evidence-quality gate.",
+        });
+      }
+      continue;
+    }
+    const retrievalAuthority = row.source_type === "pdf_upload"
+      ? UPLOADED_SOURCE_IDENTITY.authorityClass
+      : toRetrievalAuthorityClass(authorityClass, row.source_type);
+    const chunkMetadata = row.chunk_metadata_json || {};
     const content = cleanSourceText(row.content).slice(0, remaining);
     if (!content) continue;
     remaining -= content.length;
-    selected.push(`[User source: ${row.title} | Passage ${Number(row.chunk_index) + 1}]\n${content}`);
+    const sourceLabel = storedQuality.publicAuthorityLabel ||
+      publicAuthorityLabel(authorityClass);
+    selected.push(
+      `[User source: ${row.title} | ${sourceLabel} | Evidence ${evidenceStatus} | Passage ${Number(row.chunk_index) + 1}]\n${content}`,
+    );
     evidence.push({
       sourceId: String(row.id),
       documentId: `user-source-${row.id}`,
       documentTitle: row.title,
-      sourceUrl: row.source_url,
+      sourceUrl: canonicalUrl,
       fileName: row.file_name,
       sourceType: row.source_type,
       chunkIndex: Number(row.chunk_index),
       content,
       passage: Number(row.chunk_index) + 1,
       userSource: true,
-      authorityClass: "USER_SOURCE",
-      resourceType: row.metadata_json?.resourceType || null,
-      heading: row.metadata_json?.heading || row.metadata_json?.sectionTitle || null,
-      sectionPath: row.metadata_json?.sectionPath || [],
-      anchor: row.metadata_json?.sourceAnchor || null,
-      pageStart: row.metadata_json?.pageStart || null,
-      pageEnd: row.metadata_json?.pageEnd || null,
+      authorityClass: retrievalAuthority,
+      authorityDetail: authorityClass,
+      evidenceStatus,
+      sourceLabel,
+      resourceType: chunkMetadata.resourceType || null,
+      heading: chunkMetadata.heading || chunkMetadata.sectionTitle || null,
+      sectionPath: chunkMetadata.sectionPath || [],
+      anchor: chunkMetadata.sourceAnchor || null,
+      pageStart: chunkMetadata.pageStart || null,
+      pageEnd: chunkMetadata.pageEnd || null,
     });
     if (!sources.some((source) => source.sourceId === String(row.id))) {
       sources.push({
         sourceId: String(row.id),
         documentTitle: row.title,
-        sourceUrl: row.source_url,
+        sourceUrl: canonicalUrl,
         fileName: row.file_name,
         sourceType: row.source_type,
         content: content.slice(0, 360),
         passage: Number(row.chunk_index) + 1,
         userSource: true,
-        authorityClass: "USER_SOURCE",
-        resourceType: row.metadata_json?.resourceType || null,
-        heading: row.metadata_json?.heading || row.metadata_json?.sectionTitle || null,
-        sectionPath: row.metadata_json?.sectionPath || [],
-        anchor: row.metadata_json?.sourceAnchor || null,
-        pageStart: row.metadata_json?.pageStart || null,
-        pageEnd: row.metadata_json?.pageEnd || null,
+        authorityClass: retrievalAuthority,
+        authorityDetail: authorityClass,
+        evidenceStatus,
+        sourceLabel,
+        resourceType: chunkMetadata.resourceType || null,
+        heading: chunkMetadata.heading || chunkMetadata.sectionTitle || null,
+        sectionPath: chunkMetadata.sectionPath || [],
+        anchor: chunkMetadata.sourceAnchor || null,
+        pageStart: chunkMetadata.pageStart || null,
+        pageEnd: chunkMetadata.pageEnd || null,
       });
     }
   }
-  return { context: selected.join("\n\n"), sources, evidence, chunks: selected.length };
+  return {
+    context: selected.join("\n\n"),
+    sources,
+    evidence,
+    chunks: selected.length,
+    limitations,
+  };
 };
 
 const deleteSourceUnlocked = async (

@@ -1172,6 +1172,15 @@ router.post("/", generationLimiter, async (req, res) => {
       req.user.id,
       sourceIds,
       message,
+      {
+        purpose: freshnessRequired
+          ? "current_status"
+          : answerIntent === "COMPLIANCE"
+            ? "compliance"
+            : answerIntent === "LEGAL_EFFECT"
+              ? "legal"
+              : "research",
+      },
     );
     const briefContext = buildBriefContext(document, textArtifact);
     const passageContext = passages
@@ -1296,6 +1305,7 @@ router.post("/", generationLimiter, async (req, res) => {
         graphSourceCount: relationshipContext.sources.length,
         graphGrounded: relationshipContext.graphGrounded,
         selectedSourceCount: userSourceContext.sources.length,
+        sourceLimitations: userSourceContext.limitations || [],
         evidenceSufficiency: sufficiency,
         retrieval: {
           ...retrieval.diagnostics,

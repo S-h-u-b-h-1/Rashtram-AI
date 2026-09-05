@@ -1,6 +1,13 @@
 const crypto = require("crypto");
 const { connectDB, getPool, query } = require("../../../db");
 const { sourceNameGroup } = require("./sourceIdentity");
+const { sourcePolicyFor } = require("./sourcePolicy");
+const {
+  CONNECTOR_STATUS,
+  EXTERNALLY_BLOCKED_FAILURES,
+  classifyConnectorState,
+  classifyFailure,
+} = require("./sourceHealthPolicy");
 
 // completeRun() only executes on the happy path, so a run whose process
 // is killed mid-flight (serverless timeout, cancelled CI job, terminated
@@ -90,6 +97,54 @@ const createRun = async ({ sourceName, collectionName, options = {} }) => {
 
 const completeRun = async (runId, summary) => {
   const errors = summary.errors || [];
+  const now = new Date();
+  const firstError = errors.find((error) => error?.message || error?.error || error?.code) || {};
+  const failureClass = classifyFailure(firstError);
+  const sourcePolicy = sourcePolicyFor(summary.source);
+  const fullySuccessful = summary.status === "completed";
+  const partialSuccess = summary.status === "completed_with_errors";
+  const liveStatus = fullySuccessful
+    ? (Number(summary.discovered || 0) > 0 ? "connected" : "no data found")
+    : partialSuccess && (Number(summary.discovered || 0) > 0 || Number(summary.stored || 0) > 0)
+      ? "degraded"
+      : "unavailable";
+  const freshnessStatus = classifyConnectorState({
+    sourceName: summary.source,
+    liveStatus,
+    lastSuccess: fullySuccessful ? now : null,
+    lastAttempt: now,
+    failureClass,
+    externalBlock: liveStatus === "unavailable" &&
+      EXTERNALLY_BLOCKED_FAILURES.has(failureClass),
+    sampleRecordsDiscovered: summary.discovered || 0,
+    storedSourceRecords: summary.stored || 0,
+    enabled: true,
+  });
+  const changed = Number(summary.counters?.inserted || 0) +
+    Number(summary.counters?.updated || 0) +
+    Number(summary.counters?.created || 0) +
+    Number(summary.counters?.merged || 0) > 0;
+  const newestDocumentDate = (summary.sampleRecords || [])
+    .map((record) => record?.publicationDate || record?.publishedAt || null)
+    .filter(Boolean)
+    .sort((left, right) => new Date(right) - new Date(left))[0] || null;
+  const healthMetadata = {
+    runId,
+    collection: summary.collection || null,
+    counters: summary.counters || {},
+    finalStatus: freshnessStatus,
+    failureClass: failureClass || null,
+    failureSummary: firstError?.message || firstError?.error || null,
+    priority: sourcePolicy.priority,
+    authorityClass: sourcePolicy.authorityClass,
+    sourceLabel: sourcePolicy.publicLabel,
+    expectedCadence: sourcePolicy.cadence,
+    expectedCadenceHours: sourcePolicy.cadenceHours,
+    lastAttemptAt: now.toISOString(),
+    ...(fullySuccessful ? { lastSuccessAt: now.toISOString() } : {}),
+    ...(newestDocumentDate ? { lastDocumentSeenAt: newestDocumentDate } : {}),
+    ...(changed ? { lastChangeSeenAt: now.toISOString() } : {}),
+  };
   await query(
     `UPDATE ingestion_runs
         SET status = $2,
@@ -119,19 +174,16 @@ const completeRun = async (runId, summary) => {
      )
      VALUES (
        $1, REPLACE($1, '-', '_'), INITCAP(REPLACE($1, '-', ' ')),
-       CASE
-         WHEN $1 LIKE 'regulator-%' THEN 'Official Regulator Source'
-         WHEN $1 LIKE 'state-%' THEN 'State Government Source'
-         WHEN $1 LIKE 'ministry%' THEN 'Ministry Source'
-         ELSE 'Official Government Source'
-       END,
-       $1, 'manual', $2, TRUE,
-       CASE WHEN $2 IN ('completed', 'completed_with_errors') THEN NOW() END,
-       CASE WHEN $2 = 'failed' THEN NOW() END,
+       $5,
+       $1, $4, $2, TRUE,
+       CASE WHEN $3 THEN NOW() END,
+       CASE WHEN NOT $3 THEN NOW() END,
        'Automatically registered from an ingestion run.'
      )
      ON CONFLICT (source_name) DO UPDATE SET
        status = EXCLUDED.status,
+       source_type = EXCLUDED.source_type,
+       ingestion_frequency = EXCLUDED.ingestion_frequency,
        last_successful_run_at = COALESCE(
          EXCLUDED.last_successful_run_at,
          source_registry.last_successful_run_at
@@ -141,7 +193,13 @@ const completeRun = async (runId, summary) => {
          source_registry.last_failed_run_at
        ),
        updated_at = NOW()`,
-    [summary.source, summary.status],
+    [
+      summary.source,
+      freshnessStatus.toLowerCase(),
+      fullySuccessful,
+      sourcePolicy.cadence,
+      sourcePolicy.authorityClass,
+    ],
   );
   await query(
     `INSERT INTO source_health (
@@ -152,19 +210,15 @@ const completeRun = async (runId, summary) => {
      )
      VALUES (
        $1,
-       CASE
-         WHEN $2 = 'completed' THEN 'fresh'
-         WHEN $2 = 'completed_with_errors' THEN 'degraded'
-         ELSE 'failed'
-       END,
-       $2 <> 'failed',
-       CASE WHEN $2 = 'failed' THEN 'failed' ELSE 'valid' END,
-       $3, $4, $5, NOW(),
-       CASE WHEN $2 IN ('completed', 'completed_with_errors') THEN NOW() END,
-       CASE WHEN $2 = 'failed' THEN NOW() END,
-       CASE WHEN $2 = 'failed' THEN 1 ELSE 0 END,
-       $6,
-       $7::jsonb,
+       LOWER($2),
+       $3,
+       $4,
+       $5, $6, $7, NOW(),
+       CASE WHEN $8 THEN NOW() END,
+       CASE WHEN NOT $8 THEN NOW() END,
+       CASE WHEN NOT $8 THEN 1 ELSE 0 END,
+       $9,
+       $10::jsonb,
        NOW()
      )
      ON CONFLICT (source_name) DO UPDATE SET
@@ -184,7 +238,7 @@ const completeRun = async (runId, summary) => {
          source_health.last_failed_run_at
        ),
        consecutive_failures = CASE
-         WHEN EXCLUDED.status = 'failed'
+         WHEN EXCLUDED.status IN ('error', 'blocked_external')
            THEN source_health.consecutive_failures + 1
          ELSE 0
        END,
@@ -193,16 +247,17 @@ const completeRun = async (runId, summary) => {
        updated_at = NOW()`,
     [
       summary.source,
-      summary.status,
+      freshnessStatus,
+      ![CONNECTOR_STATUS.ERROR, CONNECTOR_STATUS.BLOCKED_EXTERNAL].includes(freshnessStatus),
+      [CONNECTOR_STATUS.ERROR, CONNECTOR_STATUS.BLOCKED_EXTERNAL].includes(freshnessStatus)
+        ? "failed"
+        : freshnessStatus === CONNECTOR_STATUS.DEGRADED ? "partial" : "valid",
       summary.discovered || 0,
       summary.stored || 0,
       summary.resources || 0,
+      fullySuccessful,
       errors[0]?.message ? String(errors[0].message).slice(0, 2_000) : null,
-      JSON.stringify({
-        runId,
-        collection: summary.collection || null,
-        counters: summary.counters || {},
-      }),
+      JSON.stringify(healthMetadata),
     ],
   );
 };

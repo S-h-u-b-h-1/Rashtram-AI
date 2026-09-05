@@ -428,6 +428,15 @@ router.post("/chat", generationLimiter, async (req, res) => {
       req.user.id,
       sourceIds,
       message,
+      {
+        purpose: freshnessRequired
+          ? "current_status"
+          : answerIntent === "COMPLIANCE"
+            ? "compliance"
+            : answerIntent === "LEGAL_EFFECT"
+              ? "legal"
+              : "research",
+      },
     );
     const context = sources
       .map(
@@ -486,7 +495,7 @@ router.post("/chat", generationLimiter, async (req, res) => {
     const currentVerification = freshnessRequired
       ? {
           required: true,
-          status: passageGroups.every((group) =>
+          status: passageGroups.length > 0 && passageGroups.every((group) =>
             group.currentVerification.status === "VERIFIED_CURRENT")
             ? "VERIFIED_CURRENT"
             : passageGroups.some((group) =>
@@ -496,10 +505,11 @@ router.post("/chat", generationLimiter, async (req, res) => {
           checkedAt: new Date().toISOString(),
           checkedThrough: passageGroups.map((group) => group.currentVerification.checkedThrough)
             .filter(Boolean).sort().at(-1) || null,
-          connectorStatus: passageGroups.some((group) =>
-            ["degraded", "error", "stale", "not_checked"].includes(group.currentVerification.connectorStatus))
-            ? "degraded"
-            : "fresh",
+          connectorStatus: !passageGroups.length
+            ? "not_checked"
+            : passageGroups.every((group) => group.currentVerification.connectorStatus === "fresh")
+              ? "fresh"
+              : "degraded",
           documents: passageGroups.map((group) => ({
             documentId: group.document.id,
             status: group.currentVerification.status,
@@ -527,6 +537,7 @@ router.post("/chat", generationLimiter, async (req, res) => {
         grounded: true,
         documentCount: documents.length,
         selectedSourceCount: userSourceContext.sources.length,
+        sourceLimitations: userSourceContext.limitations || [],
         graphSourceCount: graphSources.length,
         evidenceSufficiency: sufficiency,
         answerIntent,

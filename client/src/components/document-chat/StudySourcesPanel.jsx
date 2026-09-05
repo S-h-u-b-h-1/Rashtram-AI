@@ -19,7 +19,8 @@ import {
 } from "@/lib/research-upload.mjs";
 
 const sourceLabel = (source) =>
-  source.sourceType === "pdf_upload" ? "PDF upload" : "Web source";
+  source.sourceLabel ||
+  (source.sourceType === "pdf_upload" ? "PDF upload" : "External web source");
 
 export function StudySourcesPanel({
   sources,

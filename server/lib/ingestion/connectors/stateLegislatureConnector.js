@@ -29,6 +29,7 @@ const stateLegislatureConnector = {
       snapshots: [],
       errors: [],
       diagnostics: [],
+      collectionResults: [],
     };
     for (const jurisdiction of jurisdictions) {
       const url =
@@ -61,11 +62,31 @@ const stateLegislatureConnector = {
         combined.snapshots.push(...result.snapshots);
         combined.errors.push(...result.errors);
         combined.diagnostics.push(...(result.diagnostics || []));
+        combined.collectionResults.push({
+          collection: jurisdiction,
+          status: result.records.length
+            ? (result.errors.length || result.diagnostics?.length ? "DEGRADED" : "FRESH")
+            : result.diagnostics?.some((item) => item.type === "blocked")
+              ? "BLOCKED_EXTERNAL"
+              : result.errors.length ? "ERROR" : "NO_DATA",
+          recordsDiscovered: result.records.length,
+          pdfLinksDiscovered: result.records.filter((record) => record.pdfUrl).length,
+          snapshotsCaptured: result.snapshots.length,
+          failureSummary: result.errors[0]?.message || result.diagnostics?.[0]?.message || null,
+        });
       } catch (error) {
         combined.errors.push({
           stage: "state-portal",
           collection: jurisdiction,
           message: error.message,
+        });
+        combined.collectionResults.push({
+          collection: jurisdiction,
+          status: "ERROR",
+          recordsDiscovered: 0,
+          pdfLinksDiscovered: 0,
+          snapshotsCaptured: 0,
+          failureSummary: String(error.message || "State portal failed").slice(0, 300),
         });
       }
     }

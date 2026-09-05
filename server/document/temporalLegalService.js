@@ -1,5 +1,11 @@
 const { query } = require("../db");
 const { sourceNameGroup } = require("../lib/ingestion/core/sourceIdentity");
+const { sourcePolicyFor } = require("../lib/ingestion/core/sourcePolicy");
+const {
+  CONNECTOR_STATUS,
+  classifyConnectorState,
+  classifyFailure,
+} = require("../lib/ingestion/core/sourceHealthPolicy");
 const {
   SOURCE_AUTHORITY,
   classifySourceAuthority,
@@ -388,6 +394,8 @@ const loadDocumentSourceFreshness = async (document, queryFn = query) => {
     document?.source_name || document?.sourceName || document?.source || "").trim();
   if (!source) return {
     status: "not_checked",
+    freshnessStatus: null,
+    verificationLevel: "UNVERIFIED",
     checkedThrough: null,
     sourceNames: [],
   };
@@ -397,7 +405,9 @@ const loadDocumentSourceFreshness = async (document, queryFn = query) => {
       `SELECT health.source_name, health.status, health.reachable,
               health.parser_status, health.last_checked_at,
               health.last_successful_run_at, health.last_failed_run_at,
-              health.consecutive_failures, registry.ingestion_frequency
+              health.consecutive_failures, health.last_error,
+              health.metadata_json, registry.ingestion_frequency,
+              registry.enabled
          FROM source_health health
          LEFT JOIN source_registry registry ON registry.source_name = health.source_name
         WHERE health.source_name = ANY($1::TEXT[])
@@ -406,33 +416,62 @@ const loadDocumentSourceFreshness = async (document, queryFn = query) => {
     );
     if (!result.rows.length) return {
       status: "not_checked",
+      freshnessStatus: null,
+      verificationLevel: "UNVERIFIED",
       checkedThrough: null,
       sourceNames,
     };
-    const maximumAgeMs = (frequency) => {
-      const value = String(frequency || "").toLowerCase();
-      if (value.includes("hour")) return 12 * 60 * 60 * 1_000;
-      if (value.includes("daily")) return 2 * 24 * 60 * 60 * 1_000;
-      if (value.includes("weekly")) return 10 * 24 * 60 * 60 * 1_000;
-      return 30 * 24 * 60 * 60 * 1_000;
-    };
-    const stale = result.rows.some((row) => {
-      const last = row.last_successful_run_at || row.last_checked_at;
-      return !last || Date.now() - new Date(last).getTime() > maximumAgeMs(row.ingestion_frequency);
+    const latest = result.rows[0];
+    const policy = sourcePolicyFor(source, {
+      ingestionFrequency: latest.ingestion_frequency,
     });
-    const degraded = result.rows.some((row) =>
-      row.reachable === false || Number(row.consecutive_failures || 0) > 0 ||
-      /^(failed|error|stale|degraded|blocked)$/i.test(String(row.status || "")) ||
-      /^(failed|changed|blocked)$/i.test(String(row.parser_status || "")),
-    );
+    const persistedStatus = String(
+      latest.metadata_json?.finalStatus || latest.status || "",
+    ).toUpperCase();
+    const failureClass = latest.metadata_json?.failureClass || classifyFailure({
+      message: latest.last_error,
+      parserMessage: latest.parser_status,
+    });
+    const normalizedStatus = Object.values(CONNECTOR_STATUS).includes(persistedStatus)
+      ? persistedStatus
+      : classifyConnectorState({
+          sourceName: source,
+          liveStatus: latest.status,
+          lastSuccess: latest.last_successful_run_at,
+          lastAttempt: latest.last_checked_at,
+          failureClass,
+          externalBlock: persistedStatus === "BLOCKED",
+          storedSourceRecords: Number(latest.metadata_json?.storedSourceRecords || 0),
+          enabled: latest.enabled !== false,
+          ingestionFrequency: latest.ingestion_frequency,
+        });
     const checkedThrough = result.rows
       .map((row) => row.last_successful_run_at || row.last_checked_at)
       .filter(Boolean)
       .sort((left, right) => new Date(right) - new Date(left))[0] || null;
+    const legacyStatus = ({
+      [CONNECTOR_STATUS.FRESH]: "fresh",
+      [CONNECTOR_STATUS.DELAYED]: "delayed",
+      [CONNECTOR_STATUS.STALE]: "stale",
+      [CONNECTOR_STATUS.BLOCKED_EXTERNAL]: "blocked_external",
+      [CONNECTOR_STATUS.DEGRADED]: "degraded",
+      [CONNECTOR_STATUS.ERROR]: "error",
+      [CONNECTOR_STATUS.NO_DATA]: "no_data",
+    })[normalizedStatus] || "not_checked";
     return {
-      status: degraded ? "degraded" : stale ? "stale" : "fresh",
+      status: legacyStatus,
+      freshnessStatus: normalizedStatus,
+      verificationLevel: normalizedStatus === CONNECTOR_STATUS.FRESH
+        ? "FULLY_VERIFIED"
+        : normalizedStatus === CONNECTOR_STATUS.NO_DATA
+          ? "UNVERIFIED"
+          : "PARTIALLY_VERIFIED",
       checkedThrough: checkedThrough ? new Date(checkedThrough).toISOString() : null,
       sourceNames,
+      expectedCadence: policy.cadence,
+      expectedCadenceHours: policy.cadenceHours,
+      failureClass: failureClass || null,
+      failureSummary: latest.metadata_json?.failureSummary || latest.last_error || null,
       sources: result.rows.map((row) => ({
         sourceName: row.source_name,
         status: row.status,
@@ -440,11 +479,17 @@ const loadDocumentSourceFreshness = async (document, queryFn = query) => {
         reachable: row.reachable,
         lastCheckedAt: row.last_checked_at,
         lastSuccessfulRunAt: row.last_successful_run_at,
+        failureClass: row.metadata_json?.failureClass || classifyFailure({
+          message: row.last_error,
+          parserMessage: row.parser_status,
+        }),
       })),
     };
   } catch (error) {
     return {
       status: "error",
+      freshnessStatus: CONNECTOR_STATUS.ERROR,
+      verificationLevel: "UNVERIFIED",
       checkedThrough: null,
       sourceNames,
       error: "Source freshness could not be checked.",
@@ -463,7 +508,11 @@ const assessCurrentVerification = ({ document = {}, passages = [], freshness = {
       .includes(passage.authorityClass || classifySourceAuthority(passage)),
   );
   const checkedAt = new Date().toISOString();
-  const verified = freshness.status === "fresh" && laterAuthoritativeEvidence.length > 0;
+  const connectorFresh = freshness.freshnessStatus === CONNECTOR_STATUS.FRESH ||
+    freshness.status === "fresh";
+  const verified = connectorFresh && laterAuthoritativeEvidence.length > 0;
+  const connectorBlocked = freshness.freshnessStatus === CONNECTOR_STATUS.BLOCKED_EXTERNAL ||
+    freshness.status === "blocked_external";
   return {
     required: true,
     status: verified ? "VERIFIED_CURRENT" :
@@ -471,8 +520,10 @@ const assessCurrentVerification = ({ document = {}, passages = [], freshness = {
     checkedAt,
     checkedThrough: freshness.checkedThrough || null,
     connectorStatus: freshness.status || "not_checked",
-    connectorWarning: ["degraded", "error", "stale", "not_checked"].includes(freshness.status)
-      ? "Freshness could not be fully verified for the selected source."
+    connectorWarning: connectorBlocked
+      ? `The authoritative source is externally blocked${freshness.failureClass ? ` (${freshness.failureClass})` : ""}; current status could not be fully verified.`
+      : ["delayed", "degraded", "error", "stale", "no_data", "not_checked"].includes(freshness.status)
+      ? "The selected source is not fully fresh, so current status could not be fully verified."
       : null,
     laterEvidenceCount: laterAuthoritativeEvidence.length,
     temporalEvidenceCount: temporalPassages.length,

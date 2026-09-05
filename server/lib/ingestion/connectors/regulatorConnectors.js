@@ -70,8 +70,9 @@ const configs = [
   {
     name: "regulator-uidai",
     collection: "uidai-circulars",
-    url:
-      "https://uidai.gov.in/en/about-uidai/legal-framework/circulars.html",
+    // UIDAI retired the previous /about-uidai/legal-framework path. The
+    // official navigation now links directly to this stable circular index.
+    url: "https://uidai.gov.in/en/circulars",
     authority: "Unique Identification Authority of India",
     linkPattern:
       /circular|memorandum|notification|policy|guideline|sop|\.pdf(?:$|[?#])/i,

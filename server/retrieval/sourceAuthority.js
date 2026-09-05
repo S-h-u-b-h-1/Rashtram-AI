@@ -1,3 +1,8 @@
+const {
+  classifyDetailedAuthority,
+  toRetrievalAuthorityClass,
+} = require("../research/sourceQuality");
+
 const SOURCE_AUTHORITY = Object.freeze({
   PRIMARY_OFFICIAL: "PRIMARY_OFFICIAL",
   OFFICIAL_SECONDARY: "OFFICIAL_SECONDARY",
@@ -17,9 +22,21 @@ const authorityWeights = () => ({
 });
 
 const classifySourceAuthority = (source = {}) => {
-  if (source.userSource || source.sourceType === "pdf_upload" || source.sourceType === "url") {
+  if (Object.values(SOURCE_AUTHORITY).includes(source.authorityClass)) {
+    return source.authorityClass;
+  }
+  if (source.sourceType === "pdf_upload" ||
+      (source.userSource && !["url", "external_url"].includes(source.sourceType))) {
     return SOURCE_AUTHORITY.USER_SOURCE;
   }
+  const detailed = classifyDetailedAuthority({
+    sourceName: source.sourceName || source.source,
+    sourceUrl: source.sourceUrl || source.pdfUrl,
+    canonicalUrl: source.canonicalUrl,
+    sourceType: source.sourceType,
+  });
+  const classified = toRetrievalAuthorityClass(detailed, source.sourceType);
+  if (classified !== SOURCE_AUTHORITY.UNKNOWN) return classified;
   const text = [source.sourceUrl, source.pdfUrl, source.source, source.sourceName,
     source.authority, source.sourceClassification].filter(Boolean).join(" ").toLowerCase();
   // PolicyEdge is a useful institutional research source, but it is not the
@@ -27,12 +44,8 @@ const classifySourceAuthority = (source = {}) => {
   if (/\b(policyedge|policy-edge|policyedge\.in)\b/.test(text)) {
     return SOURCE_AUTHORITY.RESEARCH;
   }
-  if (/\b(gov\.in|nic\.in|indiacode\.nic\.in|egazette|sansad|parliamentofindia|rbi\.org\.in|sebi\.gov\.in|supremecourt\.gov\.in)\b/.test(text)) {
-    return SOURCE_AUTHORITY.PRIMARY_OFFICIAL;
-  }
-  if (/\b(pib\.gov\.in|ministry|department|commission|authority|board)\b/.test(text)) {
-    return SOURCE_AUTHORITY.OFFICIAL_SECONDARY;
-  }
+  // Authority identity comes from the configured connector or verified host,
+  // never merely from words such as "ministry" inside page content.
   if (/\b(who\.int|un\.org|worldbank\.org|oecd\.org|institution|university|institute)\b/.test(text)) {
     return SOURCE_AUTHORITY.INSTITUTIONAL;
   }

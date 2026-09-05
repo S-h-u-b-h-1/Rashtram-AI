@@ -177,6 +177,41 @@ test("connector health reports interactive official catalogues as blocked", asyn
   assert.match(report.error, /Interactive ASP.NET/);
 });
 
+test("one blocked collection does not hide records returned by other state collections", async () => {
+  const report = await probeConnector(
+    {
+      name: "state-legislature",
+      async collect() {
+        return {
+          records: [{
+            sourceName: "state-legislature",
+            sourceRecordId: "delhi-1",
+            sourceUrl: "https://delhiassembly.delhi.gov.in/bill.pdf",
+            pdfUrl: "https://delhiassembly.delhi.gov.in/bill.pdf",
+            title: "Delhi Bill",
+          }],
+          snapshots: [{ sourceName: "state-legislature" }],
+          errors: [],
+          diagnostics: [{
+            type: "blocked",
+            message: "One official state portal exposed no crawlable legislative PDF links.",
+          }],
+          collectionResults: [
+            { collection: "delhi", status: "FRESH", recordsDiscovered: 1 },
+            { collection: "kerala", status: "BLOCKED_EXTERNAL", recordsDiscovered: 0 },
+          ],
+        };
+      },
+    },
+    {},
+    { fetcher: {}, history: {} },
+  );
+  assert.equal(report.status, "degraded");
+  assert.equal(report.freshnessStatus, "DEGRADED");
+  assert.equal(report.failureClass, "PDF_DISCOVERY_FAILED");
+  assert.equal(report.collectionResults.length, 2);
+});
+
 test("connector health treats robots and HTTP 403 refusals as blocked", async () => {
   const report = await probeConnector(
     {
