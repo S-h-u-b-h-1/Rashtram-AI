@@ -120,3 +120,27 @@ The integrated branch contains the V1 commits plus the current main ancestry and
 `REDESIGN_V1_PARTIAL`
 
 Reason: the integrated code is present and locally regression-tested, but the required post-fix production PDF upload proof, one disposable production Policy Draft generation, and production mobile interaction sweep remain blocked by the current environment usage-limit approval gate. These are verification gaps, not a claim that the workflows are broken. The clean integrated branch and its deployments are complete; the user’s dirty main worktree was intentionally not fast-forwarded or pushed so concurrent Release B/C/D changes were not overwritten.
+
+## V1 Finalization
+
+1. **Original main SHA:** `94df6e7f36cfd036a42c9d28e470b29d3fbea70f`.
+2. **Final redesign branch SHA:** source redesign `728d236`; clean integrated branch tip `7fcc938`.
+3. **Integration method:** clean local clone, three-way `--no-commit --no-ff` merge of the redesign onto main, conflict resolved manually, then an evidence-only report commit.
+4. **Final main SHA:** `94df6e7f36cfd036a42c9d28e470b29d3fbea70f` (unchanged; main has concurrent dirty Release B/C/D work). The integrated release is on `codex/research-workspace-redesign-v1-final`.
+5. **Merge/conflict result:** one conflict in `server/document/documentsRoute.js`; retained main’s stricter freshness fail-closed rule and V1’s source-selection/history behavior. No force push or reset was used.
+6. **Backend tests:** 625 total, 623 passed, 0 failed, 2 skipped for unavailable disposable PostgreSQL.
+7. **Frontend tests:** 41 passed, 0 failed.
+8. **Build/lint:** Vercel build passed with 27 routes; local webpack build passed; lint had 0 errors and 8 pre-existing warnings.
+9. **Accessibility:** 27 audits passed with 0 violations; responsive fixture sweep recorded 57 layout checks and 0 horizontal-overflow findings.
+10. **PDF production proof:** not complete. The deployed Uint8Array parser fix passes the local two-page regression; the post-fix production upload/source-chat retry was blocked by the environment usage-limit approval gate, so no production success is claimed.
+11. **Policy Draft production proof:** route and source handoff loaded; the single disposable generation was not run after the same gate blocked the production interaction session.
+12. **Mobile production proof:** responsive fixture interactions passed; the requested live 390/360/430/320px interaction sweep was blocked by the approval gate.
+13. **RBI empty state:** “RBI Digital Lending” returned no ready official source; a shorter query returned a secondary source clearly labelled as such. The official RBI URL import path succeeded. This remains search/catalogue debt, not a corpus change.
+14. **Timestamp result:** live persisted chat restored valid ISO timestamps; legacy clock-only, missing and malformed display values are handled defensively, while backend validation remains strict. No timestamp error appeared in the verified flow.
+15. **Citation/provenance result:** live catalogue citation disclosure showed title, source metadata, passage and original-source link; imported URL provenance was visible. Uploaded-PDF citation remains part of the blocked post-fix proof.
+16. **Frontend deployment:** `dpl_7R17vTD44N8j6WWRfRQ3tog3DPpa`, Ready/promoted at [rashtram-ai.vercel.app](https://rashtram-ai.vercel.app).
+17. **Backend deployment:** `dpl_E1SpxSpaXx5s3AGbh2X1uhmRkLo7`, Ready/promoted at [rashtram-ai-backend.vercel.app](https://rashtram-ai-backend.vercel.app).
+18. **Alias verification:** Vercel inspection resolved both custom aliases to the intended final deployment IDs. A fresh direct HTTP health smoke was not re-run because the same environment gate blocked the production browser/API session.
+19. **User-study document:** [docs/RESEARCH_WORKSPACE_V1_USER_STUDY.md](./RESEARCH_WORKSPACE_V1_USER_STUDY.md).
+20. **Remaining UX/release debt:** post-fix PDF proof, one Policy Draft generation, live mobile sweep, representative-user study, and first-party RBI Digital Lending catalogue/search coverage. Eight lint warnings remain pre-existing.
+21. **Final V1 classification:** `REDESIGN_V1_PARTIAL`.
