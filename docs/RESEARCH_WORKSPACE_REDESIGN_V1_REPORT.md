@@ -1,8 +1,9 @@
 # Rashtram AI — Research Workspace Redesign V1 Report
 
 Date: 5 September 2026  
-Release branch: `codex/research-workspace-redesign-v1`  
-Commits: `d2e80b6` (workspace redesign), `728d236` (PDF byte-array compatibility fix)
+Release branch: `codex/research-workspace-redesign-v1-final`
+Source branch: `codex/research-workspace-redesign-v1`
+Commits: `d2e80b6` (workspace redesign), `728d236` (PDF byte-array compatibility fix), `e7550ed` (main integration)
 
 ## Executive result
 
@@ -89,8 +90,9 @@ These are engineering task checks, not a representative-user study; no 5–10 se
 
 ## 8. Production deployments and verification
 
-- Frontend: [https://rashtram-ai.vercel.app](https://rashtram-ai.vercel.app), deployment `dpl_2ahFXBJrZBqcTs33eyNWnj537vXR`, ready and promoted.
-- Backend: [https://rashtram-ai-backend.vercel.app](https://rashtram-ai-backend.vercel.app), redesign deployment `dpl_HHG8udbsukFLTzZwsFSoiBjbk4ve`, then parser-fix deployment `dpl_A4aiTGnLWQEA3Lr7RA3WRnZ8QWvZ`, ready and promoted.
+- Final integrated frontend: [https://rashtram-ai.vercel.app](https://rashtram-ai.vercel.app), deployment `dpl_7R17vTD44N8j6WWRfRQ3tog3DPpa`, Ready and promoted; the alias inspection resolves to this deployment.
+- Final integrated backend: [https://rashtram-ai-backend.vercel.app](https://rashtram-ai-backend.vercel.app), deployment `dpl_E1SpxSpaXx5s3AGbh2X1uhmRkLo7`, Ready and promoted; the alias inspection resolves to this deployment.
+- Earlier V1-only deployments (`dpl_2ahFXBJrZBqcTs33eyNWnj537vXR` and `dpl_A4aiTGnLWQEA3Lr7RA3WRnZ8QWvZ`) are retained as deployment history, not the final release target.
 
 Deployments came from the isolated release checkout; ongoing Release B/C working-tree files were not staged or deployed. Dedicated QA accounts were used, with credentials kept only in a mode-600 temporary state file. Live comparison `84`, report `9`, official RBI URL source and synthetic PDF attempt were owner-scoped. Cross-account private-chat, comparison, report and history checks returned empty/404 responses.
 
@@ -111,10 +113,10 @@ The final integration branch was created from main `94df6e7` (latest committed R
 
 Integration used a three-way merge in a clean clone. The only content conflict was the freshness connector-status expression in `server/document/documentsRoute.js`. The main-side stricter fail-closed behavior was retained (`fresh` only when every passage group is explicitly fresh), while the redesign’s source-aware selection/history changes were kept. No Release B/C/D corpus, connector, authority, semantic or retrieval files were overwritten.
 
-The integrated branch contains the V1 commits plus the current main ancestry and the PDF compatibility fix. After conflict resolution, the integrated checkout ran 625 backend tests: 623 passed, 0 failed and 2 disposable-PostgreSQL tests skipped. Frontend tests remained 41 passed; lint remained 0 errors with 8 pre-existing warnings. The production aliases currently point to the earlier V1 deployment; final-main deployment is pending the remaining bounded production PDF/policy/mobile checks and the environment’s Vercel approval limit.
+The integrated branch contains the V1 commits plus the current main ancestry and the PDF compatibility fix. After conflict resolution, the integrated checkout ran 625 backend tests: 623 passed, 0 failed and 2 disposable-PostgreSQL tests skipped. Frontend tests remained 41 passed; lint remained 0 errors with 8 pre-existing warnings. Final integrated production deployments are Ready and promoted: frontend `dpl_7R17vTD44N8j6WWRfRQ3tog3DPpa` and backend `dpl_E1SpxSpaXx5s3AGbh2X1uhmRkLo7`; both custom aliases resolve to those deployments.
 
 ### Final classification
 
 `REDESIGN_V1_PARTIAL`
 
-Reason: the integrated code is present and locally regression-tested, but the required post-fix production PDF upload proof, one disposable production Policy Draft generation, and production mobile interaction sweep remain blocked by the current environment usage-limit approval gate. These are verification gaps, not a claim that the workflows are broken. No Release D deployment has been attempted from the dirty main worktree.
+Reason: the integrated code is present and locally regression-tested, but the required post-fix production PDF upload proof, one disposable production Policy Draft generation, and production mobile interaction sweep remain blocked by the current environment usage-limit approval gate. These are verification gaps, not a claim that the workflows are broken. The clean integrated branch and its deployments are complete; the user’s dirty main worktree was intentionally not fast-forwarded or pushed so concurrent Release B/C/D changes were not overwritten.
