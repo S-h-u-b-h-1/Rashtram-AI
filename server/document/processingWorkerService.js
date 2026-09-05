@@ -297,6 +297,9 @@ const enqueueCandidateBatch = async (options = {}) => {
   const requestedType = normalizeBatchType(options.type);
   const retryFailed = Boolean(options.retryFailed);
   const onlyUnprocessed = Boolean(options.onlyUnprocessed);
+  const allowedDocumentIds = Array.isArray(options.allowedDocumentIds)
+    ? options.allowedDocumentIds.map(Number).filter(Number.isFinite)
+    : null;
   const candidates = await query(
     `SELECT document.id, document.document_type,
        LEAST(
@@ -307,13 +310,18 @@ const enqueueCandidateBatch = async (options = {}) => {
          + LEAST(COALESCE(recommendations.recommended, 0), 10)
          + LEAST(COALESCE(graph.degree, 0), 15)
          + CASE document.document_type
-             WHEN 'policy' THEN 12
-             WHEN 'bill' THEN 10
-             WHEN 'act' THEN 8
-             WHEN 'gazette' THEN 6
-             WHEN 'notification' THEN 5
+             WHEN 'act' THEN 18
+             WHEN 'rule' THEN 18
+             WHEN 'regulation' THEN 18
+             WHEN 'notification' THEN 17
+             WHEN 'circular' THEN 17
+             WHEN 'gazette' THEN 16
+             WHEN 'ordinance' THEN 16
+             WHEN 'bill' THEN 12
+             WHEN 'policy' THEN 11
              ELSE 3
            END
+         + CASE WHEN document.title ILIKE '%amendment%' THEN 12 ELSE 0 END
          + CASE
              WHEN document.year >= EXTRACT(YEAR FROM CURRENT_DATE) - 3 THEN 10
              WHEN document.year >= EXTRACT(YEAR FROM CURRENT_DATE) - 8 THEN 5
@@ -330,6 +338,27 @@ const enqueueCandidateBatch = async (options = {}) => {
        )::INTEGER AS processing_priority
      FROM documents document
      JOIN legislative_documents legacy ON legacy.id = document.id
+     LEFT JOIN LATERAL (
+       SELECT NULLIF(LOWER(SUBSTRING(
+         COALESCE(
+           (
+             SELECT resource.url
+             FROM document_resources resource
+             WHERE resource.document_id = document.id
+               AND resource.is_accessible
+               AND resource.resource_type = 'pdf'
+             ORDER BY resource.is_primary DESC, resource.id
+             LIMIT 1
+           ),
+           legacy.pdf_url,
+           legacy.canonical_url,
+           legacy.source_url
+         )
+         FROM '^[a-z]+://([^/:]+)'
+       )), '') AS source_host
+     ) source_location ON TRUE
+     LEFT JOIN document_retry_domain_state domain_state
+       ON domain_state.source_host = source_location.source_host
      LEFT JOIN document_processing_state state
        ON state.document_id = document.id
      LEFT JOIN LATERAL (
@@ -357,6 +386,14 @@ const enqueueCandidateBatch = async (options = {}) => {
      WHERE document.visibility_status = 'public'
        AND (
          legacy.pdf_url IS NOT NULL
+         OR EXISTS (
+           SELECT 1
+           FROM document_resources resource
+           WHERE resource.document_id = document.id
+             AND resource.is_accessible
+             AND resource.resource_type = 'pdf'
+             AND resource.url IS NOT NULL
+         )
          OR (
            COALESCE(legacy.canonical_source, legacy.source_name)
              IN ('policyedge', 'policy-edge')
@@ -367,6 +404,21 @@ const enqueueCandidateBatch = async (options = {}) => {
          $1::TEXT[] IS NULL
          OR document.document_type = ANY($1::TEXT[])
        )
+       AND (
+         $6::BIGINT[] IS NULL
+         OR document.id = ANY($6::BIGINT[])
+       )
+       AND COALESCE(domain_state.cooldown_until, '-infinity'::TIMESTAMPTZ) <= NOW()
+       AND (
+         domain_state.window_started_at IS NULL
+         OR domain_state.window_started_at < NOW() - (
+           COALESCE(domain_state.policy_json->>'windowMinutes', '60') || ' minutes'
+         )::INTERVAL
+         OR domain_state.window_attempts < COALESCE(
+           NULLIF(domain_state.policy_json->>'maxAttemptsPerWindow', '')::INTEGER,
+           CASE WHEN source_location.source_host ~* '(^|\\.)prsindia\\.org$' THEN 25 ELSE 50 END
+         )
+       )
        AND (NOT $2::BOOLEAN OR document.jurisdiction_level = 'state')
        AND (
          ($3::BOOLEAN AND state.readiness_class = 'processing_failed_retriable')
@@ -374,7 +426,7 @@ const enqueueCandidateBatch = async (options = {}) => {
          OR (
            NOT $3::BOOLEAN AND NOT $4::BOOLEAN
            AND NOT document.research_ready
-           AND state.readiness_class NOT IN (
+           AND COALESCE(state.readiness_class, '') NOT IN (
              'processing_failed_permanent',
              'invalid_or_quarantined',
              'unsupported_file_type'
@@ -386,7 +438,12 @@ const enqueueCandidateBatch = async (options = {}) => {
          WHERE active.document_id = document.id
            AND active.status IN ('queued', 'running')
        )
-     ORDER BY processing_priority DESC,
+     ORDER BY
+       CASE
+         WHEN $6::BIGINT[] IS NOT NULL THEN array_position($6::BIGINT[], document.id)
+         ELSE NULL
+       END ASC NULLS LAST,
+       processing_priority DESC,
        document.quality_score DESC,
        document.updated_at DESC,
        document.id
@@ -397,6 +454,7 @@ const enqueueCandidateBatch = async (options = {}) => {
       retryFailed,
       onlyUnprocessed,
       limit,
+      allowedDocumentIds,
     ],
   );
   const jobs = [];
@@ -404,7 +462,7 @@ const enqueueCandidateBatch = async (options = {}) => {
     jobs.push(
       await enqueueProcessing(candidate.id, null, {
         priority: candidate.processing_priority,
-        reason: "mass_corpus_backfill",
+        reason: options.reason || "mass_corpus_backfill",
         maxAttempts: options.maxAttempts,
         storageChecked: true,
       }),
@@ -424,6 +482,9 @@ const workerLoop = async ({
   discoverGraph,
   sourceConcurrency,
   allowedDocumentIds = null,
+  idlePollLimit = 5,
+  skipSemantic = false,
+  skipSummary = false,
 }) => {
   const results = [];
   await updateWorker(workerId, {
@@ -487,7 +548,7 @@ const workerLoop = async ({
       }
       if (Number(queued.rows[0]?.jobs || 0) <= 0) break;
       idlePolls += 1;
-      if (idlePolls >= 5) {
+      if (idlePolls >= idlePollLimit) {
         results.push({
           status: "paused",
           reason: "No eligible jobs could be claimed; source cooldown or rate controls may be active.",
@@ -521,17 +582,24 @@ const workerLoop = async ({
     }, 30_000);
     heartbeat.unref();
     try {
-      const result = await prepareDocument(job.document_id, {
+      const result = await prepareDocument(job.document_id, preparationOptions({
         job,
         workerId,
-        reason: "worker_pool",
         discoverGraph,
-      });
+        skipSemantic,
+        skipSummary,
+      }));
       results.push({
+        jobId: String(job.id),
         documentId: String(job.document_id),
         status: "ready",
         chunks: Number(result.chunksStored || 0),
         durationMs: Number(result.stageMetrics?.totalMs || 0),
+        extractionMethod: result.extractionMethod || result.textArtifact?.extractionMethod || null,
+        ocrUsed: Boolean(result.ocrUsed || result.textArtifact?.ocrUsed),
+        retrievalVerified: Boolean(result.retrievalVerified),
+        retrievalMode: result.retrievalMode || null,
+        embeddingsStored: Number(result.stageMetrics?.embeddingsStored || 0),
       });
       if (job.source_host) {
         await recordDomainResult(job.source_host, {
@@ -551,11 +619,14 @@ const workerLoop = async ({
       });
     } catch (error) {
       results.push({
+        jobId: String(job.id),
         documentId: String(job.document_id),
         status: error.processingFailure?.permanent
           ? "dead_letter"
           : "failed",
-        error: String(error.message || error).slice(0, 500),
+        failureCode: error.processingFailure?.failureCode || "PROCESSING_FAILED",
+        failureStage: error.processingFailure?.failureStage || null,
+        retryEligible: Boolean(error.processingFailure?.retryEligible),
         classification:
           error.processingFailure?.readinessClass ||
           "processing_failed_retriable",
@@ -587,6 +658,21 @@ const workerLoop = async ({
   return results;
 };
 
+const preparationOptions = ({
+  job,
+  workerId,
+  discoverGraph,
+  skipSemantic = false,
+  skipSummary = false,
+}) => ({
+  job,
+  workerId,
+  reason: "worker_pool",
+  discoverGraph,
+  skipSemantic: Boolean(skipSemantic),
+  skipSummary: Boolean(skipSummary),
+});
+
 const runWorkerPool = async (options = {}) => {
   const concurrency = clamp(
     options.concurrency,
@@ -610,6 +696,9 @@ const runWorkerPool = async (options = {}) => {
         jobLimit,
         discoverGraph: options.discoverGraph !== false,
         allowedDocumentIds: options.allowedDocumentIds || null,
+        idlePollLimit: clamp(options.idlePollLimit, 5, 5, 600),
+        skipSemantic: Boolean(options.skipSemantic),
+        skipSummary: Boolean(options.skipSummary),
         sourceConcurrency: clamp(
           options.sourceConcurrency,
           Number(process.env.PROCESSING_SOURCE_CONCURRENCY) || 2,
@@ -715,6 +804,10 @@ const runProcessingBatch = async (options = {}) => {
     storage,
     storageAfter: bounded.latestStorage,
     stopReason: bounded.stopReason,
+    selection: enqueued.jobs.map((job) => ({
+      jobId: String(job.id),
+      documentId: String(job.document_id),
+    })),
     ...processed,
   };
 };
@@ -724,6 +817,7 @@ module.exports = {
   enqueueCandidateBatch,
   effectiveBatchSize,
   recoverStaleJobs,
+  preparationOptions,
   runCapacityBoundedGroups,
   runProcessingBatch,
   runWorkerPool,

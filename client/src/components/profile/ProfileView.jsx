@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import * as api from "@/lib/api";
 import { ContinueResearch } from "@/components/intelligence/ContinueResearch";
 import { AccountSettings } from "./AccountSettings";
@@ -106,6 +107,8 @@ export function ProfileView() {
         profile={profile.account?.profile}
         onEdit={() => openSettings("details")}
       />
+      <Link href="/app/research" className="inline-flex min-h-11 items-center rounded-xl border border-[#8f1d2c]/15 px-4 text-sm text-[#8f1d2c]">Open My Research: conversations, sources and outputs →</Link>
+      <details className="rounded-xl border border-[#8f1d2c]/10 p-4"><summary className="cursor-pointer py-2 text-sm font-semibold">Research activity and account overview</summary><div className="mt-4 space-y-5">
       <div id="research-activity" className="scroll-mt-6">
         <ResearchActivity
           stats={{
@@ -130,6 +133,7 @@ export function ProfileView() {
         />
       </div>
 
+      </div></details>
       <AccountSettings
         account={profile.account}
         user={profile.user}
@@ -159,8 +163,9 @@ export function ProfileView() {
         }
       />
 
-      <RecommendationHistory />
+      <details className="rounded-xl border border-[#8f1d2c]/10 p-4"><summary className="cursor-pointer py-2 text-sm font-semibold">Recommendations and relationship history</summary><div className="mt-4 space-y-5"><RecommendationHistory />
       <GraphResearchJourneys insights={profile.graphInsights} />
+      </div></details>
 
       <div id="privacy-settings" className="scroll-mt-6">
         <DataPersonalization
@@ -176,7 +181,7 @@ export function ProfileView() {
           }
         />
       </div>
-      <ProfileSupportForms defaultEmail={profile.user.email} />
+      <details className="rounded-xl border border-[#8f1d2c]/10 p-4"><summary className="cursor-pointer py-2 text-sm font-semibold">Contact support</summary><ProfileSupportForms defaultEmail={profile.user.email} /></details>
     </div>
   );
 }

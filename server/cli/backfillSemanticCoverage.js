@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 
+const fs = require("node:fs");
 const path = require("node:path");
 require("dotenv").config({
   path: process.env.ENV_FILE || path.resolve(__dirname, "../.env.local"),
@@ -33,7 +34,24 @@ const main = async () => {
     maxChunks: argumentInteger("max-chunks", 100, 1, 1_000),
     dryRun: argumentFlag("dry-run"),
   });
-  console.log(JSON.stringify({ generatedAt: new Date().toISOString(), ...result }, null, 2));
+  const report = { generatedAt: new Date().toISOString(), ...result };
+  const output = argumentValue("output");
+  if (output) {
+    fs.writeFileSync(path.resolve(output), `${JSON.stringify(report, null, 2)}\n`, { mode: 0o600 });
+  }
+  console.log(JSON.stringify({
+    generatedAt: report.generatedAt,
+    requested: report.requested,
+    effective: report.effective,
+    candidates: report.candidates,
+    processed: report.processed,
+    succeeded: report.succeeded,
+    failed: report.failed,
+    embeddingsReused: report.embeddingsReused,
+    embeddingsGenerated: report.embeddingsGenerated,
+    stopReason: report.stopReason,
+    outputPath: output ? path.resolve(output) : null,
+  }, null, 2));
 };
 
 main().catch((error) => {

@@ -206,6 +206,8 @@ const recordDomainResult = async (
        last_failure_reason = COALESCE($6, document_retry_domain_state.last_failure_reason),
        circuit_state = CASE
          WHEN $3::BOOLEAN THEN 'closed'
+         WHEN document_retry_domain_state.circuit_state = 'cooldown'
+           THEN 'cooldown'
          WHEN (
            CASE
              WHEN document_retry_domain_state.window_started_at <
@@ -236,6 +238,8 @@ const recordDomainResult = async (
        END,
        cooldown_until = CASE
          WHEN $3::BOOLEAN THEN NULL
+         WHEN document_retry_domain_state.circuit_state = 'cooldown'
+           THEN NOW() + (($11)::TEXT || ' seconds')::INTERVAL
          WHEN (
            CASE
              WHEN document_retry_domain_state.window_started_at <

@@ -393,17 +393,26 @@ select:focus-visible {
 .chat-markdown.user-message p,
 .chat-markdown.user-message li,
 .chat-markdown.user-message strong {
-  color: #fffaf0;
+  color: #29312d;
 }
 
 .chat-markdown.user-message code {
-  background: rgba(255, 255, 255, 0.14);
-  color: #fffaf0;
+  background: rgba(143, 29, 44, 0.06);
+  color: #29312d;
 }
 
 .chat-markdown.user-message blockquote {
-  border-color: rgba(255, 255, 255, 0.5);
-  color: rgba(255, 255, 255, 0.75);
+  border-color: rgba(143, 29, 44, 0.25);
+  color: #514d46;
+}
+
+:where(button, a, input, textarea, select, summary):focus-visible {
+  outline: 2px solid #8f1d2c;
+  outline-offset: 3px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { scroll-behavior: auto !important; animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
 }
 
 @keyframes policy-spin {

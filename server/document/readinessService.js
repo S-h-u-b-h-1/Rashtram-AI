@@ -140,23 +140,52 @@ const enqueueProcessing = async (
 
 const verifyRetrieval = async (document) => {
   const { retrieveDocumentContext } = require("./documentResearchService");
+  const probeResult = await query(
+    `SELECT original_text
+     FROM document_text_chunks
+     WHERE document_id = $1 AND LENGTH(TRIM(original_text)) >= 80
+     ORDER BY chunk_index
+     LIMIT 1`,
+    [document.id],
+  );
+  const chunkPhrase = String(probeResult.rows[0]?.original_text || "")
+    .replace(/[^\p{L}\p{N}\s]/gu, " ")
+    .split(/\s+/u)
+    .filter((token) => token.length >= 3)
+    .slice(0, 8)
+    .join(" ");
+  const probes = [...new Set([document.title, chunkPhrase].filter(Boolean))];
   let lastError;
   for (let attempt = 0; attempt < 2; attempt += 1) {
-    try {
-      const context = await retrieveDocumentContext(
-        document.type,
-        document.id,
-        document.title,
-        { topK: 2 },
-      );
-      if (
-        context.retrievalVerified &&
-        context.passages.some((passage) => String(passage.content || "").trim())
-      ) {
-        return context;
+    for (const probe of probes) {
+      try {
+        const context = await retrieveDocumentContext(
+          document.type,
+          document.id,
+          probe,
+          {
+            topK: 2,
+            plan: {
+              queryType: "EXACT_REFERENCE",
+              useMetadata: false,
+              useLexical: true,
+              useVector: false,
+              useGraph: false,
+              comparisonIsolation: false,
+              plannerVersion: "readiness-lexical-probe-v1",
+            },
+            adapters: { localSearch: async () => [] },
+          },
+        );
+        if (
+          context.retrievalVerified && context.retrievalMode === "fts" &&
+          context.passages.some((passage) => String(passage.content || "").trim())
+        ) {
+          return context;
+        }
+      } catch (error) {
+        lastError = error;
       }
-    } catch (error) {
-      lastError = error;
     }
     if (attempt === 0) {
       await new Promise((resolve) => setTimeout(resolve, 500));
@@ -176,6 +205,8 @@ const prepareDocument = async (
     workerId = null,
     discoverGraph = true,
     forcePdfReextract = false,
+    skipSemantic = false,
+    skipSummary = false,
   } = {},
 ) => {
   const startedAt = Date.now();
@@ -286,7 +317,11 @@ const prepareDocument = async (
   });
   try {
     const { processDocument } = require("./documentResearchService");
-    const result = await processDocument(document.type, document.id, { forcePdfReextract });
+    const result = await processDocument(document.type, document.id, {
+      forcePdfReextract,
+      skipSemantic,
+      skipSummary,
+    });
     const chunksCount = Number(
       result.chunksStored || result.totalChunks || 0,
     );
@@ -315,6 +350,9 @@ const prepareDocument = async (
       retrievalMs,
       totalMs: Date.now() - startedAt,
     };
+    const semanticReady = !skipSemantic &&
+      ["hybrid", "vector"].includes(retrieval.retrievalMode) &&
+      !result.stageMetrics?.vectorStorageFailed;
     await DocumentRepository.updateProcessingStatus(
       document.id,
       "ready",
@@ -328,12 +366,10 @@ const prepareDocument = async (
             ? "pending"
             : "not_required",
         chunkingStatus: "ready",
-        embeddingStatus:
-          retrieval.retrievalMode === "local_text" ? "fallback" : "ready",
+        embeddingStatus: semanticReady ? "ready" : "deferred",
         summaryStatus: "deferred",
         chunksCount,
-        embeddingsCount:
-          retrieval.retrievalMode === "local_text" ? 0 : chunksCount,
+        embeddingsCount: semanticReady ? chunksCount : 0,
         textLength: Number(result.textLength || 0),
         language:
           artifact.languageCode || result.language?.languageCode || "und",
@@ -357,8 +393,6 @@ const prepareDocument = async (
         readinessClass: "comparison_ready",
       },
     );
-    const semanticReady = retrieval.retrievalMode !== "local_text" &&
-      !result.stageMetrics?.vectorStorageFailed;
     await recordCompletedPipeline({
       documentId: document.id,
       jobId: job.id,
@@ -1182,7 +1216,7 @@ const runReadinessAudit = async ({ queryFn = null } = {}) => {
 };
 
 const getProcessingStatus = async () => {
-  const [counts, totals, latest, jobs, performance, workers, failuresByStage, storage, queueByStage] = await Promise.all([
+  const [counts, totals, latest, jobs, performance, workers, failuresByStage, storage, queueByStage, queueHealth] = await Promise.all([
     query(`
       SELECT readiness_class, COUNT(*)::INTEGER AS documents
       FROM document_processing_state
@@ -1281,6 +1315,11 @@ const getProcessingStatus = async () => {
         COALESCE(SUM(
           NULLIF(stage_metrics_json ->> 'ocrPages', '')::BIGINT
         ) FILTER (WHERE completed_at >= NOW() - INTERVAL '24 hours'), 0)::BIGINT AS ocr_pages_24h,
+        COUNT(*) FILTER (
+          WHERE status = 'completed'
+            AND completed_at >= NOW() - INTERVAL '24 hours'
+            AND COALESCE(NULLIF(stage_metrics_json ->> 'ocrPages', '')::INTEGER, 0) > 0
+        )::INTEGER AS ocr_documents_24h,
         COALESCE(SUM(
           NULLIF(stage_metrics_json ->> 'embeddingsStored', '')::BIGINT
         ) FILTER (WHERE completed_at >= NOW() - INTERVAL '24 hours'), 0)::BIGINT AS embeddings_24h,
@@ -1340,6 +1379,20 @@ const getProcessingStatus = async () => {
       WHERE job_rank = 1 AND status IN ('queued', 'running')
       GROUP BY stage, status ORDER BY stage, status
     `),
+    query(`
+      WITH latest_jobs AS (
+        SELECT status, retry_eligible, queued_at,
+          ROW_NUMBER() OVER (PARTITION BY document_id ORDER BY id DESC) AS job_rank
+        FROM document_processing_jobs
+      )
+      SELECT
+        COUNT(*) FILTER (WHERE status = 'failed' AND retry_eligible)::INTEGER AS retryable_failed,
+        MIN(queued_at) FILTER (WHERE status = 'queued') AS oldest_queued_at,
+        COALESCE(EXTRACT(EPOCH FROM (
+          NOW() - MIN(queued_at) FILTER (WHERE status = 'queued')
+        )), 0)::BIGINT AS oldest_queue_age_seconds
+      FROM latest_jobs WHERE job_rank = 1
+    `),
   ]);
   const row = totals.rows[0] || {};
   const performanceRow = performance.rows[0] || {};
@@ -1356,6 +1409,7 @@ const getProcessingStatus = async () => {
   );
   const backlog = Number(row.processable_backlog || 0);
   const storageRow = storage.rows[0] || {};
+  const queueHealthRow = queueHealth.rows[0] || {};
   return {
     totalDocuments: Number(row.total_documents || 0),
     researchReady: Number(row.research_ready || 0),
@@ -1376,8 +1430,11 @@ const getProcessingStatus = async () => {
       queued: jobCounts.queued || 0,
       running: jobCounts.running || 0,
       failed: jobCounts.failed || 0,
+      retryable: Number(queueHealthRow.retryable_failed || 0),
       deadLetter: jobCounts.dead_letter || 0,
       completed: jobCounts.completed || 0,
+      oldestQueuedAt: queueHealthRow.oldest_queued_at || null,
+      oldestQueueAgeSeconds: Number(queueHealthRow.oldest_queue_age_seconds || 0),
     },
     queueByStage: queueByStage.rows.map((item) => ({
       stage: item.stage,
@@ -1404,6 +1461,9 @@ const getProcessingStatus = async () => {
       completed24h,
       throughputPerHour,
       ocrPagesPerHour: Number((Number(performanceRow.ocr_pages_24h || 0) / observedHours).toFixed(2)),
+      ocrDocumentRate: completed24h > 0
+        ? Number((Number(performanceRow.ocr_documents_24h || 0) / completed24h).toFixed(4))
+        : 0,
       embeddingsPerHour: Number((Number(performanceRow.embeddings_24h || 0) / observedHours).toFixed(2)),
       estimatedCompletionHours:
         throughputPerHour > 0

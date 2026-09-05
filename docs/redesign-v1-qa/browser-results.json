@@ -1,0 +1,866 @@
+{
+  "kind": "LOCAL FIXTURE — not production or legal accuracy verification",
+  "results": [
+    {
+      "name": "new-research",
+      "width": 1440,
+      "geometry": {
+        "viewport": 1440,
+        "width": 1440,
+        "bodyWidth": 1440,
+        "overlay": false,
+        "content": 517,
+        "visibleOverflow": []
+      },
+      "errors": "",
+      "accessibility": {
+        "inapplicable": 50,
+        "incomplete": 0,
+        "passes": 39,
+        "violations": 0
+      },
+      "violations": []
+    },
+    {
+      "name": "library",
+      "width": 1440,
+      "geometry": {
+        "viewport": 1440,
+        "width": 1440,
+        "bodyWidth": 1440,
+        "overlay": false,
+        "content": 1339,
+        "visibleOverflow": []
+      },
+      "errors": "",
+      "accessibility": {
+        "inapplicable": 48,
+        "incomplete": 0,
+        "passes": 41,
+        "violations": 0
+      },
+      "violations": []
+    },
+    {
+      "name": "my-research",
+      "width": 1440,
+      "geometry": {
+        "viewport": 1440,
+        "width": 1440,
+        "bodyWidth": 1440,
+        "overlay": false,
+        "content": 383,
+        "visibleOverflow": []
+      },
+      "errors": "",
+      "accessibility": {
+        "inapplicable": 54,
+        "incomplete": 1,
+        "passes": 35,
+        "violations": 0
+      },
+      "violations": []
+    },
+    {
+      "name": "workspace",
+      "width": 1440,
+      "geometry": {
+        "viewport": 1440,
+        "width": 1440,
+        "bodyWidth": 1440,
+        "overlay": false,
+        "content": 1326,
+        "visibleOverflow": []
+      },
+      "errors": "",
+      "accessibility": {
+        "inapplicable": 50,
+        "incomplete": 0,
+        "passes": 39,
+        "violations": 0
+      },
+      "violations": []
+    },
+    {
+      "name": "source-selector",
+      "width": 1440,
+      "geometry": {
+        "viewport": 1440,
+        "width": 1440,
+        "bodyWidth": 1440,
+        "overlay": false,
+        "content": 1872,
+        "visibleOverflow": []
+      },
+      "errors": "",
+      "accessibility": {
+        "inapplicable": 57,
+        "incomplete": 2,
+        "passes": 32,
+        "violations": 0
+      },
+      "violations": []
+    },
+    {
+      "name": "studio",
+      "width": 1440,
+      "geometry": {
+        "viewport": 1440,
+        "width": 1440,
+        "bodyWidth": 1440,
+        "overlay": false,
+        "content": 1326,
+        "visibleOverflow": []
+      },
+      "errors": "",
+      "accessibility": {
+        "inapplicable": 50,
+        "incomplete": 0,
+        "passes": 39,
+        "violations": 0
+      },
+      "violations": []
+    },
+    {
+      "name": "comparison",
+      "width": 1440,
+      "geometry": {
+        "viewport": 1440,
+        "width": 1440,
+        "bodyWidth": 1440,
+        "overlay": false,
+        "content": 1505,
+        "visibleOverflow": []
+      },
+      "errors": "",
+      "accessibility": {
+        "inapplicable": 47,
+        "incomplete": 0,
+        "passes": 42,
+        "violations": 0
+      },
+      "violations": []
+    },
+    {
+      "name": "policy-output",
+      "width": 1440,
+      "geometry": {
+        "viewport": 1440,
+        "width": 1440,
+        "bodyWidth": 1440,
+        "overlay": false,
+        "content": 757,
+        "visibleOverflow": []
+      },
+      "errors": "",
+      "accessibility": {
+        "inapplicable": 52,
+        "incomplete": 0,
+        "passes": 37,
+        "violations": 0
+      },
+      "violations": []
+    },
+    {
+      "name": "report",
+      "width": 1440,
+      "geometry": {
+        "viewport": 1440,
+        "width": 1440,
+        "bodyWidth": 1440,
+        "overlay": false,
+        "content": 583,
+        "visibleOverflow": []
+      },
+      "errors": "",
+      "accessibility": {
+        "inapplicable": 51,
+        "incomplete": 0,
+        "passes": 38,
+        "violations": 0
+      },
+      "violations": []
+    },
+    {
+      "name": "new-research",
+      "width": 768,
+      "geometry": {
+        "viewport": 768,
+        "width": 768,
+        "bodyWidth": 768,
+        "overlay": false,
+        "content": 362,
+        "visibleOverflow": []
+      },
+      "errors": "",
+      "accessibility": {
+        "inapplicable": 53,
+        "incomplete": 0,
+        "passes": 36,
+        "violations": 0
+      },
+      "violations": []
+    },
+    {
+      "name": "library",
+      "width": 768,
+      "geometry": {
+        "viewport": 768,
+        "width": 768,
+        "bodyWidth": 768,
+        "overlay": false,
+        "content": 1184,
+        "visibleOverflow": []
+      },
+      "errors": "",
+      "accessibility": {
+        "inapplicable": 51,
+        "incomplete": 0,
+        "passes": 38,
+        "violations": 0
+      },
+      "violations": []
+    },
+    {
+      "name": "my-research",
+      "width": 768,
+      "geometry": {
+        "viewport": 768,
+        "width": 768,
+        "bodyWidth": 768,
+        "overlay": false,
+        "content": 228,
+        "visibleOverflow": []
+      },
+      "errors": "",
+      "accessibility": {
+        "inapplicable": 57,
+        "incomplete": 1,
+        "passes": 32,
+        "violations": 0
+      },
+      "violations": []
+    },
+    {
+      "name": "workspace",
+      "width": 768,
+      "geometry": {
+        "viewport": 768,
+        "width": 768,
+        "bodyWidth": 768,
+        "overlay": false,
+        "content": 633,
+        "visibleOverflow": [
+          {
+            "tag": "BUTTON",
+            "class": "whitespace-nowrap rounded-full border border-[#8f1d2c]/10 bg-white px-3 py-2 text-[10px] font-medium text-[#514d46] disabled:opacity-40",
+            "text": "What penalties, timelines, or procedures are important?"
+          }
+        ]
+      },
+      "errors": "",
+      "accessibility": {
+        "inapplicable": 51,
+        "incomplete": 0,
+        "passes": 38,
+        "violations": 0
+      },
+      "violations": []
+    },
+    {
+      "name": "source-selector",
+      "width": 768,
+      "geometry": {
+        "viewport": 768,
+        "width": 768,
+        "bodyWidth": 768,
+        "overlay": false,
+        "content": 1179,
+        "visibleOverflow": [
+          {
+            "tag": "BUTTON",
+            "class": "whitespace-nowrap rounded-full border border-[#8f1d2c]/10 bg-white px-3 py-2 text-[10px] font-medium text-[#514d46] disabled:opacity-40",
+            "text": "What penalties, timelines, or procedures are important?"
+          }
+        ]
+      },
+      "errors": "",
+      "accessibility": {
+        "inapplicable": 57,
+        "incomplete": 2,
+        "passes": 32,
+        "violations": 0
+      },
+      "violations": []
+    },
+    {
+      "name": "studio",
+      "width": 768,
+      "geometry": {
+        "viewport": 768,
+        "width": 768,
+        "bodyWidth": 768,
+        "overlay": false,
+        "content": 1087,
+        "visibleOverflow": [
+          {
+            "tag": "BUTTON",
+            "class": "whitespace-nowrap rounded-full border border-[#8f1d2c]/10 bg-white px-3 py-2 text-[10px] font-medium text-[#514d46] disabled:opacity-40",
+            "text": "What penalties, timelines, or procedures are important?"
+          }
+        ]
+      },
+      "errors": "",
+      "accessibility": {
+        "inapplicable": 48,
+        "incomplete": 0,
+        "passes": 41,
+        "violations": 0
+      },
+      "violations": []
+    },
+    {
+      "name": "comparison",
+      "width": 768,
+      "geometry": {
+        "viewport": 768,
+        "width": 768,
+        "bodyWidth": 768,
+        "overlay": false,
+        "content": 1350,
+        "visibleOverflow": []
+      },
+      "errors": "",
+      "accessibility": {
+        "inapplicable": 50,
+        "incomplete": 0,
+        "passes": 39,
+        "violations": 0
+      },
+      "violations": []
+    },
+    {
+      "name": "policy-output",
+      "width": 768,
+      "geometry": {
+        "viewport": 768,
+        "width": 768,
+        "bodyWidth": 768,
+        "overlay": false,
+        "content": 602,
+        "visibleOverflow": []
+      },
+      "errors": "",
+      "accessibility": {
+        "inapplicable": 56,
+        "incomplete": 0,
+        "passes": 33,
+        "violations": 0
+      },
+      "violations": []
+    },
+    {
+      "name": "report",
+      "width": 768,
+      "geometry": {
+        "viewport": 768,
+        "width": 768,
+        "bodyWidth": 768,
+        "overlay": false,
+        "content": 428,
+        "visibleOverflow": []
+      },
+      "errors": "",
+      "accessibility": {
+        "inapplicable": 54,
+        "incomplete": 0,
+        "passes": 35,
+        "violations": 0
+      },
+      "violations": []
+    },
+    {
+      "name": "new-research",
+      "width": 390,
+      "geometry": {
+        "viewport": 390,
+        "width": 390,
+        "bodyWidth": 390,
+        "overlay": false,
+        "content": 359,
+        "visibleOverflow": []
+      },
+      "errors": "",
+      "accessibility": {
+        "inapplicable": 53,
+        "incomplete": 0,
+        "passes": 36,
+        "violations": 0
+      },
+      "violations": []
+    },
+    {
+      "name": "library",
+      "width": 390,
+      "geometry": {
+        "viewport": 390,
+        "width": 390,
+        "bodyWidth": 390,
+        "overlay": false,
+        "content": 1181,
+        "visibleOverflow": []
+      },
+      "errors": "",
+      "accessibility": {
+        "inapplicable": 51,
+        "incomplete": 0,
+        "passes": 38,
+        "violations": 0
+      },
+      "violations": []
+    },
+    {
+      "name": "my-research",
+      "width": 390,
+      "geometry": {
+        "viewport": 390,
+        "width": 390,
+        "bodyWidth": 390,
+        "overlay": false,
+        "content": 225,
+        "visibleOverflow": []
+      },
+      "errors": "",
+      "accessibility": {
+        "inapplicable": 57,
+        "incomplete": 1,
+        "passes": 32,
+        "violations": 0
+      },
+      "violations": []
+    },
+    {
+      "name": "workspace",
+      "width": 390,
+      "geometry": {
+        "viewport": 390,
+        "width": 390,
+        "bodyWidth": 390,
+        "overlay": false,
+        "content": 463,
+        "visibleOverflow": [
+          {
+            "tag": "BUTTON",
+            "class": "whitespace-nowrap rounded-full border border-[#8f1d2c]/10 bg-white px-3 py-2 text-[10px] font-medium text-[#514d46] disabled:opacity-40",
+            "text": "Which authorities enforce this Act?"
+          },
+          {
+            "tag": "BUTTON",
+            "class": "whitespace-nowrap rounded-full border border-[#8f1d2c]/10 bg-white px-3 py-2 text-[10px] font-medium text-[#514d46] disabled:opacity-40",
+            "text": "What penalties, timelines, or procedures are important?"
+          }
+        ]
+      },
+      "errors": "",
+      "accessibility": {
+        "inapplicable": 50,
+        "incomplete": 0,
+        "passes": 39,
+        "violations": 0
+      },
+      "violations": []
+    },
+    {
+      "name": "source-selector",
+      "width": 390,
+      "geometry": {
+        "viewport": 390,
+        "width": 390,
+        "bodyWidth": 390,
+        "overlay": false,
+        "content": 1009,
+        "visibleOverflow": [
+          {
+            "tag": "BUTTON",
+            "class": "whitespace-nowrap rounded-full border border-[#8f1d2c]/10 bg-white px-3 py-2 text-[10px] font-medium text-[#514d46] disabled:opacity-40",
+            "text": "Which authorities enforce this Act?"
+          },
+          {
+            "tag": "BUTTON",
+            "class": "whitespace-nowrap rounded-full border border-[#8f1d2c]/10 bg-white px-3 py-2 text-[10px] font-medium text-[#514d46] disabled:opacity-40",
+            "text": "What penalties, timelines, or procedures are important?"
+          }
+        ]
+      },
+      "errors": "",
+      "accessibility": {
+        "inapplicable": 57,
+        "incomplete": 1,
+        "passes": 32,
+        "violations": 0
+      },
+      "violations": []
+    },
+    {
+      "name": "studio",
+      "width": 390,
+      "geometry": {
+        "viewport": 390,
+        "width": 390,
+        "bodyWidth": 390,
+        "overlay": false,
+        "content": 917,
+        "visibleOverflow": [
+          {
+            "tag": "BUTTON",
+            "class": "whitespace-nowrap rounded-full border border-[#8f1d2c]/10 bg-white px-3 py-2 text-[10px] font-medium text-[#514d46] disabled:opacity-40",
+            "text": "Which authorities enforce this Act?"
+          },
+          {
+            "tag": "BUTTON",
+            "class": "whitespace-nowrap rounded-full border border-[#8f1d2c]/10 bg-white px-3 py-2 text-[10px] font-medium text-[#514d46] disabled:opacity-40",
+            "text": "What penalties, timelines, or procedures are important?"
+          }
+        ]
+      },
+      "errors": "",
+      "accessibility": {
+        "inapplicable": 48,
+        "incomplete": 0,
+        "passes": 41,
+        "violations": 0
+      },
+      "violations": []
+    },
+    {
+      "name": "comparison",
+      "width": 390,
+      "geometry": {
+        "viewport": 390,
+        "width": 390,
+        "bodyWidth": 390,
+        "overlay": false,
+        "content": 1347,
+        "visibleOverflow": []
+      },
+      "errors": "",
+      "accessibility": {
+        "inapplicable": 50,
+        "incomplete": 0,
+        "passes": 39,
+        "violations": 0
+      },
+      "violations": []
+    },
+    {
+      "name": "policy-output",
+      "width": 390,
+      "geometry": {
+        "viewport": 390,
+        "width": 390,
+        "bodyWidth": 390,
+        "overlay": false,
+        "content": 599,
+        "visibleOverflow": []
+      },
+      "errors": "",
+      "accessibility": {
+        "inapplicable": 55,
+        "incomplete": 0,
+        "passes": 34,
+        "violations": 0
+      },
+      "violations": []
+    },
+    {
+      "name": "report",
+      "width": 390,
+      "geometry": {
+        "viewport": 390,
+        "width": 390,
+        "bodyWidth": 390,
+        "overlay": false,
+        "content": 425,
+        "visibleOverflow": []
+      },
+      "errors": "",
+      "accessibility": {
+        "inapplicable": 53,
+        "incomplete": 0,
+        "passes": 36,
+        "violations": 0
+      },
+      "violations": []
+    },
+    {
+      "name": "new-research",
+      "width": 320,
+      "geometry": {
+        "viewport": 320,
+        "width": 320,
+        "overlay": false
+      }
+    },
+    {
+      "name": "library",
+      "width": 320,
+      "geometry": {
+        "viewport": 320,
+        "width": 320,
+        "overlay": false
+      }
+    },
+    {
+      "name": "my-research",
+      "width": 320,
+      "geometry": {
+        "viewport": 320,
+        "width": 320,
+        "overlay": false
+      }
+    },
+    {
+      "name": "workspace",
+      "width": 320,
+      "geometry": {
+        "viewport": 320,
+        "width": 320,
+        "overlay": false
+      }
+    },
+    {
+      "name": "comparison",
+      "width": 320,
+      "geometry": {
+        "viewport": 320,
+        "width": 320,
+        "overlay": false
+      }
+    },
+    {
+      "name": "policy-output",
+      "width": 320,
+      "geometry": {
+        "viewport": 320,
+        "width": 320,
+        "overlay": false
+      }
+    },
+    {
+      "name": "new-research",
+      "width": 360,
+      "geometry": {
+        "viewport": 360,
+        "width": 360,
+        "overlay": false
+      }
+    },
+    {
+      "name": "library",
+      "width": 360,
+      "geometry": {
+        "viewport": 360,
+        "width": 360,
+        "overlay": false
+      }
+    },
+    {
+      "name": "my-research",
+      "width": 360,
+      "geometry": {
+        "viewport": 360,
+        "width": 360,
+        "overlay": false
+      }
+    },
+    {
+      "name": "workspace",
+      "width": 360,
+      "geometry": {
+        "viewport": 360,
+        "width": 360,
+        "overlay": false
+      }
+    },
+    {
+      "name": "comparison",
+      "width": 360,
+      "geometry": {
+        "viewport": 360,
+        "width": 360,
+        "overlay": false
+      }
+    },
+    {
+      "name": "policy-output",
+      "width": 360,
+      "geometry": {
+        "viewport": 360,
+        "width": 360,
+        "overlay": false
+      }
+    },
+    {
+      "name": "new-research",
+      "width": 375,
+      "geometry": {
+        "viewport": 375,
+        "width": 375,
+        "overlay": false
+      }
+    },
+    {
+      "name": "library",
+      "width": 375,
+      "geometry": {
+        "viewport": 375,
+        "width": 375,
+        "overlay": false
+      }
+    },
+    {
+      "name": "my-research",
+      "width": 375,
+      "geometry": {
+        "viewport": 375,
+        "width": 375,
+        "overlay": false
+      }
+    },
+    {
+      "name": "workspace",
+      "width": 375,
+      "geometry": {
+        "viewport": 375,
+        "width": 375,
+        "overlay": false
+      }
+    },
+    {
+      "name": "comparison",
+      "width": 375,
+      "geometry": {
+        "viewport": 375,
+        "width": 375,
+        "overlay": false
+      }
+    },
+    {
+      "name": "policy-output",
+      "width": 375,
+      "geometry": {
+        "viewport": 375,
+        "width": 375,
+        "overlay": false
+      }
+    },
+    {
+      "name": "new-research",
+      "width": 412,
+      "geometry": {
+        "viewport": 412,
+        "width": 412,
+        "overlay": false
+      }
+    },
+    {
+      "name": "library",
+      "width": 412,
+      "geometry": {
+        "viewport": 412,
+        "width": 412,
+        "overlay": false
+      }
+    },
+    {
+      "name": "my-research",
+      "width": 412,
+      "geometry": {
+        "viewport": 412,
+        "width": 412,
+        "overlay": false
+      }
+    },
+    {
+      "name": "workspace",
+      "width": 412,
+      "geometry": {
+        "viewport": 412,
+        "width": 412,
+        "overlay": false
+      }
+    },
+    {
+      "name": "comparison",
+      "width": 412,
+      "geometry": {
+        "viewport": 412,
+        "width": 412,
+        "overlay": false
+      }
+    },
+    {
+      "name": "policy-output",
+      "width": 412,
+      "geometry": {
+        "viewport": 412,
+        "width": 412,
+        "overlay": false
+      }
+    },
+    {
+      "name": "new-research",
+      "width": 430,
+      "geometry": {
+        "viewport": 430,
+        "width": 430,
+        "overlay": false
+      }
+    },
+    {
+      "name": "library",
+      "width": 430,
+      "geometry": {
+        "viewport": 430,
+        "width": 430,
+        "overlay": false
+      }
+    },
+    {
+      "name": "my-research",
+      "width": 430,
+      "geometry": {
+        "viewport": 430,
+        "width": 430,
+        "overlay": false
+      }
+    },
+    {
+      "name": "workspace",
+      "width": 430,
+      "geometry": {
+        "viewport": 430,
+        "width": 430,
+        "overlay": false
+      }
+    },
+    {
+      "name": "comparison",
+      "width": 430,
+      "geometry": {
+        "viewport": 430,
+        "width": 430,
+        "overlay": false
+      }
+    },
+    {
+      "name": "policy-output",
+      "width": 430,
+      "geometry": {
+        "viewport": 430,
+        "width": 430,
+        "overlay": false
+      }
+    }
+  ]
+}

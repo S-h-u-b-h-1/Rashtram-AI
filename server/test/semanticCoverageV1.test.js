@@ -19,9 +19,14 @@ const {
   updateSemanticState,
 } = require("../document/semanticBackfillService");
 const {
+  VECTOR_RECONCILIATION_CLASSES,
+  auditSemanticVectorState,
+  diagnosticForRow,
   reconcileSemanticReadinessTruth,
   semanticReadinessTruth,
 } = require("../document/semanticReconciliationService");
+const { canonicalVectorId } = require("../document/vectorIdentity");
+const { cleanupStaleVectors } = require("../lib/vectordb");
 
 const config = {
   embeddingProvider: "gemini",
@@ -153,11 +158,18 @@ test("outdated embedding namespace requires regeneration", async () => {
 
 test("valid current vectors reconcile without duplicate embedding calls", async () => {
   const text = row().original_text;
+  const vectorReference = canonicalVectorId({
+    family: "act", documentId: 7, chunkIndex: 0, embeddingText: text, config,
+  });
   let storeCalls = 0;
   let state = null;
   const result = await backfillSemanticDocument({
     document: document(), config,
-    loadChunksFn: async () => [row({ embedding_namespace: config.vectorNamespace, embedding_input_sha256: sha256(text) })],
+    loadChunksFn: async () => [row({
+      vector_reference: vectorReference,
+      embedding_namespace: config.vectorNamespace,
+      embedding_input_sha256: sha256(text),
+    })],
     storeOverrides: { act: async () => { storeCalls += 1; } },
     probeFn: async () => ({ verified: true, attempts: 1, matches: 1 }),
     updateStateFn: async (value) => { state = value; return true; },
@@ -171,14 +183,18 @@ test("valid current vectors reconcile without duplicate embedding calls", async 
 
 test("known missing Pinecone IDs are regenerated despite matching PostgreSQL hashes", async () => {
   const text = row().original_text;
+  const vectorReference = canonicalVectorId({
+    family: "act", documentId: 7, chunkIndex: 0, embeddingText: text, config,
+  });
   let unchanged = null;
   const result = await backfillSemanticDocument({
     document: document(), config,
     loadChunksFn: async () => [row({
+      vector_reference: vectorReference,
       embedding_namespace: config.vectorNamespace,
       embedding_input_sha256: sha256(text),
     })],
-    missingVectorIds: new Set(["act-7-chunk-0"]),
+    missingVectorIds: new Set([vectorReference]),
     storeOverrides: { act: async (_chunks, options) => {
       unchanged = options.unchangedChunkIds;
       return { embeddingCacheHits: 0, embeddingCacheMisses: 1, metrics: {} };
@@ -276,12 +292,144 @@ test("active embedding metadata stays provider/model/dimension/version consisten
   assert.equal(chunk.metadata.vectorNamespace, "gemini-embedding-001-768-v1");
 });
 
+test("semantic diagnostics require canonical identity and the active embedding contract", () => {
+  const text = row().original_text;
+  const vectorReference = canonicalVectorId({
+    family: "act", documentId: 7, chunkIndex: 0, embeddingText: text, config,
+  });
+  const current = row({
+    vector_reference: vectorReference,
+    embedding_namespace: config.vectorNamespace,
+    embedding_input_sha256: sha256(text),
+  });
+  const ids = new Set([vectorReference]);
+  const record = {
+    values: Array(config.embeddingDimension).fill(0),
+    metadata: {
+      content: text,
+      embeddingProvider: config.embeddingProvider,
+      embeddingModel: config.embeddingModel,
+      embeddingDimension: String(config.embeddingDimension),
+      vectorNamespace: config.vectorNamespace,
+    },
+  };
+  assert.equal(diagnosticForRow({
+    row: { ...current, document_id: 7, document_type: "act" },
+    ids, records: { [vectorReference]: record }, config,
+  }), "ACTIVE_SEMANTIC");
+  assert.equal(diagnosticForRow({
+    row: { ...current, document_id: 7, document_type: "act", vector_reference: "act-7-chunk-0" },
+    ids: new Set(["act-7-chunk-0"]), records: { "act-7-chunk-0": record }, config,
+  }), "STALE_VECTOR");
+});
+
+test("hierarchical routing vectors referenced in PostgreSQL are not reported as orphans", async () => {
+  const routingId = "large-act-24561-group-0";
+  const emptyIndex = {
+    listPaginated: async () => ({ vectors: [] }),
+    fetch: async () => ({ records: {} }),
+  };
+  const actIndex = {
+    listPaginated: async () => ({ vectors: [{ id: routingId }] }),
+    fetch: async () => ({ records: {
+      [routingId]: { metadata: {
+        actId: "24561", documentId: "24561", chunkIndex: 0,
+        content: "Structural routing evidence", routingOnly: true,
+      } },
+    } }),
+  };
+  const audit = await auditSemanticVectorState({
+    config,
+    indexes: { bill: emptyIndex, act: actIndex },
+    queryFn: async (sql) => {
+      if (sql.includes("FROM document_chunk_groups")) {
+        return { rows: [{
+          document_id: 24561, group_index: 0, vector_reference: routingId,
+          embedding_namespace: config.vectorNamespace,
+          representation_hash: sha256("Structural routing evidence"),
+          representation_text: "Structural routing evidence", metadata_json: {},
+          title: "Large Act", document_type: "act", visibility_status: "public",
+          search_ready: true, semantic_ready: true, retrieval_verified: true,
+        }] };
+      }
+      return { rows: [] };
+    },
+  });
+  assert.equal(audit.postgresRoutingReferences, 1);
+  assert.equal(audit.referenceDelta, 0);
+  assert.equal(audit.deferredVectorOnly.length, 0);
+  assert.equal(audit.diagnostics.ORPHAN_VECTOR, 0);
+});
+
+test("chunk reconciliation excludes hierarchical routing vectors from stale cleanup", async () => {
+  let receivedFilter = null;
+  const deleted = [];
+  const removed = await cleanupStaleVectors({
+    chunks: [{ id: "canonical-current", documentId: "77" }],
+    index: {
+      query: async ({ filter }) => {
+        receivedFilter = filter;
+        return { matches: [{ id: "canonical-current" }, { id: "stale-chunk" }] };
+      },
+      deleteMany: async (ids) => deleted.push(...ids),
+    },
+    idField: "actId",
+    chunkIdField: "documentId",
+  });
+  assert.deepEqual(receivedFilter, {
+    $and: [{ actId: { $eq: "77" } }, { routingOnly: { $ne: true } }],
+  });
+  assert.equal(removed, 1);
+  assert.deepEqual(deleted, ["stale-chunk"]);
+});
+
+test("unverifiable vector-only records are explicitly quarantined instead of deleted", async () => {
+  const currentText = "The authoritative PostgreSQL chunk text.";
+  const currentId = canonicalVectorId({
+    family: "act", documentId: 99, chunkIndex: 0, embeddingText: currentText, config,
+  });
+  const legacyId = "act-99-chunk-0";
+  const emptyIndex = {
+    listPaginated: async () => ({ vectors: [] }),
+    fetch: async () => ({ records: {} }),
+  };
+  const actIndex = {
+    listPaginated: async () => ({ vectors: [{ id: legacyId }] }),
+    fetch: async () => ({ records: {
+      [legacyId]: { metadata: {
+        documentId: "99", chunkIndex: 0, content: "Conflicting vector content.",
+      } },
+    } }),
+  };
+  const audit = await auditSemanticVectorState({
+    config,
+    indexes: { bill: emptyIndex, act: actIndex },
+    queryFn: async (sql) => {
+      if (sql.includes("FROM document_chunk_groups")) return { rows: [] };
+      return { rows: [{
+        document_id: 99, chunk_index: 0, vector_reference: currentId,
+        embedding_namespace: config.vectorNamespace,
+        embedding_input_sha256: sha256(currentText), original_text: currentText,
+        translated_text: null, title: "Authoritative Act", document_type: "act",
+        visibility_status: "public", search_ready: true, semantic_ready: false,
+        retrieval_verified: true, retry_eligible: true,
+      }] };
+    },
+  });
+  assert.deepEqual(Object.keys(audit.reconciliationCounts), VECTOR_RECONCILIATION_CLASSES);
+  assert.equal(audit.reconciliationCounts.QUARANTINE_UNKNOWN, 1);
+  assert.equal(audit.safeOrphans.length, 0);
+  assert.equal(audit.unexplainedVectorOnly[0].reconciliationClass, "QUARANTINE_UNKNOWN");
+});
+
 test("semantic readiness truth requires current hashes, namespace, vectors, and probe", () => {
   const text = "A current authoritative provision.";
   const current = {
     document_id: 1, chunk_index: 0, title: "Current", document_type: "act",
     visibility_status: "public", search_ready: true, semantic_ready: false,
-    retrieval_verified: true, retry_eligible: true, original_text: text,
+    retrieval_verified: true, retrieval_mode: "hybrid", embedding_status: "ready",
+    failure_details_json: { semanticRetrievalVerified: true },
+    retry_eligible: true, original_text: text,
     translated_text: null, vector_reference: "act-1-chunk-0",
     embedding_namespace: config.vectorNamespace,
     embedding_input_sha256: sha256(text),
@@ -301,6 +449,27 @@ test("semantic readiness truth requires current hashes, namespace, vectors, and 
   assert.deepEqual(truth.mismatches.map((item) => item.documentId), ["1", "2"]);
 });
 
+test("semantic readiness truth rejects legacy vector identities in the active namespace", () => {
+  const text = "A chunk with a stale legacy vector identity.";
+  const audit = {
+    activeNamespace: config.vectorNamespace,
+    missing: [],
+    diagnosticByIdentity: new Map([["8:0", "STALE_VECTOR"]]),
+    rows: [{
+      document_id: 8, chunk_index: 0, title: "Legacy identity", document_type: "act",
+      visibility_status: "public", search_ready: true, semantic_ready: true,
+      retrieval_verified: true, retrieval_mode: "hybrid", embedding_status: "ready",
+      failure_details_json: { semanticRetrievalVerified: true },
+      original_text: text, translated_text: null,
+      vector_reference: "act-8-chunk-0", embedding_namespace: config.vectorNamespace,
+      embedding_input_sha256: sha256(text),
+    }],
+  };
+  const truth = semanticReadinessTruth(audit);
+  assert.equal(truth.derivedSemanticReady, 0);
+  assert.equal(truth.mismatches.length, 1);
+});
+
 test("readiness reconciliation changes only mismatched semantic flags", async () => {
   const text = "Verified active evidence.";
   const statements = [];
@@ -310,7 +479,9 @@ test("readiness reconciliation changes only mismatched semantic flags", async ()
     rows: [{
       document_id: 3, chunk_index: 0, title: "Verified", document_type: "act",
       visibility_status: "public", search_ready: true, semantic_ready: false,
-      retrieval_verified: true, retry_eligible: true, original_text: text,
+      retrieval_verified: true, retrieval_mode: "hybrid", embedding_status: "ready",
+      failure_details_json: { semanticRetrievalVerified: true },
+      retry_eligible: true, original_text: text,
       translated_text: null, vector_reference: "act-3-chunk-0",
       embedding_namespace: config.vectorNamespace,
       embedding_input_sha256: sha256(text),

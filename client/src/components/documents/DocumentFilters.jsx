@@ -42,7 +42,8 @@ export function DocumentFilters({
   const visibleOptions = filterKeys?.length
     ? availableOptions.filter(([key]) => filterKeys.includes(key))
     : availableOptions;
-  const activeCount = Object.values(filters).filter(Boolean).length;
+  const activeCount = Object.entries(filters).filter(([key, value]) => value && key !== 'researchReady').length;
+  const quickOptions = visibleOptions.filter(([key]) => ['type', 'jurisdiction'].includes(key));
 
   return (
     <div className="space-y-3">
@@ -52,20 +53,21 @@ export function DocumentFilters({
         <input
           value={query}
           onChange={(event) => onQueryChange(event.target.value)}
-          placeholder="Search title, number, ministry, authority, category, metadata, or PDF text…"
+          placeholder="Search by title, topic or document number…"
           className="h-12 w-full rounded-xl border border-[#8f1d2c]/10 bg-white pl-11 pr-4 text-sm text-[#29312d] outline-none placeholder:text-[#9a9387] focus:border-[#a85a52] focus:ring-4 focus:ring-[#a85a52]/10"
         />
       </label>
       <div className="flex flex-wrap items-end gap-2">
+        {quickOptions.map(([key, optionLabel, source]) => <label key={key} className="min-w-0 flex-1 space-y-1 sm:max-w-52"><span className="text-xs text-[#706a61]">{filterLabels[key] || optionLabel}</span><select value={filters[key] || ''} onChange={(event) => onFilterChange(key, event.target.value)} className="h-11 w-full rounded-xl border border-[#8f1d2c]/10 bg-white px-3 text-xs"><option value="">All {optionLabel.toLowerCase()}s</option>{(options[source] || []).map((option) => <option key={String(option)} value={String(option)}>{label(option)}</option>)}</select></label>)}
         {onSortChange && (
           <label className="min-w-[150px] space-y-1">
-            <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[#777066]">
+            <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[#706a61]">
               Sort
             </span>
             <select
               value={sortBy}
               onChange={(event) => onSortChange(event.target.value)}
-              className="h-10 w-full rounded-xl border border-[#8f1d2c]/10 bg-white px-3 text-xs text-[#29312d]"
+              className="h-11 w-full rounded-xl border border-[#8f1d2c]/10 bg-white px-3 text-xs text-[#29312d]"
             >
               <option value="cataloguedAt">Recently catalogued</option>
               <option value="publicationDate">Publication date</option>
@@ -74,31 +76,6 @@ export function DocumentFilters({
               <option value="title">Title</option>
               <option value="ministry">Ministry</option>
               {query.trim() && <option value="relevance">Relevance</option>}
-            </select>
-          </label>
-        )}
-        {onSortDirectionChange && sortBy !== "relevance" && (
-          <label className="space-y-1">
-            <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[#777066]">
-              Direction
-            </span>
-            <select
-              value={sortDirection}
-              onChange={(event) =>
-                onSortDirectionChange(event.target.value)
-              }
-              className="h-10 rounded-xl border border-[#8f1d2c]/10 bg-white px-3 text-xs text-[#29312d]"
-            >
-              <option value="desc">
-                {sortBy === "title" || sortBy === "ministry"
-                  ? "Z–A"
-                  : "Newest first"}
-              </option>
-              <option value="asc">
-                {sortBy === "title" || sortBy === "ministry"
-                  ? "A–Z"
-                  : "Oldest first"}
-              </option>
             </select>
           </label>
         )}
@@ -124,14 +101,15 @@ export function DocumentFilters({
               </span>
             )}
           </span>
-          <span className="text-[10px] font-normal text-[#81796e]">
-            Type, ministry, date, readiness
+          <span className="text-[10px] font-normal text-[#706a61]">
+            Authority, date, availability
           </span>
         </summary>
         <div className="grid gap-2 border-t border-[#8f1d2c]/8 p-4 sm:grid-cols-2 xl:grid-cols-4">
-          {visibleOptions.map(([key, optionLabel, source]) => (
+          {onSortDirectionChange && sortBy !== 'relevance' && <label className="space-y-1"><span className="text-xs text-[#706a61]">Sort direction</span><select value={sortDirection} onChange={(event) => onSortDirectionChange(event.target.value)} className="h-11 w-full rounded-xl border border-[#8f1d2c]/10 bg-white px-3 text-xs"><option value="desc">{['title', 'ministry'].includes(sortBy) ? 'Z–A' : 'Newest first'}</option><option value="asc">{['title', 'ministry'].includes(sortBy) ? 'A–Z' : 'Oldest first'}</option></select></label>}
+          {visibleOptions.filter(([key]) => !['type', 'jurisdiction'].includes(key)).map(([key, optionLabel, source]) => (
             <label key={key} className="space-y-1">
-              <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[#777066]">
+              <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[#706a61]">
                 {filterLabels[key] || optionLabel}
               </span>
               <select
@@ -149,7 +127,7 @@ export function DocumentFilters({
             </label>
           ))}
           <label className="space-y-1">
-            <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[#777066]">
+            <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[#706a61]">
               PDF
             </span>
             <select
@@ -169,7 +147,7 @@ export function DocumentFilters({
             ["comparisonReady", "Comparison"],
           ].map(([key, text]) => (
             <label key={key} className="space-y-1">
-              <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[#777066]">
+              <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[#706a61]">
                 {text}
               </span>
               <select
@@ -185,7 +163,7 @@ export function DocumentFilters({
           ))}
           {["publicationFrom", "publicationTo"].map((key) => (
             <label key={key} className="space-y-1">
-              <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[#777066]">
+              <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[#706a61]">
                 {key === "publicationFrom" ? "From date" : "To date"}
               </span>
               <input

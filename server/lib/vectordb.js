@@ -2068,7 +2068,12 @@ const cleanupStaleVectors = async ({ chunks, index, idField, chunkIdField }) => 
     const queryResults = await index.query({
       vector: createProbeVector(),
       topK: 1000,
-      filter: { [idField]: { $eq: documentIdValue } },
+      filter: {
+        $and: [
+          { [idField]: { $eq: documentIdValue } },
+          { routingOnly: { $ne: true } },
+        ],
+      },
       includeMetadata: false,
     });
     const existingIds = (queryResults.matches || []).map((match) => match.id);
