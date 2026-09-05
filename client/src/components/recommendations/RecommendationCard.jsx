@@ -117,15 +117,35 @@ export function RecommendationCard({
           ))}
         </div>
       )}
+      {(recommendation.authorityLabel || recommendation.priority) && (
+        <div className="mt-3 flex flex-wrap gap-2 text-[10px] font-semibold text-[#706a61]">
+          {recommendation.authorityLabel && (
+            <span className="rounded-full border border-[#8f1d2c]/10 bg-[#fffaf0] px-2 py-1">
+              {recommendation.authorityLabel}
+            </span>
+          )}
+          {recommendation.priority && (
+            <span className="rounded-full border border-[#c1a06f]/30 bg-[#f7f2eb] px-2 py-1 capitalize">
+              {recommendation.priority} reading
+            </span>
+          )}
+        </div>
+      )}
       {(!compact || recommendation.graphRelationship) && (
         <div className="mt-4 border-l-2 border-[#c1a06f]/55 pl-3">
           <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-[#874047]">
             Why this matches
           </p>
           <p className="mt-1 line-clamp-3 text-xs leading-5 text-[#625d55]">
-            {recommendation.reason || "Recommended from your recent research context."}
+            {recommendation.whyThisMatters || recommendation.reason || "Recommended from your recent research context."}
           </p>
         </div>
+      )}
+      {recommendation.focusAreas?.length > 0 && (
+        <p className="mt-3 text-[10px] leading-4 text-[#81796e]">
+          <span className="font-bold uppercase tracking-[0.1em] text-[#874047]">Focus on:</span>{" "}
+          {recommendation.focusAreas.join(" · ")}
+        </p>
       )}
       {recommendation.signals?.length > 0 && (
         <div className="mt-3 flex flex-wrap gap-1.5">

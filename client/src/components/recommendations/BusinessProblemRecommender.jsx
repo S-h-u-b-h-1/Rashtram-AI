@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { Bell, Check, Loader2, Search, ShieldAlert } from "lucide-react";
 import { useState } from "react";
 import {
@@ -17,6 +18,13 @@ export function BusinessProblemRecommender() {
   const [loading, setLoading] = useState(false);
   const [watching, setWatching] = useState(false);
   const [watchStatus, setWatchStatus] = useState("");
+  const hasPrimaryRecommendation = Boolean(result?.recommendations?.some((item) => item.authorityClass === "PRIMARY_OFFICIAL"));
+  const noReadyOfficialSource = Boolean(result && (!hasPrimaryRecommendation || result.coverageClass === "D_PRIMARY_SOURCE_MISSING"));
+  const recommendationGroups = [
+    ["essential", "Essential reading"],
+    ["important", "Important supporting material"],
+    ["background", "Background / context"],
+  ];
 
   const watchProblem = async () => {
     if (watching || problem.trim().length < 2) return;
@@ -84,6 +92,7 @@ export function BusinessProblemRecommender() {
               Business or policy problem
             </span>
             <textarea
+              id="business-problem"
               required
               value={problem}
               onChange={(event) => setProblem(event.target.value)}
@@ -115,13 +124,64 @@ export function BusinessProblemRecommender() {
 
       {result && (
         <>
-          <RecommendationSection
-            title="Documents relevant to this problem"
-            eyebrow="Real catalogue matches"
-            recommendations={result.recommendations || []}
-            pagePath="/app/recommend"
-            emptyMessage="No research-ready catalogue records matched strongly enough. Add the sector, location, obligation, or affected group to your problem description and try again."
-          />
+          {result.problemUnderstanding && (
+            <section className="surface-card p-5 sm:p-6" aria-labelledby="problem-understanding-title">
+              <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-[#874047]">Understanding your problem</p>
+              <h2 id="problem-understanding-title" className="mt-2 font-serif text-2xl text-[#8f1d2c]">
+                {result.problemUnderstanding.statement}
+              </h2>
+              <dl className="mt-4 grid gap-3 text-xs text-[#625d55] sm:grid-cols-2">
+                <div><dt className="font-bold uppercase tracking-[0.1em] text-[#874047]">Research goal</dt><dd className="mt-1">{result.problemUnderstanding.goal}</dd></div>
+                <div><dt className="font-bold uppercase tracking-[0.1em] text-[#874047]">Jurisdiction</dt><dd className="mt-1">{result.problemUnderstanding.jurisdiction}</dd></div>
+                <div><dt className="font-bold uppercase tracking-[0.1em] text-[#874047]">Authority to check</dt><dd className="mt-1">{result.problemUnderstanding.regulator}</dd></div>
+                <div><dt className="font-bold uppercase tracking-[0.1em] text-[#874047]">People / institutions</dt><dd className="mt-1">{(result.problemUnderstanding.stakeholders || []).join(" · ")}</dd></div>
+              </dl>
+              <p className="mt-4 text-xs leading-5 text-[#706a61]">{result.problemUnderstanding.timeframe}</p>
+            </section>
+          )}
+          {result.researchPlan?.length > 0 && (
+            <section className="surface-card p-5 sm:p-6" aria-labelledby="research-plan-title">
+              <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-[#874047]">Research plan</p>
+              <h2 id="research-plan-title" className="mt-2 font-serif text-2xl text-[#8f1d2c]">Areas you should research</h2>
+              <ol className="mt-4 grid gap-3 lg:grid-cols-2">
+                {result.researchPlan.map((plan) => (
+                  <li key={plan.area} className="rounded-xl border border-[#8f1d2c]/8 bg-[#f7f2eb] p-3">
+                    <div className="flex items-center justify-between gap-2"><span className="text-sm font-semibold text-[#29312d]">{plan.order}. {plan.area}</span><span className="text-[9px] font-bold uppercase tracking-[0.1em] text-[#874047]">{plan.priority}</span></div>
+                    <p className="mt-1 text-xs leading-5 text-[#706a61]">{plan.rationale}</p>
+                  </li>
+                ))}
+              </ol>
+            </section>
+          )}
+          {recommendationGroups.some(([key]) => result.recommendationGroups?.[key]?.length) ? recommendationGroups.map(([key, title]) => result.recommendationGroups?.[key]?.length ? (
+            <RecommendationSection
+              key={key}
+              title={noReadyOfficialSource && key === "background" ? "Related sources" : title}
+              eyebrow="Problem-aware reading list"
+              recommendations={result.recommendationGroups[key]}
+              pagePath="/app/recommend"
+              emptyMessage=""
+            />
+          ) : null) : (
+            <RecommendationSection
+              title="Documents relevant to this problem"
+              eyebrow="Problem-aware reading list"
+              recommendations={result.recommendations || []}
+              pagePath="/app/recommend"
+              emptyMessage="No research-ready catalogue records matched strongly enough. Add the sector, location, obligation, or affected group to your problem description and try again."
+            />
+          )}
+          {noReadyOfficialSource && (
+            <section role="status" className="surface-card border border-[#c1a06f]/35 bg-[#fffaf0] p-5 sm:p-6">
+              <h2 className="font-serif text-2xl text-[#8f1d2c]">No ready official source found</h2>
+              <p className="mt-2 text-sm leading-6 text-[#625d55]">No ready primary official source was verified for this part of the problem. Related readings below are useful context, but are not presented as official requirements.</p>
+              <div className="mt-4 flex flex-wrap gap-2">
+                <Link href="/app/library" className="inline-flex min-h-11 items-center rounded-xl bg-[#8f1d2c] px-4 text-xs font-semibold text-white">Search Library</Link>
+                <Link href="/app" className="inline-flex min-h-11 items-center rounded-xl border border-[#8f1d2c]/20 bg-white px-4 text-xs font-semibold text-[#8f1d2c]">Add official source URL</Link>
+                <button type="button" onClick={() => document.getElementById("business-problem")?.focus()} className="inline-flex min-h-11 items-center rounded-xl border border-[#8f1d2c]/20 bg-white px-4 text-xs font-semibold text-[#8f1d2c]">Adjust query</button>
+              </div>
+            </section>
+          )}
           {result.abstention && (
             <section role="status" className="surface-card border border-[#8f1d2c]/12 p-5 sm:p-6">
               <h2 className="font-serif text-2xl text-[#8f1d2c]">

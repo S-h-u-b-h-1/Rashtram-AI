@@ -3,6 +3,10 @@ const assert = require("node:assert/strict");
 
 const {
   RELEVANCE_TIERS,
+  authorityLabel,
+  buildProblemUnderstanding,
+  buildResearchPlan,
+  classifyProblemIntent,
   confidenceForScore,
   evaluateBusinessCandidate,
   hasDocumentSummarySubjectOverlap,
@@ -11,11 +15,33 @@ const {
   inferBusinessSignals,
   isRecommendationEligible,
   normalizeTypes,
+  recommendationPriority,
   stateOnlyRequested,
   scoreRecommendation,
   validateComparisonRecommendationRequest,
   validateProblemRequest,
 } = require("../document/recommendationService");
+
+test("problem-aware recommendations expose plain-language intent and research plan", () => {
+  const input = {
+    problem: "I want to start a digital lending platform in India and understand the requirements.",
+    industry: "financial services",
+    states: [],
+  };
+  const inferred = inferBusinessSignals(input);
+  const understanding = buildProblemUnderstanding(input, inferred);
+  const plan = buildResearchPlan(input, inferred);
+  assert.equal(classifyProblemIntent(input)[0], "START_A_BUSINESS");
+  assert.match(understanding.statement, /starting or operating a business/i);
+  assert.ok(understanding.stakeholders.includes("borrowers and customers"));
+  assert.ok(plan.some((item) => /licensing/i.test(item.area)));
+  assert.ok(plan.every((item) => item.rationale && item.priority));
+  assert.equal(authorityLabel("PRIMARY_OFFICIAL"), "Primary official source");
+  assert.equal(authorityLabel("SECONDARY_RESEARCH"), "Secondary research");
+  assert.equal(recommendationPriority({ authorityClass: "PRIMARY_OFFICIAL", relevanceTier: RELEVANCE_TIERS.HIGH }), "essential");
+  assert.equal(recommendationPriority({ authorityClass: "OFFICIAL_SECONDARY", relevanceTier: RELEVANCE_TIERS.HIGH }), "important");
+  assert.equal(recommendationPriority({ authorityClass: "SECONDARY_RESEARCH", relevanceTier: RELEVANCE_TIERS.LOW }), "background");
+});
 
 test("document recommendations require shared subject matter, not generic metadata", () => {
   assert.equal(

@@ -160,6 +160,153 @@ const BUSINESS_DOMAINS = Object.freeze([
   },
 ]);
 
+const RESEARCH_AREA_TEMPLATES = Object.freeze({
+  "financial services": [
+    ["Licensing and institutional model", "Identify the permissions, regulated-entity model and bank/NBFC or service-provider responsibilities that need primary-source review.", "Essential"],
+    ["Customer protection and disclosures", "Review borrower-facing disclosures, key facts, fair-practice and grievance themes in the applicable official material.", "Essential"],
+    ["Data, reporting and operations", "Check data handling, credit reporting, outsourcing, record-keeping and recurring operational duties where the sources cover them.", "Important"],
+  ],
+  "environment and recycling": [
+    ["Waste and EPR obligations", "Review the waste stream, producer responsibility and registration themes that govern the proposed recycling activity.", "Essential"],
+    ["Environmental permissions", "Identify pollution-control, handling and facility permissions that require state and central authority review.", "Important"],
+    ["Operational records and reporting", "Check collection, processing, reporting and audit obligations in the applicable rules and guidance.", "Important"],
+  ],
+  "digital services and data": [
+    ["Data-protection duties", "Review the primary data-protection instrument for the service, data roles, consent, security and breach-response themes.", "Essential"],
+    ["User rights and notices", "Check notice, rights-request, grievance and transparency material relevant to the product and its users.", "Important"],
+    ["Implementation guidance", "Use official rules, guidance and institutional background to translate the primary instrument into operating controls.", "Background"],
+  ],
+  "food manufacturing": [
+    ["Food-safety licensing", "Identify the food-business licensing and safety-control instruments that apply to the proposed operation.", "Essential"],
+    ["Factory and labour permissions", "Check facility, worker-safety and local permissions that may sit alongside the food-specific framework.", "Important"],
+    ["Inspection and reporting", "Review record-keeping, inspection, labelling and recurring reporting material in the relevant sources.", "Important"],
+  ],
+  manufacturing: [
+    ["Factory and worker safety", "Review the factory, occupational-safety and labour instruments connected to the proposed facility.", "Essential"],
+    ["Environmental consent", "Check pollution-control and environmental permissions for the location and activity.", "Important"],
+    ["Local implementation", "Look for state or local implementation material once the jurisdiction and facility details are confirmed.", "Background"],
+  ],
+});
+
+const PROBLEM_INTENTS = Object.freeze([
+  ["START_A_BUSINESS", /\b(start|launch|set up|setup|establish|open|build|operate|running|run)\b/i, "starting or operating a business"],
+  ["COMPLIANCE_CHECK", /\b(compliance|comply|obligations?|requirements?|licen[cs]e|permit|registration|permission)\b/i, "checking compliance requirements"],
+  ["UNDERSTAND_LAW", /\b(understand|explain|meaning|law|act|rule|regulation|legal position)\b/i, "understanding the applicable law"],
+  ["REGULATORY_CHANGE", /\b(change|changed|new|latest|current|amendment|update|recent)\b/i, "understanding a regulatory change"],
+  ["POLICY_RESEARCH", /\b(policy|public policy|programme|program|scheme|strategy)\b/i, "researching policy options and context"],
+]);
+
+const classifyProblemIntent = (input = {}) => {
+  const text = [input.problem, input.industry, input.topic].filter(Boolean).join(" ");
+  return PROBLEM_INTENTS.find(([, pattern]) => pattern.test(text)) ||
+    ["GENERAL_RESEARCH", null, "researching the described issue"];
+};
+
+const inferredStakeholders = (input = {}, inferred = {}) => {
+  const text = normalizeProblemText([input.problem, input.industry, input.topic].filter(Boolean).join(" "));
+  const values = [];
+  if (/borrower|loan|lending|fintech|nbfc|bank/.test(text)) values.push("borrowers and customers", "regulated lenders or service providers");
+  if (/employee|worker|factory|manufactur|plant/.test(text)) values.push("workers and operating businesses");
+  if (/consumer|customer|user|saas|data|platform/.test(text)) values.push("customers and data subjects");
+  if (inferred.regulators?.length) values.push(...inferred.regulators.slice(0, 2));
+  if (!values.length) values.push("the affected businesses, people and public authorities");
+  return [...new Set(values)].slice(0, 5);
+};
+
+const buildProblemUnderstanding = (input = {}, inferred = {}) => {
+  const [, , intentLabel] = classifyProblemIntent(input);
+  const location = inferred.jurisdictions?.length
+    ? inferred.jurisdictions.join(" and ")
+    : "the relevant Indian jurisdiction";
+  const activity = input.industry || inferred.activities?.[0] || input.topic || "the activity described";
+  const regulator = inferred.regulators?.length
+    ? inferred.regulators.join(" and ")
+    : "the authority responsible for this activity";
+  return {
+    statement: "You are " + intentLabel + " for " + activity + " in " + location + ".",
+    goal: intentLabel,
+    activity,
+    jurisdiction: location,
+    regulator,
+    timeframe: /\b(20\d{2}|current|latest|recent|today|ongoing)\b/i.test(input.problem)
+      ? "Current or time-specific material is requested; verify effective dates before relying on it."
+      : "No specific timeframe was supplied; currentness should be checked before action.",
+    stakeholders: inferredStakeholders(input, inferred),
+    desiredOutcome: "A focused reading list to help you " + intentLabel.replace(/^researching /, "research ") + ".",
+  };
+};
+
+const buildResearchPlan = (input = {}, inferred = {}) => {
+  const domainAreas = inferred.sectors?.flatMap((sector) => RESEARCH_AREA_TEMPLATES[sector] || []) || [];
+  const fallbackAreas = [
+    ...(inferred.themes || []).map((theme) => [
+      theme[0].toUpperCase() + theme.slice(1),
+      "Look for primary and official material that addresses " + theme + " for the described problem.",
+      "Important",
+    ]),
+    ["Primary instrument and authority", "Identify the governing Act, rule, regulation, circular, policy or official guidance and confirm its issuing authority.", "Essential"],
+    ["Jurisdiction and currentness", "Check the location, effective date, amendments and local implementation material before relying on a reading.", "Important"],
+  ];
+  const seen = new Set();
+  return [...domainAreas, ...fallbackAreas]
+    .filter(([area]) => {
+      const key = normalizeProblemText(area);
+      if (!key || seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    })
+    .slice(0, 8)
+    .map(([area, rationale, priority], index) => ({
+      order: index + 1,
+      area,
+      rationale,
+      priority: priority || (index === 0 ? "Essential" : "Important"),
+    }));
+};
+
+const authorityLabel = (authorityClass) => ({
+  PRIMARY_OFFICIAL: "Primary official source",
+  OFFICIAL_SECONDARY: "Official supporting material",
+  INSTITUTIONAL: "Institutional research",
+  SECONDARY_RESEARCH: "Secondary research",
+}[authorityClass] || "Source authority not yet classified");
+
+const recommendationPriority = (item = {}) => {
+  if (item.authorityClass === "PRIMARY_OFFICIAL" && item.relevanceTier === RELEVANCE_TIERS.HIGH) return "essential";
+  if ([RELEVANCE_TIERS.HIGH, RELEVANCE_TIERS.MEDIUM].includes(item.relevanceTier) &&
+      ["PRIMARY_OFFICIAL", "OFFICIAL_SECONDARY"].includes(item.authorityClass)) return "important";
+  return "background";
+};
+
+const enrichProblemRecommendation = (recommendation, input, inferred, researchPlan) => {
+  const recommendationText = normalizeProblemText([
+    recommendation.title, recommendation.category, recommendation.documentType,
+  ].join(" "));
+  const matchedAreas = researchPlan
+    .filter((plan) => normalizeProblemText(plan.area).split(" ")
+      .some((token) => token.length > 3 && recommendationText.includes(token)))
+    .map((plan) => plan.area);
+  const focusAreas = [...new Set([
+    ...(matchedAreas.length ? matchedAreas : researchPlan.slice(0, inferred.sectors?.length ? 2 : 1).map((plan) => plan.area)),
+    ...(inferred.themes || []).slice(0, 2),
+  ])].slice(0, 4);
+  const location = inferred.jurisdictions?.length ? inferred.jurisdictions.join(" and ") : "the relevant jurisdiction";
+  const activity = input.industry || inferred.activities?.[0] || input.topic || "the issue you described";
+  const authority = authorityLabel(recommendation.authorityClass);
+  const reason = recommendation.title + " is recommended for " + activity + " in " + location +
+    " because its " + (recommendation.documentType || "document") + " and " + authority.toLowerCase() +
+    " status align with the research areas identified from your problem. Use it to investigate " +
+    (focusAreas.join(", ") || "the governing framework") + "; confirm exact applicability in the source.";
+  return {
+    ...recommendation,
+    priority: recommendationPriority(recommendation),
+    authorityLabel: authority,
+    focusAreas,
+    whyThisMatters: reason,
+    relevanceExplanation: reason,
+  };
+};
+
 const normalizeProblemText = (value) => String(value || "")
   .normalize("NFKC")
   .toLowerCase()
@@ -936,6 +1083,8 @@ const getProblemRecommendations = async (userId, payload) => {
   if (!input.states.length && inferred.jurisdictions.length) {
     input.states = inferred.jurisdictions;
   }
+  const problemUnderstanding = buildProblemUnderstanding(input, inferred);
+  const researchPlan = buildResearchPlan(input, inferred);
   const searchText = [
     input.problem,
     input.industry,
@@ -1091,7 +1240,7 @@ const getProblemRecommendations = async (userId, payload) => {
             Date.now() - 366 * 24 * 60 * 60 * 1_000,
       };
       const recommendation = shapeRecommendation(row, signals);
-      return {
+      return enrichProblemRecommendation({
         ...recommendation,
         draftUsable: Boolean(row.draft_usable),
         searchReady: Boolean(row.search_ready),
@@ -1109,7 +1258,7 @@ const getProblemRecommendations = async (userId, payload) => {
         reason: relevance.matchReasons.length
           ? `Matches ${relevance.matchReasons.slice(0, 4).join("; ")}.`
           : "A lower-confidence discovery result; applicability is not established.",
-      };
+      }, input, inferred, researchPlan);
     })
     .sort((left, right) =>
       right.score - left.score ||
@@ -1118,7 +1267,7 @@ const getProblemRecommendations = async (userId, payload) => {
     );
   const recommendations = candidates
     .filter((item) => item.researchReady && (!input.draftOnly || item.draftUsable) && [RELEVANCE_TIERS.HIGH, RELEVANCE_TIERS.MEDIUM].includes(item.relevanceTier))
-    .slice(0, input.limit);
+    .slice(0, Math.min(input.limit, 8));
   const lowerConfidenceRecommendations = candidates
     .filter((item) => item.researchReady && (!input.draftOnly || item.draftUsable) && item.relevanceTier === RELEVANCE_TIERS.LOW)
     .slice(0, Math.min(8, input.limit));
@@ -1162,6 +1311,14 @@ const getProblemRecommendations = async (userId, payload) => {
         .includes(normalizeProblemText(theme)),
     ),
   );
+  const recommendationGroups = {
+    essential: recommendations.filter((item) => item.priority === "essential"),
+    important: recommendations.filter((item) => item.priority === "important"),
+    background: [
+      ...recommendations.filter((item) => item.priority === "background"),
+      ...lowerConfidenceRecommendations,
+    ].slice(0, 4),
+  };
   const suggestedQuestions = [
     "Which licences, registrations, or permissions may apply?",
     inferred.regulators.length
@@ -1175,6 +1332,9 @@ const getProblemRecommendations = async (userId, payload) => {
   ];
   return {
     query: input,
+    problemUnderstanding,
+    researchPlan,
+    recommendationGroups,
     inferredSignals: {
       sectors: inferred.sectors,
       activities: inferred.activities,
@@ -1212,7 +1372,7 @@ const getProblemRecommendations = async (userId, payload) => {
           ? "Relevant records were found, but they are not yet ready to support evidence-grounded obligations. Open a record below to prepare it for research."
           : inferred.needsSpecificity
             ? "The problem is too broad for a reliable recommendation. Add the regulated activity, location, or authority involved."
-            : "No sufficiently relevant verified documents were found. This is a catalogue coverage gap; Rashtram AI will not invent requirements."
+            : "No ready official source found for this part of the problem. Related material may be useful background, but Rashtram AI will not present it as an official requirement."
         : null,
     disclaimer: "Rashtram AI provides research assistance, not legal advice.",
   };
@@ -1461,6 +1621,10 @@ module.exports = {
   authorityWeight,
   complianceDocumentTypeWeight,
   confidenceForScore,
+  authorityLabel,
+  buildProblemUnderstanding,
+  buildResearchPlan,
+  classifyProblemIntent,
   evaluateBusinessCandidate,
   hasDocumentTitleSubjectOverlap,
   hasDocumentSummarySubjectOverlap,
@@ -1471,6 +1635,8 @@ module.exports = {
   getRecentRecommendations,
   isRecommendationEligible,
   inferBusinessSignals,
+  inferredStakeholders,
+  recommendationPriority,
   normalizeTypes,
   stateOnlyRequested,
   scoreRecommendation,

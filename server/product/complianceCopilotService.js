@@ -225,6 +225,13 @@ const runComplianceCopilot = async (userId, payload = {}, adapters = {}) => {
   const recommendations = (recommendationResult.recommendations || [])
     .filter((item) => [RELEVANCE_TIERS.HIGH, RELEVANCE_TIERS.MEDIUM].includes(item.relevanceTier))
     .slice(0, 5);
+  const recommendationIds = new Set(recommendations.map((item) => String(item.id)));
+  const recommendationGroups = Object.fromEntries(
+    Object.entries(recommendationResult.recommendationGroups || {}).map(([group, items]) => [
+      group,
+      (Array.isArray(items) ? items : []).filter((item) => recommendationIds.has(String(item.id))).slice(0, 5),
+    ]),
+  );
   const documentRuns = (await Promise.all(recommendations.map(async (recommendation) => {
     const document = await loadDocument(recommendation.id);
     if (!document) return null;
@@ -293,6 +300,9 @@ const runComplianceCopilot = async (userId, payload = {}, adapters = {}) => {
     status,
     createdAt: inserted.rows?.[0]?.created_at || new Date().toISOString(),
     recommendations,
+    problemUnderstanding: recommendationResult.problemUnderstanding || null,
+    researchPlan: recommendationResult.researchPlan || [],
+    recommendationGroups,
     ...result,
     preparationCandidates: recommendationResult.preparationCandidates || [],
     lowerConfidenceRecommendations:
