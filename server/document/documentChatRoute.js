@@ -31,6 +31,7 @@ const {
   assessEvidenceSufficiency,
   buildAbstentionResponse,
   buildGroundedExtractiveAnswer,
+  validateAnswerCompleteness,
   summarizeVerification,
   verifyAndRepairAnswer,
 } = require("../retrieval/evidenceSafetyService");
@@ -1429,6 +1430,15 @@ router.post("/", generationLimiter, async (req, res) => {
           };
       const verificationLatency = Date.now() - verificationStartedAt;
       verification.answer = enforceFreshnessGuard(verification.answer, currentVerification);
+      const completeness = validateAnswerCompleteness(verification.answer);
+      if (!completeness.complete) {
+        // One bounded safety action: replace a dangling provider response with
+        // the already-retrieved evidence. Never persist visibly incomplete text
+        // as a successful answer and never loop repairs.
+        verification.answer = buildGroundedExtractiveAnswer(message, evidence);
+        verification.abstained = true;
+        verification.completeness = completeness;
+      }
       responsePersistence = await persistGeneratedChatResponse({
         lifecycle,
         userId: req.user.id,
@@ -1440,6 +1450,7 @@ router.post("/", generationLimiter, async (req, res) => {
           grounded: true,
           generationMode: verification.abstained ? "verification_abstention" : "ai_verified",
           verification: summarizeVerification(verification),
+          completeness: verification.completeness || { complete: true },
           evidenceSufficiency: sufficiency,
           retrieval: retrieval.diagnostics,
           workflow,
@@ -1457,6 +1468,7 @@ router.post("/", generationLimiter, async (req, res) => {
         metadata: {
           generationMode: verification.abstained ? "verification_abstention" : "ai_verified",
           verification: summarizeVerification(verification),
+          completeness: verification.completeness || { complete: true },
           evidenceSufficiency: sufficiency,
           answerIntent,
           freshnessClass,

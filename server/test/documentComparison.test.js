@@ -4,9 +4,28 @@ const assert = require("node:assert/strict");
 const {
   allowExtractiveComparisonFallback,
   comparisonSectionBackfill,
+  validateComparisonOutput,
   normalizeRequest,
   readinessReason,
 } = require("../document/documentComparisonService");
+
+test("comparison output validator rejects analytically empty success", () => {
+  const citations = [{ id: "D1-C1" }, { id: "D2-C1" }];
+  const empty = validateComparisonOutput({
+    generationMode: "ai",
+    executiveSummary: "Comparison completed.",
+    similarities: [], differences: [], keyFindings: [],
+  }, citations);
+  assert.equal(empty.valid, false);
+  assert.equal(empty.reason, "ANALYTICALLY_EMPTY");
+  const useful = validateComparisonOutput({
+    generationMode: "ai",
+    executiveSummary: "The instruments differ in scope.",
+    differences: [{ analysis: "D1 applies to reporting.", citations: ["D1-C1"] }],
+  }, citations);
+  assert.equal(useful.valid, true);
+  assert.equal(useful.status, "SUCCESS");
+});
 
 test("comparison accepts two to five unique documents", () => {
   assert.deepEqual(

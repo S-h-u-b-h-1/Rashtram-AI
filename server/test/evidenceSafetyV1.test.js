@@ -16,6 +16,7 @@ const {
   extractClaims,
   validateClaims,
   verifyAndRepairAnswer,
+  validateAnswerCompleteness,
   verifyStructuredComparison,
 } = require("../retrieval/evidenceSafetyService");
 const { QUERY_TYPES } = require("../retrieval/queryPlanner");
@@ -34,6 +35,12 @@ const evidence = (overrides = {}) => ({
   ftsScore: 1,
   identifierBoost: 1,
   ...overrides,
+});
+
+test("answer completeness validator catches dangling promised passages", () => {
+  assert.equal(validateAnswerCompleteness("The strongest supporting passage is:").complete, false);
+  assert.equal(validateAnswerCompleteness("The evidence is: ").reason, "DANGLING_PROMISE");
+  assert.equal(validateAnswerCompleteness("The provision may increase reporting effort.").complete, true);
 });
 
 test("high-confidence exact section evidence receives a HIGH assessment", () => {

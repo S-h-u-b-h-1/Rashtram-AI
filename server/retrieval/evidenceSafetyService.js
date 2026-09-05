@@ -582,6 +582,31 @@ const buildGroundedExtractiveAnswer = (query, evidence = []) => {
   ].join("\n");
 };
 
+/**
+ * Deterministic final-output guard. Provider responses can be syntactically
+ * valid while ending on a promise (for example, "the passage is:") or a
+ * visibly incomplete list. Such text must never be persisted as a successful
+ * answer. This intentionally errs on the side of requesting the bounded
+ * extractive fallback rather than guessing what the model meant.
+ */
+const validateAnswerCompleteness = (answer) => {
+  const text = String(answer || "").replace(/\s+/g, " ").trim();
+  if (!text) return { complete: false, reason: "EMPTY" };
+  if (/(?:passage|evidence|supporting (?:passage|evidence)|table|list)\s*(?:is|are|follows)\s*:\s*$/i.test(text)) {
+    return { complete: false, reason: "DANGLING_PROMISE" };
+  }
+  if (/(?:as follows|such as|including)\s*:\s*$/i.test(text)) {
+    return { complete: false, reason: "MISSING_PROMISED_CONTENT" };
+  }
+  if (/(?:^|\s)(?:[-*]\s*|\d+[.)]\s*)$/.test(text)) {
+    return { complete: false, reason: "UNFINISHED_LIST_ITEM" };
+  }
+  if (/[,:;–—-]$/.test(text) && text.length < 240) {
+    return { complete: false, reason: "TRAILING_PUNCTUATION" };
+  }
+  return { complete: true, reason: null };
+};
+
 const verifyStructuredComparison = (generated, citations = []) => {
   const evidence = citations.map((citation) => ({
     ...citation,
@@ -661,5 +686,6 @@ module.exports = {
   summarizeVerification,
   validateClaims,
   verifyAndRepairAnswer,
+  validateAnswerCompleteness,
   verifyStructuredComparison,
 };

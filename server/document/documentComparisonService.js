@@ -702,6 +702,37 @@ const comparisonSectionBackfill = ({ documents, groups, citations, generated }) 
   return normalized;
 };
 
+const validateComparisonOutput = (generated = {}, citations = []) => {
+  const summary = String(generated.executiveSummary || "").trim();
+  const citationIds = new Set((citations || []).map((citation) => String(citation.id)));
+  const analyticalSections = [
+    "similarities", "differences", "keyClauses", "stakeholders",
+    "complianceImpact", "timeline", "authorityDifferences",
+    "impactAssessment", "keyFindings",
+  ];
+  const substantiveSections = analyticalSections.filter((section) =>
+    hasUsefulItems(generated[section]),
+  );
+  const citedItems = analyticalSections.flatMap((section) =>
+    (Array.isArray(generated[section]) ? generated[section] : [])
+      .filter((item) => Array.isArray(item?.citations) && item.citations.some((id) => citationIds.has(String(id)))),
+  ).length;
+  if (!summary) return { valid: false, status: "GENERATION_FAILED", reason: "EMPTY_SUMMARY" };
+  if (generated.generationMode === "evidence_abstention") {
+    return { valid: true, status: "INSUFFICIENT_EVIDENCE", reason: null };
+  }
+  if (!substantiveSections.length || !citedItems) {
+    return { valid: false, status: "INSUFFICIENT_EVIDENCE", reason: "ANALYTICALLY_EMPTY" };
+  }
+  return {
+    valid: true,
+    status: generated.generationMode === "extractive_fallback" ? "PARTIAL_EVIDENCE" : "SUCCESS",
+    reason: null,
+    substantiveSections,
+    citedItems,
+  };
+};
+
 const mapComparison = (row) => row && ({
   id: String(row.id),
   title: row.title,
@@ -1162,6 +1193,19 @@ const createComparison = async (userId, payload, options = {}) => {
       durationMs: Date.now() - startedAt,
     });
   }
+  const outputValidation = validateComparisonOutput(generated, citations);
+  if (!outputValidation.valid) {
+    generated = {
+      ...generated,
+      generationMode: "evidence_abstention",
+      executiveSummary: buildAbstentionResponse(sufficiency, {
+        documentTitles: comparisonDocuments.map((document) => document.title),
+      }),
+      quality: { ...(generated.quality || {}), outputValidation },
+    };
+  } else {
+    generated.quality = { ...(generated.quality || {}), outputValidation };
+  }
   const recommendedDocuments = [
     ...new Map(
       (
@@ -1417,6 +1461,7 @@ module.exports = {
   buildComparisonCitation,
   ensureResearchReady,
   comparisonSectionBackfill,
+  validateComparisonOutput,
   getComparison,
   getComparisons,
   normalizeRequest,
