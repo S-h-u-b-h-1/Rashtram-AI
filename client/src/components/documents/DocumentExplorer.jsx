@@ -49,20 +49,20 @@ const EMPTY_FILTERS = {
 };
 
 const READINESS_LABELS = {
-  research_ready: "Ready for research",
-  search_ready: "Search ready",
-  comparison_ready: "Ready for research",
+  research_ready: "Ready to research",
+  search_ready: "Source available",
+  comparison_ready: "Ready to research",
   pdf_available: "PDF available",
-  processing_failed: "Could not process",
-  source_only: "Source link only",
-  missing_pdf: "PDF unavailable",
-  processing_pending: "Preparing",
-  processing_failed_retriable: "Can retry",
+  processing_failed: "Could not prepare this source",
+  source_only: "Source available",
+  missing_pdf: "Source available",
+  processing_pending: "Preparing source…",
+  processing_failed_retriable: "Could not prepare this source",
   source_extractable_not_processed: "Source available",
-  processing_failed_permanent: "Research unavailable",
-  ocr_required: "Needs OCR",
+  processing_failed_permanent: "Could not prepare this source",
+  ocr_required: "Source needs preparation",
   unsupported_file_type: "Unsupported file",
-  invalid_or_quarantined: "Quarantined",
+  invalid_or_quarantined: "Could not prepare this source",
 };
 
 const documentDateLabel = (document) => {
@@ -96,9 +96,10 @@ export function DocumentExplorer({
   filterLabels,
   dataNote,
   initialQuery = "",
+  initialFilters = {},
 }) {
   const [query, setQuery] = useState(initialQuery);
-  const [filters, setFilters] = useState(EMPTY_FILTERS);
+  const [filters, setFilters] = useState({ ...EMPTY_FILTERS, researchReady: "true", ...initialFilters });
   const [documents, setDocuments] = useState([]);
   const [suggestions, setSuggestions] = useState([]);
   const [filterOptions, setFilterOptions] = useState({});
@@ -111,7 +112,8 @@ export function DocumentExplorer({
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [sortBy, setSortBy] = useState("cataloguedAt");
+  const [revision, setRevision] = useState(0);
+  const [sortBy, setSortBy] = useState(initialQuery ? "relevance" : "publicationDate");
   const [sortDirection, setSortDirection] = useState("desc");
   const requestSequence = useRef(0);
   const {
@@ -126,9 +128,9 @@ export function DocumentExplorer({
     () => ({
       ...filters,
       type: type || filters.type,
-      scope,
+      scope: scope || filters.scope,
       source: source || filters.source,
-      jurisdictionLevel,
+      jurisdictionLevel: jurisdictionLevel || filters.jurisdictionLevel,
     }),
     [filters, jurisdictionLevel, scope, source, type],
   );
@@ -176,7 +178,7 @@ export function DocumentExplorer({
       clearTimeout(timer);
       controller.abort();
     };
-  }, [page, query, requestFilters, sortBy, sortDirection]);
+  }, [page, query, requestFilters, sortBy, sortDirection, revision]);
 
   useEffect(() => {
     setPage(1);
@@ -199,30 +201,22 @@ export function DocumentExplorer({
   };
 
   return (
-    <section className="surface-card overflow-hidden">
-      <div className="border-b border-[#8f1d2c]/8 bg-[#f7f2eb] p-5 sm:p-6">
+    <section className="overflow-hidden">
+      <div className="border-b border-[#8f1d2c]/10 pb-5">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
           <div>
-            <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#874047]">
-              {eyebrow}
-            </p>
             <h2 className="mt-2 font-serif text-3xl text-[#8f1d2c]">
               {title}
             </h2>
             <p className="mt-2 max-w-3xl text-sm leading-6 text-[#706a61]">
               {description}
             </p>
-            <p className="mt-3 max-w-3xl rounded-2xl bg-white/55 px-4 py-3 text-xs leading-5 text-[#706a61]">
-              Simple flow: search or filter, open a document, then ask
-              questions with citations. Use Compare after selecting two or more
-              ready documents.
-            </p>
           </div>
-          <div className="rounded-2xl bg-[#eee0dc] px-4 py-3 text-right">
-            <p className="font-serif text-2xl text-[#8f1d2c]">
+          <div className="text-sm text-[#706a61]">
+            <p>
               {Number(pagination.total || 0).toLocaleString("en-IN")}
             </p>
-            <p className="text-[10px] uppercase tracking-[0.12em] text-[#777066]">
+            <p className="text-xs text-[#706a61]">
               Records found
             </p>
           </div>
@@ -237,13 +231,14 @@ export function DocumentExplorer({
             filterLabels={filterLabels}
             sortBy={sortBy}
             sortDirection={sortDirection}
-            onQueryChange={setQuery}
+            onQueryChange={(value) => { setQuery(value); setSortBy(value.trim() ? "relevance" : "publicationDate"); setPage(1); }}
             onFilterChange={updateFilter}
             onSortChange={setSortBy}
             onSortDirectionChange={setSortDirection}
             onClear={() => setFilters(EMPTY_FILTERS)}
           />
         </div>
+        <p className="mt-3 text-xs leading-5 text-[#706a61]">{filters.researchReady === "true" ? "Showing sources ready for cited research." : "Showing the full collection, including sources not yet prepared for chat."} <button type="button" className="min-h-11 px-2 font-semibold text-[#8f1d2c] underline" onClick={() => updateFilter("researchReady", filters.researchReady === "true" ? "" : "true")}>{filters.researchReady === "true" ? "Show all sources" : "Show ready sources"}</button></p>
         {dataNote && (
           <p className="mt-3 rounded-xl border border-[#8f1d2c]/8 bg-white/55 px-3 py-2 text-[11px] leading-5 text-[#706a61]">
             {dataNote}
@@ -267,12 +262,12 @@ export function DocumentExplorer({
 
       <div>
         {loading ? (
-          <div className="grid min-h-[460px] place-items-center">
-            <Loader2 className="h-8 w-8 animate-spin text-[#8f1d2c]" />
+          <div className="grid min-h-[300px] place-items-center" role="status">
+            <span className="flex items-center gap-3 text-sm text-[#706a61]"><Loader2 className="h-5 w-5 animate-spin text-[#8f1d2c]" />Finding documents…</span>
           </div>
         ) : error ? (
-          <div className="grid min-h-[460px] place-items-center p-8 text-center">
-            <p className="text-sm text-[#85434a]">{error}</p>
+          <div className="grid min-h-[300px] place-items-center p-8 text-center">
+            <div><p role="alert" className="text-sm text-[#85434a]">{error}</p><button type="button" onClick={() => setRevision((value) => value + 1)} className="mt-4 min-h-11 rounded-lg border border-[#8f1d2c]/15 px-4 text-sm text-[#8f1d2c]">Try again</button></div>
           </div>
         ) : documents.length === 0 ? (
           <div className="min-h-[460px] p-8">
@@ -297,7 +292,7 @@ export function DocumentExplorer({
                         <p className="text-sm font-semibold text-[#29312d]">
                           {suggestion.title}
                         </p>
-                        <p className="mt-1 text-[11px] text-[#777066]">
+                        <p className="mt-1 text-[11px] text-[#706a61]">
                           {[humanize(suggestion.type), suggestion.suggestionReason]
                             .filter(Boolean)
                             .join(" · ")}
@@ -327,7 +322,7 @@ export function DocumentExplorer({
               return (
                 <article
                   key={document.id}
-                  className="grid gap-4 p-5 transition hover:bg-[#fbf8f2] md:grid-cols-[auto_minmax(0,1fr)_auto]"
+                  className="grid gap-3 py-5 transition hover:bg-[#f1ece3]/50 md:grid-cols-[auto_minmax(0,1fr)] xl:grid-cols-[auto_minmax(0,1fr)_auto]"
                 >
                   {sourceOnlyActions ? (
                     <div
@@ -376,16 +371,11 @@ export function DocumentExplorer({
                       >
                         {READINESS_LABELS[readiness] || "Available"}
                       </span>
-                      {document.comparisonReady && (
-                        <span className="rounded-full bg-[#e6e1f1] px-2 py-1 text-[9px] font-semibold text-[#554477]">
-                          Ready to compare
-                        </span>
-                      )}
                     </div>
                     <h3 className="mt-2 font-serif text-lg leading-6 text-[#29312d]">
                       {document.title}
                     </h3>
-                    <p className="mt-2 text-xs leading-5 text-[#777066]">
+                    <p className="mt-2 text-xs leading-5 text-[#706a61]">
                       {[
                         document.number,
                         document.ministry || document.authority,
@@ -398,7 +388,7 @@ export function DocumentExplorer({
                     </p>
                   </div>
                   <div className="flex flex-wrap items-start gap-2 md:justify-end">
-                    {!sourceOnlyActions && (
+                    {!sourceOnlyActions && canPrepareCompare && (
                       <button
                         type="button"
                         disabled={
@@ -516,7 +506,7 @@ export function DocumentExplorer({
         >
           Previous
         </button>
-        <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[#777066]">
+        <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[#706a61]">
           Page {pagination.page || page} of {pagination.totalPages || 1}
         </p>
         <button

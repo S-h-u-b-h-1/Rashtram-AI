@@ -328,7 +328,9 @@ class PDFProcessor {
       pages.push(pageText);
       return pageText;
     };
-    const pdfData = await pdf(buffer, { pagerender });
+    // Legacy PDF.js expects Uint8Array slicing semantics; Node Buffer.slice()
+    // returns a shared view and can corrupt its cross-reference parsing.
+    const pdfData = await pdf(new Uint8Array(buffer), { pagerender });
     return {
       fullText: pages.length ? pages.join("\f") : pdfData.text || "",
       pages,

@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { AnimatePresence, motion } from "framer-motion";
 import ActsUI from "@/components/Acts";
 import BillsListUI from "@/components/Bills";
-import { IntelligenceDashboard } from "@/components/intelligence/IntelligenceDashboard";
+import { NewResearch } from "@/components/workspace/NewResearch";
 import ProtectedRoute from "@/components/ProtectedRoute";
 import { WorkspaceShell } from "@/components/workspace/WorkspaceShell";
 import { DocumentExplorer } from "@/components/documents/DocumentExplorer";
@@ -49,9 +49,9 @@ function WorkspacePage() {
   const router = useRouter();
   const viewKey = searchParams.get("view");
   const selectedView = VIEWS[viewKey];
-  const ActiveContent = selectedView?.content || IntelligenceDashboard;
+  const ActiveContent = selectedView?.content || NewResearch;
   const activeKey = selectedView?.activeKey || "dashboard";
-  const title = selectedView?.title || "Research Desk";
+  const title = selectedView?.title || "New Research";
   const initialQuery = searchParams.get("q") || "";
   const demoMode = searchParams.get("demo") === "1";
 

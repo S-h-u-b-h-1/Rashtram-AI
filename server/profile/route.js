@@ -24,6 +24,16 @@ const {
 
 const router = express.Router();
 
+router.get("/research-history", fetchuser, async (req, res) => {
+  try {
+    const { getResearchHistory } = require("./researchHistoryService");
+    return res.json(await getResearchHistory(req.user.id));
+  } catch (error) {
+    console.error("Research history lookup failed:", error);
+    return res.status(500).json({ error: "We could not load your saved research. Try again." });
+  }
+});
+
 router.get("/", fetchuser, async (req, res) => {
   try {
     const profile = await getProfileData(req.user.id);

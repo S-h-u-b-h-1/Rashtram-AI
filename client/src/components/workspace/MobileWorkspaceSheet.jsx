@@ -5,6 +5,7 @@ import { useEffect, useRef } from "react";
 
 export function MobileWorkspaceSheet({ open, title, onClose, children }) {
   const closeButtonRef = useRef(null);
+  const dialogRef = useRef(null);
   const onCloseRef = useRef(onClose);
   useEffect(() => {
     onCloseRef.current = onClose;
@@ -15,6 +16,12 @@ export function MobileWorkspaceSheet({ open, title, onClose, children }) {
     closeButtonRef.current?.focus();
     const closeOnEscape = (event) => {
       if (event.key === "Escape") onCloseRef.current();
+      if (event.key === "Tab") {
+        const nodes = [...dialogRef.current.querySelectorAll('a[href], button:not([disabled]), input:not([disabled]), textarea:not([disabled]), select:not([disabled]), summary, [tabindex="0"]')].filter((node) => node.getClientRects().length);
+        const first = nodes[0], last = nodes.at(-1);
+        if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus(); }
+        else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus(); }
+      }
     };
     window.addEventListener("keydown", closeOnEscape);
     return () => {
@@ -33,6 +40,7 @@ export function MobileWorkspaceSheet({ open, title, onClose, children }) {
       }}
     >
       <section
+        ref={dialogRef}
         role="dialog"
         aria-modal="true"
         aria-label={title}

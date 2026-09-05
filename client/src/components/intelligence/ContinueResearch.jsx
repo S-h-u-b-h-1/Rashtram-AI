@@ -2,7 +2,8 @@
 
 import Link from "next/link";
 import { ArrowRight, BookOpenText } from "lucide-react";
-import { buildResearchHref, formatDate } from "@/lib/document-links";
+import { formatDate } from "@/lib/document-links";
+import { resumeChatHref } from "@/lib/research-workspace.mjs";
 import { trackActivity } from "@/lib/api";
 
 export function ContinueResearch({ chats }) {
@@ -31,7 +32,7 @@ export function ContinueResearch({ chats }) {
       ) : (
         <div className="mt-5 grid gap-3 md:grid-cols-2">
           {chats.slice(0, 6).map((chat) => {
-            const href = buildResearchHref(chat);
+            const href = resumeChatHref(chat);
             return (
               <Link
                 key={`${chat.documentType}-${chat.id}`}

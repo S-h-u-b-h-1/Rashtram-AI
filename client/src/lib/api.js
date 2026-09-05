@@ -387,6 +387,9 @@ export const retryResearchPdfSource = async (sourceId) =>
 export const getPolicyDrafts = async (limit = 20) =>
   apiRequest(`/policy-drafts?limit=${encodeURIComponent(limit)}`);
 
+export const getPolicyDraft = async (id) => apiRequest(`/policy-drafts/${encodeURIComponent(id)}`);
+export const getResearchHistory = async () => apiRequest("/profile/research-history");
+
 export const downloadPolicyDraftDocx = async (draftId) => {
   const token = getAuthToken();
   if (!token) throw new Error("No authentication token found. Please login.");
@@ -669,6 +672,8 @@ export const sendCrossDocumentChat = async (
     responseLanguage = "English",
     comparisonId = null,
     sourceIds = [],
+    historySourceIds = [],
+    workflow,
     signal,
   },
 ) => {
@@ -689,6 +694,8 @@ export const sendCrossDocumentChat = async (
       responseLanguage,
       comparisonId,
       sourceIds,
+      historySourceIds,
+      workflow: workflow ? { id: workflow.id, title: workflow.title } : undefined,
     }),
     signal,
   });
@@ -699,6 +706,7 @@ export const sendCrossDocumentChat = async (
   let fullResponse = "";
   let sources = [];
   let metadata = {};
+  let persisted = false;
   await consumeSSEStream(response, {
     signal,
     onEvent: (event) => {
@@ -707,25 +715,31 @@ export const sendCrossDocumentChat = async (
       } else if (event.type === "content") {
         fullResponse += event.content || "";
         onChunk?.(event.content || "");
+      } else if (event.type === "done") {
+        persisted = event.persisted === true;
       } else if (event.type === "error") {
         throw new Error(event.error || "Response generation failed.");
       }
     },
   });
+  if (!persisted) throw new Error("The response could not be confirmed as saved. Retry before leaving this workspace.");
+  clearApiCache();
   return { response: fullResponse, sources, metadata };
 };
 
-export const getCrossDocumentChatHistory = async (documentIds) =>
+export const getCrossDocumentChatHistory = async (documentIds, sourceIds = []) =>
   apiRequest(
     `/documents/chat/history?${toQueryString({
       ids: documentIds.join(","),
+      sources: sourceIds.join(","),
     })}`,
   );
 
-export const clearCrossDocumentChatHistory = async (documentIds) =>
+export const clearCrossDocumentChatHistory = async (documentIds, sourceIds = []) =>
   apiRequest(
     `/documents/chat/history?${toQueryString({
       ids: documentIds.join(","),
+      sources: sourceIds.join(","),
     })}`,
     { method: "DELETE" },
   );
