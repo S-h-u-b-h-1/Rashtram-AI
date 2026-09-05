@@ -7,6 +7,9 @@ import {
   RefreshCw,
 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { restoreSourceIds, selectedPersonalSources, sourceCount, uniqueIds, workspaceHref } from "@/lib/research-workspace.mjs";
+import { useRouter } from "next/navigation";
+import { CatalogueSourcePicker } from "@/components/workspace/CatalogueSourcePicker";
 import {
   addDocumentChatMessage,
   addDocumentNote,
@@ -64,17 +67,15 @@ const QUESTIONS = {
   ],
 };
 
-const timeLabel = () =>
-  new Date().toLocaleTimeString([], {
-    hour: "2-digit",
-    minute: "2-digit",
-  });
+const timeLabel = () => new Date().toISOString();
 
 export function DocumentChatLayout({
   documentType,
   documentId,
   initialDocument,
 }) {
+  const router = useRouter();
+  const [pickerOpen, setPickerOpen] = useState(false);
   const [document, setDocument] = useState(initialDocument || null);
   const [summary, setSummary] = useState("");
   const [messages, setMessages] = useState([]);
@@ -95,6 +96,7 @@ export function DocumentChatLayout({
   const [sourcesOpen, setSourcesOpen] = useState(true);
   const [studioOpen, setStudioOpen] = useState(true);
   const [mobilePanel, setMobilePanel] = useState(null);
+  const [loadRevision, setLoadRevision] = useState(0);
   const [conversationEpoch, setConversationEpoch] = useState(0);
   const abortControllerRef = useRef(null);
   const failedTurnRef = useRef(null);
@@ -200,9 +202,13 @@ export function DocumentChatLayout({
         const history = await getDocumentChatHistory(
           documentType,
           documentId,
-        ).catch(() => ({ chat: null, notes: [] }));
+        );
         if (cancelled) return;
         setNotes(history.notes || []);
+        const handoff = new URLSearchParams(window.location.search);
+        const restored = handoff.has("sources") ? uniqueIds(handoff.get("sources")) : restoreSourceIds(history.chat?.messages || [], sourceResponse.sources || []);
+        setSelectedSourceIds(selectedPersonalSources(sourceResponse.sources || [], restored).map((source) => String(source.id)));
+        if (handoff.get("q")) setInput(handoff.get("q").slice(0, 1600));
         setConversationEpoch(Number(history.chat?.conversationEpoch || 0));
         if (history.chat?.messages?.length) {
           setMessages(history.chat.messages);
@@ -261,7 +267,7 @@ export function DocumentChatLayout({
     return () => {
       cancelled = true;
     };
-  }, [documentId, documentType, initialDocument]);
+  }, [documentId, documentType, initialDocument, loadRevision]);
 
   useEffect(
     () => () => {
@@ -342,7 +348,7 @@ export function DocumentChatLayout({
         signal: controller.signal,
         onChunk: (chunk) => smoothStream.append(streamId, chunk),
       });
-      smoothStream.complete(streamId, result);
+      smoothStream.complete(streamId, { ...result, metadata: { ...result.metadata, sourceIds: selectedSourceIds, ...(workflow ? { workflowId: workflow.id, workflowTitle: workflow.title } : {}) } });
       failedTurnRef.current = null;
       if (Number.isSafeInteger(Number(result.metadata?.persistence?.conversationEpoch))) {
         setConversationEpoch(Number(result.metadata.persistence.conversationEpoch));
@@ -577,8 +583,9 @@ export function DocumentChatLayout({
         onExport={() => exportDocumentChat(documentType, documentId)}
       />
       {error && (
-        <p className="shrink-0 bg-[#f4dfdc] px-4 py-2 text-center text-xs text-[#85434a]">
+        <p role="alert" className="shrink-0 bg-[#f4dfdc] px-4 py-2 text-center text-xs text-[#85434a]">
           {error}
+          <button type="button" disabled={sending} onClick={() => setLoadRevision((value) => value + 1)} className="ml-2 min-h-11 px-2 underline">Reload workspace</button>
         </p>
       )}
       {processingError && (
@@ -598,10 +605,19 @@ export function DocumentChatLayout({
           )}
         </div>
       )}
-      <div className={`grid min-h-0 min-w-0 flex-1 ${sourcesOpen && studioOpen ? "lg:grid-cols-[280px_minmax(0,1fr)_340px]" : sourcesOpen ? "lg:grid-cols-[280px_minmax(0,1fr)]" : studioOpen ? "lg:grid-cols-[minmax(0,1fr)_340px]" : "lg:grid-cols-1"}`}>
-        {sourcesOpen && <aside className="hidden min-h-0 overflow-hidden border-r border-[#8f1d2c]/10 lg:block">
+      <div className="flex shrink-0 border-b border-[#8f1d2c]/10 bg-[#f8f6f1] lg:hidden" role="navigation" aria-label="Workspace panels">
+        <button type="button" onClick={() => setMobilePanel("sources")} className="min-h-11 flex-1 text-sm text-[#706a61]">Sources</button>
+        <button type="button" aria-pressed={!mobilePanel} onClick={() => setMobilePanel(null)} className="min-h-11 flex-1 border-b-2 border-[#8f1d2c] text-sm font-semibold text-[#8f1d2c]">Chat</button>
+        <button type="button" onClick={() => setMobilePanel("studio")} className="min-h-11 flex-1 text-sm text-[#706a61]">Studio</button>
+      </div>
+      <div className={`grid min-h-0 min-w-0 flex-1 ${sourcesOpen && studioOpen ? "lg:grid-cols-[minmax(230px,21%)_minmax(0,1fr)_minmax(250px,23%)]" : sourcesOpen ? "lg:grid-cols-[minmax(230px,23%)_minmax(0,1fr)]" : studioOpen ? "lg:grid-cols-[minmax(0,1fr)_minmax(250px,25%)]" : "lg:grid-cols-1"}`}>
+        {sourcesOpen && <aside aria-label="Research sources" className="hidden min-h-0 overflow-hidden border-r border-[#8f1d2c]/10 lg:block">
           <StudySourcesPanel
             sources={studySources}
+            catalogueSources={[{ ...document, researchReady }]}
+            onFindCatalogue={() => { setMobilePanel(null); setPickerOpen(true); }}
+            onRemoveCatalogue={() => router.push(workspaceHref({ sourceIds: selectedSourceIds, question: input }))}
+            disabled={sending}
             selectedIds={selectedSourceIds}
             onToggle={toggleStudySource}
             onAddUrl={addUrlSource}
@@ -615,22 +631,16 @@ export function DocumentChatLayout({
           <div className="flex shrink-0 items-center justify-between border-b border-[#8f1d2c]/8 bg-[#f7f2eb] px-4 py-3 sm:px-6">
             <div className="min-w-0">
               <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-[#874047]">Chat</p>
-              <p className="mt-1 hidden truncate text-xs text-[#706a61] sm:block">Ask questions across the selected sources and this document.</p>
+              <p className="mt-1 hidden truncate text-xs text-[#706a61] sm:block">Ask questions about your selected sources.</p>
             </div>
             <div className="ml-3 flex shrink-0 items-center gap-1.5">
-              <button type="button" onClick={() => setMobilePanel("sources")} className="grid h-10 w-10 place-items-center rounded-xl border border-[#8f1d2c]/12 bg-white text-[#874047] lg:hidden" aria-label="Open sources and study context">
-                <PanelLeftOpen className="h-4 w-4" />
-              </button>
-              <button type="button" onClick={() => setMobilePanel("studio")} className="grid h-10 w-10 place-items-center rounded-xl border border-[#8f1d2c]/12 bg-white text-[#874047] lg:hidden" aria-label="Open research tools">
-                <PanelRightOpen className="h-4 w-4" />
-              </button>
               {!sourcesOpen && <button type="button" onClick={() => setSourcesOpen(true)} className="hidden h-8 w-8 place-items-center rounded-lg border border-[#8f1d2c]/12 bg-white text-[#874047] transition hover:bg-[#eee0dc] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#8f1d2c]/30 lg:grid" aria-label="Expand sources" title="Expand sources">
                 <PanelLeftOpen className="h-4 w-4" />
               </button>}
               {!studioOpen && <button type="button" onClick={() => setStudioOpen(true)} className="hidden h-8 w-8 place-items-center rounded-lg border border-[#8f1d2c]/12 bg-white text-[#874047] transition hover:bg-[#eee0dc] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#8f1d2c]/30 lg:grid" aria-label="Expand research tools" title="Expand research tools">
                 <PanelRightOpen className="h-4 w-4" />
               </button>}
-              <span className="rounded-full border border-[#8f1d2c]/12 bg-white px-2.5 py-1 text-[10px] font-semibold text-[#874047]"><span className="sm:hidden">{selectedSourceIds.length + (researchReady ? 1 : 0)}</span><span className="hidden sm:inline">{selectedSourceIds.length + (researchReady ? 1 : 0)} sources in context</span></span>
+              <span className="text-xs font-medium text-[#706a61]">Sources · {sourceCount([{ ...document, researchReady }], studySources, selectedSourceIds)}</span>
             </div>
           </div>
           {!researchReady && !processing && (
@@ -660,7 +670,7 @@ export function DocumentChatLayout({
           <div
             ref={scrollContainerRef}
             onScroll={handleScroll}
-            className="paper-grid app-scrollbar flex-1 overflow-y-auto p-4 sm:p-6"
+            className="app-scrollbar min-h-0 flex-1 overflow-y-auto bg-[#f8f6f1] p-4 sm:p-6"
           >
             <ChatHistory
               messages={messages}
@@ -687,15 +697,18 @@ export function DocumentChatLayout({
             onResponseLanguageChange={setResponseLanguage}
           />
         </main>
-        {studioOpen && <aside className="hidden min-h-0 overflow-hidden border-l border-[#8f1d2c]/10 lg:block">
+        {studioOpen && <aside aria-label="Studio tools and saved outputs" className="hidden min-h-0 overflow-hidden border-l border-[#8f1d2c]/10 lg:block">
           <StudioPanel
             document={document}
+            selectedSourceIds={selectedSourceIds}
+            messages={messages}
+            onFindCatalogue={() => { setMobilePanel(null); setPickerOpen(true); }}
             summary={summary}
             notes={notes}
             onAddNote={addNote}
             onDeleteNote={removeNote}
-            disabled={sending || processing}
-            onRunWorkflow={runWorkflow}
+            disabled={sending || processing || !chatEnabled}
+            onRunWorkflow={(workflow) => { setMobilePanel(null); runWorkflow(workflow); }}
             onCollapse={() => setStudioOpen(false)}
           />
         </aside>}
@@ -708,6 +721,10 @@ export function DocumentChatLayout({
         {mobilePanel === "sources" ? (
                 <StudySourcesPanel
                   sources={studySources}
+                  catalogueSources={[{ ...document, researchReady }]}
+                  onFindCatalogue={() => { setMobilePanel(null); setPickerOpen(true); }}
+                  onRemoveCatalogue={() => router.push(workspaceHref({ sourceIds: selectedSourceIds, question: input }))}
+                  disabled={sending}
                   selectedIds={selectedSourceIds}
                   onToggle={toggleStudySource}
                   onAddUrl={addUrlSource}
@@ -718,15 +735,19 @@ export function DocumentChatLayout({
         ) : (
                 <StudioPanel
                   document={document}
+                  selectedSourceIds={selectedSourceIds}
+                  messages={messages}
+                  onFindCatalogue={() => { setMobilePanel(null); setPickerOpen(true); }}
                   summary={summary}
                   notes={notes}
                   onAddNote={addNote}
                   onDeleteNote={removeNote}
-                  disabled={sending || processing}
-                  onRunWorkflow={runWorkflow}
+                  disabled={sending || processing || !chatEnabled}
+                  onRunWorkflow={(workflow) => { setMobilePanel(null); runWorkflow(workflow); }}
                 />
         )}
       </MobileWorkspaceSheet>
+      <CatalogueSourcePicker open={pickerOpen} onOpenChange={setPickerOpen} documents={[{ ...document, researchReady }]} onConfirm={(next) => router.push(workspaceHref({ documentIds: next.map((item) => item.id), sourceIds: selectedSourceIds, question: input }))} />
     </div>
   );
 }

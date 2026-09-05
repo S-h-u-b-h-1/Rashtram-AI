@@ -25,7 +25,6 @@ import {
 import { useComparison } from "@/context/ComparisonContext";
 import { comparisonActionState } from "@/lib/comparison-regeneration.mjs";
 import { RecommendationSection } from "@/components/recommendations/RecommendationSection";
-import { MultiDocumentChat } from "@/components/documents/MultiDocumentChat";
 
 const SECTION_CONFIG = [
   ["similarities", "Similarities"],
@@ -117,12 +116,10 @@ export function DocumentComparison() {
   const [loading, setLoading] = useState(Boolean(comparisonId));
   const [regenerating, setRegenerating] = useState(false);
   const [error, setError] = useState("");
-  const [chatDraft, setChatDraft] = useState(null);
   const [reportLoading, setReportLoading] = useState(false);
   const [reportError, setReportError] = useState("");
   const initialRequest = useRef("");
   const regenerationInFlight = useRef(false);
-  const chatSectionRef = useRef(null);
 
   const readinessKey = ids.join(",");
   const selectionReadinessList = useMemo(
@@ -381,14 +378,10 @@ export function DocumentComparison() {
   }`;
   const hasEmbeddedChat = Boolean(result && chatDocumentIds.length >= 2);
   const focusEmbeddedChat = () => {
-    chatSectionRef.current?.scrollIntoView({
-      behavior: "smooth",
-      block: "start",
-    });
+    router.push(chatHref);
   };
   const queueSuggestedQuestion = (question) => {
-    setChatDraft({ id: Date.now(), text: question });
-    window.requestAnimationFrame(focusEmbeddedChat);
+    router.push(`${chatHref}&q=${encodeURIComponent(question)}`);
   };
   const createReport = async () => {
     if (reportLoading || !chatDocumentIds.length) return;
@@ -417,7 +410,7 @@ export function DocumentComparison() {
             Add documents from any catalogue, search result, or research page.
           </p>
           <Link
-            href="/app?view=bills"
+            href="/app/library"
             className="mt-5 inline-flex rounded-xl bg-[#8f1d2c] px-4 py-2.5 text-xs font-semibold text-white"
           >
             Browse documents
@@ -619,7 +612,7 @@ export function DocumentComparison() {
                 >
                   <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-[#8f1d2c]">D{index + 1}</p>
                   <p className="mt-1 text-sm font-semibold text-[#29312d]">{document.title}</p>
-                  <p className="mt-2 text-[10px] uppercase tracking-[0.1em] text-[#81796e]">
+                  <p className="mt-2 text-[10px] uppercase tracking-[0.1em] text-[#706a61]">
                     {[document.type, document.ministry || document.authority,
                       document.state || document.jurisdiction,
                       document.year]
@@ -670,7 +663,7 @@ export function DocumentComparison() {
               )}
             </div>
             {!(result.relationshipIntelligence?.relationships || []).length && (
-              <p className="mt-3 text-sm text-[#81796e]">
+              <p className="mt-3 text-sm text-[#706a61]">
                 No direct verified relationship is stored between these
                 documents.
               </p>
@@ -683,7 +676,7 @@ export function DocumentComparison() {
                 ["Shared topics", "sharedTopics"],
               ].filter(([, key]) => result.relationshipIntelligence?.[key]?.length).map(([label, key]) => (
                 <div key={key} className="rounded-xl bg-[#fffaf0] p-3">
-                  <dt className="text-[9px] uppercase tracking-[0.1em] text-[#81796e]">
+                  <dt className="text-[9px] uppercase tracking-[0.1em] text-[#706a61]">
                     {label}
                   </dt>
                   <dd className="mt-1 text-xs text-[#514d46]">
@@ -737,7 +730,7 @@ export function DocumentComparison() {
                       <p className="mt-1 text-xs font-semibold text-[#29312d]">
                         {citation.documentTitle}
                       </p>
-                      <p className="mt-1 text-[10px] text-[#81796e]">
+                      <p className="mt-1 text-[10px] text-[#706a61]">
                         {[
                           citation.resourceType === "html" ? "PolicyEdge webpage" : null,
                           citation.sectionPath?.length
@@ -792,7 +785,7 @@ export function DocumentComparison() {
           )}
 
           {hasEmbeddedChat && (
-            <section ref={chatSectionRef} className="scroll-mt-24">
+            <section className="scroll-mt-24">
               <div className="mb-3 rounded-2xl border border-[#8f1d2c]/8 bg-[#fffaf0] p-5 shadow-sm sm:p-6">
                 <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-[#874047]">
                   Comparison chat
@@ -805,11 +798,7 @@ export function DocumentComparison() {
                   tied to the documents used in this comparison.
                 </p>
               </div>
-              <MultiDocumentChat
-                documentIds={chatDocumentIds}
-                comparisonId={comparison?.id || comparisonId}
-                draftQuestion={chatDraft}
-              />
+              <Link href={chatHref} className="inline-flex min-h-11 items-center rounded-xl bg-[#8f1d2c] px-4 text-sm text-white">Continue research with these sources</Link>
             </section>
           )}
 

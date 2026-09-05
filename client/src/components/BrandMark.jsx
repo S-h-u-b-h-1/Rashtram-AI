@@ -27,7 +27,7 @@ export function BrandMark({
       >
         <Image
           src="/rashtram-ai-shield.png"
-          alt="Rashtram AI"
+          alt=""
           width={32}
           height={32}
           sizes="32px"
@@ -42,7 +42,7 @@ export function BrandMark({
             inverse ? "text-white" : "text-[#8f1d2c]",
           )}
         >
-          Rashtram <span className="font-normal opacity-60">AI</span>
+          Rashtram <span className="font-normal">AI</span>
         </span>
       )}
     </Link>

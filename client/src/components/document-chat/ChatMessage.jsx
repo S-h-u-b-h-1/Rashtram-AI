@@ -12,6 +12,7 @@ import { memo, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { CitationCard } from "./CitationCard";
+import { formatMessageTime } from "@/lib/research-workspace.mjs";
 
 function ChatMessageComponent({ message, onDownloadPdf, onFeedback }) {
   const [copied, setCopied] = useState(false);
@@ -44,10 +45,11 @@ function ChatMessageComponent({ message, onDownloadPdf, onFeedback }) {
 
   return (
     <article
+      id={message._id || message.id ? `research-message-${message._id || message.id}` : undefined}
       className={
         isUser
-          ? "ml-auto max-w-[88%] rounded-2xl rounded-br-md bg-[#8f1d2c] px-5 py-4 text-white sm:max-w-[78%]"
-          : "max-w-[94%] rounded-2xl rounded-bl-md border border-[#8f1d2c]/8 bg-[#f6f2eb] px-5 py-4 text-[#29312d] shadow-sm sm:max-w-[86%]"
+          ? "ml-auto max-w-[92%] rounded-2xl bg-[#eee0dc] px-4 py-3 text-[#29312d] sm:max-w-[80%]"
+          : "w-full min-w-0 max-w-full px-1 py-5 text-[#29312d] sm:px-2"
       }
     >
       <div
@@ -59,7 +61,7 @@ function ChatMessageComponent({ message, onDownloadPdf, onFeedback }) {
           <p
             className={`mb-2 inline-flex rounded-full px-2 py-1 text-[10px] font-semibold ${
               isUser
-                ? "bg-white/15 text-white/80"
+                ? "bg-white/60 text-[#8f1d2c]"
                 : "bg-[#eee0dc] text-[#8f1d2c]"
             }`}
           >
@@ -89,11 +91,11 @@ function ChatMessageComponent({ message, onDownloadPdf, onFeedback }) {
         />
       )}
       {!isUser && message.sources?.length > 0 && (
-        <details className="mt-4 border-t border-[#8f1d2c]/8 pt-3">
+        <details open className="mt-4 border-t border-[#8f1d2c]/8 pt-3">
           <summary className="cursor-pointer text-[10px] font-semibold uppercase tracking-[0.12em] text-[#874047]">
             {message.sources.length} cited passages
           </summary>
-          <div className="mt-3 grid gap-2 sm:grid-cols-2">
+          <div className="mt-3 flex flex-wrap gap-2">
             {message.sources.map((source, index) => (
               <CitationCard
                 key={`${source.chunkIndex}-${source.passage}-${index}`}
@@ -106,16 +108,16 @@ function ChatMessageComponent({ message, onDownloadPdf, onFeedback }) {
       )}
       <footer
         className={`mt-3 flex items-center gap-2 text-[10px] ${
-          isUser ? "text-white/55" : "text-[#8a8277]"
+          isUser ? "text-[#625b53]" : "text-[#706a61]"
         }`}
       >
-        <span>{message.timestamp}</span>
+        <span>{formatMessageTime(message.timestamp)}</span>
         {!message.isStreaming && (
           <button
             type="button"
             onClick={copy}
             aria-label="Copy response"
-            className="ml-auto rounded-md p-1 hover:bg-black/5"
+            className="ml-auto grid h-11 w-11 place-items-center rounded-md hover:bg-black/5"
           >
             {copied ? (
               <Check className="h-3.5 w-3.5" />
@@ -148,7 +150,7 @@ function ChatMessageComponent({ message, onDownloadPdf, onFeedback }) {
               type="button"
               onClick={() => onFeedback(message, 1).catch(() => {})}
               aria-label="Helpful response"
-              className="rounded-md p-1 hover:bg-black/5"
+              className="grid h-11 w-11 place-items-center rounded-md hover:bg-black/5"
             >
               <ThumbsUp className="h-3.5 w-3.5" />
             </button>
@@ -156,7 +158,7 @@ function ChatMessageComponent({ message, onDownloadPdf, onFeedback }) {
               type="button"
               onClick={() => onFeedback(message, -1).catch(() => {})}
               aria-label="Unhelpful response"
-              className="rounded-md p-1 hover:bg-black/5"
+              className="grid h-11 w-11 place-items-center rounded-md hover:bg-black/5"
             >
               <ThumbsDown className="h-3.5 w-3.5" />
             </button>

@@ -3,7 +3,7 @@
 import { Suspense, useMemo } from "react";
 import { useSearchParams } from "next/navigation";
 import ProtectedRoute from "@/components/ProtectedRoute";
-import { WorkspaceShell } from "@/components/workspace/WorkspaceShell";
+import { uniqueIds } from "@/lib/research-workspace.mjs";
 import { MultiDocumentChat } from "@/components/documents/MultiDocumentChat";
 
 function MultiDocumentChatPageContent() {
@@ -21,16 +21,15 @@ function MultiDocumentChatPageContent() {
     [searchParams],
   );
   const comparisonId = searchParams.get("comparison");
+  const sourceIds = useMemo(() => uniqueIds(searchParams.get("sources")), [searchParams]);
   return (
-    <WorkspaceShell
-      activeKey="documents"
-      title="Cross-document Research"
-    >
       <MultiDocumentChat
+        key={`${documentIds.join(',')}|${sourceIds.join(',')}`}
         documentIds={documentIds}
         comparisonId={comparisonId}
+        initialSourceIds={sourceIds}
+        draftQuestion={{ text: searchParams.get("q") || "" }}
       />
-    </WorkspaceShell>
   );
 }
 

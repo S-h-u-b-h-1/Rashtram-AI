@@ -3,166 +3,53 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import {
-  ArrowLeft,
-  Bookmark,
-  Download,
-  ExternalLink,
-  FileDown,
-  Pin,
-  GitCompareArrows,
-  Loader2,
-  MoreHorizontal,
-} from "lucide-react";
+import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
+import { ArrowLeft, ExternalLink, MoreHorizontal } from "lucide-react";
 import { CollectionMenu } from "./CollectionMenu";
-import {
-  comparisonDisabledReason,
-  canPrepareForResearch,
-  comparisonHrefForDocuments,
-  useComparison,
-} from "@/context/ComparisonContext";
-import {
-  isSourceOnlyResearchDocument,
-  shouldShowPdfAction,
-} from "@/lib/document-readiness";
+import { comparisonDisabledReason, canPrepareForResearch, comparisonHrefForDocuments, useComparison } from "@/context/ComparisonContext";
+import { isSourceOnlyResearchDocument, shouldShowPdfAction } from "@/lib/document-readiness";
 
-export function ChatHeader({
-  document,
-  isPinned,
-  onPin,
-  onBookmark,
-  onExport,
-}) {
+const itemClass = "flex min-h-11 cursor-pointer items-center rounded-lg px-3 text-sm outline-none focus:bg-[#eee0dc] data-[disabled]:cursor-not-allowed data-[disabled]:opacity-45";
+
+export function ChatHeader({ document, isPinned, onPin, onBookmark, onExport }) {
   const router = useRouter();
   const { addDocument, prepareAndAddDocument, removeDocument, isSelected } = useComparison();
-  const [preparingCompare, setPreparingCompare] = useState(false);
+  const [preparing, setPreparing] = useState(false);
+  const [error, setError] = useState('');
   const selected = isSelected(document.id);
   const compareDisabled = comparisonDisabledReason(document);
-  const canPrepareCompare = canPrepareForResearch(document);
-  const sourceOnlyActions = isSourceOnlyResearchDocument(document);
-  return (
-    <header className="flex shrink-0 items-center justify-between gap-3 border-b border-white/8 bg-[#8f1d2c] px-4 py-3 text-white sm:px-6">
+  const canPrepare = canPrepareForResearch(document);
+  const compare = async () => {
+    if (selected) { removeDocument(document.id); return; }
+    setPreparing(true); setError('');
+    try {
+      const result = canPrepare ? await prepareAndAddDocument(document) : addDocument(document);
+      if (!result.ok) { setError(result.reason || 'This source is not ready for comparison.'); return; }
+      const href = comparisonHrefForDocuments(result.documents);
+      if (href) router.push(href);
+    } catch (failure) { setError(failure.message || 'Could not add this source. Try again.'); }
+    finally { setPreparing(false); }
+  };
+  return <>
+    <header className="flex shrink-0 items-center justify-between gap-3 border-b border-white/10 bg-[#8f1d2c] px-3 py-2 text-white sm:px-6">
       <div className="flex min-w-0 items-center gap-3">
-        <Link
-          href="/app"
-          className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-white/8 text-white/70 hover:text-white"
-          aria-label="Back to research workspace"
-        >
-          <ArrowLeft className="h-4 w-4" />
-        </Link>
-        <div className="min-w-0">
-          <p className="truncate text-sm font-semibold">{document.title}</p>
-          <p className="mt-1 truncate text-[10px] uppercase tracking-[0.12em] text-white/45">
-            {document.documentType} research workspace
-          </p>
-        </div>
+        <Link href="/app" aria-label="Back to New Research" className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-white/10 text-white hover:bg-white/15"><ArrowLeft className="h-4 w-4" /></Link>
+        <div className="min-w-0"><h1 className="truncate text-sm font-semibold" title={document.title}>{document.title}</h1><p className="mt-1 truncate text-xs text-white/80">{document.documentType || document.type} · Research workspace</p></div>
       </div>
-      <div className="relative flex shrink-0 gap-1.5">
-        {!sourceOnlyActions && (
-          <button
-            type="button"
-            disabled={
-              (Boolean(compareDisabled) && !canPrepareCompare) ||
-              preparingCompare
-            }
-            title={compareDisabled || undefined}
-            onClick={async () => {
-              if (selected) {
-                removeDocument(document.id);
-                return;
-              }
-              setPreparingCompare(true);
-              try {
-                const result = canPrepareCompare
-                  ? await prepareAndAddDocument(document)
-                  : addDocument(document);
-                const href = result.ok
-                  ? comparisonHrefForDocuments(result.documents)
-                  : null;
-                if (href) router.push(href);
-              } finally {
-                setPreparingCompare(false);
-              }
-            }}
-            className="grid h-9 w-9 place-items-center rounded-xl bg-white/8 text-white/70 hover:text-white disabled:cursor-not-allowed disabled:opacity-35"
-            aria-label={
-              selected
-                ? "Remove document from comparison"
-                : "Add document to comparison"
-            }
-          >
-            {preparingCompare ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <GitCompareArrows className="h-4 w-4" />
-            )}
-          </button>
-        )}
-        <div className="hidden items-center gap-1.5 sm:flex">
-        {shouldShowPdfAction(document) && (
-          <a
-            href={document.pdfUrl}
-            target="_blank"
-            rel="noreferrer"
-            className="grid h-9 w-9 place-items-center rounded-xl bg-white/8 text-white/70 hover:text-white"
-            aria-label="Open official PDF"
-          >
-            <FileDown className="h-4 w-4" />
-          </a>
-        )}
-        {document.sourceUrl && (
-          <a
-            href={document.sourceUrl}
-            target="_blank"
-            rel="noreferrer"
-            className="inline-flex h-9 items-center gap-1.5 rounded-xl bg-white/8 px-3 text-[10px] font-semibold text-white/75 hover:text-white"
-            aria-label="Open source page"
-          >
-            Source
-            <ExternalLink className="h-3.5 w-3.5" />
-          </a>
-        )}
-        <button
-          type="button"
-          onClick={onBookmark}
-          className="grid h-9 w-9 place-items-center rounded-xl bg-white/8 text-white/70 hover:text-white"
-          aria-label="Bookmark document"
-        >
-          <Bookmark className="h-4 w-4" />
-        </button>
+      <div className="flex shrink-0 items-center gap-1">
+        {document.sourceUrl && <a href={document.sourceUrl} target="_blank" rel="noreferrer" aria-label="Open source page" className="hidden min-h-11 items-center gap-2 rounded-xl px-3 text-xs text-white hover:bg-white/10 sm:inline-flex">Source<ExternalLink className="h-4 w-4" /></a>}
         <CollectionMenu document={document} />
-        <button
-          type="button"
-          onClick={onPin}
-          className={`grid h-9 w-9 place-items-center rounded-xl ${
-            isPinned ? "bg-[#c1a06f] text-[#5a1320]" : "bg-white/8 text-white/70"
-          }`}
-          aria-label={isPinned ? "Unpin chat" : "Pin chat"}
-        >
-          <Pin className="h-4 w-4" />
-        </button>
-        <button
-          type="button"
-          onClick={onExport}
-          className="grid h-9 w-9 place-items-center rounded-xl bg-white/8 text-white/70 hover:text-white"
-          aria-label="Export conversation"
-        >
-          <Download className="h-4 w-4" />
-        </button>
-        </div>
-        <details className="group relative sm:hidden">
-          <summary className="grid h-11 w-11 cursor-pointer list-none place-items-center rounded-xl bg-white/8 text-white/75 [&::-webkit-details-marker]:hidden" aria-label="More document actions">
-            <MoreHorizontal className="h-5 w-5" />
-          </summary>
-          <div className="absolute right-0 top-12 z-50 grid w-52 gap-1 rounded-2xl border border-[#8f1d2c]/10 bg-[#fffaf0] p-2 text-[#29312d] shadow-2xl">
-            {shouldShowPdfAction(document) && <a href={document.pdfUrl} target="_blank" rel="noreferrer" className="rounded-xl px-3 py-2.5 text-xs font-semibold">Open official PDF</a>}
-            {document.sourceUrl && <a href={document.sourceUrl} target="_blank" rel="noreferrer" className="rounded-xl px-3 py-2.5 text-xs font-semibold">Open source page</a>}
-            <button type="button" onClick={onBookmark} className="rounded-xl px-3 py-2.5 text-left text-xs font-semibold">Bookmark document</button>
-            <button type="button" onClick={onPin} className="rounded-xl px-3 py-2.5 text-left text-xs font-semibold">{isPinned ? "Unpin chat" : "Pin chat"}</button>
-            <button type="button" onClick={onExport} className="rounded-xl px-3 py-2.5 text-left text-xs font-semibold">Export conversation</button>
-          </div>
-        </details>
+        <DropdownMenu.Root><DropdownMenu.Trigger aria-label="More document actions" className="grid h-11 w-11 place-items-center rounded-xl bg-white/10 text-white hover:bg-white/15"><MoreHorizontal className="h-5 w-5" /></DropdownMenu.Trigger><DropdownMenu.Portal><DropdownMenu.Content align="end" sideOffset={8} className="z-[90] w-64 max-w-[calc(100vw-24px)] rounded-xl border border-[#8f1d2c]/15 bg-[#f8f6f1] p-2 text-[#29312d] shadow-xl">
+          {shouldShowPdfAction(document) && <DropdownMenu.Item asChild><a href={document.pdfUrl} target="_blank" rel="noreferrer" className={itemClass}>Open official PDF</a></DropdownMenu.Item>}
+          {document.sourceUrl && <DropdownMenu.Item asChild><a href={document.sourceUrl} target="_blank" rel="noreferrer" className={itemClass}>Open source page</a></DropdownMenu.Item>}
+          {!isSourceOnlyResearchDocument(document) && <DropdownMenu.Item disabled={preparing || (Boolean(compareDisabled) && !canPrepare)} onSelect={compare} className={itemClass}>{preparing ? 'Preparing comparison…' : selected ? 'Remove from comparison' : 'Add to comparison'}</DropdownMenu.Item>}
+          <DropdownMenu.Item onSelect={onBookmark} className={itemClass}>Bookmark document</DropdownMenu.Item>
+          <DropdownMenu.Item onSelect={onPin} className={itemClass}>{isPinned ? 'Unpin chat' : 'Pin chat'}</DropdownMenu.Item>
+          <DropdownMenu.Item onSelect={onExport} className={itemClass}>Export conversation</DropdownMenu.Item>
+          <DropdownMenu.Item asChild><Link href="/app/research" className={itemClass}>My Research</Link></DropdownMenu.Item>
+        </DropdownMenu.Content></DropdownMenu.Portal></DropdownMenu.Root>
       </div>
     </header>
-  );
+    {error && <p role="alert" className="shrink-0 bg-[#f4e4e0] px-4 py-2 text-xs text-[#85434a]">{error}</p>}
+  </>;
 }

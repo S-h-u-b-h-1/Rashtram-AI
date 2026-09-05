@@ -60,6 +60,7 @@ const {
 } = require("./temporalLegalService");
 
 const router = express.Router();
+const { normalizeSourceIds, researchSelectionKey: selectionKey } = require("./researchSelection");
 
 const normalizeChatIds = (value) => [
   ...new Set(
@@ -68,11 +69,6 @@ const normalizeChatIds = (value) => [
       .filter(Boolean),
   ),
 ].slice(0, 5);
-
-const selectionKey = (ids) =>
-  [...ids].sort((left, right) =>
-    left.localeCompare(right, undefined, { numeric: true }),
-  ).join(":");
 
 const compactText = (value, maxLength = 1_000) =>
   String(value || "")
@@ -181,13 +177,14 @@ router.post("/recommend-for-comparison", async (req, res) => {
 router.get("/chat/history", async (req, res) => {
   try {
     const ids = normalizeChatIds(req.query.ids);
-    if (ids.length < 2) return res.json({ messages: [] });
+    const historySourceIds = normalizeSourceIds(req.query.sources);
+    if (!ids.length && !historySourceIds.length) return res.json({ messages: [] });
     const result = await query(
       `SELECT messages, comparison_id, updated_at
        FROM multi_document_chats
        WHERE user_id = $1 AND selection_key = $2
        LIMIT 1`,
-      [req.user.id, selectionKey(ids)],
+      [req.user.id, selectionKey(ids, historySourceIds)],
     );
     const row = result.rows[0];
     return res.json({
@@ -203,13 +200,14 @@ router.get("/chat/history", async (req, res) => {
 router.delete("/chat/history", async (req, res) => {
   try {
     const ids = normalizeChatIds(req.query.ids);
-    if (ids.length < 2) {
-      return res.status(400).json({ error: "At least two IDs are required." });
+    const historySourceIds = normalizeSourceIds(req.query.sources);
+    if (!ids.length && !historySourceIds.length) {
+      return res.status(400).json({ error: "Select a document or personal source." });
     }
     await query(
       `DELETE FROM multi_document_chats
        WHERE user_id = $1 AND selection_key = $2`,
-      [req.user.id, selectionKey(ids)],
+      [req.user.id, selectionKey(ids, historySourceIds)],
     );
     return res.json({ success: true });
   } catch (error) {
@@ -325,18 +323,18 @@ router.post("/chat", generationLimiter, async (req, res) => {
   try {
     const ids = normalizeChatIds(req.body.documentIds);
     const message = String(req.body.message || "").trim();
-    const sourceIds = Array.isArray(req.body.sourceIds)
-      ? req.body.sourceIds.slice(0, 20)
-      : [];
-    if (!ids.length || !message) {
+    const sourceIds = normalizeSourceIds(req.body.sourceIds);
+    const explicitHistorySources = normalizeSourceIds(req.body.historySourceIds);
+    const historySourceIds = explicitHistorySources.length ? explicitHistorySources : sourceIds;
+    if ((!ids.length && !sourceIds.length) || !message) {
       return res.status(400).json({
-        error: "A message and one to five document IDs are required.",
+        error: "A message and at least one selected document or personal source are required.",
       });
     }
     const documents = (
       await Promise.all(ids.map((id) => DocumentRepository.getById(id)))
     ).filter(Boolean);
-    if (!documents.length) {
+    if (ids.length && documents.length !== ids.length) {
       return res.status(404).json({ error: "Documents not found." });
     }
     const answerIntent = classifyAnswerIntent(message, {
@@ -348,7 +346,7 @@ router.post("/chat", generationLimiter, async (req, res) => {
     const historyPromise = query(
       `SELECT messages FROM multi_document_chats
         WHERE user_id = $1 AND selection_key = $2 LIMIT 1`,
-      [req.user.id, selectionKey(ids)],
+      [req.user.id, selectionKey(ids, historySourceIds)],
     ).catch(() => ({ rows: [] }));
     const passagesPerDocument = Math.max(
       2,
@@ -476,7 +474,7 @@ router.post("/chat", generationLimiter, async (req, res) => {
     ];
     const sufficiency = flags.evidenceSufficiency ? assessEvidenceSufficiency(message, verificationEvidence, {
       queryType: plan.queryType,
-      retrievalVerified: passageGroups.some(({ passages }) => passages.length > 0),
+      retrievalVerified: passageGroups.some(({ passages }) => passages.length > 0) || userSourceContext.chunks > 0,
       minimumEvidence: Math.max(2, documents.length),
     }) : {
       level: SUFFICIENCY_LEVELS.MEDIUM, decision: "SUFFICIENT", signals: {},
@@ -486,7 +484,7 @@ router.post("/chat", generationLimiter, async (req, res) => {
     const currentVerification = freshnessRequired
       ? {
           required: true,
-          status: passageGroups.every((group) =>
+          status: passageGroups.length > 0 && passageGroups.every((group) =>
             group.currentVerification.status === "VERIFIED_CURRENT")
             ? "VERIFIED_CURRENT"
             : passageGroups.some((group) =>
@@ -496,10 +494,12 @@ router.post("/chat", generationLimiter, async (req, res) => {
           checkedAt: new Date().toISOString(),
           checkedThrough: passageGroups.map((group) => group.currentVerification.checkedThrough)
             .filter(Boolean).sort().at(-1) || null,
-          connectorStatus: passageGroups.some((group) =>
-            ["degraded", "error", "stale", "not_checked"].includes(group.currentVerification.connectorStatus))
-            ? "degraded"
-            : "fresh",
+          connectorStatus: !passageGroups.length
+            ? "not_checked"
+            : passageGroups.some((group) =>
+              ["degraded", "error", "stale", "not_checked"].includes(group.currentVerification.connectorStatus))
+              ? "degraded"
+              : "fresh",
           documents: passageGroups.map((group) => ({
             documentId: group.document.id,
             status: group.currentVerification.status,
@@ -674,6 +674,9 @@ router.post("/chat", generationLimiter, async (req, res) => {
         metadata: {
           grounded: true,
           documentIds: ids,
+          sourceIds,
+          historySourceIds,
+          ...(req.body.workflow?.title ? { workflowTitle: String(req.body.workflow.title).slice(0, 160), workflowId: String(req.body.workflow.id || '').slice(0, 80) } : {}),
           responseLanguage,
           generationMode,
           providerError,
@@ -709,7 +712,7 @@ router.post("/chat", generationLimiter, async (req, res) => {
          updated_at = NOW()`,
       [
         req.user.id,
-        selectionKey(ids),
+        selectionKey(ids, historySourceIds),
         JSON.stringify(ids),
         String(req.body.comparisonId || ""),
         JSON.stringify(persistedMessages),
