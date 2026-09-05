@@ -34,7 +34,7 @@ test("chat composer is safe-area aware and remains pinned on phone", async () =>
   ]);
   assert.match(input, /sticky bottom-0/);
   assert.match(input, /safe-area-inset-bottom/);
-  assert.match(input, /min-h-9/);
+  assert.match(input, /min-h-11/);
   assert.match(input, /min-w-0 max-w-full/);
   assert.match(layout, /id="research-chat" className="flex min-h-0 min-w-0 w-full flex-col"/);
   assert.match(questions, /min-w-0 max-w-full/);
