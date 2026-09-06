@@ -5,13 +5,11 @@ import { ArrowRight, FileText, Link2, Loader2, Search, Upload, X } from "lucide-
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
-import { addResearchPdfSource, addResearchUrlSource, deleteResearchSource, fetchDocuments, getResearchSources, retryResearchPdfSource } from "@/lib/api";
-import { isResearchReady } from "@/lib/document-readiness";
+import { addResearchPdfSource, addResearchUrlSource, deleteResearchSource, fetchDocuments, getResearchSources, prepareResearchCandidates, retryResearchPdfSource } from "@/lib/api";
+import { canPrepareDocumentForResearch, isResearchReady } from "@/lib/document-readiness";
 import { formatDate, humanize } from "@/lib/document-links";
 import { selectedPersonalSources, workspaceHref } from "@/lib/research-workspace.mjs";
 import { StudySourcesPanel } from "@/components/document-chat/StudySourcesPanel";
-import { RecentResearch } from "./RecentResearch";
-import { useRecentResearch } from "@/hooks/useRecentResearch";
 
 const EXAMPLES = [
   "What are the current RBI requirements for digital lending?",
@@ -23,7 +21,6 @@ const EXAMPLES = [
 export function NewResearch() {
   const router = useRouter();
   const { user } = useAuth();
-  const { items: recent, loading: recentLoading } = useRecentResearch(4);
   const [question, setQuestion] = useState("");
   const [searchedQuestion, setSearchedQuestion] = useState("");
   const [documents, setDocuments] = useState([]);
@@ -32,6 +29,8 @@ export function NewResearch() {
   const [sourceIds, setSourceIds] = useState([]);
   const [showSources, setShowSources] = useState(false);
   const [finding, setFinding] = useState(false);
+  const [preparingIds, setPreparingIds] = useState(() => new Set());
+  const [discoveryMs, setDiscoveryMs] = useState(null);
   const [error, setError] = useState("");
   const [sourceError, setSourceError] = useState("");
   const requestRef = useRef(null);
@@ -51,10 +50,29 @@ export function NewResearch() {
     requestRef.current?.abort();
     const controller = new AbortController();
     requestRef.current = controller;
-    setFinding(true); setError(""); setDocuments([]); setSelected([]); setSearchedQuestion(query);
+    const startedAt = typeof performance !== "undefined" ? performance.now() : Date.now();
+    setFinding(true); setError(""); setDocuments([]); setSelected([]); setSearchedQuestion(query); setDiscoveryMs(null); setPreparingIds(new Set());
     try {
-      const result = await fetchDocuments({ search: query, semantic: true, researchReady: true, sortBy: "relevance", limit: 12, signal: controller.signal });
-      if (!controller.signal.aborted) setDocuments((result.documents || []).filter(isResearchReady));
+      const result = await fetchDocuments({ search: query, semantic: true, sortBy: "relevance", limit: 20, signal: controller.signal });
+      if (!controller.signal.aborted) {
+        const found = result.documents || [];
+        setDocuments(found);
+        setDiscoveryMs(Math.round((typeof performance !== "undefined" ? performance.now() : Date.now()) - startedAt));
+        const justInTime = found
+          .filter((document) => !isResearchReady(document) && canPrepareDocumentForResearch(document))
+          .slice(0, 3)
+          .map((document) => String(document.id));
+        if (justInTime.length) {
+          setPreparingIds(new Set(justInTime));
+          prepareResearchCandidates(justInTime)
+            .then((prepared) => {
+              if (controller.signal.aborted) return;
+              const queued = new Set((prepared.candidates || []).filter((item) => item.status === "preparing").map((item) => String(item.documentId)));
+              setPreparingIds(queued);
+            })
+            .catch(() => { if (!controller.signal.aborted) setPreparingIds(new Set()); });
+        }
+      }
     } catch (failure) {
       if (!controller.signal.aborted) setError(failure.message || "We could not find sources. Try again or search the Library.");
     } finally { if (!controller.signal.aborted) setFinding(false); }
@@ -85,6 +103,10 @@ export function NewResearch() {
     </form>
     <p className="mt-3 text-center text-xs text-[#706a61]">Choose your sources before Rashtram answers. Your research stays private to your account.</p>
     {error && <p role="alert" className="mt-4 rounded-lg bg-[#f4e4e0] p-3 text-sm text-[#85434a]">{error}</p>}
+    <div className="mt-4 grid gap-2 sm:grid-cols-2" aria-label="Quick research actions">
+      <Link href="/app/policy-drafter" className="group rounded-xl border border-[#8f1d2c]/12 bg-white px-4 py-3 text-left transition hover:border-[#8f1d2c]/30 hover:bg-[#fffaf0]"><span className="block text-sm font-semibold text-[#8f1d2c]">Draft a policy <ArrowRight className="ml-1 inline h-3.5 w-3.5 transition group-hover:translate-x-0.5" /></span><span className="mt-1 block text-xs text-[#706a61]">Turn selected evidence into a policy draft.</span></Link>
+      <Link href="/app/compare" className="group rounded-xl border border-[#8f1d2c]/12 bg-white px-4 py-3 text-left transition hover:border-[#8f1d2c]/30 hover:bg-[#fffaf0]"><span className="block text-sm font-semibold text-[#8f1d2c]">Compare documents <ArrowRight className="ml-1 inline h-3.5 w-3.5 transition group-hover:translate-x-0.5" /></span><span className="mt-1 block text-xs text-[#706a61]">Compare two or more research-ready sources.</span></Link>
+    </div>
     {showSources && <section className="mt-5 overflow-hidden rounded-xl border border-[#8f1d2c]/15">
       <div className="flex items-center justify-between px-4 py-2"><h3 className="text-sm font-semibold">Add your sources</h3><button type="button" onClick={() => setShowSources(false)} className="grid h-11 w-11 place-items-center" aria-label="Close source picker"><X className="h-4 w-4" /></button></div>
       {sourceError && <p role="alert" className="px-4 text-sm text-[#85434a]">{sourceError}</p>}
@@ -95,12 +117,13 @@ export function NewResearch() {
     </section>}
     {finding && <p role="status" className="py-8 text-center text-sm text-[#706a61]">Finding relevant sources…</p>}
     {searchedQuestion && !finding && !error && <section className="mt-7" aria-label="Choose research sources">
-      <div className="flex flex-wrap items-baseline justify-between gap-2"><h3 className="text-base font-semibold">{documents.length ? `${documents.length} sources to review` : "No ready sources found for this question"}</h3><p className="text-xs text-[#706a61]">Select up to 5 Library documents</p></div>
+      <div className="flex flex-wrap items-baseline justify-between gap-2"><h3 className="text-base font-semibold">{documents.length ? `${documents.length} catalogue matches` : "No catalogue sources found for this question"}</h3><p className="text-xs text-[#706a61]">Select up to 5 ready sources · {discoveryMs != null ? `found in ${(discoveryMs / 1000).toFixed(1)}s` : ""}</p></div>
       {!documents.length && <p className="mt-3 text-sm leading-6 text-[#706a61]">Try the instrument name or a shorter topic. You can also add a PDF or link, or <Link className="text-[#8f1d2c] underline" href={`/app/library?q=${encodeURIComponent(searchedQuestion)}`}>browse Library</Link>. No answer has been generated.</p>}
-      <div className="mt-3 divide-y divide-[#8f1d2c]/10">{documents.map((document) => { const checked = selected.includes(String(document.id)); return <article key={document.id} className={`py-4 ${checked ? "bg-[#f1ece3]" : ""}`}>
-        <label className="flex cursor-pointer items-start gap-3 rounded-lg px-3"><input type="checkbox" className="mt-1 h-5 w-5 shrink-0 accent-[#8f1d2c]" checked={checked} disabled={!checked && selected.length >= 5} onChange={() => toggleDocument(document.id)} />
+      {documents.length > 0 && <p className="mt-2 text-xs leading-5 text-[#706a61]">Catalogue matches include sources that still need preparation. They are never treated as evidence until ready.</p>}
+      <div className="mt-3 divide-y divide-[#8f1d2c]/10">{documents.map((document) => { const checked = selected.includes(String(document.id)); const ready = isResearchReady(document); const preparing = preparingIds.has(String(document.id)) || ["processing_pending", "queued", "processing"].includes(document.readinessClass); return <article key={document.id} className={`py-4 ${checked ? "bg-[#f1ece3]" : ""}`}>
+        <label className={`flex items-start gap-3 rounded-lg px-3 ${ready ? "cursor-pointer" : "cursor-default"}`}><input type="checkbox" className="mt-1 h-5 w-5 shrink-0 accent-[#8f1d2c]" checked={checked} disabled={!ready || (!checked && selected.length >= 5)} onChange={() => toggleDocument(document.id)} />
           <span className="min-w-0"><span className="block text-sm font-semibold leading-6">{document.title}</span><span className="mt-1 block text-xs leading-5 text-[#706a61]">{[humanize(document.type || document.documentType), document.authority || document.ministry, document.jurisdiction || document.state, formatDate(document.publicationDate, document.year || "Date unavailable")].filter(Boolean).join(" · ")}</span>
-          <span className="mt-2 block text-xs leading-5 text-[#706a61]">{document.relevanceExplanation || document.matchExplanation || "Matched by Library search. Review the source before including it."}</span><span className="mt-2 block text-xs font-medium text-[#34725b]">Ready to research</span></span>
+          <span className="mt-2 block text-xs leading-5 text-[#706a61]">{document.relevanceExplanation || document.matchExplanation || "Discovered from the full catalogue. Review the source before including it."}</span><span className={`mt-2 block text-xs font-medium ${ready ? "text-[#34725b]" : preparing ? "text-[#a06a22]" : "text-[#81796e]"}`}>{ready ? "Ready to research" : preparing ? "Preparing for research" : document.hasAccessibleResource ? "Source available · needs processing" : "Metadata only · needs preparation"}</span></span>
         </label>
         <div className="pl-11 pt-1">{(document.sourceUrl || document.pdfUrl) && <a href={document.sourceUrl || document.pdfUrl} target="_blank" rel="noreferrer" className="inline-flex min-h-11 items-center gap-1 text-xs text-[#8f1d2c]"><FileText className="h-3.5 w-3.5" />Preview source</a>}</div>
       </article>; })}</div>
@@ -109,7 +132,6 @@ export function NewResearch() {
       <p className="text-sm">{count} {count === 1 ? "source" : "sources"} selected</p>
       <button type="button" onClick={() => router.push(workspaceHref({ documentIds: selected, sourceIds: readySourceIds, question }))} className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-[#8f1d2c] px-4 text-sm font-semibold text-white">Start research with these sources<ArrowRight className="h-4 w-4" /></button>
     </div>}
-    {!searchedQuestion && !showSources && !recentLoading && !recent.length && <section aria-label="Example research questions" className="mt-8 grid gap-2 sm:grid-cols-2">{EXAMPLES.map((example) => <button key={example} type="button" onClick={() => { setQuestion(example); document.getElementById("research-question")?.focus(); }} className="rounded-xl px-4 py-3 text-left text-xs leading-5 text-[#706a61] transition hover:bg-[#f1ece3]">{example}<ArrowRight className="ml-2 inline h-3 w-3 text-[#8f1d2c]" /></button>)}</section>}
-    {!searchedQuestion && <RecentResearch />}
+    {!searchedQuestion && !showSources && <section aria-label="Example research questions" className="mt-8 grid gap-2 sm:grid-cols-2">{EXAMPLES.map((example) => <button key={example} type="button" onClick={() => { setQuestion(example); document.getElementById("research-question")?.focus(); }} className="rounded-xl px-4 py-3 text-left text-xs leading-5 text-[#706a61] transition hover:bg-[#f1ece3]">{example}<ArrowRight className="ml-2 inline h-3 w-3 text-[#8f1d2c]" /></button>)}</section>}
   </div>;
 }

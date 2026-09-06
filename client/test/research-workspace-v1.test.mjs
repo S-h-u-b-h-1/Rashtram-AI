@@ -27,7 +27,10 @@ test('welcome timestamp is an ISO date; server generation still owns turns', asy
 });
 test('question-first discovery never directly generates an answer', async () => {
   const home = await read('components/workspace/NewResearch.jsx');
-  assert.match(home, /researchReady: true/); assert.match(home, /Start research with these sources/);
+  assert.doesNotMatch(home, /researchReady:\s*true/);
+  assert.match(home, /limit: 20/);
+  assert.match(home, /Start research with these sources/);
+  assert.match(home, /never treated as evidence until ready/);
   assert.doesNotMatch(home, /sendDocumentChatMessage|sendCrossDocumentChat|generateResponse/);
 });
 test('Studio keeps summary collapsed and contextual tools accessible', async () => {

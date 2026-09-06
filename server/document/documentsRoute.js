@@ -33,6 +33,7 @@ const {
   deleteComparison,
   getComparison,
   regenerateComparison,
+  comparisonAsMarkdown,
 } = require("./documentComparisonService");
 const {
   getComparisonRecommendations,
@@ -44,6 +45,7 @@ const {
   prepareDocument,
 } = require("./readinessService");
 const { getDocumentReadiness } = require("./readinessContract");
+const { createResearchBriefPdf, safeFilePart } = require("./reportPdfService");
 const { sendError } = require("../lib/httpResponse");
 const { applyResearchFlags, resolveResearchFlags } = require("../retrieval/featureFlags");
 const { recordResearchTelemetry } = require("../retrieval/researchTelemetry");
@@ -304,6 +306,34 @@ router.get("/compare/:comparisonId", async (req, res) => {
     });
   } catch (error) {
     return sendError(res, error, "Document comparison lookup failed");
+  }
+});
+
+router.get("/compare/:comparisonId/pdf", async (req, res) => {
+  try {
+    const comparison = await getComparison(req.user.id, req.params.comparisonId);
+    if (!comparison) return res.status(404).json({ error: "Comparison not found." });
+    const result = comparison.result || {};
+    const pdf = await createResearchBriefPdf({
+      title: comparison.title || "Document comparison",
+      documentType: "Validated comparative analysis",
+      reportText: comparisonAsMarkdown(comparison),
+      sources: (result.citations || []).map((citation) => ({
+        documentTitle: citation.documentTitle,
+        page: citation.page ?? citation.pageStart,
+        section: citation.sectionTitle || citation.sectionId,
+        content: citation.snippet || citation.content,
+        sourceUrl: citation.canonicalSourceUrl || citation.sourceUrl || citation.pdfUrl,
+      })),
+      generatedAt: comparison.createdAt,
+    });
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader("Content-Length", String(pdf.length));
+    res.setHeader("Cache-Control", "private, no-store");
+    res.setHeader("Content-Disposition", `attachment; filename="rashtram-${safeFilePart(comparison.title || "comparison")}.pdf"`);
+    return res.send(pdf);
+  } catch (error) {
+    return sendError(res, error, "Comparison PDF export failed");
   }
 });
 
@@ -790,6 +820,33 @@ router.post("/:id/prepare", generationLimiter, async (req, res) => {
     });
   } catch (error) {
     return sendError(res, error, "Document preparation failed");
+  }
+});
+
+router.post("/prepare-candidates", generationLimiter, async (req, res) => {
+  try {
+    const documentIds = [...new Set((Array.isArray(req.body?.documentIds) ? req.body.documentIds : [])
+      .map((id) => String(id || "").trim()).filter((id) => /^\d+$/.test(id)))].slice(0, 5);
+    if (!documentIds.length) return res.status(400).json({ error: "Select at least one catalogue document." });
+    const candidates = await Promise.all(documentIds.map(async (documentId) => {
+      const readiness = await getDocumentReadiness(documentId);
+      if (!readiness) return { documentId, status: "unavailable", reason: "Document not found." };
+      if (readiness.researchReady || readiness.comparisonReady) {
+        return { documentId, status: "ready", readiness: readiness.readinessClass };
+      }
+      if (!readiness.canPrepare) {
+        return { documentId, status: "unavailable", reason: readiness.reason || readiness.readinessReason || "Preparation is not available for this source." };
+      }
+      const job = await enqueueProcessing(documentId, req.user.id, {
+        priority: 95,
+        reason: "just_in_time_discovery",
+        maxAttempts: 2,
+      });
+      return { documentId, status: "preparing", jobId: job?.id || null, readiness: readiness.readinessClass };
+    }));
+    return res.json({ candidates, queued: candidates.filter((item) => item.status === "preparing").length });
+  } catch (error) {
+    return sendError(res, error, "Just-in-time document preparation failed");
   }
 });
 

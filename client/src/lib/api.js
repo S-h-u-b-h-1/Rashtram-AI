@@ -551,6 +551,12 @@ export const prepareDocumentForComparison = async (documentId) =>
     method: "POST",
   });
 
+export const prepareResearchCandidates = async (documentIds) =>
+  apiRequest("/documents/prepare-candidates", {
+    method: "POST",
+    body: JSON.stringify({ documentIds: [...new Set((documentIds || []).map(String))].slice(0, 5) }),
+  });
+
 export const getRecentRecommendations = async (limit = 12) => {
   return apiRequest(
     `/profile/recommendations?limit=${encodeURIComponent(limit)}`,
@@ -611,6 +617,12 @@ export const downloadResearchReportPdf = (id) =>
   downloadAuthenticatedFile(
     `/product-intelligence/reports/${encodeURIComponent(id)}/pdf`,
     `rashtram-research-report-${id}.pdf`,
+  );
+
+export const downloadComparisonPdf = (id) =>
+  downloadAuthenticatedFile(
+    `/documents/compare/${encodeURIComponent(id)}/pdf`,
+    `rashtram-comparison-${id}.pdf`,
   );
 
 export const getMyCommercialPilotMetrics = async () =>
