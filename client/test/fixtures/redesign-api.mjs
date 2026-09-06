@@ -1,6 +1,17 @@
 // Local visual/interaction fixture only; never imported by the application.
 // Does not contact a database, model, object store, or production API.
 import http from 'node:http';
+import {createRequire} from 'node:module';
+const require = createRequire(import.meta.url);
+const ministryMatrix = require('../../../server/config/ministry-onboarding.json');
+const sourceHealth = [
+  {key:'ministry',label:'Government ministry directory',status:'No data',onboardingEntries:ministryMatrix.entries},
+  {key:'regulator-rbi',label:'Reserve Bank of India',status:'Degraded',errorSummary:'Synthetic fixture: latest listing could not be validated'},
+  {key:'egazette',label:'eGazette',status:'Blocked',errorSummary:'Synthetic fixture: TLS_CERTIFICATE_FAILURE'},
+  {key:'research-takshashila',label:'Takshashila Institution',publisherGroup:'think-tank',onboardingStatus:'pilot',sourceUrl:'https://takshashila.org.in/pages/publications/'},
+  {key:'research-university-iima',label:'Indian Institute of Management Ahmedabad',publisherGroup:'academic',onboardingStatus:'pilot'},
+  {key:'union-budget',label:'Union Budget',status:'Not checked'},
+].map((source)=>({purpose:'Local interface test fixture — not live collection data',lastAttempt:'2026-09-06T10:00:00Z',lastSuccess:null,lastDocumentSeen:'2026-08-27',lastRunNewRecords:0,lastRunUpdatedRecords:3,latestRunStatus:'completed_with_errors',errorCount:1,...source}));
 const date = '2026-09-05T10:00:00.000Z';
 const documents = [
   { id: '101', title: 'Digital Personal Data Protection Act, 2023', type: 'act', authority: 'Ministry of Electronics and Information Technology', jurisdiction: 'India', year: 2023 },
@@ -69,6 +80,6 @@ http.createServer(async (req, res) => {
   if (path === '/product-intelligence/watchlists') return json(res, { watchlists: [] });
   if (path === '/product-intelligence/alerts') return json(res, { alerts: [] });
   if (path === '/recommendations/problem') return json(res, { recommendations: documents });
-  if (path === '/dashboard/intelligence') return json(res, { sourceHealth: [], platformCoverage: {} });
+  if (path === '/dashboard/intelligence') return json(res, { sourceHealth, platformCoverage: {} });
   return json(res, { success: true });
 }).listen(5081, '127.0.0.1', () => console.log('Local-only redesign fixture API: http://localhost:5081/api'));

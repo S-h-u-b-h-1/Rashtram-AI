@@ -16,6 +16,8 @@ const {
 } = require("../document/recommendationService");
 const { sourcePolicyFor } = require("../lib/ingestion/core/sourcePolicy");
 const { canonicalSourceName } = require("../lib/ingestion/core/sourceIdentity");
+const { acceptanceFor, isScheduleAccepted } = require('../lib/ingestion/core/sourceAcceptance');
+const ministryOnboarding = require('../config/ministry-onboarding.json');
 const {
   EXTERNALLY_BLOCKED_FAILURES,
   classifyConnectorState,
@@ -31,6 +33,10 @@ let overviewCache = {
 };
 
 const SOURCE_REGISTRY = [
+  ...require('../lib/ingestion/connectors/researchExpansionConnectors').definitions.map((source) => ({
+    key: source.name, label: source.authority, purpose: source.collection,
+    publisherGroup: source.group, onboardingStatus: 'pilot', sourceUrl: source.url,
+  })),
   {
     key: "prs-india",
     label: "PRS Legislative Research",
@@ -64,7 +70,7 @@ const SOURCE_REGISTRY = [
   {
     key: "ministry",
     label: "Ministries & Departments",
-    purpose: "Policies, schemes, guidelines and consultations",
+    purpose: "Ministry and department directory entries (not document collection)",
   },
   {
     key: "ministry-environment",
@@ -301,6 +307,7 @@ const getSourceHealth = async () => {
         started_at,
         completed_at,
         counters_json,
+        records_discovered,
         errors_json
       FROM ingestion_runs
       ORDER BY source_name, started_at DESC
@@ -401,21 +408,26 @@ const getSourceHealth = async () => {
     const freshnessStatus = classifyConnectorState({
       sourceName: source.key,
       liveStatus,
-      lastSuccess: health.last_successful_run_at || latestRun?.completed_at,
+      lastSuccess: health.last_successful_run_at || (latestRun?.status === 'completed' ? latestRun.completed_at : null),
       lastAttempt: health.last_checked_at || latestRun?.started_at,
       failureClass,
       externalBlock,
-      sampleRecordsDiscovered: Number(latestRun?.counters_json?.discovered || 0),
+      sampleRecordsDiscovered: Number(latestRun?.records_discovered ?? latestRun?.counters_json?.discovered ?? 0),
       storedSourceRecords: documentCount,
       enabled: health.enabled !== false,
       ingestionFrequency: health.ingestion_frequency,
+      listingQualityAccepted: health.metadata_json?.listingQualityAccepted === true,
+      checkedWindow: health.metadata_json?.checkedWindow === true,
     });
     return {
       ...source,
+      acceptance: acceptanceFor(source.key),
+      scheduled: isScheduleAccepted(source.key) && require('../lib/ingestion/schedules').DAILY_SOURCES.concat(require('../lib/ingestion/schedules').WEEKLY_SOURCES).includes(source.key),
+      onboardingEntries: source.key === 'ministry' ? ministryOnboarding.entries : undefined,
       status: publicConnectorStatus(freshnessStatus),
       freshnessStatus,
       failureClass,
-      errorSummary: health.last_error || null,
+      errorSummary: health.last_error || (Array.isArray(latestRun?.errors_json) ? latestRun.errors_json.at(-1)?.message : null) || null,
       sourceLabel: policy.publicLabel,
       authorityClass: policy.authorityClass,
       priority: policy.priority,
@@ -424,7 +436,7 @@ const getSourceHealth = async () => {
       expectedCadenceHours: policy.cadenceHours,
       documentCount,
       lastAttempt: toIso(health.last_checked_at || latestRun?.started_at),
-      lastSuccess: toIso(health.last_successful_run_at),
+      lastSuccess: toIso(health.last_successful_run_at || (latestRun?.status === 'completed' ? latestRun.completed_at : null)),
       lastDocumentSeen: toIso(count.last_document_seen),
       lastChangeSeen: toIso(count.last_change_seen),
       freshnessAgeHours: hoursSince(health.last_successful_run_at),
@@ -434,6 +446,8 @@ const getSourceHealth = async () => {
         latestRun?.completed_at || latestSnapshot?.collected_at ||
         latestSnapshot?.fetched_at),
       latestRunStatus: latestRun?.status || null,
+      lastRunNewRecords: latestRun?.counters_json ? Number(latestRun.counters_json.inserted || 0) : null,
+      lastRunUpdatedRecords: latestRun?.counters_json ? Number(latestRun.counters_json.updated || 0) : null,
       latestCollection: latestRun?.collection_name || null,
       latestSnapshotUrl: latestSnapshot?.source_url || null,
       errorCount: Array.isArray(latestRun?.errors_json)

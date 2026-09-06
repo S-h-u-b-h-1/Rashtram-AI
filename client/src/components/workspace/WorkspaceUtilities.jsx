@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { getDashboardIntelligence, getProfile } from "@/lib/api";
 import { AccountSettings } from "@/components/profile/AccountSettings";
 import { ProfileSupportForms } from "@/components/profile/ProfileSupportForms";
-import { SourceHealthPanel } from "@/components/intelligence/SourceHealthPanel";
+import { SourceCatalogue as SourceHealthPanel } from "@/components/intelligence/SourceCatalogue";
 import { PlatformCoverageOverview } from "@/components/intelligence/PlatformCoverageOverview";
 import { useAuth } from "@/context/AuthContext";
 
