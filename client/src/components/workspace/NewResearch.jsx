@@ -5,7 +5,7 @@ import { ArrowRight, FileText, Link2, Loader2, Search, Upload, X } from "lucide-
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
-import { addResearchPdfSource, addResearchUrlSource, deleteResearchSource, fetchDocuments, getResearchSources, prepareResearchCandidates, recommendForProblem, retryResearchPdfSource } from "@/lib/api";
+import { addResearchPdfSource, addResearchUrlSource, deleteResearchSource, fetchDocuments, getDocumentReadiness, getResearchSources, prepareResearchCandidates, recommendForProblem, retryResearchPdfSource } from "@/lib/api";
 import { canPrepareDocumentForResearch, isResearchReady } from "@/lib/document-readiness";
 import { formatDate, humanize } from "@/lib/document-links";
 import { selectedPersonalSources, workspaceHref } from "@/lib/research-workspace.mjs";
@@ -38,6 +38,21 @@ export function NewResearch() {
   const [sourceError, setSourceError] = useState("");
   const requestRef = useRef(null);
   const owner = user?.id || user?._id;
+
+  const refreshPreparedCandidates = async (ids, controller, attempt = 0) => {
+    if (controller.signal.aborted || !ids.length || attempt > 4) return;
+    try {
+      const readiness = await Promise.all(ids.map((id) => getDocumentReadiness(id)));
+      if (controller.signal.aborted) return;
+      setDocuments((current) => current.map((document) => {
+        const updated = readiness.find((item) => String(item?.id || item?.documentId) === String(document.id));
+        return updated ? { ...document, ...updated, capabilities: updated.capabilities || document.capabilities } : document;
+      }));
+      const pending = readiness.filter((item) => item && !item.researchReady && item.canPrepare !== false).map((item) => String(item.documentId || item.id));
+      setPreparingIds(new Set(pending));
+      if (pending.length && attempt < 4) setTimeout(() => refreshPreparedCandidates(pending, controller, attempt + 1), 2_500);
+    } catch { /* The initial discovery result remains visible if a readiness refresh is unavailable. */ }
+  };
 
   useEffect(() => {
     let active = true;
@@ -78,6 +93,7 @@ export function NewResearch() {
               if (controller.signal.aborted) return;
               const queued = new Set((prepared.candidates || []).filter((item) => item.status === "preparing").map((item) => String(item.documentId)));
               setPreparingIds(queued);
+              if (queued.size) refreshPreparedCandidates([...queued], controller);
             })
             .catch(() => { if (!controller.signal.aborted) setPreparingIds(new Set()); });
         }
