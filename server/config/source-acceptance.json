@@ -3,7 +3,7 @@
   "reviewedAt": "2026-09-06",
   "pilots": {
     "union-budget": {"decision":"MANUAL_ONLY","reason":"Edition-scoped discovery implemented; metadata-only pending reproduction permission. Table semantics and production readiness remain unverified.","cadence":null},
-    "cag-reports": {"decision":"NEEDS_MORE_WORK","reason":"Three listing pages checked; known dates sorted within the bounded window and undated reports retain UNKNOWN. Three partial-quality PDFs inspected. Production duplicate canary and three-report catch-up passed; research readiness and live UI acceptance remain in progress.","cadence":null},
+    "cag-reports": {"decision":"NEEDS_MORE_WORK","reason":"Three-page discovery, canonical identity, three-report production catch-up, verified lexical readiness and authenticated Coverage UI passed. Live Nagaland chat still conflates the 0.07 crore penal-interest amount with current-year ULB grant transfer and adds unsupported implications; grounded-answer quality gate failed. No schedule activation pending table/footnote-aware evidence verification.","cadence":null,"evidenceReport":"docs/SOURCE_ACCEPTANCE_WAVE1B_2026-09-06.md"},
     "ministry-home-circulars": {"decision":"MANUAL_ONLY","reason":"Bounded observed-link pagination and recent/older windows checked. Metadata-only pending reproduction permission; scanned PDF OCR/citation quality is not accepted.","cadence":null},
     "ministry-home-notifications": {"decision":"NEEDS_MORE_WORK","reason":"Notification date semantics, recent-window coverage and PDF quality require validation.","cadence":null},
     "ministry-education-notices": {"decision":"NEEDS_MORE_WORK","reason":"Configured listing yields no known downloadable publication.","cadence":null},

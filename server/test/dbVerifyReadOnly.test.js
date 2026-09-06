@@ -2,6 +2,14 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const { verifyDatabase, checks } = require('../cli/dbVerify');
 
+test('research readiness accepts verified lexical retrieval without semantic backfill', () => {
+  const sql = checks.find(check => check.name === 'strict research-ready invariant').sql;
+  assert.match(sql, /embedding_status IN \('fallback', 'deferred'\)/);
+  assert.match(sql, /retrieval_mode IN \('local_text', 'fts', 'hybrid'\)/);
+  assert.match(sql, /NOT ps.retrieval_verified/);
+  assert.match(sql, /ps.chunks_count <= 0/);
+});
+
 test('database verification is transaction-enforced read-only without quality refresh or initialization', async () => {
   const calls = [];
   const result = await verifyDatabase({ queryFn: async (sql) => { calls.push(sql); return { rows: [{ passed: true }] }; } });

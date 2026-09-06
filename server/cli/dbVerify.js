@@ -77,8 +77,8 @@ const checks = [
               AND ps.embeddings_count >= ps.chunks_count
             )
             OR (
-              ps.embedding_status = 'fallback'
-              AND ps.retrieval_mode IN ('local_text', 'hybrid')
+              ps.embedding_status IN ('fallback', 'deferred')
+              AND ps.retrieval_mode IN ('local_text', 'fts', 'hybrid')
             )
           )
           OR ps.chunks_count <= 0

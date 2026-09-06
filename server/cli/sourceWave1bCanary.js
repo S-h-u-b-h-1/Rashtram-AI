@@ -23,7 +23,7 @@ async function ingest(ids){
 }
 async function main(){
   assert.ok(process.argv.includes('--apply'),'Requires explicit --apply');
-  assert.ok(['duplicate','catchup','prepare'].includes(phase),'Unknown canary phase');
+  assert.ok(['duplicate','catchup','prepare','refresh'].includes(phase),'Unknown canary phase');
   assert.equal(new URL(process.env.DATABASE_URL).hostname,'ep-holy-dew-ahu5clty-pooler.c-3.us-east-1.aws.neon.tech','Wrong database target');
   const before=await sourceRows();assert.ok(before.length<=3,'Unexpected CAG population; re-audit before running');
   for(const row of before)assert.ok(allowedIds.includes(row.metadata_json.publisherId),'Unexpected CAG identity');
@@ -37,6 +37,12 @@ async function main(){
     const proof=JSON.parse(fs.readFileSync('/tmp/rashtram-wave1b-duplicate.json'));
     assert.equal(proof.passed,true);assert.equal(before.length,1);
     output.runs.push(await ingest(allowedIds));assert.equal(output.runs[0].status,'completed');
+    assert.equal((await sourceRows()).length,3);
+  }else if(phase==='refresh'){
+    assert.equal(before.length,3);
+    output.runs.push(await ingest(allowedIds));
+    assert.equal(output.runs[0].status,'completed');
+    assert.equal(output.runs[0].counters.inserted,0,'Refresh must not expand the canary');
     assert.equal((await sourceRows()).length,3);
   }else{
     assert.equal(before.length,3);
