@@ -6,7 +6,8 @@ decision: **PARTIAL**. Release E was not started.
 ## 1–3. Scope, branch and fixes
 
 The pass ran on `codex/bcd-final-closure` from the latest intended integration
-state. Product commits are `ac4dba7` and `092e7b8`. The changes are limited to
+state. Product commits are `ac4dba7` and `092e7b8`; the tested integration
+revision promoted to `main` is `89a553b`. The changes are limited to
 problem interpretation/ranking, canonical readiness truth, vector-deletion
 safety, implicit temporal claims, comparison conflict/output validation, and
 chat completeness. No corpus bulk processing, broad embedding, vector deletion,
@@ -118,7 +119,7 @@ were verification abstentions. p50 total response time was 550 ms; maximum was
   path. Their owned chats/comparisons/sessions were removed transactionally; no
   uploads were created and no public catalogue row was touched. No credentials
   were persisted.
-- Backend deployment `dpl_7r9RG1GDTopDwsskBgf5tD4tttN9` is Ready and attached
+- Backend deployment `dpl_9rmah81LFmJ6Ad48SMkzn2pXsaXt` is Ready and attached
   to `rashtram-ai-backend.vercel.app`. Backend and unchanged frontend aliases
   both returned HTTP 200. Live health reported PostgreSQL connected and Gemini
   generation, embeddings and streaming available.
