@@ -563,10 +563,11 @@ export const getRecentRecommendations = async (limit = 12) => {
   );
 };
 
-export const recommendForProblem = async (payload) => {
+export const recommendForProblem = async (payload, { signal } = {}) => {
   return apiRequest("/recommendations/problem", {
     method: "POST",
     body: JSON.stringify(payload),
+    signal,
   });
 };
 

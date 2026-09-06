@@ -31,6 +31,9 @@ test('question-first discovery never directly generates an answer', async () => 
   assert.match(home, /limit: 20/);
   assert.match(home, /Start research with these sources/);
   assert.match(home, /never treated as evidence until ready/);
+  assert.match(home, /Understanding your research/);
+  assert.match(home, /Topics that matter/);
+  assert.match(home, /Recommended sources/);
   assert.doesNotMatch(home, /sendDocumentChatMessage|sendCrossDocumentChat|generateResponse/);
 });
 test('Studio keeps summary collapsed and contextual tools accessible', async () => {

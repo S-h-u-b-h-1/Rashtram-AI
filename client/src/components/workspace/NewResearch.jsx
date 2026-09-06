@@ -5,7 +5,7 @@ import { ArrowRight, FileText, Link2, Loader2, Search, Upload, X } from "lucide-
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
-import { addResearchPdfSource, addResearchUrlSource, deleteResearchSource, fetchDocuments, getResearchSources, prepareResearchCandidates, retryResearchPdfSource } from "@/lib/api";
+import { addResearchPdfSource, addResearchUrlSource, deleteResearchSource, fetchDocuments, getResearchSources, prepareResearchCandidates, recommendForProblem, retryResearchPdfSource } from "@/lib/api";
 import { canPrepareDocumentForResearch, isResearchReady } from "@/lib/document-readiness";
 import { formatDate, humanize } from "@/lib/document-links";
 import { selectedPersonalSources, workspaceHref } from "@/lib/research-workspace.mjs";
@@ -31,6 +31,9 @@ export function NewResearch() {
   const [finding, setFinding] = useState(false);
   const [preparingIds, setPreparingIds] = useState(() => new Set());
   const [discoveryMs, setDiscoveryMs] = useState(null);
+  const [problemUnderstanding, setProblemUnderstanding] = useState(null);
+  const [researchPlan, setResearchPlan] = useState([]);
+  const [recommendedSources, setRecommendedSources] = useState([]);
   const [error, setError] = useState("");
   const [sourceError, setSourceError] = useState("");
   const requestRef = useRef(null);
@@ -51,12 +54,18 @@ export function NewResearch() {
     const controller = new AbortController();
     requestRef.current = controller;
     const startedAt = typeof performance !== "undefined" ? performance.now() : Date.now();
-    setFinding(true); setError(""); setDocuments([]); setSelected([]); setSearchedQuestion(query); setDiscoveryMs(null); setPreparingIds(new Set());
+    setFinding(true); setError(""); setDocuments([]); setSelected([]); setSearchedQuestion(query); setDiscoveryMs(null); setPreparingIds(new Set()); setProblemUnderstanding(null); setResearchPlan([]); setRecommendedSources([]);
     try {
-      const result = await fetchDocuments({ search: query, semantic: true, sortBy: "relevance", limit: 20, signal: controller.signal });
+      const [result, intelligence] = await Promise.all([
+        fetchDocuments({ search: query, semantic: true, sortBy: "relevance", limit: 20, signal: controller.signal }),
+        query.length >= 12 ? recommendForProblem({ problem: query, limit: 20 }, { signal: controller.signal }).catch(() => null) : Promise.resolve(null),
+      ]);
       if (!controller.signal.aborted) {
         const found = result.documents || [];
         setDocuments(found);
+        setProblemUnderstanding(intelligence?.problemUnderstanding || null);
+        setResearchPlan(intelligence?.researchPlan || []);
+        setRecommendedSources([...(intelligence?.recommendations || []), ...(intelligence?.preparationCandidates || [])].slice(0, 6));
         setDiscoveryMs(Math.round((typeof performance !== "undefined" ? performance.now() : Date.now()) - startedAt));
         const justInTime = found
           .filter((document) => !isResearchReady(document) && canPrepareDocumentForResearch(document))
@@ -107,6 +116,11 @@ export function NewResearch() {
       <Link href="/app/policy-drafter" className="group rounded-xl border border-[#8f1d2c]/12 bg-white px-4 py-3 text-left transition hover:border-[#8f1d2c]/30 hover:bg-[#fffaf0]"><span className="block text-sm font-semibold text-[#8f1d2c]">Draft a policy <ArrowRight className="ml-1 inline h-3.5 w-3.5 transition group-hover:translate-x-0.5" /></span><span className="mt-1 block text-xs text-[#706a61]">Turn selected evidence into a policy draft.</span></Link>
       <Link href="/app/compare" className="group rounded-xl border border-[#8f1d2c]/12 bg-white px-4 py-3 text-left transition hover:border-[#8f1d2c]/30 hover:bg-[#fffaf0]"><span className="block text-sm font-semibold text-[#8f1d2c]">Compare documents <ArrowRight className="ml-1 inline h-3.5 w-3.5 transition group-hover:translate-x-0.5" /></span><span className="mt-1 block text-xs text-[#706a61]">Compare two or more research-ready sources.</span></Link>
     </div>
+    {searchedQuestion && (problemUnderstanding || researchPlan.length > 0 || recommendedSources.length > 0) && <section className="mt-5 rounded-xl border border-[#8f1d2c]/12 bg-[#fffaf0] p-4" aria-label="Research understanding and recommendations">
+      {problemUnderstanding && <div><p className="text-[10px] font-bold uppercase tracking-[0.16em] text-[#874047]">Understanding your research</p><h3 className="mt-1 font-serif text-xl text-[#8f1d2c]">{problemUnderstanding.statement}</h3><p className="mt-2 text-xs leading-5 text-[#706a61]">Goal: {problemUnderstanding.goal} · Jurisdiction: {problemUnderstanding.jurisdiction} · Authority: {problemUnderstanding.regulator}</p></div>}
+      {researchPlan.length > 0 && <div className="mt-4"><p className="text-[10px] font-bold uppercase tracking-[0.16em] text-[#874047]">Topics that matter</p><div className="mt-2 flex flex-wrap gap-2">{researchPlan.slice(0, 6).map((item) => <span key={item.area} className="rounded-full border border-[#8f1d2c]/10 bg-white px-2.5 py-1.5 text-[11px] text-[#625d55]">{item.area}</span>)}</div></div>}
+      {recommendedSources.length > 0 && <div className="mt-4"><p className="text-[10px] font-bold uppercase tracking-[0.16em] text-[#874047]">Recommended sources</p><div className="mt-2 grid gap-2 sm:grid-cols-2">{recommendedSources.map((source) => <div key={source.id} className="rounded-lg border border-[#8f1d2c]/8 bg-white px-3 py-2"><p className="text-xs font-semibold leading-5 text-[#29312d]">{source.title}</p><p className="mt-1 text-[10px] leading-4 text-[#706a61]">{source.authorityLabel || source.authority || source.ministry || "Authority not classified"} · {humanize(source.documentType || source.type || "document")} · {source.jurisdiction || source.state || "India"}</p><p className={`mt-1 text-[10px] font-semibold ${source.researchReady ? "text-[#34725b]" : "text-[#a06a22]"}`}>{source.researchReady ? "Ready" : "Preparation required"}</p></div>)}</div></div>}
+    </section>}
     {showSources && <section className="mt-5 overflow-hidden rounded-xl border border-[#8f1d2c]/15">
       <div className="flex items-center justify-between px-4 py-2"><h3 className="text-sm font-semibold">Add your sources</h3><button type="button" onClick={() => setShowSources(false)} className="grid h-11 w-11 place-items-center" aria-label="Close source picker"><X className="h-4 w-4" /></button></div>
       {sourceError && <p role="alert" className="px-4 text-sm text-[#85434a]">{sourceError}</p>}
