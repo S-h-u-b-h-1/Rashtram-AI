@@ -15,7 +15,9 @@ for(const width of [1440,768,390,360]){
   for(const [source,authority] of sources){
     run('fill',ref('Find a publisher'),source);
     const body=run('get','text','body');
-    for(const expected of ['Rashtram QA Wave B','1 publishers',authority,'Rights:','Last attempt','Last successful collection','Newest catalogued publication','Errors in last run'])if(!body.includes(expected))throw new Error(`${source}/${width}: missing ${expected}`);
+    // Mobile intentionally hides the sidebar account label; authenticated
+    // Coverage content is still required at every viewport.
+    for(const expected of [...(width===1440?['Rashtram QA Wave B']:[]),'1 publishers',authority,'Rights:','Last attempt','Last successful collection','Newest catalogued publication','Errors in last run'])if(!body.includes(expected))throw new Error(`${source}/${width}: missing ${expected}`);
     if(source==='research-takshashila' && !body.includes('automation blocked'))throw new Error('Missing automation restriction');
     const geometry=unwrap(run('eval','JSON.stringify({width:innerWidth,scrollWidth:document.documentElement.scrollWidth})'));
     const a11y=unwrap(run('a11y','--json')).data;

@@ -3,7 +3,10 @@ import { formatDate } from "@/lib/document-links";
 
 export function CitationCard({ source, index }) {
   const rawHref = source.pdfUrl || source.sourceUrl;
-  const sourceHref = /^https?:\/\//i.test(rawHref || "") ? rawHref : null;
+  const physicalPage=Number(source.pageStart);
+  const sourceHref = /^https?:\/\//i.test(rawHref || "")
+    ? source.pdfUrl && Number.isInteger(physicalPage) && physicalPage>0
+      ? `${rawHref.split('#')[0]}#page=${physicalPage}` : rawHref : null;
   const sectionLabel = source.sectionPath?.length ? source.sectionPath.join(" › ") : source.heading || source.sectionTitle || source.sectionId;
   const label = source.label || source.citationId || source.id || source.passage || index + 1;
   return <details className="max-w-full rounded-lg border border-[#8f1d2c]/15 bg-white text-xs">

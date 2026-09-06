@@ -30,3 +30,9 @@ test('bounded OCR never includes deferred pages as evidence',async()=>{
   assert.equal(calls,0);assert.ok(result.chunks.every(c=>c.pageStart===1));
   assert.equal(result.pdfQuality.pageExtraction[1].ocrFailureCode,'OCR_BUDGET_DEFERRED');
 });
+test('analysis labels and headings cannot shelter unsupported compliance claims',async()=>{
+  const {verifyAndRepairAnswer}=require('../retrieval/evidenceSafetyService');
+  const result=await verifyAndRepairAnswer('**Source:**\n\n**Analytical Implications:**\n\nThe surplus, while technically compliant with accounting, may distort the financial position.',[]);
+  assert.ok(result.unsupportedBeforeRepair>0);assert.equal(result.supportedFacts,0);assert.equal(result.abstained,true);
+  assert.doesNotMatch(result.answer,/technically compliant/);
+});
