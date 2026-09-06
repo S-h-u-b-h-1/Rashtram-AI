@@ -42,7 +42,7 @@ const MODE_ALIASES = {
 const LANGUAGES = new Set(["auto", "english", "hindi"]);
 const EMPTY_FIELD_PATTERN =
   /^(not identified|none identified|not available|no evidence|not found|not specified|n\/a|not materially applicable|insufficient evidence|unable to compare)/i;
-const COMPARISON_SECTION_KEYS = Object.freeze([
+const CORE_COMPARISON_SECTION_KEYS = Object.freeze([
   "purpose",
   "scope",
   "applicability",
@@ -58,6 +58,9 @@ const COMPARISON_SECTION_KEYS = Object.freeze([
   "whatChanged",
   "practicalImplications",
   "keyTakeaways",
+]);
+const COMPARISON_SECTION_KEYS = Object.freeze([
+  ...CORE_COMPARISON_SECTION_KEYS,
   // Legacy keys remain part of the persisted API contract.
   "keyClauses",
   "stakeholders",
@@ -749,6 +752,22 @@ const comparisonSectionBackfill = ({ citations = [], generated = {} }) => {
       ? (Array.isArray(normalized[field]) ? normalized[field].filter(Boolean).slice(0, 6) : [])
       : normalizeComparisonArray(normalized[field], validCitationIds);
   });
+  // Older providers returned the six legacy fields while the current UI uses
+  // canonical sections. Promote legacy content into its canonical section once,
+  // rather than making the validator count the same claim twice.
+  const legacyAliases = {
+    keyProvisions: "keyClauses",
+    obligations: "complianceImpact",
+    legalEffect: "authorityDifferences",
+    stakeholderImpact: "stakeholders",
+    practicalImplications: "impactAssessment",
+    keyTakeaways: "keyFindings",
+  };
+  Object.entries(legacyAliases).forEach(([canonical, legacy]) => {
+    if (!hasUsefulItems(normalized[canonical]) && hasUsefulItems(normalized[legacy])) {
+      normalized[canonical] = normalized[legacy];
+    }
+  });
   const sectionStatus = { ...(normalized.sectionStatus || {}) };
   COMPARISON_SECTION_KEYS.forEach((field) => {
     if (hasUsefulItems(normalized[field])) {
@@ -799,7 +818,10 @@ const comparisonEvidenceOverlap = (item, citations) => {
 const validateComparisonOutput = (generated = {}, citations = [], { requireCompleteSections = false } = {}) => {
   const summary = String(generated.executiveSummary || "").trim();
   const validCitationIds = new Set((citations || []).map((citation) => String(citation.id)));
-  const analyticalSections = COMPARISON_SECTION_KEYS.filter((section) =>
+  // Validate the canonical contract only. Legacy fields are aliases for six of
+  // these sections, not additional analytical requirements; counting both made
+  // otherwise sound model output appear duplicated or incomplete.
+  const analyticalSections = CORE_COMPARISON_SECTION_KEYS.filter((section) =>
     section !== "keyProvisions" || generated.keyProvisions || generated.keyClauses,
   );
   const sectionItems = analyticalSections.flatMap((section) => {
@@ -892,7 +914,7 @@ const validateComparisonOutput = (generated = {}, citations = [], { requireCompl
   if (!isExtractiveFallback && rawEvidenceCount > Math.max(1, Math.floor(citedSubstantive.length * 0.65))) {
     return { valid: false, status: "PARTIAL_EVIDENCE", reason: "EXTRACTIVE_ONLY" };
   }
-  const missingSections = COMPARISON_SECTION_KEYS.slice(0, 15).filter((key) =>
+  const missingSections = CORE_COMPARISON_SECTION_KEYS.filter((key) =>
     !citedSubstantive.some((item) => item.section === key) && generated.sectionStatus?.[key] !== "not_applicable");
   return {
     valid: true,

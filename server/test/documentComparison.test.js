@@ -60,6 +60,40 @@ test("comparison output validator rejects analytically empty success", () => {
   assert.equal(useful.status, "SUCCESS");
 });
 
+test("comparison validator treats legacy fields as aliases rather than duplicate requirements", () => {
+  const citations = [
+    { id: "D1-C1", documentId: "101", snippet: "Document A requires monthly reporting." },
+    { id: "D2-C1", documentId: "102", snippet: "Document B requires annual reporting." },
+  ];
+  const difference = {
+    topic: "Reporting cadence",
+    documentA: "Document A requires monthly reporting.",
+    documentB: "Document B requires annual reporting.",
+    significance: "The different cadence changes implementation planning.",
+    analysis: "Document A differs from Document B because reporting is monthly rather than annual.",
+    citations: ["D1-C1", "D2-C1"],
+  };
+  const result = validateComparisonOutput({
+    generationMode: "ai",
+    executiveSummary: "Document A requires monthly reporting whereas Document B requires annual reporting [D1-C1] [D2-C1].",
+    differences: [difference],
+    keyFindings: [difference],
+  }, citations);
+  assert.equal(result.valid, true);
+  assert.equal(result.reason, null);
+});
+
+test("comparison backfill promotes legacy sections into the canonical response contract", () => {
+  const repaired = comparisonSectionBackfill({
+    citations: [{ id: "D1-C1" }],
+    generated: {
+      keyFindings: [{ point: "A cited conclusion.", citations: ["D1-C1"] }],
+    },
+  });
+  assert.equal(repaired.keyTakeaways.length, 1);
+  assert.equal(repaired.keyTakeaways[0].point, "A cited conclusion.");
+});
+
 test("comparison accepts two to five unique documents", () => {
   assert.deepEqual(
     normalizeRequest({

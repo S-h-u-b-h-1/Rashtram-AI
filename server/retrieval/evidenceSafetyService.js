@@ -666,6 +666,9 @@ const validateAnswerCompleteness = (answer) => {
   if (/(?:as follows|such as|including)\s*:\s*$/i.test(text)) {
     return { complete: false, reason: "MISSING_PROMISED_CONTENT" };
   }
+  if (/(?:^|\s)(?:#{1,6}\s*)?\*{0,2}(?:evidence gaps?|limitations?|analysis|conclusion|key findings?|answer):?\*{0,2}\s*:?\s*$/i.test(text)) {
+    return { complete: false, reason: "EMPTY_FINAL_SECTION" };
+  }
   if (/(?:^|\s)(?:[-*]\s*|\d+[.)]\s*)$/.test(text)) {
     return { complete: false, reason: "UNFINISHED_LIST_ITEM" };
   }
@@ -705,6 +708,11 @@ const verifyStructuredComparison = (generated, citations = []) => {
     "impactAssessment", "whatChanged", "practicalImplications",
     "keyTakeaways", "keyFindings",
   ];
+  const comparativeSections = new Set([
+    "scope", "applicability", "similarities", "differences", "obligations",
+    "rights", "legalEffect", "authorityDifferences", "whatChanged",
+    "keyTakeaways", "keyFindings",
+  ]);
   let removed = 0;
   const value = { ...generated };
   for (const section of sections) {
@@ -728,13 +736,18 @@ const verifyStructuredComparison = (generated, citations = []) => {
       ].filter(Boolean).join(" ");
       const labels = Array.isArray(item.citations) ? item.citations.map(canonicalCitationLabel) : [];
       const claimType = classifyClaim(text);
-      const analytical = [
+      const citedEvidence = labels.map((label) => byCitation.get(label)).filter(Boolean);
+      const citedDocuments = new Set(citedEvidence.map((source) =>
+        String(source.documentId || "")).filter(Boolean));
+      const comparativeInference = comparativeSections.has(section) &&
+        citedDocuments.size >= 2 &&
+        /\b(differs?|difference|similar|whereas|while|contrast|change(?:d)?|compared|unlike|more|less|both)\b/i.test(text);
+      const analytical = comparativeInference || [
         CLAIM_TYPES.INFERENCE,
         CLAIM_TYPES.PERSPECTIVE,
         CLAIM_TYPES.HYPOTHETICAL,
         CLAIM_TYPES.RECOMMENDATION,
       ].includes(claimType);
-      const citedEvidence = labels.map((label) => byCitation.get(label)).filter(Boolean);
       const citedNumbers = new Set(citedEvidence.flatMap((source) => numericFacts(evidenceText(source))));
       const analyticalPremisesAvailable = analytical && citedEvidence.some(evidenceTextIsReliable) &&
         numericFacts(text).every((number) => citedNumbers.has(number));
@@ -747,9 +760,21 @@ const verifyStructuredComparison = (generated, citations = []) => {
     });
   }
   const summaryClaims = validateClaims(extractClaims(value.executiveSummary || ""), evidence);
-  const summaryIsGrounded = summaryClaims.length > 0 && summaryClaims.every((claim) =>
-    ![CLAIM_TYPES.SOURCE_FACT, CLAIM_TYPES.EXTERNAL_FACT].includes(claim.type) ||
-      claim.state !== CLAIM_STATES.UNSUPPORTED,
+  const summaryLabels = extractCitationLabels(value.executiveSummary || "")
+    .map(canonicalCitationLabel);
+  const summaryEvidence = summaryLabels.map((label) => byCitation.get(label)).filter(Boolean);
+  const summaryNumbers = new Set(summaryEvidence.flatMap((source) =>
+    numericFacts(evidenceText(source))));
+  const citedComparativeSummary = summaryEvidence.length >= 2 &&
+    new Set(summaryEvidence.map((source) => String(source.documentId || ""))).size >= 2 &&
+    numericFacts(value.executiveSummary || "").every((number) => summaryNumbers.has(number)) &&
+    /\b(differs?|difference|similar|whereas|while|contrast|change(?:d)?|compared|unlike|more|less)\b/i
+      .test(String(value.executiveSummary || ""));
+  const summaryIsGrounded = citedComparativeSummary || (
+    summaryClaims.length > 0 && summaryClaims.every((claim) =>
+      ![CLAIM_TYPES.SOURCE_FACT, CLAIM_TYPES.EXTERNAL_FACT].includes(claim.type) ||
+        claim.state !== CLAIM_STATES.UNSUPPORTED,
+    )
   );
   if (!summaryIsGrounded) {
     value.executiveSummary = removed > 0

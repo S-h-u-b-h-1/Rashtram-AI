@@ -45,6 +45,13 @@ test("answer completeness validator catches dangling promised passages", () => {
   assert.equal(validateAnswerCompleteness("The provision may increase reporting effort.").complete, true);
 });
 
+test("answer completeness validator catches an empty final markdown section", () => {
+  assert.deepEqual(
+    validateAnswerCompleteness("The Bill changes tribunal appointments.\n\n**Evidence Gaps:**"),
+    { complete: false, reason: "EMPTY_FINAL_SECTION" },
+  );
+});
+
 test("safe extractive excerpts never end mid-word, mid-sentence, or on a dangling clause", () => {
   const paragraph = "Section 4 establishes registration duties for every covered intermediary. Section 5 requires an annual return before 30 June. A final sentence continues with additional implementation detail that should not be cut in the middle";
   const excerpt = safePassageExcerpt(paragraph, 95);
