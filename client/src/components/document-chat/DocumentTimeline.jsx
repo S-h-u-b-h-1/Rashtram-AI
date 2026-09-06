@@ -17,7 +17,7 @@ export function DocumentTimeline({ events = [] }) {
             <p className="text-xs font-semibold text-[#29312d]">
               {event.label || humanize(event.type)}
             </p>
-            <p className="mt-0.5 text-[10px] text-[#777066]">
+            <p className="mt-0.5 text-xs text-[#777066]">
               {formatDate(event.date)}
             </p>
           </li>

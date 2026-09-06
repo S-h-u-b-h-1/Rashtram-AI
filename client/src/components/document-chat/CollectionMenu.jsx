@@ -62,7 +62,7 @@ export function CollectionMenu({ document }) {
       </button>
       {open && (
         <div className="absolute right-0 top-11 z-30 w-64 rounded-2xl border border-[#8f1d2c]/10 bg-[#f7f2eb] p-3 text-[#29312d] shadow-2xl">
-          <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-[#874047]">
+          <p className="text-xs font-bold uppercase tracking-[0.12em] text-[#874047]">
             Research collections
           </p>
           {loading && (
@@ -88,7 +88,7 @@ export function CollectionMenu({ document }) {
             </Link>
           )}
           {notice && (
-            <p className="mt-3 text-[10px] text-[#874047]">{notice}</p>
+            <p className="mt-3 text-xs text-[#874047]">{notice}</p>
           )}
         </div>
       )}

@@ -15,18 +15,18 @@ export function ComparisonTray() {
     >
       <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
         <div className="min-w-0 flex-1">
-          <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-white/55">
+          <p className="text-xs font-bold uppercase tracking-[0.16em] text-white/55">
             Compare selection · {documents.length}/5
           </p>
           <div className="mt-2 flex gap-2 overflow-x-auto pb-1">
             {documents.map((document) => (
               <span
                 key={document.id}
-                className="inline-flex max-w-[290px] shrink-0 items-center gap-2 rounded-xl bg-white/10 px-3 py-2 text-[11px]"
+                className="inline-flex max-w-[290px] shrink-0 items-center gap-2 rounded-xl bg-white/10 px-3 py-2 text-xs"
               >
                 <span className="min-w-0">
                   <span className="block truncate">{document.title}</span>
-                  <span className="mt-0.5 block truncate text-[9px] text-white/45">
+                  <span className="mt-0.5 block truncate text-xs text-white/45">
                     {[
                       document.type,
                       document.ministry ||

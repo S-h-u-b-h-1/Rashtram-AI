@@ -11,7 +11,7 @@ export function SuggestedQuestions({
           type="button"
           disabled={disabled}
           onClick={() => onSelect(question)}
-          className="whitespace-nowrap rounded-full border border-[#8f1d2c]/10 bg-white px-3 py-2 text-[10px] font-medium text-[#514d46] disabled:opacity-40"
+          className="whitespace-nowrap rounded-full border border-[#8f1d2c]/10 bg-white px-3 py-2 text-xs font-medium text-[#514d46] disabled:opacity-40"
         >
           {question}
         </button>

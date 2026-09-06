@@ -84,7 +84,7 @@ export function DataPersonalization({ insights, onUpdate }) {
           <ShieldCheck className="h-5 w-5" />
         </div>
         <div>
-          <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#874047]">
+          <p className="text-xs font-bold uppercase tracking-[0.2em] text-[#874047]">
             Privacy controls
           </p>
           <h2 className="mt-2 font-serif text-2xl text-[#8f1d2c]">
@@ -145,7 +145,7 @@ export function DataPersonalization({ insights, onUpdate }) {
       ) : hasInsights ? (
         <div className="mt-5 grid gap-4 lg:grid-cols-2">
           <div className="rounded-2xl border border-[#8f1d2c]/9 bg-[#f6f2eb] p-4">
-            <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-[#874047]">
+            <p className="text-xs font-bold uppercase tracking-[0.16em] text-[#874047]">
               Research signals
             </p>
             <div className="mt-3 flex flex-wrap gap-2">
@@ -171,7 +171,7 @@ export function DataPersonalization({ insights, onUpdate }) {
           </div>
 
           <div className="rounded-2xl border border-[#8f1d2c]/9 bg-[#f6f2eb] p-4">
-            <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-[#874047]">
+            <p className="text-xs font-bold uppercase tracking-[0.16em] text-[#874047]">
               Recent opted-in activity
             </p>
             <div className="mt-3 space-y-2 text-xs text-[#6f685f]">
@@ -195,7 +195,7 @@ export function DataPersonalization({ insights, onUpdate }) {
         </div>
       )}
 
-      <div className="mt-4 flex items-start gap-2 text-[11px] leading-5 text-[#81796e]">
+      <div className="mt-4 flex items-start gap-2 text-xs leading-5 text-[#81796e]">
         <DatabaseZap className="mt-0.5 h-3.5 w-3.5 shrink-0" />
         Activity data stays in Rashtram AI&apos;s PostgreSQL account records and
         is not used to claim legal authority.

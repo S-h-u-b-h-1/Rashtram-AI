@@ -116,7 +116,7 @@ export function StudySourcesPanel({
     <section className="flex h-full min-h-0 flex-col bg-[#f8f6f1]">
       <div className="border-b border-[#8f1d2c]/10 px-4 py-4">
         <div className="flex items-center justify-between gap-2">
-          <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-[#874047]">
+          <p className="text-xs font-bold uppercase tracking-[0.18em] text-[#874047]">
             Sources · {sourceCount(catalogueSources, sources, selectedIds)}
           </p>
           {onCollapse && (
@@ -136,7 +136,7 @@ export function StudySourcesPanel({
             Research sources
           </h2>
         </div>
-        <p className="mt-2 text-[11px] leading-5 text-[#706a61]">
+        <p className="mt-2 text-xs leading-5 text-[#706a61]">
           Answers use the selected sources below.
         </p>
         <details className="mt-3" open={!catalogueSources.length && !sources.length}><summary className="cursor-pointer rounded-lg py-3 text-xs font-semibold text-[#8f1d2c]">Add source</summary>
@@ -172,7 +172,7 @@ export function StudySourcesPanel({
             <Upload className="h-3.5 w-3.5" />
             Upload PDF
           </button>
-          <p className="text-[10px] text-[#8a8277]">Maximum PDF size: 50 MB</p>
+          <p className="text-xs text-[#8a8277]">Maximum PDF size: 50 MB</p>
           <input
             ref={fileInputRef}
             type="file"
@@ -185,29 +185,29 @@ export function StudySourcesPanel({
         </details>
         {uploadName && (
           <div className="mt-3 rounded-xl border border-[#8f1d2c]/10 bg-white p-3" aria-live="polite">
-            <div className="flex items-center justify-between gap-2 text-[10px]">
+            <div className="flex items-center justify-between gap-2 text-xs">
               <span className="min-w-0 truncate font-semibold text-[#514d46]">{uploadName}</span>
               <span className="shrink-0 text-[#8a8277]">{(uploadSize / 1024 / 1024).toFixed(1)} MB</span>
             </div>
             <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-[#eee0dc]">
               <div className="h-full rounded-full bg-[#8f1d2c] transition-[width] duration-200" style={{ width: `${uploadProgress}%` }} />
             </div>
-            <p className="mt-2 text-[10px] text-[#874047]">{uploadStage}{uploadProgress > 0 && uploadProgress < 100 ? ` · ${uploadProgress}%` : ""}</p>
+            <p className="mt-2 text-xs text-[#874047]">{uploadStage}{uploadProgress > 0 && uploadProgress < 100 ? ` · ${uploadProgress}%` : ""}</p>
           </div>
         )}
-        {error && <p className="mt-2 text-[11px] leading-4 text-[#a33d42]" role="alert">{error}</p>}
+        {error && <p className="mt-2 text-xs leading-snug text-[#a33d42]" role="alert">{error}</p>}
       </div>
 
       <div className="app-scrollbar min-h-0 flex-1 space-y-2 overflow-y-auto p-3">
         {catalogueSources.map((source, index) => <article key={`catalogue:${source.id}`} className="rounded-xl border border-[#8f1d2c]/15 bg-white p-3">
-          <div className="flex items-start gap-2"><FileText className="mt-1 h-4 w-4 shrink-0 text-[#8f1d2c]" /><div className="min-w-0"><h3 className="text-xs font-semibold leading-5">{source.title}</h3><p className="mt-1 text-[11px] leading-5 text-[#706a61]">{[humanize(source.documentType || source.type), source.authority || source.ministry, source.jurisdiction || source.state, formatDate(source.publicationDate, source.year || '')].filter(Boolean).join(' · ')}</p><p className="mt-1 text-[11px] text-[#706a61]">Library source{index === 0 ? " · Open document" : ""}</p><p className="mt-1 text-[11px] text-[#34725b]">{(source.researchReady ?? source.capabilities?.chatReady) ? "Ready to research" : "Not in answer context · source needs preparation"}</p></div></div>
+          <div className="flex items-start gap-2"><FileText className="mt-1 h-4 w-4 shrink-0 text-[#8f1d2c]" /><div className="min-w-0"><h3 className="text-xs font-semibold leading-5">{source.title}</h3><p className="mt-1 text-xs leading-5 text-[#706a61]">{[humanize(source.documentType || source.type), source.authority || source.ministry, source.jurisdiction || source.state, formatDate(source.publicationDate, source.year || '')].filter(Boolean).join(' · ')}</p><p className="mt-1 text-xs text-[#706a61]">Library source{index === 0 ? " · Open document" : ""}</p><p className="mt-1 text-xs text-[#34725b]">{(source.researchReady ?? source.capabilities?.chatReady) ? "Ready to research" : "Not in answer context · source needs preparation"}</p></div></div>
           <div className="mt-2 flex items-center justify-between gap-2">{(source.sourceUrl || source.pdfUrl) && <a target="_blank" rel="noreferrer" href={source.sourceUrl || source.pdfUrl} className="flex min-h-11 items-center text-xs text-[#8f1d2c]">Preview source</a>}{onRemoveCatalogue && <button type="button" disabled={disabled} onClick={() => onRemoveCatalogue(source.id)} aria-label={`Remove ${source.title} from workspace`} className="grid h-11 w-11 place-items-center text-[#706a61]"><X className="h-4 w-4" /></button>}</div>
         </article>)}
         {!sources.length && !catalogueSources.length ? (
           <div className="rounded-2xl border border-dashed border-[#8f1d2c]/15 bg-white px-4 py-8 text-center">
             <FileText className="mx-auto h-6 w-6 text-[#b2837d]" />
             <p className="mt-3 text-xs font-semibold text-[#514d46]">Add sources to begin</p>
-            <p className="mt-1 text-[11px] leading-5 text-[#706a61]">Add documents, PDFs or links to research together.</p>
+            <p className="mt-1 text-xs leading-5 text-[#706a61]">Add documents, PDFs or links to research together.</p>
           </div>
         ) : sources.map((source) => {
           const selected = selectedIds.includes(String(source.id));
@@ -229,8 +229,8 @@ export function StudySourcesPanel({
                 </button>
                 <div className="min-w-0 flex-1">
                   <p className="line-clamp-2 text-xs font-semibold leading-5 text-[#29312d]">{source.title}</p>
-                  <p className="mt-1 truncate text-[10px] uppercase tracking-[0.1em] text-[#8a8277]">{sourceLabel(source)}{source.languageCode ? ` · ${source.languageCode}` : ""}</p>
-                  <p className={`mt-1 text-[10px] font-semibold ${source.status === "ready" ? "text-[#34725b]" : source.status === "failed" ? "text-[#a33d42]" : "text-[#a06b42]"}`}>
+                  <p className="mt-1 truncate text-xs uppercase tracking-[0.1em] text-[#8a8277]">{sourceLabel(source)}{source.languageCode ? ` · ${source.languageCode}` : ""}</p>
+                  <p className={`mt-1 text-xs font-semibold ${source.status === "ready" ? "text-[#34725b]" : source.status === "failed" ? "text-[#a33d42]" : "text-[#a06b42]"}`}>
                     {source.status === "ready"
                       ? `${source.metadata?.partialValid ? "Partially ready" : "Ready to use"}${source.metadata?.pageCount ? ` · ${source.metadata.pageCount} pages` : ""}`
                       : source.status === "failed" ? "Preparation failed" : "Preparing evidence"}
@@ -243,7 +243,7 @@ export function StudySourcesPanel({
                         type="button"
                         onClick={() => retrySource(source.id)}
                         disabled={Boolean(retryingId)}
-                        className="mt-2 inline-flex items-center gap-1 rounded-lg border border-[#8f1d2c]/15 px-2 py-1 text-[10px] font-semibold text-[#874047] disabled:opacity-45"
+                        className="mt-2 inline-flex items-center gap-1 rounded-lg border border-[#8f1d2c]/15 px-2 py-1 text-xs font-semibold text-[#874047] disabled:opacity-45"
                       >
                         {retryingId === String(source.id) && (
                           <Loader2 className="h-3 w-3 animate-spin" />
@@ -263,14 +263,14 @@ export function StudySourcesPanel({
                 </button>
               </div>
               {source.sourceUrl && (
-                <a href={source.sourceUrl} target="_blank" rel="noreferrer" className="mt-2 block truncate pl-7 text-[10px] text-[#874047] hover:underline">
+                <a href={source.sourceUrl} target="_blank" rel="noreferrer" className="mt-2 block truncate pl-7 text-xs text-[#874047] hover:underline">
                   {source.sourceUrl}
                 </a>
               )}
               {source.metadata?.storageWarning && (
-                <p className="mt-2 pl-7 text-[10px] leading-4 text-[#a06b42]">{source.metadata.storageWarning}</p>
+                <p className="mt-2 pl-7 text-xs leading-snug text-[#a06b42]">{source.metadata.storageWarning}</p>
               )}
-              {source.errorMessage && <p className="mt-2 pl-7 text-[10px] leading-4 text-[#a33d42]">{source.errorMessage}</p>}
+              {source.errorMessage && <p className="mt-2 pl-7 text-xs leading-snug text-[#a33d42]">{source.errorMessage}</p>}
             </article>
           );
         })}

@@ -346,7 +346,7 @@ export function DocumentComparison() {
     <div className="min-w-0 space-y-5 pb-5 [overflow-wrap:anywhere]">
       <section className="surface-card overflow-hidden">
         <div className={`${result ? "bg-white text-[#29312d]" : "bg-[#8f1d2c] text-white"} p-5 sm:p-7`}>
-          <p className={`text-[10px] font-bold uppercase tracking-[0.2em] ${result ? "text-[#874047]" : "text-white/80"}`}>
+          <p className={`text-xs font-bold uppercase tracking-[0.2em] ${result ? "text-[#874047]" : "text-white/80"}`}>
             Grounded document comparison
           </p>
           <h2 className={`mt-2 font-serif ${result ? "text-2xl text-[#8f1d2c]" : "text-3xl"}`}>
@@ -421,7 +421,7 @@ export function DocumentComparison() {
           </div>
           {!canRunComparison && <p id="comparison-action-reason" className="mt-3 text-xs">{loading || regenerating ? "Wait for the current comparison to finish." : readinessLoading ? "Checking source readiness…" : selectionNotReadyMessage || "Select at least two ready sources."}</p>}
           {!result && <label className="mt-4 block max-w-3xl">
-            <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-white/80">
+            <span className="text-xs font-semibold uppercase tracking-[0.12em] text-white/80">
               Optional focused question
             </span>
             <textarea
@@ -514,9 +514,9 @@ export function DocumentComparison() {
                   key={document.id}
                   className="rounded-xl border border-[#8f1d2c]/8 bg-[#f7f2eb] p-4"
                 >
-                  <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-[#8f1d2c]">D{index + 1}</p>
+                  <p className="text-xs font-bold uppercase tracking-[0.14em] text-[#8f1d2c]">D{index + 1}</p>
                   <p className="mt-1 text-sm font-semibold text-[#29312d]">{document.title}</p>
-                  <p className="mt-2 text-[10px] uppercase tracking-[0.1em] text-[#706a61]">
+                  <p className="mt-2 text-xs uppercase tracking-[0.1em] text-[#706a61]">
                     {[document.type, document.ministry || document.authority,
                       document.state || document.jurisdiction,
                       document.year]
@@ -554,7 +554,7 @@ export function DocumentComparison() {
           {hasEmbeddedChat && (
             <section className="scroll-mt-24">
               <div className="mb-3 rounded-2xl border border-[#8f1d2c]/8 bg-[#fffaf0] p-5 shadow-sm sm:p-6">
-                <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-[#874047]">
+                <p className="text-xs font-bold uppercase tracking-[0.18em] text-[#874047]">
                   Comparison chat
                 </p>
                 <h3 className="mt-1 font-serif text-2xl text-[#8f1d2c]">

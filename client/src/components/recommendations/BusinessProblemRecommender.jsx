@@ -82,7 +82,7 @@ export function BusinessProblemRecommender() {
     <div className="min-w-0 space-y-5 pb-5 [overflow-wrap:anywhere]">
       <section className="surface-card overflow-hidden">
         <div className="bg-[#8f1d2c] p-6 text-white sm:p-8">
-          <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-white/80">
+          <p className="text-xs font-bold uppercase tracking-[0.2em] text-white/80">
             Business and compliance research
           </p>
           <h1 className="mt-2 max-w-3xl font-serif text-3xl sm:text-4xl">
@@ -133,7 +133,7 @@ export function BusinessProblemRecommender() {
         <>
           {result.problemUnderstanding && (
             <section className="surface-card p-5 sm:p-6" aria-labelledby="problem-understanding-title">
-              <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-[#874047]">Understanding your problem</p>
+              <p className="text-xs font-bold uppercase tracking-[0.18em] text-[#874047]">Understanding your problem</p>
               <h2 id="problem-understanding-title" className="mt-2 font-serif text-2xl text-[#8f1d2c]">
                 {result.problemUnderstanding.statement}
               </h2>
@@ -148,12 +148,12 @@ export function BusinessProblemRecommender() {
           )}
           {result.researchPlan?.length > 0 && (
             <section className="surface-card p-5 sm:p-6" aria-labelledby="research-plan-title">
-              <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-[#874047]">Research plan</p>
+              <p className="text-xs font-bold uppercase tracking-[0.18em] text-[#874047]">Research plan</p>
               <h2 id="research-plan-title" className="mt-2 font-serif text-2xl text-[#8f1d2c]">What you should research</h2>
               <ol className="mt-4 grid gap-3 lg:grid-cols-2">
                 {researchAreas(result.researchPlan).map((plan) => (
                   <li key={plan.area} className="rounded-xl border border-[#8f1d2c]/8 bg-[#f7f2eb] p-3">
-                    <div className="flex items-center justify-between gap-2"><span className="text-sm font-semibold text-[#29312d]">{plan.order}. {plan.area}</span><span className="text-[9px] font-bold uppercase tracking-[0.1em] text-[#874047]">{String(plan.priority || "").toLowerCase()}</span></div>
+                    <div className="flex items-center justify-between gap-2"><span className="text-sm font-semibold text-[#29312d]">{plan.order}. {plan.area}</span><span className="text-xs font-bold uppercase tracking-[0.1em] text-[#874047]">{String(plan.priority || "").toLowerCase()}</span></div>
                     <p className="mt-1 text-xs leading-5 text-[#706a61]">{plan.rationale}</p>
                   </li>
                 ))}

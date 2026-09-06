@@ -11,7 +11,7 @@ export function IntelligenceSidebar({ trendingCategories, sourceHealth = [] }) {
       <section className="surface-card p-5 sm:p-6">
         <div className="flex items-center gap-2">
           <RadioTower className="h-4 w-4 text-[#874047]" />
-          <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#874047]">
+          <p className="text-xs font-bold uppercase tracking-[0.2em] text-[#874047]">
             Live Parliament sources
           </p>
         </div>
@@ -25,7 +25,7 @@ export function IntelligenceSidebar({ trendingCategories, sourceHealth = [] }) {
                 {source.label}
               </span>
               <span
-                className={`rounded-full px-2 py-1 text-[9px] font-semibold ${
+                className={`rounded-full px-2 py-1 text-xs font-semibold ${
                   ["Fresh", "Connected"].includes(source.status)
                     ? "bg-[#e2ece6] text-[#315a49]"
                     : "bg-[#f1e5d7] text-[#81552e]"
@@ -41,7 +41,7 @@ export function IntelligenceSidebar({ trendingCategories, sourceHealth = [] }) {
       <section className="surface-card p-5 sm:p-6">
         <div className="flex items-center gap-2">
           <Tags className="h-4 w-4 text-[#874047]" />
-          <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#874047]">
+          <p className="text-xs font-bold uppercase tracking-[0.2em] text-[#874047]">
             Trending policy areas
           </p>
         </div>
@@ -53,7 +53,7 @@ export function IntelligenceSidebar({ trendingCategories, sourceHealth = [] }) {
                 className="inline-flex items-center gap-2 rounded-full border border-[#8f1d2c]/10 bg-[#f6f2eb] px-3 py-2 text-xs font-medium text-[#514d46]"
               >
                 {category.label}
-                <span className="text-[10px] text-[#874047]">
+                <span className="text-xs text-[#874047]">
                   {category.documentCount}
                 </span>
               </span>

@@ -103,7 +103,7 @@ export function RecommendationHistory() {
               <span className="grid h-8 w-8 place-items-center rounded-xl bg-[#eee0dc]">
                 <Sparkles className="h-4 w-4" />
               </span>
-              <p className="text-[10px] font-bold uppercase tracking-[0.18em]">
+              <p className="text-xs font-bold uppercase tracking-[0.18em]">
                 Grounded recommendations
               </p>
             </div>
@@ -143,7 +143,7 @@ export function RecommendationHistory() {
                     setActiveFilter(filter.id);
                     setShowAll(false);
                   }}
-                  className={`inline-flex min-h-9 shrink-0 items-center gap-1.5 rounded-full border px-3 text-[10px] font-semibold transition disabled:cursor-not-allowed disabled:opacity-40 ${
+                  className={`inline-flex min-h-9 shrink-0 items-center gap-1.5 rounded-full border px-3 text-xs font-semibold transition disabled:cursor-not-allowed disabled:opacity-40 ${
                     selected
                       ? "border-[#8f1d2c] bg-[#8f1d2c] text-white"
                       : "border-[#8f1d2c]/10 bg-white text-[#706a61] hover:border-[#8f1d2c]/25 hover:text-[#8f1d2c]"

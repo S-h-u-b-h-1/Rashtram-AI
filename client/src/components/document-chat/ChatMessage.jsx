@@ -59,7 +59,7 @@ function ChatMessageComponent({ message, onDownloadPdf, onFeedback }) {
       >
         {message.metadata?.workflowTitle && (
           <p
-            className={`mb-2 inline-flex rounded-full px-2 py-1 text-[10px] font-semibold ${
+            className={`mb-2 inline-flex rounded-full px-2 py-1 text-xs font-semibold ${
               isUser
                 ? "bg-white/60 text-[#8f1d2c]"
                 : "bg-[#eee0dc] text-[#8f1d2c]"
@@ -92,7 +92,7 @@ function ChatMessageComponent({ message, onDownloadPdf, onFeedback }) {
       )}
       {!isUser && message.sources?.length > 0 && (
         <details open className="mt-4 border-t border-[#8f1d2c]/8 pt-3">
-          <summary className="cursor-pointer text-[10px] font-semibold uppercase tracking-[0.12em] text-[#874047]">
+          <summary className="cursor-pointer text-xs font-semibold uppercase tracking-[0.12em] text-[#874047]">
             {message.sources.length} cited passages
           </summary>
           <div className="mt-3 flex flex-wrap gap-2">
@@ -107,7 +107,7 @@ function ChatMessageComponent({ message, onDownloadPdf, onFeedback }) {
         </details>
       )}
       <footer
-        className={`mt-3 flex items-center gap-2 text-[10px] ${
+        className={`mt-3 flex items-center gap-2 text-xs ${
           isUser ? "text-[#625b53]" : "text-[#706a61]"
         }`}
       >

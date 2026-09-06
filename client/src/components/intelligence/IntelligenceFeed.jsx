@@ -25,7 +25,7 @@ export function IntelligenceFeed({
     <section className="surface-card p-5 sm:p-6">
       <div className="flex items-start justify-between gap-4">
         <div>
-          <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#874047]">
+          <p className="text-xs font-bold uppercase tracking-[0.2em] text-[#874047]">
             {eyebrow}
           </p>
           <h2 className="mt-2 font-serif text-2xl text-[#8f1d2c]">
@@ -62,13 +62,13 @@ export function IntelligenceFeed({
                 className="py-5 first:pt-0"
               >
                 <div className="flex flex-wrap items-center gap-2">
-                  <span className="rounded-full bg-[#8f1d2c] px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.1em] text-white">
+                  <span className="rounded-full bg-[#8f1d2c] px-2.5 py-1 text-xs font-semibold uppercase tracking-[0.1em] text-white">
                     {humanize(event.eventType)}
                   </span>
-                  <span className="rounded-full bg-[#eee6d9] px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.1em] text-[#6f4335]">
+                  <span className="rounded-full bg-[#eee6d9] px-2.5 py-1 text-xs font-semibold uppercase tracking-[0.1em] text-[#6f4335]">
                     {humanize(event.documentType)}
                   </span>
-                  <span className="text-[11px] text-[#8a8277]">
+                  <span className="text-xs text-[#8a8277]">
                     {formatDate(event.eventDate || event.createdAt)}
                   </span>
                 </div>
@@ -82,7 +82,7 @@ export function IntelligenceFeed({
                   </p>
                 )}
 
-                <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-[#857d72]">
+                <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-[#857d72]">
                   <span className="font-semibold text-[#874047]">
                     {getPublicSourceLabel(event.sourceName)}
                   </span>

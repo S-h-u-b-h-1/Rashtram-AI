@@ -21,7 +21,7 @@ function ResearchList({ title, eyebrow, items, type, onViewAll }) {
     <section className="surface-card flex min-h-[350px] flex-col p-5 sm:p-6">
       <div className="flex items-start justify-between gap-4">
         <div>
-          <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#874047]">
+          <p className="text-xs font-bold uppercase tracking-[0.2em] text-[#874047]">
             {eyebrow}
           </p>
           <h2 className="mt-2 font-serif text-2xl text-[#8f1d2c]">{title}</h2>
@@ -69,7 +69,7 @@ function ResearchList({ title, eyebrow, items, type, onViewAll }) {
                   <p className="truncate text-sm font-semibold text-[#29312d]">
                     {titleText}
                   </p>
-                  <p className="mt-1 truncate text-[11px] text-[#857e73]">
+                  <p className="mt-1 truncate text-xs text-[#857e73]">
                     {status} · {new Date(updatedAt).toLocaleDateString()}
                   </p>
                 </div>
@@ -160,7 +160,7 @@ export default function Dashboard({ onNavigate }) {
         <div className="absolute -right-14 -top-16 h-56 w-56 rounded-full bg-[#a85a52]/20 blur-3xl" />
         <div className="relative z-10 flex flex-col gap-8 lg:flex-row lg:items-end lg:justify-between">
           <div>
-            <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-[11px] font-medium text-white/65">
+            <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-medium text-white/65">
               <Sparkles className="h-3.5 w-3.5 text-[#c1a06f]" />
               Evidence workspace ready
             </div>
@@ -231,7 +231,7 @@ export default function Dashboard({ onNavigate }) {
       </div>
 
       {lastUpdated && (
-        <p className="text-right text-[10px] uppercase tracking-[0.16em] text-[#9a9286]">
+        <p className="text-right text-xs uppercase tracking-[0.16em] text-[#9a9286]">
           Updated {lastUpdated}
         </p>
       )}

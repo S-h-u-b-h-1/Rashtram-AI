@@ -61,7 +61,7 @@ export function DocumentFilters({
         {quickOptions.map(([key, optionLabel, source]) => <label key={key} className="min-w-0 flex-1 space-y-1 sm:max-w-52"><span className="text-xs text-[#706a61]">{filterLabels[key] || optionLabel}</span><select value={filters[key] || ''} onChange={(event) => onFilterChange(key, event.target.value)} className="h-11 w-full rounded-xl border border-[#8f1d2c]/10 bg-white px-3 text-xs"><option value="">All {optionLabel.toLowerCase()}s</option>{(options[source] || []).map((option) => <option key={String(option)} value={String(option)}>{label(option)}</option>)}</select></label>)}
         {onSortChange && (
           <label className="min-w-[150px] space-y-1">
-            <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[#706a61]">
+            <span className="text-xs font-semibold uppercase tracking-[0.12em] text-[#706a61]">
               Sort
             </span>
             <select
@@ -96,12 +96,12 @@ export function DocumentFilters({
             <Filter className="h-3.5 w-3.5" />
             Advanced filters
             {activeCount > 0 && (
-              <span className="rounded-full bg-[#eee0dc] px-2 py-0.5 text-[10px]">
+              <span className="rounded-full bg-[#eee0dc] px-2 py-0.5 text-xs">
                 {activeCount} active
               </span>
             )}
           </span>
-          <span className="text-[10px] font-normal text-[#706a61]">
+          <span className="text-xs font-normal text-[#706a61]">
             Authority, date, availability
           </span>
         </summary>
@@ -109,7 +109,7 @@ export function DocumentFilters({
           {onSortDirectionChange && sortBy !== 'relevance' && <label className="space-y-1"><span className="text-xs text-[#706a61]">Sort direction</span><select value={sortDirection} onChange={(event) => onSortDirectionChange(event.target.value)} className="h-11 w-full rounded-xl border border-[#8f1d2c]/10 bg-white px-3 text-xs"><option value="desc">{['title', 'ministry'].includes(sortBy) ? 'Z–A' : 'Newest first'}</option><option value="asc">{['title', 'ministry'].includes(sortBy) ? 'A–Z' : 'Oldest first'}</option></select></label>}
           {visibleOptions.filter(([key]) => !['type', 'jurisdiction'].includes(key)).map(([key, optionLabel, source]) => (
             <label key={key} className="space-y-1">
-              <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[#706a61]">
+              <span className="text-xs font-semibold uppercase tracking-[0.12em] text-[#706a61]">
                 {filterLabels[key] || optionLabel}
               </span>
               <select
@@ -127,7 +127,7 @@ export function DocumentFilters({
             </label>
           ))}
           <label className="space-y-1">
-            <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[#706a61]">
+            <span className="text-xs font-semibold uppercase tracking-[0.12em] text-[#706a61]">
               PDF
             </span>
             <select
@@ -147,7 +147,7 @@ export function DocumentFilters({
             ["comparisonReady", "Comparison"],
           ].map(([key, text]) => (
             <label key={key} className="space-y-1">
-              <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[#706a61]">
+              <span className="text-xs font-semibold uppercase tracking-[0.12em] text-[#706a61]">
                 {text}
               </span>
               <select
@@ -163,7 +163,7 @@ export function DocumentFilters({
           ))}
           {["publicationFrom", "publicationTo"].map((key) => (
             <label key={key} className="space-y-1">
-              <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[#706a61]">
+              <span className="text-xs font-semibold uppercase tracking-[0.12em] text-[#706a61]">
                 {key === "publicationFrom" ? "From date" : "To date"}
               </span>
               <input

@@ -48,7 +48,7 @@ export function ComparisonHistory() {
                 <p className="line-clamp-2 text-sm font-semibold text-[#29312d]">
                   {comparison.title}
                 </p>
-                <p className="mt-2 text-[10px] uppercase tracking-[0.1em] text-[#81796e]">
+                <p className="mt-2 text-xs uppercase tracking-[0.1em] text-[#81796e]">
                   {comparison.documentIds.length} documents · {comparison.mode} ·{" "}
                   {formatDate(comparison.updatedAt)}
                 </p>

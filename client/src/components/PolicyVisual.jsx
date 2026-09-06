@@ -56,7 +56,7 @@ export function PolicyVisual({ compact = false }) {
                   <Landmark className="h-4 w-4 text-[#91454a]" />
                 </div>
                 <div>
-                  <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[#7d7468]">
+                  <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#7d7468]">
                     Answer
                   </p>
                   <p className="mt-1 text-sm font-semibold">
@@ -77,17 +77,17 @@ export function PolicyVisual({ compact = false }) {
             </div>
 
             <div className="mt-5 border-t border-[#ddd2c2] pt-4">
-              <div className="flex items-center gap-2 text-[11px] text-[#6c655c]">
+              <div className="flex items-center gap-2 text-xs text-[#6c655c]">
                 <BookOpenText className="h-3.5 w-3.5" />
                 Includes source links and citations
               </div>
             </div>
           </div>
 
-          <div className="policy-float absolute left-0 top-[18%] rounded-xl border border-white/10 bg-white/10 px-3 py-2 text-[11px] backdrop-blur">
+          <div className="policy-float absolute left-0 top-[18%] rounded-xl border border-white/10 bg-white/10 px-3 py-2 text-xs backdrop-blur">
             Official document
           </div>
-          <div className="policy-float-delayed absolute bottom-[14%] right-0 rounded-xl border border-white/10 bg-white/10 px-3 py-2 text-[11px] backdrop-blur">
+          <div className="policy-float-delayed absolute bottom-[14%] right-0 rounded-xl border border-white/10 bg-white/10 px-3 py-2 text-xs backdrop-blur">
             Saved notes
           </div>
         </div>

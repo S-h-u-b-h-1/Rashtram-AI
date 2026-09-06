@@ -139,7 +139,7 @@ export function GlobalCommandPalette({ open, onClose }) {
         <div className="app-scrollbar max-h-[65vh] overflow-y-auto p-3">
           {visiblePages.length > 0 && (
             <div>
-              <p className="px-3 py-2 text-[10px] font-bold uppercase tracking-[0.14em] text-[#874047]">
+              <p className="px-3 py-2 text-xs font-bold uppercase tracking-[0.14em] text-[#874047]">
                 {normalizedQuery ? "Pages and commands" : "Navigate"}
               </p>
               {visiblePages.map(({ label, href, icon: Icon }) => (
@@ -158,7 +158,7 @@ export function GlobalCommandPalette({ open, onClose }) {
 
           {query.trim().length >= 2 && (
             <div>
-              <p className="px-3 py-2 text-[10px] font-bold uppercase tracking-[0.14em] text-[#874047]">
+              <p className="px-3 py-2 text-xs font-bold uppercase tracking-[0.14em] text-[#874047]">
                 Documents {loading ? "· searching" : ""}
               </p>
               {documents.map((document) => (
@@ -171,7 +171,7 @@ export function GlobalCommandPalette({ open, onClose }) {
                   <p className="truncate text-sm font-semibold text-[#29312d]">
                     {document.title}
                   </p>
-                  <p className="mt-1 text-[10px] uppercase tracking-[0.1em] text-[#777066]">
+                  <p className="mt-1 text-xs uppercase tracking-[0.1em] text-[#777066]">
                     {humanize(document.type)} ·{" "}
                     {document.ministry || document.authority || document.source}
                   </p>
@@ -182,7 +182,7 @@ export function GlobalCommandPalette({ open, onClose }) {
 
           {visibleChats.length > 0 && (
             <div className="mt-2 border-t border-[#8f1d2c]/7 pt-2">
-              <p className="flex items-center gap-2 px-3 py-2 text-[10px] font-bold uppercase tracking-[0.14em] text-[#874047]">
+              <p className="flex items-center gap-2 px-3 py-2 text-xs font-bold uppercase tracking-[0.14em] text-[#874047]">
                 <History className="h-3.5 w-3.5" />
                 Recent research
               </p>
@@ -200,7 +200,7 @@ export function GlobalCommandPalette({ open, onClose }) {
           )}
           {!normalizedQuery && recentSearches.length > 0 && (
             <div className="mt-2 border-t border-[#8f1d2c]/7 pt-2">
-              <p className="flex items-center gap-2 px-3 py-2 text-[10px] font-bold uppercase tracking-[0.14em] text-[#874047]">
+              <p className="flex items-center gap-2 px-3 py-2 text-xs font-bold uppercase tracking-[0.14em] text-[#874047]">
                 <Search className="h-3.5 w-3.5" />
                 Saved searches
               </p>
@@ -219,7 +219,7 @@ export function GlobalCommandPalette({ open, onClose }) {
             </div>
           )}
         </div>
-        <footer className="border-t border-[#8f1d2c]/8 px-5 py-3 text-[10px] text-[#777066]">
+        <footer className="border-t border-[#8f1d2c]/8 px-5 py-3 text-xs text-[#777066]">
           Esc to close · Select up to five documents in the catalogue for
           cross-document chat.
         </footer>

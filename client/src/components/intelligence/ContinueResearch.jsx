@@ -10,7 +10,7 @@ export function ContinueResearch({ chats }) {
   return (
     <section className="surface-card p-5 sm:p-6">
       <div>
-        <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#874047]">
+        <p className="text-xs font-bold uppercase tracking-[0.2em] text-[#874047]">
           Your workspace
         </p>
         <h2 className="mt-2 font-serif text-2xl text-[#8f1d2c]">
@@ -59,7 +59,7 @@ export function ContinueResearch({ chats }) {
                     <p className="line-clamp-2 text-sm font-semibold leading-5 text-[#29312d]">
                       {chat.title}
                     </p>
-                    <p className="mt-2 text-[11px] text-[#857e73]">
+                    <p className="mt-2 text-xs text-[#857e73]">
                       {chat.messageCount} messages ·{" "}
                       {formatDate(chat.updatedAt)}
                     </p>

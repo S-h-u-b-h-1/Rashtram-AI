@@ -57,7 +57,7 @@ export function RelatedDocuments({
   }));
   return (
     <section>
-      <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-[#874047]">
+      <p className="text-xs font-bold uppercase tracking-[0.18em] text-[#874047]">
         {sourceDocumentType === "bill"
           ? "Related Bills"
           : "Related documents to refer"}
@@ -77,7 +77,7 @@ export function RelatedDocuments({
         </div>
       )}
       {items.length > 0 && (
-        <p className="mt-5 text-[9px] font-semibold uppercase tracking-[0.12em] text-[#81796e]">
+        <p className="mt-5 text-xs font-semibold uppercase tracking-[0.12em] text-[#81796e]">
           Catalogue relationship signals
         </p>
       )}
@@ -87,7 +87,7 @@ export function RelatedDocuments({
             key={`${item.verified}-${item.relation || "rel"}-${item.id || "id"}-${index}`}
             className="rounded-xl border border-[#8f1d2c]/8 bg-white p-3"
           >
-            <p className="text-[9px] font-semibold uppercase tracking-[0.1em] text-[#874047]">
+            <p className="text-xs font-semibold uppercase tracking-[0.1em] text-[#874047]">
               {item.verified
                 ? "Source-verified"
                 : item.verificationStatus === "model_checked_inference"
@@ -101,7 +101,7 @@ export function RelatedDocuments({
               {item.title}
             </p>
             {item.explanation && (
-              <p className="mt-2 text-[10px] leading-5 text-[#706a61]">
+              <p className="mt-2 text-xs leading-5 text-[#706a61]">
                 {item.explanation}
               </p>
             )}
@@ -123,7 +123,7 @@ export function RelatedDocuments({
                       ? undefined
                       : "noreferrer"
                   }
-                  className="inline-flex items-center gap-1 text-[10px] font-semibold text-[#874047]"
+                  className="inline-flex items-center gap-1 text-xs font-semibold text-[#874047]"
                 >
                   {isResearchReady(item)
                     ? "Open research"
@@ -154,7 +154,7 @@ export function RelatedDocuments({
                         : null;
                       if (href) router.push(href);
                     }}
-                    className="inline-flex items-center gap-1 text-[10px] font-semibold text-[#874047]"
+                    className="inline-flex items-center gap-1 text-xs font-semibold text-[#874047]"
                   >
                     <GitCompareArrows className="h-3 w-3" />
                     {sourceDocument
@@ -169,7 +169,7 @@ export function RelatedDocuments({
           </article>
         ))}
         {!items.length && !recommendations.length && (
-          <p className="rounded-xl border border-dashed border-[#8f1d2c]/10 p-4 text-[11px] leading-5 text-[#81796e]">
+          <p className="rounded-xl border border-dashed border-[#8f1d2c]/10 p-4 text-xs leading-5 text-[#81796e]">
             {sourceDocumentType === "bill"
               ? "No closely related Bills are available yet."
               : "Related records will appear when the catalogue has a supported relationship signal."}
@@ -178,7 +178,7 @@ export function RelatedDocuments({
       </div>
       {relatedChats.length > 0 && (
         <div className="mt-5 border-t border-[#8f1d2c]/8 pt-4">
-          <p className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.18em] text-[#874047]">
+          <p className="flex items-center gap-2 text-xs font-bold uppercase tracking-[0.18em] text-[#874047]">
             <MessageSquareText className="h-3.5 w-3.5" />
             Related research
           </p>
@@ -192,7 +192,7 @@ export function RelatedDocuments({
                 <p className="text-xs font-semibold leading-5 text-[#29312d]">
                   {chat.title}
                 </p>
-                <p className="mt-1 text-[9px] uppercase tracking-[0.1em] text-[#874047]">
+                <p className="mt-1 text-xs uppercase tracking-[0.1em] text-[#874047]">
                   {humanize(chat.documentType)} research chat
                 </p>
               </Link>

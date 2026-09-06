@@ -33,10 +33,10 @@ export function ProfileIdentity({ user, profile, onEdit }) {
           </div>
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
-              <span className="rounded-full border border-white/12 bg-white/[0.08] px-2.5 py-1 text-[9px] font-semibold uppercase tracking-[0.16em] text-[#ecd9b9]">
+              <span className="rounded-full border border-white/12 bg-white/[0.08] px-2.5 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-[#ecd9b9]">
                 {user.accountType}
               </span>
-              <span className="inline-flex items-center gap-1.5 rounded-full border border-white/12 bg-white/[0.08] px-2.5 py-1 text-[9px] font-medium text-white/70">
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-white/12 bg-white/[0.08] px-2.5 py-1 text-xs font-medium text-white/70">
                 <KeyRound className="h-3 w-3" />
                 {user.authenticationProvider} account
               </span>
@@ -47,7 +47,7 @@ export function ProfileIdentity({ user, profile, onEdit }) {
             {professionalLine && (
               <p className="mt-2 text-sm text-white/68">{professionalLine}</p>
             )}
-            <div className="mt-4 flex flex-wrap gap-x-5 gap-y-2 text-[11px] text-white/58 sm:text-xs">
+            <div className="mt-4 flex flex-wrap gap-x-5 gap-y-2 text-xs text-white/58 sm:text-xs">
               <span className="inline-flex items-center gap-1.5">
                 <Mail className="h-3.5 w-3.5" />
                 {user.email}
@@ -81,7 +81,7 @@ export function ProfileIdentity({ user, profile, onEdit }) {
             <Pencil className="h-3.5 w-3.5" />
             Edit profile
           </button>
-          <p className="inline-flex items-center gap-1.5 text-[10px] text-white/48">
+          <p className="inline-flex items-center gap-1.5 text-xs text-white/48">
             <ShieldCheck className="h-3.5 w-3.5 text-[#d4b782]" />
             Account details are private by default
           </p>

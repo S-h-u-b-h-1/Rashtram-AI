@@ -13,7 +13,7 @@ export function GraphResearchJourneys({ insights }) {
       <div className="flex items-center gap-2">
         <Network className="h-5 w-5 text-[#8f1d2c]" />
         <div>
-          <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-[#874047]">
+          <p className="text-xs font-bold uppercase tracking-[0.18em] text-[#874047]">
             Knowledge graph activity
           </p>
           <h2 className="mt-1 font-serif text-2xl text-[#8f1d2c]">

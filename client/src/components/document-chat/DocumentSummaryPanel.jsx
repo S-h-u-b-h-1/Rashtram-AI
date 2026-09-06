@@ -4,7 +4,7 @@ import remarkGfm from "remark-gfm";
 export function DocumentSummaryPanel({ summary }) {
   return (
     <section>
-      <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-[#874047]">
+      <p className="text-xs font-bold uppercase tracking-[0.18em] text-[#874047]">
         Evidence brief
       </p>
       {summary ? (

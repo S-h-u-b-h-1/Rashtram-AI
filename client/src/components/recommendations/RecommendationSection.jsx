@@ -60,7 +60,7 @@ export function RecommendationSection({
 
   return (
     <section className="surface-card p-5 sm:p-6">
-      {eyebrow && <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-[#874047]">
+      {eyebrow && <p className="text-xs font-bold uppercase tracking-[0.18em] text-[#874047]">
         {eyebrow}
       </p>}
       <h2 className="mt-2 font-serif text-2xl text-[#8f1d2c]">{title}</h2>

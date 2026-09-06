@@ -593,7 +593,7 @@ export function DocumentChatLayout({
             <button
               type="button"
               onClick={retryProcessing}
-              className="inline-flex shrink-0 items-center gap-1 rounded-lg bg-[#8f1d2c] px-2.5 py-1.5 text-[10px] font-semibold text-white"
+              className="inline-flex shrink-0 items-center gap-1 rounded-lg bg-[#8f1d2c] px-2.5 py-1.5 text-xs font-semibold text-white"
             >
               <RefreshCw className="h-3 w-3" />
               Retry
@@ -626,7 +626,7 @@ export function DocumentChatLayout({
         <main id="research-chat" className="flex min-h-0 min-w-0 w-full flex-col">
           <div className="flex shrink-0 items-center justify-between border-b border-[#8f1d2c]/8 bg-[#f7f2eb] px-4 py-3 sm:px-6">
             <div className="min-w-0">
-              <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-[#874047]">Chat</p>
+              <p className="text-xs font-bold uppercase tracking-[0.18em] text-[#874047]">Chat</p>
               <p className="mt-1 hidden truncate text-xs text-[#706a61] sm:block">Ask questions about your selected sources.</p>
             </div>
             <div className="ml-3 flex shrink-0 items-center gap-1.5">
@@ -655,7 +655,7 @@ export function DocumentChatLayout({
                 <button
                   type="button"
                   onClick={retryProcessing}
-                  className="mt-2 inline-flex items-center gap-1 rounded-lg bg-[#8f1d2c] px-2.5 py-1.5 text-[10px] font-semibold text-white"
+                  className="mt-2 inline-flex items-center gap-1 rounded-lg bg-[#8f1d2c] px-2.5 py-1.5 text-xs font-semibold text-white"
                 >
                   <RefreshCw className="h-3 w-3" />
                   Prepare for Research

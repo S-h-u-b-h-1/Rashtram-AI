@@ -9,7 +9,7 @@ export function ResearchNotes({ notes, onAdd, onDelete }) {
   const [error, setError] = useState("");
   return (
     <section>
-      <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-[#874047]">
+      <p className="text-xs font-bold uppercase tracking-[0.18em] text-[#874047]">
         Pinned research notes
       </p>
       <div className="mt-3 flex gap-2">
@@ -49,7 +49,7 @@ export function ResearchNotes({ notes, onAdd, onDelete }) {
             <p className="whitespace-pre-wrap text-xs leading-5 text-[#514d46]">
               {note.body}
             </p>
-            <p className="mt-2 text-[9px] text-[#8a8277]">
+            <p className="mt-2 text-xs text-[#8a8277]">
               Saved{" "}
               {new Date(note.updated_at || note.updatedAt || note.created_at)
                 .toLocaleString("en-IN")}

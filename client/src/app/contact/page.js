@@ -132,7 +132,7 @@ export default function ContactPage() {
   return (
     <main className="min-h-dvh bg-[#eee8df] px-5 py-12 sm:py-16 lg:py-20">
       <section className="mx-auto max-w-2xl rounded-[2rem] border border-[#8f1d2c]/9 bg-[#f8f4ed] p-6 shadow-sm sm:p-10">
-        <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#874047]">
+        <p className="text-xs font-bold uppercase tracking-[0.2em] text-[#874047]">
           Contact Rashtram AI
         </p>
         <h1 className="mt-3 font-serif text-4xl text-[#8f1d2c]">
