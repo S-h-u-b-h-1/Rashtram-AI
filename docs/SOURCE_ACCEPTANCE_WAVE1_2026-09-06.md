@@ -4,7 +4,7 @@ This report supersedes the five relevant pilot decisions in the previous accepta
 
 ## 1. Elapsed time
 
-Started approximately 13:45 UTC on 6 September 2026. Release timing is recorded below after deployment.
+Started approximately 13:45 UTC on 6 September 2026. Implementation, release and health checks completed by 14:23 UTC: approximately 38 minutes, excluding the final report-only commit.
 
 ## 2. Starting revision and production baseline
 
@@ -125,11 +125,18 @@ Fourteen pre-existing document/readiness flag mismatches and six eligible dead l
 
 ## 19. Commits
 
-Release identifiers are recorded after commit and push. Local untracked output and dependency symlinks are excluded.
+Implementation: `71fb9dc` — Harden Wave 1 source discovery, rights and production acceptance gates. Pushed normally to `github/main` and `github/codex/ux-quality-pass`. This report receives a final documentation-only commit. Local untracked output and dependency symlinks are excluded.
 
 ## 20. Deployments
 
-Deployment result is recorded after release. A healthy deployment does not imply source acceptance.
+The established GitHub integration deployed the implementation to both existing projects. Verified production builds:
+
+| Project | Deployment | Target/status | URL |
+|---|---|---|---|
+| Frontend, Next.js | `dpl_Eom7L4FDkccQYRnFYoFpfFubMG2Q` | Production / READY | [Immutable build](https://rashtram-ehlg0b9ak-shubh1s-projects.vercel.app) |
+| Backend, Express | `dpl_46SyK8EkTxrKVd4cda7m8eifUjjh` | Production / READY | [Immutable build](https://rashtram-ai-backend-ichcq3op9-shubh1s-projects.vercel.app) |
+
+Production aliases: [Rashtram AI](https://rashtram-ai.vercel.app), [backend health](https://rashtram-ai-backend.vercel.app/health). Backend health reports OK/database connected/generation, embeddings and streaming available; Coverage route returns HTTP 200. Deployment-specific error queries over the preceding 15 minutes returned no matching logs for either build. This is a short check, not ongoing monitoring; drains were not inspected. Authenticated production UI verification remains blocked. A healthy deployment does not imply source acceptance. The final documentation-only push may create subsequent equivalent-code builds.
 
 ## 21. Accepted publishers
 
