@@ -5,7 +5,7 @@ The first-pass document is historical context; this report records the stricter 
 
 ## 1. Elapsed time
 
-Started 12:45:54 UTC. Final timing and delivery status are recorded below after verification.
+Started 12:45:54 UTC. Implementation, testing, promotion and initial production checks finished by 13:42 UTC: approximately 56 minutes, excluding final report commit/push.
 
 ## 2–3. Existing connector census and fixes
 
@@ -106,7 +106,27 @@ Readiness sample: disposable fixtures are CATALOGUED with a resource URL, but th
 
 ## 30–31. Commits and deployments
 
-Delivery identifiers are appended after final verification. Production ingestion and source activation are not authorized by a passing build alone.
+Logical release commits, pushed normally to `github/main` and `github/codex/ux-quality-pass`:
+
+- `fac4ac7` — publication dates, identity and concurrent retries.
+- `1a00d08` — gated government and research publisher pilots.
+- `41b91ed` — browse-path repair and truthful collection failure reporting.
+- `9cbe0a7` — publisher onboarding and ministry discovery UI.
+- `5a1820e` — bounded audits and incomplete acceptance gates.
+
+Both existing Vercel projects were built from a clean archive of `5a1820e`, using their production build environments, then promoted after backend health and frontend route checks. No local synthetic API build, test outputs, node_modules or environment files were included in the committed archive.
+
+| Project | Deployment | Target / status | Framework / build |
+|---|---|---|---|
+| rashtram-ai-backend | `dpl_CcQ8b3dVNDGG1vq7NQcBz34J3R2Q` | Production / READY, promoted | Express / 13 seconds |
+| rashtram-ai | `dpl_BVeNXNJtrQ44PhYXhhsEhUvRGZBc` | Production / READY, promoted | Next.js / 8 seconds |
+
+Production aliases: [frontend](https://rashtram-ai.vercel.app) and [backend health](https://rashtram-ai-backend.vercel.app/health).
+Immutable build URLs: [frontend build](https://rashtram-ytrhpjq1s-shubh1s-projects.vercel.app) and [backend build](https://rashtram-ai-backend-bk2uraacd-shubh1s-projects.vercel.app).
+
+Post-promotion checks: frontend `/app/coverage` HTTP 200; backend health OK, database connected, generation/embedding/streaming available. Unauthenticated `/api/dashboard/source-health` returned HTTP 401 as expected. Authenticated production publisher filters, catalogue records, exact source links, readiness and duplicate counts were **not verified** in this pass; local fixture QA does not establish production data correctness. No production canary records were inserted.
+
+Post-deploy observability: deployment-specific error-log queries over the preceding 15 minutes returned no matching logs for either deployment. This short sample is not long-term monitoring. Drain configuration was not inspected; scheduled collector execution after release has not yet been observed. Production ingestion and source activation are not authorized by a passing build alone.
 
 ## 32–34. Remaining blocks, gaps and classification
 
