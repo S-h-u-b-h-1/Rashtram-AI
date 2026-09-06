@@ -16,9 +16,9 @@ export function ChatInput({
   onResponseLanguageChange,
 }) {
   return (
-    <div className="sticky bottom-0 z-10 min-w-0 max-w-full border-t border-[#8f1d2c]/8 bg-[#f7f2eb]/95 p-3 pb-[max(.75rem,env(safe-area-inset-bottom))] backdrop-blur sm:p-4">
+    <div className="chat-composer sticky bottom-0 z-10 min-w-0 max-w-full bg-[#f8f6f1]/95 p-3 pb-[max(.75rem,env(safe-area-inset-bottom))] backdrop-blur sm:p-4">
       <div className="mx-auto min-w-0 max-w-4xl">
-        <div className="flex items-end gap-2 rounded-2xl border border-[#8f1d2c]/10 bg-white p-2 shadow-sm">
+        <div className="workspace-input-surface flex items-end gap-2 rounded-2xl bg-white p-2">
           <textarea
             aria-label="Ask a question about these sources"
             value={input}
@@ -57,14 +57,9 @@ export function ChatInput({
           </button>
         </div>
         <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
-          <p className="hidden text-xs text-[#706a61] sm:block">
-            Answers cite retrieved passages. Verify important conclusions
-            against the original record.
-          </p>
-          <div className="flex items-center gap-3">
+          <div className="flex w-full flex-wrap items-center justify-between gap-2">
             <label className="flex items-center gap-1.5 text-xs font-semibold text-[#874047]">
-              <span className="hidden sm:inline">Response language</span>
-              <span className="sm:hidden">Language</span>
+              <span>Language</span>
               <select
                 value={responseLanguage}
                 onChange={(event) =>
@@ -78,31 +73,32 @@ export function ChatInput({
                 <option value="Hindi">हिन्दी</option>
               </select>
             </label>
-            <button
+            <div className="flex items-center gap-1"><button
               type="button"
               onClick={onRegenerate}
               disabled={disabled || sending || !canRegenerate || !onRegenerate}
               title={!canRegenerate ? "Ask a question first." : disabled || sending ? "Wait for a ready source and the current response." : "Generate another response to your last question"}
               aria-describedby={!canRegenerate ? "regenerate-reason" : undefined}
-              className="inline-flex min-h-11 min-w-11 justify-center items-center gap-1 rounded-lg px-2 text-xs font-semibold text-[#874047] disabled:opacity-40"
+              className="workspace-secondary-button text-xs"
               aria-label="Regenerate last response"
             >
-              <RotateCcw className="h-3 w-3" />
+              <RotateCcw className="h-4 w-4" />
               <span className="hidden sm:inline">Regenerate</span>
             </button>
             <button
               type="button"
               onClick={onClear}
               disabled={sending}
-              className="inline-flex min-h-11 min-w-11 justify-center items-center gap-1 rounded-lg px-2 text-xs font-semibold text-[#874047] disabled:opacity-40"
+              className="workspace-secondary-button text-xs"
               aria-label="Clear conversation"
             >
-              <Trash2 className="h-3 w-3" />
+              <Trash2 className="h-4 w-4" />
               <span className="hidden sm:inline">Clear</span>
-            </button>
+            </button></div>
           </div>
         </div>
         {!canRegenerate && <p id="regenerate-reason" className="mt-1 text-xs text-[#706a61]">Regenerate: ask a question first.</p>}
+        <p className="mt-2 text-center text-xs text-[#706a61]">Grounded in your sources. Verify important conclusions.</p>
       </div>
     </div>
   );

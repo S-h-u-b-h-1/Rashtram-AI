@@ -139,12 +139,12 @@ export function StudySourcesPanel({
         <p className="mt-2 text-xs leading-5 text-[#706a61]">
           Answers use the selected sources below.
         </p>
-        <details className="mt-3" open={!catalogueSources.length && !sources.length}><summary className="cursor-pointer rounded-lg py-3 text-xs font-semibold text-[#8f1d2c]">Add source</summary>
-        <form onSubmit={submitUrl} className="space-y-2">
+        <details className="source-add-control mt-3" open={!catalogueSources.length && !sources.length}><summary className="workspace-secondary-button w-full cursor-pointer text-xs"><Plus aria-hidden="true" className="h-4 w-4" />Add source</summary>
+        <form onSubmit={submitUrl} className="mt-3 space-y-2">
           <label className="sr-only" htmlFor={urlInputId}>
             Add a website link
           </label>
-          <div className="flex items-center gap-2 rounded-xl border border-[#8f1d2c]/12 bg-white px-3 py-2">
+          <div className="workspace-input-surface flex items-center gap-2 rounded-xl bg-white px-3 py-2">
             <Link2 className="h-4 w-4 shrink-0 text-[#8f1d2c]" />
             <input
               id={urlInputId}

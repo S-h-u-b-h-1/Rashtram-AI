@@ -15,7 +15,7 @@ import { uniqueIds } from "@/lib/research-workspace.mjs";
 import { isComparisonReady } from "@/lib/document-readiness";
 
 const workflows = flattenResearchWorkflows();
-const actionClass = "flex min-h-12 w-full items-center gap-2 rounded-lg px-3 py-3 text-left text-xs font-medium text-[#514d46] transition hover:bg-[#eee0dc] disabled:cursor-not-allowed disabled:opacity-45";
+const actionClass = "studio-action flex min-h-12 w-full items-center gap-2 rounded-lg px-3 py-3 text-left text-xs font-medium text-[#514d46] transition disabled:cursor-not-allowed";
 
 export function StudioPanel({ document = {}, catalogueSources, summary, notes = [], onAddNote, onDeleteNote, disabled, onRunWorkflow, onCollapse, selectedSourceIds = [], messages = [], onFindCatalogue }) {
   const router = useRouter();
@@ -50,13 +50,13 @@ export function StudioPanel({ document = {}, catalogueSources, summary, notes = 
   }, [identity]);
   const runWorkflow = (workflow) => onRunWorkflow?.({ ...workflow, prompt: workflow.prompt(document) });
   const generatedMessages = messages.filter((message) => message.sender === 'assistant' && message.metadata?.workflowTitle && !message.isStreaming && !message.isError);
-  return <section className="app-scrollbar h-full overflow-y-auto bg-[#f8f6f1]">
+  return <section className="studio-panel app-scrollbar h-full overflow-y-auto bg-[#f8f6f1]">
     <div className="flex items-center justify-between px-4 py-3"><h2 className="text-sm font-semibold text-[#29312d]">Studio</h2>{onCollapse && <button type="button" onClick={onCollapse} className="hidden h-11 w-11 place-items-center rounded-lg text-[#706a61] lg:grid" aria-label="Collapse research tools"><PanelRightClose className="h-4 w-4" /></button>}</div>
     <div className="px-3 pb-4">
-      <h3 className="px-3 text-xs font-semibold text-[#706a61]">Create</h3>
+      <h3 className="px-1 text-xs font-semibold text-[#706a61]">Create from your sources</h3>
       {disabled && <p role="status" className="px-3 py-2 text-xs leading-5 text-[#706a61]">Creation tools are unavailable while sources are preparing or a response is running. Select a ready source and wait for the current operation to finish.</p>}
       {!disabled && !onRunWorkflow && <p className="px-3 py-2 text-xs leading-5 text-[#706a61]">Summary and guided research require an active chat workspace.</p>}
-      <div className="mt-2 grid grid-cols-2 gap-1">
+      <div className="studio-tool-grid mt-3 grid grid-cols-2 gap-2">
         <button type="button" disabled={disabled || !onRunWorkflow} className={actionClass} onClick={() => runWorkflow(workflows.find((item) => item.id === 'executive_brief'))}><FileText className="h-4 w-4 shrink-0 text-[#8f1d2c]" />Summary</button>
         <button type="button" disabled={disabled || !canCompare} title={canCompare ? 'Compare selected Library documents' : 'Select at least two comparison-ready Library documents'} className={actionClass} onClick={() => router.push(`/app/compare?ids=${documentIds.join(',')}`)}><GitCompareArrows className="h-4 w-4 shrink-0 text-[#8f1d2c]" />Comparison</button>
         <button type="button" disabled={disabled || !identity.replace('|', '')} onClick={() => router.push(`/app/policy-drafter?${scopeParams}`)} className={actionClass}><PenLine className="h-4 w-4 shrink-0 text-[#8f1d2c]" />Policy draft</button>
@@ -64,9 +64,9 @@ export function StudioPanel({ document = {}, catalogueSources, summary, notes = 
         <button type="button" disabled={!document.id} className={actionClass} onClick={() => setTool(tool === 'timeline' ? '' : 'timeline')}><Clock3 className="h-4 w-4 shrink-0 text-[#8f1d2c]" />Timeline</button>
         {document.id ? <Link className={actionClass} href={`/app/graph/${document.id}`}><Network className="h-4 w-4 shrink-0 text-[#8f1d2c]" />Relationships</Link> : <button type="button" disabled className={actionClass}><Network className="h-4 w-4 shrink-0" />Relationships</button>}
       </div>
-      {!canCompare && <p className="px-3 py-2 text-xs leading-5 text-[#706a61]">Comparison: select at least two ready Library sources.</p>}
+      {!canCompare && <p className="studio-hint text-xs leading-5 text-[#706a61]">Comparison needs two ready Library sources.</p>}
       {!identity.replace('|', '') && <p className="px-3 py-2 text-xs leading-5 text-[#706a61]">Policy draft: add a usable source first.</p>}
-      {!canCompare && onFindCatalogue && <button type="button" disabled={disabled} onClick={onFindCatalogue} className="min-h-11 px-3 text-xs text-[#8f1d2c] underline">Add Library sources to compare</button>}
+      {!canCompare && onFindCatalogue && <button type="button" disabled={disabled} onClick={onFindCatalogue} className="workspace-secondary-button mt-1 w-full text-xs">Add Library sources to compare</button>}
       {!documentIds.length && <p className="px-3 py-2 text-xs leading-5 text-[#706a61]">Research reports and relationship tools require a Library document. You can summarise or draft from your own sources.</p>}
       {tool === 'report' && <form className="mt-3 space-y-2 rounded-xl border border-[#8f1d2c]/15 p-3" onSubmit={async (event) => { event.preventDefault(); if (generating) return; setGenerating(true); setError(''); try { const response = await generateResearchReport({ researchQuestion: reportQuestion, documentIds }); const reportId = response.report?.id || response.id; if (!reportId) throw new Error("The report was not saved. Please try again."); router.push(`/app/reports/${reportId}`); } catch (failure) { setError(failure.message || 'Could not create the report. Try again.'); } finally { setGenerating(false); } }}><label className="block text-xs font-medium">Report question<textarea value={reportQuestion} onChange={(event) => setReportQuestion(event.target.value)} rows={3} required minLength={8} maxLength={1600} placeholder="What should this report investigate?" className="mt-2 w-full rounded-lg border border-[#8f1d2c]/15 bg-white p-2 text-xs leading-5" /></label><p className="text-xs text-[#706a61]">Uses {documentIds.length} selected Library {documentIds.length === 1 ? 'document' : 'documents'}. Personal uploads are not included in this report tool.</p><button disabled={generating || reportQuestion.trim().length < 8} className="flex min-h-11 items-center gap-2 rounded-lg bg-[#8f1d2c] px-3 text-xs text-white disabled:opacity-50">{generating && <Loader2 className="h-4 w-4 animate-spin" />}{generating ? 'Creating report…' : 'Create report'}</button></form>}
       {error && <p role="alert" className="p-3 text-xs text-[#85434a]">{error}</p>}
@@ -74,7 +74,7 @@ export function StudioPanel({ document = {}, catalogueSources, summary, notes = 
       <details className="mt-2"><summary className="cursor-pointer px-3 py-3 text-xs font-medium text-[#706a61]">More research tools</summary><div className="space-y-1">{workflows.filter((item) => item.id !== 'executive_brief').map((workflow) => <button type="button" key={workflow.id} disabled={disabled || !onRunWorkflow} onClick={() => runWorkflow(workflow)} className={actionClass}>{workflow.title}</button>)}<Link href="/app/recommend" className={actionClass}>Compliance research & tracking</Link></div></details>
       <div className="mt-5 border-t border-[#8f1d2c]/10 pt-5"><h3 className="px-3 text-xs font-semibold text-[#706a61]">Saved outputs</h3>
         {historyError && <p role="status" className="px-3 py-2 text-xs text-[#85434a]">{historyError}</p>}
-        {!outputs.length && !generatedMessages.length && <p className="px-3 py-4 text-xs leading-6 text-[#706a61]">Create an output from your sources. Saved outputs will appear here.</p>}
+        {!outputs.length && !generatedMessages.length && <div className="studio-empty"><FileText aria-hidden="true" className="h-5 w-5 text-[#8f1d2c]" /><p className="text-xs leading-6 text-[#706a61]">Your work, all in one place.<span className="block">Summaries, drafts and reports will appear here.</span></p></div>}
         {generatedMessages.map((message, index) => <button key={message._id || message.id || index} type="button" onClick={() => { globalThis.document.getElementById(`research-message-${message._id || message.id}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' }); }} className={actionClass}>{message.metadata.workflowTitle}</button>)}
         {outputs.slice(0, 8).map((output) => <Link key={`${output.type}:${output.id}`} href={output.href} className="block rounded-lg px-3 py-3 hover:bg-[#f1ece3]"><span className="block text-xs font-medium leading-5">{output.title}</span><span className="mt-1 block text-xs text-[#706a61]">{output.type} · Related to these sources</span></Link>)}
         <Link href="/app/research" className="inline-flex min-h-11 items-center px-3 text-xs text-[#8f1d2c]">All saved research →</Link>
