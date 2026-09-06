@@ -41,11 +41,10 @@ const expansionConnectors = definitions.map((definition) => {
       const landingUrl = landing ? new URL(landing,definition.url).toString() : null;
       const authors = nipfp ? item.find('li').filter((_,li)=>$(li).find('span').first().text().trim()==='Authors').first().clone().children().remove().end().text().trim()
         : item.children('p').eq(1).text().trim();
-      const hindiMonths = ['जनवरी','फरवरी','मार्च','अप्रैल','मई','जून','जुलाई','अगस्त','सितंबर','अक्टूबर','नवंबर','दिसंबर'];
       const dateText = nipfp ? item.find('.misc-details-job').clone().children().remove().end().text().trim() : item.children('p').first().text();
       const year = dateText.match(/\b(?:19|20)\d{2}\b/)?.[0];
-      const monthIndex = hindiMonths.findIndex((month)=>dateText.includes(month));
-      const publicationDateRaw = year ? (nipfp && monthIndex>=0 ? `${year}-${String(monthIndex+1).padStart(2,'0')}` : year) : null;
+      const month = require('../core/hindiPublicationMonth').hindiPublicationMonth(dateText);
+      const publicationDateRaw = year ? (nipfp && month ? `${year}-${String(month).padStart(2,'0')}` : year) : null;
       return {sourceRecordId:publicationIdentity({publisher:definition.name,publisherId,landingUrl,resourceUrl:new URL(anchor.attr('href'),definition.url).toString()}),
         ...(landingUrl?{sourceUrl:landingUrl,detailUrl:landingUrl}:{}),publicationDate:null,publicationDateRaw,
         metadata:{...config.metadata,publisherId:publisherId||null,authors,publicationType:'working-paper',dateText,publisherPage:landingUrl}};
@@ -76,7 +75,7 @@ const expansionConnectors = definitions.map((definition) => {
       const subtype = /speech/i.test(title) ? 'budget-speech' : /highlight/i.test(title) ? 'budget-highlights'
         : /finance bill/i.test(title) ? 'finance-bill' : /receipt/i.test(title) ? 'receipts'
           : /expenditure/i.test(title) ? 'expenditure' : 'budget-document';
-      return {sourceRecordId:publicationIdentity({publisher:definition.name,resourceUrl,edition}),
+      return {sourceRecordId:publicationIdentity({publisher:definition.name,resourceUrl,edition:JSON.stringify([edition,subtype])}),
         publicationDate:null,publicationDateRaw:null,
         metadata:{...config.metadata,edition,financialYear:edition,publicationType:subtype,
           publisherPage:definition.url,dateSemantics:'not_published_on_listing'}};

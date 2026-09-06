@@ -119,6 +119,8 @@ const completeRun = async (runId, summary) => {
     sampleRecordsDiscovered: summary.discovered || 0,
     storedSourceRecords: summary.stored || 0,
     enabled: true,
+    listingQualityAccepted:summary.listingQualityAccepted===true,
+    checkedWindow:summary.checkedWindow===true,
   });
   const changed = Number(summary.counters?.inserted || 0) +
     Number(summary.counters?.updated || 0) +
@@ -129,6 +131,8 @@ const completeRun = async (runId, summary) => {
     .filter(Boolean)
     .sort((left, right) => new Date(right) - new Date(left))[0] || null;
   const healthMetadata = {
+    listingQualityAccepted:summary.listingQualityAccepted===true,
+    checkedWindow:summary.checkedWindow===true,
     runId,
     collection: summary.collection || null,
     counters: summary.counters || {},

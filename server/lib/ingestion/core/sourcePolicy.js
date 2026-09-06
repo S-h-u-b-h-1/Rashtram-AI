@@ -12,6 +12,9 @@ const SOURCE_AUTHORITY_CLASSES = Object.freeze({
 });
 
 const SOURCE_POLICIES = Object.freeze({
+  "cag-reports": {priority:"P1",cadence:"weekly",cadenceHours:168,authorityClass:"OFFICIAL_GOVERNMENT",publicLabel:"Official government source"},
+  "union-budget": {priority:"P2",cadence:"manual",cadenceHours:720,authorityClass:"OFFICIAL_GOVERNMENT",publicLabel:"Official government source"},
+  "ministry-home-circulars": {priority:"P2",cadence:"manual",cadenceHours:720,authorityClass:"OFFICIAL_GOVERNMENT",publicLabel:"Official government source"},
   "prs-india": { priority: "P1", cadence: "daily", cadenceHours: 24, authorityClass: "TRUSTED_SECONDARY", publicLabel: "Institutional research" },
   "india-code": { priority: "P0", cadence: "daily", cadenceHours: 24, authorityClass: "OFFICIAL_PRIMARY", publicLabel: "Official government source" },
   egazette: { priority: "P0", cadence: "daily", cadenceHours: 24, authorityClass: "OFFICIAL_PRIMARY", publicLabel: "Official government source" },

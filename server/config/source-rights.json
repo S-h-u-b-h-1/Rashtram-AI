@@ -1,8 +1,8 @@
 {
   "reviewedAt": "2026-09-06",
   "sources": {
-    "ministry-home-circulars": {"mode":"METADATA_ONLY","reason":"Website reproduction requires Ministry permission; no permission supplied for production full-text storage.","policyUrl":"https://www.mha.gov.in/en/page/website-policy"},
-    "union-budget": {"mode":"METADATA_ONLY","reason":"Website reproduction requires Ministry permission; no permission supplied for production full-text storage.","policyUrl":"https://www.indiabudget.gov.in/website-policies.php"},
+    "ministry-home-circulars": {"mode":"METADATA_ONLY","reason":"Published policy requires permission for partial/full reproduction and incoming hyperlinks. Automated metadata discovery, OCR, extracted-text storage and cited excerpts are not expressly authorized. No permission supplied.","policyUrl":"https://www.mha.gov.in/en/page/website-policy"},
+    "union-budget": {"mode":"METADATA_ONLY","reason":"Reproduction requires Ministry permission. Published hyperlink clauses conflict; no permission for automated full-text storage, OCR or excerpt publication has been established.","policyUrl":"https://www.indiabudget.gov.in/website-policies.php"},
     "research-nipfp": {"mode":"METADATA_ONLY","reason":"Public download and copyright notice do not establish permission for production extracted-text storage/indexing.","policyUrl":"https://www.nipfp.org.in/homepage/"},
     "research-takshashila": {"mode":"METADATA_ONLY","automatedCollection":"BLOCKED","reason":"Published terms restrict automated navigation/search and copyrighted reproduction. Publisher clarification or permission is required before automated collection or full-text preparation.","policyUrl":"https://takshashila.org.in/pages/terms.html"},
     "cag-reports": {"mode":"ATTRIBUTION_REQUIRED","reason":"CAG permits accurate reproduction with prominent attribution, excluding third-party copyrighted material. Per-document exclusions must still be reviewed.","policyUrl":"https://cag.gov.in/en/page-copyright"}

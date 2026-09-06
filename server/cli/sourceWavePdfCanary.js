@@ -5,11 +5,12 @@ const {PDFProcessor}=require('../lib/pdfProcessor');
 const {PoliteFetcher}=require('../lib/ingestion/core/fetcher');
 const {sha256}=require('../lib/ingestion/core/hashing');
 async function main(){
-  const records=JSON.parse(fs.readFileSync('/tmp/rashtram-wave1-cag-records.json'));
+  const input=JSON.parse(fs.readFileSync(process.argv.find(a=>a.startsWith('--records='))?.slice(10)||'/tmp/rashtram-wave1-cag-records.json'));
+  const records=Array.isArray(input)?input:input.records;
   const directory=fs.mkdtempSync('/tmp/rashtram-wave1-pdf-');
   const results=[];
   const indices=(process.argv.find(a=>a.startsWith('--indices='))?.slice(10)||'0,2').split(',').map(Number);
-  if(indices.length>2 || indices.some(i=>!Number.isInteger(i)||i<0||i>=records.length))throw new Error('Select at most two existing sample indices');
+  if(indices.length>3 || indices.some(i=>!Number.isInteger(i)||i<0||i>=records.length))throw new Error('Select at most three existing sample indices');
   for(const record of indices.map(i=>records[i])){
     const processor=new PDFProcessor();let requests=0;
     const recover=processor.recoverPageWithOcr.bind(processor);

@@ -41,6 +41,8 @@ export function SourceCatalogue({ sources = [] }) {
       {source.acceptance && <p className="mt-2 text-sm leading-6 text-[#706a61]">{source.acceptance.decision.replaceAll('_',' ')} — {source.acceptance.reason}</p>}
       {source.rights && <div className="mt-3 rounded-xl border border-[#ded5c8] bg-white p-3 text-sm leading-6">
         <p className="font-semibold">{source.rights.mode === 'METADATA_ONLY' ? 'Metadata only · full-text preparation blocked' : 'Publisher attribution required'}</p>
+        <p className="mt-1 font-medium">Rights: {(source.rights.states || []).map(state=>state.replaceAll('_',' ').toLowerCase()).join(' · ') || 'Review required'}</p>
+        <p className="mt-1 text-[#706a61]">Rights do not establish research readiness or schedule acceptance.</p>
         <p className="mt-1 text-[#706a61]">{source.rights.reason}</p>
         <a href={source.rights.policyUrl} target="_blank" rel="noreferrer" className="inline-flex min-h-11 items-center text-[#8f1d2c] underline">Publisher access policy</a>
       </div>}

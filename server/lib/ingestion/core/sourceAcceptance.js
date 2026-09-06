@@ -4,7 +4,7 @@ const REQUIRED_GATES = ['identity','datePrecision','pdfQuality','accessReview','
 const acceptanceFor = (name) => pilots[name] || null;
 const isScheduleAccepted = (name) => {
   const entry = acceptanceFor(name);
-  return !entry || (entry.decision === 'ACCEPTED_FOR_SCHEDULE' &&
+  return !entry || (entry.decision === 'PRODUCTION_ACCEPTED' &&
     ['daily','weekly','monthly'].includes(entry.cadence) &&
     REQUIRED_GATES.every((gate)=>entry.gates?.[gate] === true) && Boolean(entry.evidenceReport));
 };

@@ -1,5 +1,20 @@
 const { sources } = require('../config/source-rights.json');
-const rightsFor = source => sources[source] || null;
+const rightsFor = source => {
+  const policy=sources[source];
+  if (!policy) return null;
+  const fullTextProcessingAllowed=policy.mode==='ATTRIBUTION_REQUIRED';
+  const automationBlocked=policy.automatedCollection==='BLOCKED';
+  const metadataAllowed=['cag-reports','research-nipfp'].includes(source);
+  return {...policy,
+    states:[...(metadataAllowed?['METADATA_ALLOWED']:[]),...(fullTextProcessingAllowed?['FULL_TEXT_PROCESSING_ALLOWED']:['MANUAL_REVIEW_REQUIRED']),...(automationBlocked?['AUTOMATION_BLOCKED']:[])],
+    permissions:{metadataDiscovery:metadataAllowed?'ALLOWED':'MANUAL_REVIEW_REQUIRED',
+      sourceLinks:source==='ministry-home-circulars'?'PERMISSION_REQUIRED':source==='union-budget'?'MANUAL_REVIEW_REQUIRED':'ALLOWED',
+      extractedTextStorage:fullTextProcessingAllowed?'ALLOWED_WITH_ATTRIBUTION':'PERMISSION_NOT_ESTABLISHED',
+      pdfProcessingOcr:fullTextProcessingAllowed?'ALLOWED_WITH_ATTRIBUTION':'PERMISSION_NOT_ESTABLISHED',
+      citedPassages:fullTextProcessingAllowed?'ALLOWED_WITH_ATTRIBUTION':'PERMISSION_NOT_ESTABLISHED',
+      automatedCollection:automationBlocked?'BLOCKED':'SUBJECT_TO_ROBOTS_AND_SOURCE_ACCEPTANCE'},
+    fullTextProcessingAllowed,metadataAllowed,automationBlocked};
+};
 function assertCollectionRights(source) {
   const rights = rightsFor(source);
   if (rights?.automatedCollection === 'BLOCKED') {

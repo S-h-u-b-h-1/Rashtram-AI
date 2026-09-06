@@ -9,8 +9,8 @@ test('schedule acceptance requires production evidence, not only offline extract
 });
 test('every pilot has an explicit acceptance decision and incomplete sources cannot be scheduled',()=>{
   for(const {name} of definitions){
-    assert.ok(['ACCEPTED_FOR_SCHEDULE','MANUAL_ONLY','BLOCKED','NEEDS_MORE_WORK'].includes(acceptanceFor(name).decision));
-    if(acceptanceFor(name).decision !== 'ACCEPTED_FOR_SCHEDULE') {
+    assert.ok(['PRODUCTION_ACCEPTED','ACCEPTED_FOR_SCHEDULE','MANUAL_ONLY','BLOCKED','NEEDS_MORE_WORK'].includes(acceptanceFor(name).decision));
+    if(acceptanceFor(name).decision !== 'PRODUCTION_ACCEPTED') {
       assert.equal(isScheduleAccepted(name),false);
       assert.throws(()=>assertScheduleAccepted(name),/acceptance/);
     }

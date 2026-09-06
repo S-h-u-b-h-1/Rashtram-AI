@@ -209,6 +209,7 @@ const prepareDocument = async (
     forcePdfReextract = false,
     skipSemantic = false,
     skipSummary = false,
+    maxOcrPages = Infinity,
   } = {},
 ) => {
   const startedAt = Date.now();
@@ -324,6 +325,7 @@ const prepareDocument = async (
       forcePdfReextract,
       skipSemantic,
       skipSummary,
+      maxOcrPages,
     });
     const chunksCount = Number(
       result.chunksStored || result.totalChunks || 0,

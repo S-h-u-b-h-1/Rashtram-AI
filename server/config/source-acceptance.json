@@ -3,7 +3,7 @@
   "reviewedAt": "2026-09-06",
   "pilots": {
     "union-budget": {"decision":"MANUAL_ONLY","reason":"Edition-scoped discovery implemented; metadata-only pending reproduction permission. Table semantics and production readiness remain unverified.","cadence":null},
-    "cag-reports": {"decision":"NEEDS_MORE_WORK","reason":"Two listing windows and report/chapter associations checked; an undated entry prevents complete ordering certification. Two PDFs have usable partial page evidence. Production duplicate/readiness/UI gates remain outstanding.","cadence":null},
+    "cag-reports": {"decision":"NEEDS_MORE_WORK","reason":"Three listing pages checked; known dates sorted within the bounded window and undated reports retain UNKNOWN. Three partial-quality PDFs inspected. Production duplicate canary and three-report catch-up passed; research readiness and live UI acceptance remain in progress.","cadence":null},
     "ministry-home-circulars": {"decision":"MANUAL_ONLY","reason":"Bounded observed-link pagination and recent/older windows checked. Metadata-only pending reproduction permission; scanned PDF OCR/citation quality is not accepted.","cadence":null},
     "ministry-home-notifications": {"decision":"NEEDS_MORE_WORK","reason":"Notification date semantics, recent-window coverage and PDF quality require validation.","cadence":null},
     "ministry-education-notices": {"decision":"NEEDS_MORE_WORK","reason":"Configured listing yields no known downloadable publication.","cadence":null},

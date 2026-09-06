@@ -541,7 +541,8 @@ class PDFProcessor {
     return best;
   }
 
-  async processPDFByPages(pdfUrl) {
+  async processPDFByPages(pdfUrl, {maxOcrPages = Infinity} = {}) {
+    if (maxOcrPages !== Infinity && (!Number.isInteger(maxOcrPages) || maxOcrPages < 0)) throw new Error('Invalid OCR page budget');
     const totalStartedAt = Date.now();
     const downloadStartedAt = Date.now();
     const buffer = await this.downloadPDF(pdfUrl);
@@ -600,6 +601,9 @@ class PDFProcessor {
       const ocrStartedAt = Date.now();
       for (const pageIndex of unusablePages) {
         try {
+          if (unusablePages.indexOf(pageIndex) >= maxOcrPages) {
+            const error=new Error('OCR page budget exhausted');error.code='OCR_BUDGET_DEFERRED';throw error;
+          }
           const pageBuffer = await this.extractSinglePageBuffer(buffer, pageIndex);
           const recovered = await this.recoverPageWithOcr(pageBuffer, pageExtraction[pageIndex]);
           if (recovered?.quality?.usable) {
@@ -636,6 +640,7 @@ class PDFProcessor {
       extractionMethod = "pdf_text_with_page_ocr";
       ocrUsed = pageExtraction.some((page) => page.method === "ocr");
     } else if (!this.hasUsableText(fullText, native.numPages)) {
+      if (native.numPages > maxOcrPages) throw Object.assign(new Error('Whole-document OCR exceeds the page budget'),{code:'OCR_BUDGET_DEFERRED',status:422});
       ocrRequired = true;
       const ocrStartedAt = Date.now();
       const nativeQuality = this.pageExtractionQuality(fullText, { method: "native" });
@@ -753,8 +758,8 @@ class PDFProcessor {
     };
   }
 
-  async processPDFAndCreateChunks(pdfUrl, documentId, title) {
-    const pdfData = await this.processPDFByPages(pdfUrl);
+  async processPDFAndCreateChunks(pdfUrl, documentId, title, options = {}) {
+    const pdfData = await this.processPDFByPages(pdfUrl, options);
     const languageCode = pdfData.language.languageCode;
     const pageQuality = new Map(
       (pdfData.pdfQuality.pageExtraction || []).map((entry) => [Number(entry.page), entry]),

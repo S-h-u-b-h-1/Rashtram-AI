@@ -122,6 +122,8 @@ const runIngestion = async (connector, options = {}) => {
         retries: options.retries,
       });
     const collection = await connector.collect(options, { fetcher });
+    summary.listingQualityAccepted=collection.window?.listingQualityAccepted===true;
+    summary.checkedWindow=collection.window?.checkedWindow===true;
     const records = (collection.records || []).filter((record) =>
       matchesRequestedScope(record, options),
     );
@@ -190,6 +192,9 @@ const runIngestion = async (connector, options = {}) => {
         const candidates = await findCandidates(record);
         const decision = chooseBestCandidate(record, candidates);
         const persisted = await persistRecord(record, decision);
+        if (summary.sampleRecords.length < 10) summary.sampleRecords.push({documentId:persisted.documentId,
+          sourceName:record.sourceName,sourceRecordId:record.sourceRecordId,title:record.title,
+          publicationDate:record.publicationDate,sourceUrl:record.sourceUrl,pdfUrl:record.pdfUrl});
         await recordRunItem({
           runId: run.id,
           sourceRecordId: record.sourceRecordId,

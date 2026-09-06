@@ -1300,6 +1300,7 @@ const processDocument = async (documentType, documentId, options = {}) => {
         pdfUrl,
         documentId,
         document.title,
+        {maxOcrPages:options.maxOcrPages ?? Infinity},
       );
       processed.processedPdfUrl = pdfUrl;
       break;

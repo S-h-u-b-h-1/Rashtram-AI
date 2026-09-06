@@ -3,6 +3,8 @@ const { publicationIdentity, canonicalPublicationUrl } = require('../core/public
 const { dateFromText } = require('./publicListingConnector');
 const { createSnapshot } = require('../core/sourceSnapshots');
 const clean = value => String(value || '').replace(/\s+/g, ' ').trim();
+const cagIdentity = ({sourceUrl, jurisdiction, metadata}) => publicationIdentity({publisher:'cag-reports',
+  publisherId:JSON.stringify([metadata.reportNumber,metadata.reportYear,clean(jurisdiction).toLowerCase(),canonicalPublicationUrl(sourceUrl)])});
 const allowedUrl = (value, base) => {
   try { const url = canonicalPublicationUrl(new URL(value, base).href); return url && new URL(url).hostname === 'cag.gov.in' ? url : null; }
   catch { return null; }
@@ -18,7 +20,7 @@ function parseCagListing(html, pageUrl) {
     const report = title.match(/Report\s+No\.?\s*(\d+)\s+of\s+(\d{4})/i);
     const jurisdiction = clean(row.find('.reportIcon h5').text()) || 'India';
     const dateRaw = clean(row.find('.dateFirst .dtn').text());
-    records.push({ sourceName:'cag-reports', sourceRecordId:publicationIdentity({publisher:'cag-reports',landingUrl:sourceUrl}),
+    const record = { sourceName:'cag-reports',
       sourceUrl, detailUrl:sourceUrl, title, documentType:'report', authority:'Comptroller and Auditor General of India',
       jurisdiction, jurisdictionLevel:jurisdiction==='India'?'union':'state',
       publicationDate:dateFromText(dateRaw), publicationDateRaw:dateRaw,
@@ -26,7 +28,10 @@ function parseCagListing(html, pageUrl) {
         publicationType:clean(row.find('.reportType').text()), sectors:row.find('.sectorDetail > div').slice(1).map((i,n)=>clean($(n).text()).replace(/\s*\|\s*$/,'')).get(),
         department:null, departmentStatus:'not_published_in_listing', dateSemantics:'report_tabled', publisherPage:sourceUrl,
         publisherGroup:'government', onboardingStatus:'pilot', tableExtraction:'page_evidence_only', structuredTablesVerified:false},
-      listedFullReport:allowedUrl(row.find('.pdfBottomReport a').filter((i,a)=>/Download Full Report/i.test($(a).text())).first().attr('href'),pageUrl) });
+      listedFullReport:allowedUrl(row.find('.pdfBottomReport a').filter((i,a)=>/Download Full Report/i.test($(a).text())).first().attr('href'),pageUrl) };
+    record.sourceRecordId=cagIdentity(record);
+    record.metadata.identityVersion='cag-report-v2';
+    records.push(record);
   });
   const next = $('a[href]').filter((i,a)=>clean($(a).text())==='>>').first().attr('href');
   const nextUrl = next ? allowedUrl(next,pageUrl) : null;
@@ -63,7 +68,7 @@ function parseCagDetail(html, parent) {
 const cagReportsConnector={name:'cag-reports',defaultCollection:'audit-reports',
   async collect(options={}, {fetcher}) {
     const result={records:[],snapshots:[],errors:[],diagnostics:[],window:{pages:[],orderChecked:false}};
-    const limit=Math.min(100,Math.max(1,Number(options.limit)||5)), maxPages=Math.min(3,Math.max(1,Number(options.maxPages)||2));
+    const limit=Math.min(5,Math.max(1,Number(options.limit)||5)), maxPages=Math.min(3,Math.max(1,Number(options.maxPages)||3));
     let url='https://cag.gov.in/en/audit-report'; const seen=new Set(), candidates=[];
     for(let page=0;url && page<maxPages;page++) {
       if(seen.has(url)) break; seen.add(url);
@@ -75,13 +80,22 @@ const cagReportsConnector={name:'cag-reports',defaultCollection:'audit-reports',
     }
     const dates=candidates.map(r=>r.publicationDate);
     result.window.orderChecked=dates.length>0 && dates.every((date,i)=>date && (!i || date<=dates[i-1]));
+    const known=candidates.filter(r=>r.publicationDate);
+    result.window.unknownDateReports=candidates.filter(r=>!r.publicationDate).map(r=>r.sourceUrl);
+    result.window.orderAnomalies=known.flatMap((r,i)=>i && r.publicationDate>known[i-1].publicationDate
+      ? [{previous:known[i-1].sourceUrl,current:r.sourceUrl,previousDate:known[i-1].publicationDate,currentDate:r.publicationDate}] : []);
+    result.window.ordering='known_dates_sorted_locally_unknown_retained';
+    result.window.candidates=candidates.map(r=>({sourceRecordId:r.sourceRecordId,sourceUrl:r.sourceUrl,
+      reportNumber:r.metadata.reportNumber,reportYear:r.metadata.reportYear,jurisdiction:r.jurisdiction,publicationDate:r.publicationDate}));
     const unique=[...new Map(candidates.map(r=>[r.sourceRecordId,r])).values()].sort((a,b)=>(b.publicationDate||'').localeCompare(a.publicationDate||'')).slice(0,limit);
     for(const parent of unique) { try { const response=await fetcher.getText(parent.sourceUrl);
       result.records.push(parseCagDetail(response.body,parent));
       result.snapshots.push(createSnapshot({sourceName:'cag-reports',sourceUrl:parent.sourceUrl,body:response.body,responseStatus:response.status,recordCount:1}));
     } catch(e){result.errors.push({stage:'detail',url:parent.sourceUrl,message:e.message});} }
     if(!result.records.length)result.diagnostics.push({type:'empty-source',message:'No verified full-report association found.'});
+    result.window.checkedWindow=result.window.pages.length===3 && result.errors.length===0;
+    result.window.listingQualityAccepted=result.window.checkedWindow && result.records.length>0;
     return result;
   }};
 require('./connectorLifecycle').attachConnectorLifecycle(cagReportsConnector,['audit-reports']);
-module.exports={cagReportsConnector,parseCagListing,parseCagDetail};
+module.exports={cagReportsConnector,parseCagListing,parseCagDetail,cagIdentity};
