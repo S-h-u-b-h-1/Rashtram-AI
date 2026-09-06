@@ -398,6 +398,42 @@ executed). RA-T010 = `PARTIAL` (deterministic completeness guard and safe
 fallback are implemented and tested; live completeness matrix not executed).
 Release E was not started.
 
+## Releases C + D authenticated acceptance pass — 6 September 2026
+
+This was a verification-only pass. No implementation, retrieval, UX, source,
+recommendation, comparison, chat, or Release E changes were made. The latest
+Ready Vercel deployments were confirmed by deployment metadata: frontend
+`dpl_FsCpAAC3dbBtsHJCNZfn1efa3SfF` and backend
+`dpl_36NTENLkNaXmpR4nQoFCbGvj7ASC`, with the production aliases attached.
+Direct HTTP re-checks were intermittently blocked by DNS resolution failures in
+the execution environment, so alias health is not newly certified here.
+
+The available authenticated browser session was an existing user session, not
+a disposable QA account. To avoid mutating the user's workspace, only bounded
+read/smoke interactions were performed: two recommendation probes (one
+justified no-match and one correct abstention) and one document-chat probe. The
+chat answer streamed to a completed, cited response, included clearly separated
+document facts and analysis, and the source stayed `Ready to research`. The
+required 12/40/6/15 production matrices, comparison regenerations, logout/login
+replay checks, and duplicate-submission checks were not run because the required
+disposable authenticated QA account was unavailable.
+
+All focused Release C/D suites passed. Frontend tests passed 41/41; lint had
+zero errors and eight pre-existing warnings; the Webpack production build
+passed all 27 routes; database verification passed; and `process:audit` remained
+read-only with identical before/after fingerprints and zero mutations. The full
+backend suite was rerun and had the same five environment failures (four local
+listener `EPERM`, one external DNS `ENOTFOUND example.com`) with no Release C/D
+assertion failure. Dependency audit remains unchanged (client clear; existing
+moderate backend `qs` advisory).
+
+Final acceptance disposition: RA-T005 = `PARTIAL`, RA-T006 = `PARTIAL`,
+RA-T007 = `PARTIAL`, RA-T009 = `PARTIAL`, and RA-T010 = `PARTIAL`. No item is
+marked `PRODUCTION_VERIFIED` without the required disposable-account live
+evidence. Release E was not started. Next action is to repeat only the bounded
+authenticated matrices with a disposable QA account in a listener- and
+DNS-capable environment.
+
 ## Status definitions
 
 `OPEN`, `IN_PROGRESS`, `FIXED_LOCALLY`, `DEPLOYED`, `PRODUCTION_VERIFIED`,

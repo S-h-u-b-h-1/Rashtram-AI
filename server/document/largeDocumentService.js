@@ -10,6 +10,7 @@ const {
   storeRoutingRepresentations,
 } = require("../lib/vectordb");
 const { normalizeDocumentType, retrievalFamilyForType } = require("./documentTypes");
+const { canonicalRoutingVectorId } = require("./vectorIdentity");
 
 const LARGE_DOCUMENT_THRESHOLD = 100;
 const LARGE_DOCUMENT_INDEX_VERSION = "hierarchical-large-document-v1";
@@ -146,9 +147,16 @@ const indexLargeDocument = async ({
   };
   if (dryRun) return { ...result, status: "dry_run" };
 
-  const namespace = providerConfig().vectorNamespace;
+  const embeddingConfig = providerConfig();
+  const namespace = embeddingConfig.vectorNamespace;
   const representations = groups.map((group) => ({
-    id: `large-${family}-${document.id}-group-${group.groupIndex}`,
+    id: canonicalRoutingVectorId({
+      family,
+      documentId: document.id,
+      groupIndex: group.groupIndex,
+      representationHash: group.representationHash,
+      config: embeddingConfig,
+    }),
     documentId: document.id,
     title: document.title,
     embeddingText: group.representationText,
@@ -156,7 +164,15 @@ const indexLargeDocument = async ({
     groupTitle: group.groupTitle,
     childStart: group.childStart,
     childEnd: group.childEnd,
-    metadata: { documentId: String(document.id), largeDocumentIndexVersion: LARGE_DOCUMENT_INDEX_VERSION },
+    metadata: {
+      documentId: String(document.id),
+      largeDocumentIndexVersion: LARGE_DOCUMENT_INDEX_VERSION,
+      embeddingProvider: embeddingConfig.embeddingProvider,
+      embeddingModel: embeddingConfig.embeddingModel,
+      embeddingDimension: String(embeddingConfig.embeddingDimension),
+      vectorNamespace: embeddingConfig.vectorNamespace,
+      embeddingInputHash: group.representationHash,
+    },
   }));
   const stored = await storeFn({ representations, index: config.index(),
     idField: config.idField, titleField: config.titleField });

@@ -27,9 +27,9 @@ test("saveNormalizedChunks marks a chunk reusable only when hash AND namespace b
     if (sql.includes("SELECT chunk_index, content_hash")) {
       return {
         rows: [
-          { chunk_index: 0, content_hash: hashOf(unchangedContent), embedding_namespace: currentNamespace },
-          { chunk_index: 1, content_hash: "HASH_STALE", embedding_namespace: currentNamespace },
-          { chunk_index: 2, content_hash: hashOf(namespaceMismatchContent), embedding_namespace: "old-model-512-v1" },
+          { chunk_index: 0, content_hash: hashOf(unchangedContent), embedding_namespace: currentNamespace, vector_reference: "doc-1-chunk-0" },
+          { chunk_index: 1, content_hash: "HASH_STALE", embedding_namespace: currentNamespace, vector_reference: "doc-1-chunk-1" },
+          { chunk_index: 2, content_hash: hashOf(namespaceMismatchContent), embedding_namespace: "old-model-512-v1", vector_reference: "doc-1-chunk-2" },
         ],
       };
     }

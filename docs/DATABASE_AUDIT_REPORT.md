@@ -1,23 +1,23 @@
 # Database Audit Report
 
-Generated from the configured PostgreSQL database at 2026-08-21T07:42:01.367Z.
+Generated from the configured PostgreSQL database at 2026-08-24T05:23:31.272Z.
 
 No tables were deleted during this audit. Legacy tables remain available while schema-v2 mirrors preserve backward compatibility.
 
 ## Inventory summary
 
-- Tables: 69
-- Empty tables: 19
+- Tables: 79
+- Empty tables: 20
 - Legacy compatibility tables: 9
-- Universal documents: 19949
-- Strictly research-ready documents: 3138
+- Universal documents: 19980
+- Strictly research-ready documents: 3390
 - Low-quality records (score below 40): 38
 - Missing canonical source URL: 0
-- Missing primary PDF resource: 2615
+- Missing primary PDF resource: 2646
 - Broken resource rows: 0
 - Orphan sources/resources/messages: 0/0/0
 - Duplicate canonical IDs: 0
-- Invalid research-ready flags: 1564
+- Invalid research-ready flags: 0
 
 ## Table inventory
 
@@ -31,67 +31,77 @@ No tables were deleted during this audit. Legacy tables remain available while s
 | `bill_chats` | 0 | 7 | legacy_archive | n/a |
 | `bookmarks` | 0 | 4 | keep | n/a |
 | `bug_reports` | 0 | 3 | keep | n/a |
-| `catalog_match_reviews` | 46 | 3 | keep | 2026-08-15T14:50:43.217Z |
+| `catalog_match_reviews` | 50 | 3 | keep | 2026-08-22T14:52:58.583Z |
+| `compliance_research_runs` | 1 | 3 | keep | 2026-08-22T14:12:13.386Z |
 | `contact_requests` | 0 | 5 | legacy_archive | n/a |
+| `cross_state_comparisons` | 0 | 4 | keep | n/a |
 | `dashboard_metrics` | 7 | 4 | keep | n/a |
-| `dedupe_candidates` | 0 | 5 | keep | n/a |
-| `document_artifact_objects` | 3136 | 6 | keep | 2026-08-11T21:08:04.865Z |
+| `dedupe_candidates` | 0 | 6 | keep | n/a |
+| `document_artifact_objects` | 3384 | 6 | keep | 2026-08-24T02:45:15.313Z |
 | `document_catalogue_audit_checkpoints` | 1 | 2 | keep | 2026-07-11T04:27:46.616Z |
 | `document_chat_feedback` | 1 | 4 | keep | 2026-07-11T05:30:50.247Z |
-| `document_chats` | 57 | 8 | legacy_archive | 2026-08-16T10:18:01.344Z |
-| `document_comparisons` | 32 | 9 | keep | 2026-08-15T06:45:05.468Z |
+| `document_chats` | 64 | 9 | legacy_archive | 2026-08-24T01:20:29.407Z |
+| `document_chunk_groups` | 9 | 3 | keep | 2026-08-21T11:33:18.121Z |
+| `document_comparison_versions` | 39 | 3 | keep | 2026-08-24T05:11:26.730Z |
+| `document_comparisons` | 37 | 10 | keep | 2026-08-24T05:11:26.730Z |
 | `document_metadata` | 17741 | 3 | keep | 2026-07-02T09:40:26.800Z |
-| `document_processing_attempts` | 2531 | 9 | keep | 2026-08-21T07:23:06.872Z |
+| `document_processing_attempts` | 2838 | 9 | keep | 2026-08-24T02:50:50.091Z |
 | `document_processing_audit_log` | 15 | 4 | keep | 2026-07-13T11:08:33.465Z |
-| `document_processing_jobs` | 6419 | 14 | keep | 2026-08-21T07:23:06.630Z |
-| `document_processing_stages` | 10 | 3 | keep | 2026-08-21T07:23:06.131Z |
-| `document_processing_state` | 19629 | 25 | keep | 2026-08-21T07:23:06.376Z |
-| `document_processing_workers` | 379 | 3 | keep | n/a |
-| `document_relationships` | 1172 | 12 | keep | 2026-08-11T21:00:27.294Z |
-| `document_resources` | 20573 | 21 | keep | 2026-08-20T15:06:55.247Z |
-| `document_retry_domain_state` | 18 | 5 | keep | 2026-08-11T20:57:32.956Z |
-| `document_sources` | 20035 | 11 | keep | 2026-08-20T15:06:55.247Z |
-| `document_text_artifacts` | 3145 | 16 | keep | 2026-08-16T08:47:40.830Z |
-| `document_text_chunks` | 23551 | 17 | keep | 2026-08-21T07:23:05.048Z |
-| `documents` | 19949 | 75 | keep | 2026-08-20T15:06:55.293Z |
+| `document_processing_jobs` | 6614 | 15 | keep | 2026-08-24T02:50:49.783Z |
+| `document_processing_stages` | 3447 | 4 | keep | 2026-08-24T02:50:48.080Z |
+| `document_processing_state` | 19784 | 38 | keep | 2026-08-24T02:50:49.527Z |
+| `document_processing_workers` | 394 | 3 | keep | n/a |
+| `document_relationships` | 1174 | 13 | keep | 2026-08-22T10:40:52.889Z |
+| `document_research_profiles` | 20 | 2 | keep | 2026-08-24T02:35:02.365Z |
+| `document_resources` | 20708 | 23 | keep | 2026-08-24T02:50:01.106Z |
+| `document_retry_domain_state` | 18 | 5 | keep | 2026-08-24T02:50:50.394Z |
+| `document_sources` | 20066 | 12 | keep | 2026-08-23T15:09:15.458Z |
+| `document_structure_nodes` | 1900 | 1 | keep | n/a |
+| `document_text_artifacts` | 3397 | 20 | keep | 2026-08-24T02:49:40.699Z |
+| `document_text_chunks` | 24664 | 27 | keep | 2026-08-24T02:49:49.676Z |
+| `documents` | 19980 | 97 | keep | 2026-08-24T02:56:47.356Z |
 | `egazette_chats` | 1 | 7 | legacy_archive | 2026-06-29T12:43:38.960Z |
 | `feedback_submissions` | 0 | 3 | keep | n/a |
-| `ingestion_run_items` | 15801 | 4 | keep | 2026-08-20T15:06:55.272Z |
-| `ingestion_runs` | 822 | 9 | keep | 2026-08-20T15:06:55.280Z |
-| `intelligence_events` | 1766 | 6 | keep | 2026-08-20T15:06:55.247Z |
+| `ingestion_run_items` | 16418 | 4 | keep | 2026-08-23T15:09:15.477Z |
+| `ingestion_runs` | 881 | 9 | keep | 2026-08-23T15:09:15.497Z |
+| `intelligence_events` | 1797 | 8 | keep | 2026-08-23T14:59:38.919Z |
 | `knowledge_edges` | 0 | 7 | keep | n/a |
-| `knowledge_evidence` | 0 | 8 | keep | n/a |
+| `knowledge_evidence` | 0 | 9 | keep | n/a |
 | `knowledge_nodes` | 0 | 7 | keep | n/a |
-| `legislative_document_resources` | 20573 | 11 | legacy_archive | 2026-08-20T15:06:55.247Z |
-| `legislative_documents` | 19949 | 40 | legacy_archive | 2026-08-20T15:06:55.247Z |
+| `legislative_document_resources` | 20708 | 11 | legacy_archive | 2026-08-24T02:45:15.555Z |
+| `legislative_documents` | 19980 | 46 | legacy_archive | 2026-08-24T02:50:48.654Z |
 | `multi_document_chats` | 3 | 6 | legacy_archive | 2026-08-15T06:51:56.365Z |
 | `policy_chats` | 0 | 5 | keep | n/a |
-| `policy_drafts` | 0 | 2 | keep | n/a |
-| `recommendations` | 414 | 21 | keep | 2026-08-16T10:21:54.080Z |
+| `policy_drafts` | 3 | 2 | keep | 2026-08-24T04:09:52.660Z |
+| `product_usage_telemetry` | 1 | 5 | keep | 2026-08-22T14:12:13.412Z |
+| `recommendations` | 707 | 29 | keep | 2026-08-24T05:12:48.533Z |
+| `regulatory_alerts` | 0 | 5 | keep | n/a |
 | `related_bills` | 3 | 5 | legacy_archive | 2026-06-27T14:11:37.515Z |
-| `research_chats` | 57 | 5 | keep | 2026-08-16T10:18:01.344Z |
+| `research_chats` | 64 | 6 | keep | 2026-08-24T01:20:29.407Z |
 | `research_collection_items` | 1 | 5 | keep | 2026-06-30T19:30:03.994Z |
 | `research_collections` | 1 | 5 | keep | 2026-06-30T19:29:49.229Z |
-| `research_messages` | 166 | 5 | keep | 2026-08-16T09:47:10.630Z |
+| `research_messages` | 183 | 5 | keep | 2026-08-24T01:20:27.753Z |
 | `research_notes` | 5 | 6 | keep | 2026-07-02T05:42:39.893Z |
-| `research_query_telemetry` | 0 | 3 | keep | n/a |
+| `research_query_telemetry` | 95 | 5 | keep | 2026-08-24T05:11:26.725Z |
+| `research_reports` | 0 | 4 | keep | n/a |
 | `research_source_chunks` | 0 | 2 | keep | n/a |
 | `research_sources` | 0 | 2 | keep | n/a |
+| `research_watchlists` | 0 | 4 | keep | n/a |
 | `saved_content` | 1 | 3 | keep | 2026-07-01T09:29:10.470Z |
 | `saved_graph_paths` | 0 | 4 | keep | n/a |
 | `saved_searches` | 1 | 5 | keep | 2026-08-16T09:46:45.300Z |
-| `schema_migrations` | 32 | 6 | keep | 2026-08-21T06:49:44.467Z |
-| `source_collection_snapshots` | 2029 | 5 | keep | 2026-08-20T15:06:52.055Z |
-| `source_directory_entries` | 148 | 4 | keep | 2026-08-16T02:58:02.473Z |
-| `source_health` | 31 | 4 | keep | 2026-08-20T15:06:55.288Z |
-| `source_registry` | 34 | 7 | keep | 2026-08-20T15:06:55.284Z |
-| `user_activity_events` | 0 | 8 | keep | n/a |
-| `user_document_interactions` | 6 | 7 | keep | n/a |
+| `schema_migrations` | 41 | 6 | keep | 2026-08-24T04:35:43.498Z |
+| `source_collection_snapshots` | 2094 | 5 | keep | 2026-08-23T15:09:13.839Z |
+| `source_directory_entries` | 148 | 4 | keep | 2026-08-23T03:01:04.296Z |
+| `source_health` | 31 | 5 | keep | 2026-08-23T15:09:15.509Z |
+| `source_registry` | 34 | 10 | keep | 2026-08-23T15:09:15.500Z |
+| `user_activity_events` | 0 | 11 | keep | n/a |
+| `user_document_interactions` | 6 | 8 | keep | n/a |
 | `user_preferences` | 2 | 5 | keep | 2026-08-11T05:25:49.559Z |
 | `user_profiles` | 1 | 9 | keep | 2026-08-11T05:25:49.559Z |
 | `user_research_preferences` | 5 | 5 | keep | 2026-08-15T05:53:47.581Z |
-| `user_sessions` | 0 | 6 | keep | n/a |
-| `users` | 10 | 15 | keep | 2026-07-23T07:01:01.289Z |
+| `user_sessions` | 4 | 6 | keep | 2026-08-24T05:09:02.928Z |
+| `users` | 10 | 18 | keep | 2026-07-23T07:01:01.289Z |
 
 ## Detailed table findings
 
@@ -271,11 +281,11 @@ No tables were deleted during this audit. Legacy tables remain available while s
 
 ### catalog_match_reviews
 
-- Rows: 46
+- Rows: 50
 - Decision: **keep** — Active application or infrastructure table.
 - Active code references: `server/db.js`, `server/lib/database/capacity.js`, `server/lib/ingestion/core/catalogRepository.js`
 - Nullable fields: reviewed_by, reviewed_at
-- Last-update signal: created_at = 2026-08-15T14:50:43.217Z
+- Last-update signal: created_at = 2026-08-22T14:52:58.583Z
 - Indexes: `catalog_match_reviews_incoming_source_name_incoming_source__key`, `catalog_match_reviews_pending_idx`, `catalog_match_reviews_pkey`
 - Foreign keys: `catalog_match_reviews_candidate_document_id_fkey`: FOREIGN KEY (candidate_document_id) REFERENCES legislative_documents(id) ON DELETE CASCADE
 
@@ -291,6 +301,28 @@ No tables were deleted during this audit. Legacy tables remain available while s
 | `reviewed_by` | text | YES |  |
 | `reviewed_at` | timestamp with time zone | YES |  |
 | `created_at` | timestamp with time zone | NO | now() |
+
+### compliance_research_runs
+
+- Rows: 1
+- Decision: **keep** — Active application or infrastructure table.
+- Active code references: `server/cli/dbVerify.js`, `server/product/complianceCopilotService.js`, `server/profile/profileService.js`
+- Nullable fields: none
+- Last-update signal: updated_at = 2026-08-22T14:12:13.386Z
+- Indexes: `compliance_research_runs_pkey`, `compliance_research_runs_problem_idx`, `compliance_research_runs_user_recent_idx`
+- Foreign keys: `compliance_research_runs_user_id_fkey`: FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+
+| Column | Type | Nullable | Default |
+|---|---|---|---|
+| `id` | bigint | NO | nextval('compliance_research_runs_id_seq'::regclass) |
+| `user_id` | bigint | NO |  |
+| `problem_fingerprint` | text | NO |  |
+| `business_profile_json` | jsonb | NO | '{}'::jsonb |
+| `result_json` | jsonb | NO | '{}'::jsonb |
+| `evidence_refs_json` | jsonb | NO | '[]'::jsonb |
+| `status` | text | NO |  |
+| `created_at` | timestamp with time zone | NO | now() |
+| `updated_at` | timestamp with time zone | NO | now() |
 
 ### contact_requests
 
@@ -314,6 +346,27 @@ No tables were deleted during this audit. Legacy tables remain available while s
 | `status` | text | NO | 'new'::text |
 | `created_at` | timestamp with time zone | NO | now() |
 
+### cross_state_comparisons
+
+- Rows: 0 (empty)
+- Decision: **keep** — Active application or infrastructure table.
+- Active code references: `server/cli/dbVerify.js`, `server/product/crossStateComparisonService.js`, `server/profile/profileService.js`, `server/test/databaseV2.test.js`
+- Nullable fields: none
+- Last-update signal: updated_at
+- Indexes: `cross_state_comparisons_pkey`, `cross_state_comparisons_user_recent_idx`
+- Foreign keys: `cross_state_comparisons_user_id_fkey`: FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+
+| Column | Type | Nullable | Default |
+|---|---|---|---|
+| `id` | bigint | NO | nextval('cross_state_comparisons_id_seq'::regclass) |
+| `user_id` | bigint | NO |  |
+| `query_fingerprint` | text | NO |  |
+| `input_json` | jsonb | NO | '{}'::jsonb |
+| `result_json` | jsonb | NO | '{}'::jsonb |
+| `evidence_refs_json` | jsonb | NO | '[]'::jsonb |
+| `created_at` | timestamp with time zone | NO | now() |
+| `updated_at` | timestamp with time zone | NO | now() |
+
 ### dashboard_metrics
 
 - Rows: 7
@@ -335,7 +388,7 @@ No tables were deleted during this audit. Legacy tables remain available while s
 
 - Rows: 0 (empty)
 - Decision: **keep** — Normalized schema-v2 feature table; empty until the feature produces data.
-- Active code references: `server/cli/dbVerify.js`, `server/lib/database/audit.js`, `server/lib/database/capacity.js`, `server/lib/database/quality.js`, `server/test/databaseV2.test.js`
+- Active code references: `server/cli/dbVerify.js`, `server/document/corpusIntelligenceService.js`, `server/lib/database/audit.js`, `server/lib/database/capacity.js`, `server/lib/database/quality.js`, `server/test/databaseV2.test.js`
 - Nullable fields: confidence, reviewed_at
 - Last-update signal: created_at
 - Indexes: `dedupe_candidates_document_id_candidate_document_id_match_t_key`, `dedupe_candidates_pkey`
@@ -355,11 +408,11 @@ No tables were deleted during this audit. Legacy tables remain available while s
 
 ### document_artifact_objects
 
-- Rows: 3136
+- Rows: 3384
 - Decision: **keep** — Active application or infrastructure table.
 - Active code references: `server/cli/dbVerify.js`, `server/document/documentResearchService.js`, `server/document/readinessService.js`, `server/lib/database/capacity.js`, `server/lib/storage/artifactMigration.js`, `server/test/capacityPlanning.test.js`
 - Nullable fields: resource_id
-- Last-update signal: updated_at = 2026-08-11T21:08:04.865Z
+- Last-update signal: updated_at = 2026-08-24T02:45:15.313Z
 - Indexes: `document_artifact_objects_document_id_artifact_kind_sha256_key`, `document_artifact_objects_document_idx`, `document_artifact_objects_object_key_idx`, `document_artifact_objects_pkey`, `document_artifact_objects_resource_idx`
 - Foreign keys: `document_artifact_objects_document_id_fkey`: FOREIGN KEY (document_id) REFERENCES documents(id) ON DELETE CASCADE; `document_artifact_objects_resource_id_fkey`: FOREIGN KEY (resource_id) REFERENCES document_resources(id) ON DELETE SET NULL
 
@@ -424,11 +477,11 @@ No tables were deleted during this audit. Legacy tables remain available while s
 
 ### document_chats
 
-- Rows: 57
+- Rows: 64
 - Decision: **legacy_archive** — Preserved for backward compatibility while additive triggers mirror data into schema v2.
-- Active code references: `server/dashboard/intelligenceService.js`, `server/db.js`, `server/document/DocumentRepository.js`, `server/lib/database/audit.js`, `server/lib/database/capacity.js`, `server/lib/database/maintenance.js`, `server/models/DocumentChat.js`, `server/profile/profileService.js`
+- Active code references: `server/cli/pdfQualityAudit.js`, `server/dashboard/intelligenceService.js`, `server/db.js`, `server/document/DocumentRepository.js`, `server/lib/database/audit.js`, `server/lib/database/capacity.js`, `server/lib/database/maintenance.js`, `server/models/DocumentChat.js`, `server/profile/profileService.js`
 - Nullable fields: status, pdf_url, source_url, summary
-- Last-update signal: updated_at = 2026-08-16T10:18:01.344Z
+- Last-update signal: updated_at = 2026-08-24T01:20:29.407Z
 - Indexes: `document_chats_document_idx`, `document_chats_pkey`, `document_chats_user_id_document_type_document_id_key`, `document_chats_user_recent_idx`
 - Foreign keys: `document_chats_user_id_fkey`: FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 
@@ -452,13 +505,64 @@ No tables were deleted during this audit. Legacy tables remain available while s
 | `created_at` | timestamp with time zone | NO | now() |
 | `updated_at` | timestamp with time zone | NO | now() |
 
+### document_chunk_groups
+
+- Rows: 9
+- Decision: **keep** — Active application or infrastructure table.
+- Active code references: `server/cli/dbVerify.js`, `server/document/largeDocumentService.js`, `server/test/databaseV2.test.js`
+- Nullable fields: group_title, vector_reference, embedding_namespace
+- Last-update signal: updated_at = 2026-08-21T11:33:18.121Z
+- Indexes: `document_chunk_groups_document_id_group_index_key`, `document_chunk_groups_document_range_idx`, `document_chunk_groups_pkey`, `document_chunk_groups_vector_idx`
+- Foreign keys: `document_chunk_groups_document_id_fkey`: FOREIGN KEY (document_id) REFERENCES documents(id) ON DELETE CASCADE
+
+| Column | Type | Nullable | Default |
+|---|---|---|---|
+| `id` | bigint | NO | nextval('document_chunk_groups_id_seq'::regclass) |
+| `document_id` | bigint | NO |  |
+| `group_index` | integer | NO |  |
+| `group_title` | text | YES |  |
+| `child_start_index` | integer | NO |  |
+| `child_end_index` | integer | NO |  |
+| `child_count` | integer | NO |  |
+| `representation_text` | text | NO |  |
+| `representation_hash` | text | NO |  |
+| `vector_reference` | text | YES |  |
+| `embedding_namespace` | text | YES |  |
+| `metadata_json` | jsonb | NO | '{}'::jsonb |
+| `created_at` | timestamp with time zone | NO | now() |
+| `updated_at` | timestamp with time zone | NO | now() |
+
+### document_comparison_versions
+
+- Rows: 39
+- Decision: **keep** — Active application or infrastructure table.
+- Active code references: `server/document/documentComparisonService.js`, `server/test/comparisonRegeneration.test.js`, `server/test/databaseV2.test.js`
+- Nullable fields: user_question, generation_mode
+- Last-update signal: created_at = 2026-08-24T05:11:26.730Z
+- Indexes: `document_comparison_versions_comparison_id_version_number_key`, `document_comparison_versions_pkey`, `document_comparison_versions_recent_idx`
+- Foreign keys: `document_comparison_versions_comparison_id_fkey`: FOREIGN KEY (comparison_id) REFERENCES document_comparisons(id) ON DELETE CASCADE
+
+| Column | Type | Nullable | Default |
+|---|---|---|---|
+| `id` | bigint | NO | nextval('document_comparison_versions_id_seq'::regclass) |
+| `comparison_id` | bigint | NO |  |
+| `version_number` | integer | NO |  |
+| `document_ids_json` | jsonb | NO |  |
+| `mode` | text | NO |  |
+| `language` | text | NO |  |
+| `user_question` | text | YES |  |
+| `result_json` | jsonb | NO |  |
+| `generation_mode` | text | YES |  |
+| `timings_json` | jsonb | NO | '{}'::jsonb |
+| `created_at` | timestamp with time zone | NO | now() |
+
 ### document_comparisons
 
-- Rows: 32
+- Rows: 37
 - Decision: **keep** — Active application or infrastructure table.
-- Active code references: `server/cli/documentsInspect.js`, `server/db.js`, `server/document/documentComparisonService.js`, `server/document/documentsRoute.js`, `server/document/processingWorkerService.js`, `server/lib/database/audit.js`, `server/lib/database/capacity.js`, `server/lib/database/maintenance.js`, `server/profile/profileService.js`
-- Nullable fields: user_question
-- Last-update signal: updated_at = 2026-08-15T06:45:05.468Z
+- Active code references: `server/cli/documentsInspect.js`, `server/cli/pdfQualityAudit.js`, `server/db.js`, `server/document/documentComparisonService.js`, `server/document/documentsRoute.js`, `server/document/processingWorkerService.js`, `server/lib/database/audit.js`, `server/lib/database/capacity.js`, `server/lib/database/maintenance.js`, `server/profile/profileService.js`
+- Nullable fields: user_question, regeneration_started_at, last_regenerated_at, regeneration_failure_stage
+- Last-update signal: updated_at = 2026-08-24T05:11:26.730Z
 - Indexes: `document_comparisons_documents_gin_idx`, `document_comparisons_pkey`, `document_comparisons_user_recent_idx`
 - Foreign keys: `document_comparisons_user_id_fkey`: FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 
@@ -475,6 +579,11 @@ No tables were deleted during this audit. Legacy tables remain available while s
 | `updated_at` | timestamp with time zone | NO | now() |
 | `user_question` | text | YES |  |
 | `recommended_documents_json` | jsonb | NO | '[]'::jsonb |
+| `current_version` | integer | NO | 1 |
+| `regeneration_status` | text | NO | 'idle'::text |
+| `regeneration_started_at` | timestamp with time zone | YES |  |
+| `last_regenerated_at` | timestamp with time zone | YES |  |
+| `regeneration_failure_stage` | text | YES |  |
 
 ### document_metadata
 
@@ -496,11 +605,11 @@ No tables were deleted during this audit. Legacy tables remain available while s
 
 ### document_processing_attempts
 
-- Rows: 2531
+- Rows: 2838
 - Decision: **keep** — Active application or infrastructure table.
 - Active code references: `server/cli/processConsistency.js`, `server/cli/repairProcessingConsistency.js`, `server/document/readinessService.js`, `server/document/semanticBackfillService.js`, `server/document/semanticCoverageService.js`, `server/lib/database/capacity.js`, `server/lib/database/maintenance.js`, `server/test/databaseV2.test.js`, `server/test/queueWaitOverflow.test.js`
 - Nullable fields: worker_id, failure_stage, failure_reason, memory_peak_bytes, queue_wait_ms, duration_ms, completed_at, pipeline_stage, failure_code, input_checksum_sha256, output_checksum_sha256, extraction_method, ai_provider, ai_model, estimated_cost_usd
-- Last-update signal: completed_at = 2026-08-21T07:23:06.872Z
+- Last-update signal: completed_at = 2026-08-24T02:50:50.091Z
 - Indexes: `document_processing_attempts_document_idx`, `document_processing_attempts_failure_code_idx`, `document_processing_attempts_job_id_attempt_key`, `document_processing_attempts_performance_idx`, `document_processing_attempts_pkey`, `processing_attempts_semantic_backfill_idx`
 - Foreign keys: `document_processing_attempts_document_id_fkey`: FOREIGN KEY (document_id) REFERENCES documents(id) ON DELETE CASCADE; `document_processing_attempts_job_id_fkey`: FOREIGN KEY (job_id) REFERENCES document_processing_jobs(id) ON DELETE CASCADE
 
@@ -555,11 +664,11 @@ No tables were deleted during this audit. Legacy tables remain available while s
 
 ### document_processing_jobs
 
-- Rows: 6419
+- Rows: 6614
 - Decision: **keep** — Active application or infrastructure table.
-- Active code references: `server/cli/documentReadiness.js`, `server/cli/documentsInspect.js`, `server/cli/processConsistency.js`, `server/cli/processRetryable.js`, `server/cli/repairProcessingConsistency.js`, `server/cli/runDownloadRecoveryBatch.js`, `server/document/catalogueAuditService.js`, `server/document/processingWorkerService.js`, `server/document/readinessService.js`, `server/document/semanticBackfillService.js`, `server/lib/database/capacity.js`, `server/lib/database/maintenance.js`, `server/profile/profileService.js`, `server/test/databaseV2.test.js`
+- Active code references: `server/cli/documentReadiness.js`, `server/cli/documentsInspect.js`, `server/cli/processConsistency.js`, `server/cli/processRetryable.js`, `server/cli/repairProcessingConsistency.js`, `server/cli/runDownloadRecoveryBatch.js`, `server/document/catalogueAuditService.js`, `server/document/processingWorkerService.js`, `server/document/readinessService.js`, `server/document/researchReadinessAuditService.js`, `server/document/semanticBackfillService.js`, `server/lib/database/capacity.js`, `server/lib/database/maintenance.js`, `server/profile/profileService.js`, `server/test/databaseV2.test.js`
 - Nullable fields: requested_by, failure_reason, started_at, completed_at, worker_id, source_host, claimed_at, heartbeat_at, duration_ms, queue_wait_ms, memory_peak_bytes, failure_code, pipeline_stage, input_checksum_sha256, output_checksum_sha256, extraction_method, worker_version, estimated_cost_usd, retry_decision, retry_after_seconds, circuit_opened_at
-- Last-update signal: updated_at = 2026-08-21T07:23:06.630Z
+- Last-update signal: updated_at = 2026-08-24T02:50:49.783Z
 - Indexes: `document_processing_jobs_active_idx`, `document_processing_jobs_claim_idx`, `document_processing_jobs_failure_code_idx`, `document_processing_jobs_pkey`, `document_processing_jobs_queue_idx`, `document_processing_jobs_retry_decision_idx`, `document_processing_jobs_source_idx`
 - Foreign keys: `document_processing_jobs_document_id_fkey`: FOREIGN KEY (document_id) REFERENCES documents(id) ON DELETE CASCADE; `document_processing_jobs_requested_by_fkey`: FOREIGN KEY (requested_by) REFERENCES users(id) ON DELETE SET NULL
 
@@ -602,11 +711,11 @@ No tables were deleted during this audit. Legacy tables remain available while s
 
 ### document_processing_stages
 
-- Rows: 10
+- Rows: 3447
 - Decision: **keep** — Active application or infrastructure table.
-- Active code references: `server/cli/dbVerify.js`, `server/document/processingStageService.js`, `server/test/databaseV2.test.js`
+- Active code references: `server/cli/dbVerify.js`, `server/document/processingStageService.js`, `server/document/researchReadinessAuditService.js`, `server/test/databaseV2.test.js`
 - Nullable fields: job_id, failure_category, failure_reason, input_hash, output_hash, duration_ms, started_at, completed_at
-- Last-update signal: updated_at = 2026-08-21T07:23:06.131Z
+- Last-update signal: updated_at = 2026-08-24T02:50:48.080Z
 - Indexes: `document_processing_stages_document_id_stage_key`, `document_processing_stages_job_idx`, `document_processing_stages_pkey`, `document_processing_stages_resume_idx`
 - Foreign keys: `document_processing_stages_document_id_fkey`: FOREIGN KEY (document_id) REFERENCES documents(id) ON DELETE CASCADE; `document_processing_stages_job_id_fkey`: FOREIGN KEY (job_id) REFERENCES document_processing_jobs(id) ON DELETE SET NULL
 
@@ -633,11 +742,11 @@ No tables were deleted during this audit. Legacy tables remain available while s
 
 ### document_processing_state
 
-- Rows: 19629
+- Rows: 19784
 - Decision: **keep** — Active application or infrastructure table.
-- Active code references: `server/cli/dbVerify.js`, `server/cli/documentReadiness.js`, `server/cli/downloadAlternatives.js`, `server/cli/downloadFailures.js`, `server/cli/processBacklog.js`, `server/cli/processConsistency.js`, `server/cli/processFailures.js`, `server/cli/processPolicyBatch.js`, `server/cli/processRetryable.js`, `server/cli/repairProcessingConsistency.js`, `server/cli/researchEval.js`, `server/cli/researchReadyAudit.js`, `server/cli/runDownloadRecoveryBatch.js`, `server/document/DocumentRepository.js`, `server/document/catalogueAuditService.js`, `server/document/processingStageService.js`, `server/document/processingWorkerService.js`, `server/document/readinessService.js`, `server/document/recommendationService.js`, `server/document/semanticBackfillService.js`, `server/document/semanticCoverageService.js`, `server/lib/database/audit.js`, `server/lib/database/capacity.js`, `server/lib/database/maintenance.js`, `server/lib/database/quality.js`
-- Nullable fields: error_message, embedding_provider, ai_provider, last_processed_at, language, script, failure_stage, failure_reason, readiness_reason, last_attempted_at, retrieval_verified_at, failure_code, pipeline_stage, input_checksum_sha256, output_checksum_sha256, extraction_method, worker_version, estimated_cost_usd, capabilities_updated_at
-- Last-update signal: updated_at = 2026-08-21T07:23:06.376Z
+- Active code references: `server/cli/dbVerify.js`, `server/cli/documentReadiness.js`, `server/cli/downloadAlternatives.js`, `server/cli/downloadFailures.js`, `server/cli/ingestPolicyEdge.js`, `server/cli/pdfQualityAudit.js`, `server/cli/pdfQualityRepair.js`, `server/cli/policyEdgeHtmlAudit.js`, `server/cli/policyEdgeHtmlCanary.js`, `server/cli/processBacklog.js`, `server/cli/processConsistency.js`, `server/cli/processFailures.js`, `server/cli/processPolicyBatch.js`, `server/cli/processRetryable.js`, `server/cli/productReliabilityCanary.js`, `server/cli/repairProcessingConsistency.js`, `server/cli/researchEval.js`, `server/cli/researchReadyAudit.js`, `server/cli/runDownloadRecoveryBatch.js`, `server/document/DocumentRepository.js`, `server/document/catalogueAuditService.js`, `server/document/corpusIntelligenceService.js`, `server/document/documentStructureService.js`, `server/document/largeDocumentService.js`, `server/document/processingStageService.js`, `server/document/processingWorkerService.js`, `server/document/readinessService.js`, `server/document/recommendationService.js`, `server/document/researchProfileService.js`, `server/document/researchReadinessAuditService.js`, `server/document/semanticBackfillService.js`, `server/document/semanticCoverageService.js`, `server/document/semanticReconciliationService.js`, `server/lib/database/audit.js`, `server/lib/database/capacity.js`, `server/lib/database/maintenance.js`, `server/lib/database/quality.js`, `server/lib/ingestion/core/catalogRepository.js`
+- Nullable fields: error_message, embedding_provider, ai_provider, last_processed_at, language, script, failure_stage, failure_reason, readiness_reason, last_attempted_at, retrieval_verified_at, failure_code, pipeline_stage, input_checksum_sha256, output_checksum_sha256, extraction_method, worker_version, estimated_cost_usd, capabilities_updated_at, hierarchical_index_version
+- Last-update signal: updated_at = 2026-08-24T02:50:49.527Z
 - Indexes: `document_processing_readiness_idx`, `document_processing_retry_idx`, `document_processing_state_capabilities_idx`, `document_processing_state_failure_code_idx`, `document_processing_state_pipeline_stage_idx`, `document_processing_state_pkey`, `document_processing_state_retrieval_verified_idx`, `document_processing_state_semantic_backlog_idx`
 - Foreign keys: `document_processing_state_document_id_fkey`: FOREIGN KEY (document_id) REFERENCES documents(id) ON DELETE CASCADE
 
@@ -691,10 +800,13 @@ No tables were deleted during this audit. Legacy tables remain available while s
 | `chat_ready` | boolean | NO | false |
 | `capability_comparison_ready` | boolean | NO | false |
 | `capabilities_updated_at` | timestamp with time zone | YES |  |
+| `hierarchical_semantic_ready` | boolean | NO | false |
+| `hierarchical_vectors_count` | integer | NO | 0 |
+| `hierarchical_index_version` | text | YES |  |
 
 ### document_processing_workers
 
-- Rows: 379
+- Rows: 394
 - Decision: **keep** — Active application or infrastructure table.
 - Active code references: `server/document/processingWorkerService.js`, `server/document/readinessService.js`, `server/lib/database/capacity.js`
 - Nullable fields: current_document_id
@@ -716,11 +828,11 @@ No tables were deleted during this audit. Legacy tables remain available while s
 
 ### document_relationships
 
-- Rows: 1172
+- Rows: 1174
 - Decision: **keep** — Active application or infrastructure table.
-- Active code references: `server/cli/verifyGraph.js`, `server/db.js`, `server/document/DocumentRepository.js`, `server/document/processingWorkerService.js`, `server/document/recommendationService.js`, `server/egazette/egazetteService.js`, `server/graph/knowledgeGraphService.js`, `server/graph/relationshipEngine.js`, `server/lib/database/audit.js`, `server/lib/database/capacity.js`, `server/lib/ingestion/core/catalogRepository.js`, `server/test/knowledgeLayerV1.test.js`
+- Active code references: `server/cli/verifyGraph.js`, `server/db.js`, `server/document/DocumentRepository.js`, `server/document/processingWorkerService.js`, `server/document/recommendationService.js`, `server/document/temporalLegalService.js`, `server/egazette/egazetteService.js`, `server/graph/knowledgeGraphService.js`, `server/graph/relationshipEngine.js`, `server/lib/database/audit.js`, `server/lib/database/capacity.js`, `server/lib/ingestion/core/catalogRepository.js`, `server/test/knowledgeLayerV1.test.js`
 - Nullable fields: source_name, confidence, source_url, relationship_strength, relationship_source, explanation, source_document_id, target_document_id
-- Last-update signal: updated_at = 2026-08-11T21:00:27.294Z
+- Last-update signal: updated_at = 2026-08-22T10:40:52.889Z
 - Indexes: `document_relationships_confidence_idx`, `document_relationships_evidence_gin_idx`, `document_relationships_from_document_id_to_document_id_rela_key`, `document_relationships_from_idx`, `document_relationships_pkey`, `document_relationships_source_type_strength_idx`, `document_relationships_target_type_strength_idx`, `document_relationships_to_idx`
 - Foreign keys: `document_relationships_from_document_id_fkey`: FOREIGN KEY (from_document_id) REFERENCES legislative_documents(id) ON DELETE CASCADE; `document_relationships_to_document_id_fkey`: FOREIGN KEY (to_document_id) REFERENCES legislative_documents(id) ON DELETE CASCADE
 
@@ -744,13 +856,49 @@ No tables were deleted during this audit. Legacy tables remain available while s
 | `source_document_id` | bigint | YES |  |
 | `target_document_id` | bigint | YES |  |
 
+### document_research_profiles
+
+- Rows: 20
+- Decision: **keep** — Active application or infrastructure table.
+- Active code references: `server/document/recommendationService.js`, `server/document/researchProfileService.js`
+- Nullable fields: model
+- Last-update signal: updated_at = 2026-08-24T02:35:02.365Z
+- Indexes: `document_research_profiles_pkey`
+- Foreign keys: `document_research_profiles_document_id_fkey`: FOREIGN KEY (document_id) REFERENCES documents(id) ON DELETE CASCADE
+
+| Column | Type | Nullable | Default |
+|---|---|---|---|
+| `document_id` | bigint | NO |  |
+| `content_hash` | text | NO |  |
+| `executive_summary` | text | NO | ''::text |
+| `document_purpose` | text | NO | ''::text |
+| `topics_json` | jsonb | NO | '[]'::jsonb |
+| `themes_json` | jsonb | NO | '[]'::jsonb |
+| `industries_json` | jsonb | NO | '[]'::jsonb |
+| `entities_json` | jsonb | NO | '[]'::jsonb |
+| `authorities_json` | jsonb | NO | '[]'::jsonb |
+| `regulators_json` | jsonb | NO | '[]'::jsonb |
+| `ministries_json` | jsonb | NO | '[]'::jsonb |
+| `jurisdictions_json` | jsonb | NO | '[]'::jsonb |
+| `important_dates_json` | jsonb | NO | '[]'::jsonb |
+| `legal_instruments_json` | jsonb | NO | '[]'::jsonb |
+| `key_provisions_json` | jsonb | NO | '[]'::jsonb |
+| `obligations_json` | jsonb | NO | '[]'::jsonb |
+| `rights_json` | jsonb | NO | '[]'::jsonb |
+| `penalties_json` | jsonb | NO | '[]'::jsonb |
+| `implementation_topics_json` | jsonb | NO | '[]'::jsonb |
+| `model` | text | YES |  |
+| `prompt_version` | text | NO |  |
+| `generated_at` | timestamp with time zone | NO | now() |
+| `updated_at` | timestamp with time zone | NO | now() |
+
 ### document_resources
 
-- Rows: 20573
+- Rows: 20708
 - Decision: **keep** — Active application or infrastructure table.
-- Active code references: `server/cli/dbVerify.js`, `server/cli/documentReadiness.js`, `server/cli/documentsInspect.js`, `server/cli/downloadAlternatives.js`, `server/cli/downloadFailures.js`, `server/cli/processConsistency.js`, `server/cli/processFailures.js`, `server/cli/processRetryable.js`, `server/cli/researchReadyAudit.js`, `server/document/DocumentRepository.js`, `server/document/catalogueAuditService.js`, `server/document/readinessContract.js`, `server/document/readinessService.js`, `server/document/recommendationService.js`, `server/lib/database/audit.js`, `server/lib/database/capacity.js`, `server/lib/database/cockroachSqlCompat.js`, `server/lib/database/legacySyncService.js`, `server/lib/database/maintenance.js`, `server/lib/database/quality.js`, `server/test/databaseMaintenance.test.js`
+- Active code references: `server/cli/dbVerify.js`, `server/cli/documentReadiness.js`, `server/cli/documentsInspect.js`, `server/cli/downloadAlternatives.js`, `server/cli/downloadFailures.js`, `server/cli/processConsistency.js`, `server/cli/processFailures.js`, `server/cli/processRetryable.js`, `server/cli/researchReadyAudit.js`, `server/document/DocumentRepository.js`, `server/document/catalogueAuditService.js`, `server/document/corpusIntelligenceService.js`, `server/document/readinessContract.js`, `server/document/readinessService.js`, `server/document/recommendationService.js`, `server/document/researchReadinessAuditService.js`, `server/lib/database/audit.js`, `server/lib/database/capacity.js`, `server/lib/database/cockroachSqlCompat.js`, `server/lib/database/legacySyncService.js`, `server/lib/database/maintenance.js`, `server/lib/database/quality.js`, `server/test/databaseMaintenance.test.js`
 - Nullable fields: source_id, label, mime_type, file_extension, file_size, language, hash_sha256, last_checked_at
-- Last-update signal: updated_at = 2026-08-20T15:06:55.247Z
+- Last-update signal: updated_at = 2026-08-24T02:50:01.106Z
 - Indexes: `document_resources_accessible_idx`, `document_resources_document_id_url_key`, `document_resources_document_idx`, `document_resources_hash_idx`, `document_resources_pkey`, `document_resources_url_idx`
 - Foreign keys: `document_resources_document_id_fkey`: FOREIGN KEY (document_id) REFERENCES documents(id) ON DELETE CASCADE; `document_resources_source_id_fkey`: FOREIGN KEY (source_id) REFERENCES document_sources(id) ON DELETE SET NULL
 
@@ -780,7 +928,7 @@ No tables were deleted during this audit. Legacy tables remain available while s
 - Decision: **keep** — Active application or infrastructure table.
 - Active code references: `server/cli/runDownloadRecoveryBatch.js`, `server/document/processingWorkerService.js`, `server/document/sourceRetryPolicy.js`, `server/lib/database/capacity.js`, `server/test/databaseV2.test.js`
 - Nullable fields: cooldown_until, last_request_at, last_success_at, last_failure_at, last_status_code, last_failure_code, last_failure_reason
-- Last-update signal: updated_at = 2026-08-11T20:57:32.956Z
+- Last-update signal: updated_at = 2026-08-24T02:50:50.394Z
 - Indexes: `document_retry_domain_state_cooldown_idx`, `document_retry_domain_state_pkey`
 - Foreign keys: none
 
@@ -810,11 +958,11 @@ No tables were deleted during this audit. Legacy tables remain available while s
 
 ### document_sources
 
-- Rows: 20035
+- Rows: 20066
 - Decision: **keep** — Active application or infrastructure table.
-- Active code references: `server/cli/dbVerify.js`, `server/dashboard/intelligenceService.js`, `server/db.js`, `server/document/DocumentRepository.js`, `server/lib/database/audit.js`, `server/lib/database/capacity.js`, `server/lib/database/legacySyncService.js`, `server/lib/database/maintenance.js`, `server/lib/ingestion/core/catalogRepository.js`, `server/lib/ingestion/core/healthCheck.js`, `server/test/sourceIdentity.test.js`
+- Active code references: `server/cli/dbVerify.js`, `server/dashboard/intelligenceService.js`, `server/db.js`, `server/document/DocumentRepository.js`, `server/document/corpusIntelligenceService.js`, `server/lib/database/audit.js`, `server/lib/database/capacity.js`, `server/lib/database/legacySyncService.js`, `server/lib/database/maintenance.js`, `server/lib/ingestion/core/catalogRepository.js`, `server/lib/ingestion/core/healthCheck.js`, `server/test/sourceIdentity.test.js`
 - Nullable fields: detail_url, pdf_url, legal_identifier, content_hash, text_fingerprint, pdf_hash, html_hash, source_title, source_status, file_hash, mime_type, file_size_bytes, source_type, normalized_source_name, canonical_url, raw_title, raw_status, collected_at
-- Last-update signal: updated_at = 2026-08-20T15:06:55.247Z
+- Last-update signal: updated_at = 2026-08-23T15:09:15.458Z
 - Indexes: `document_sources_content_hash_idx`, `document_sources_document_idx`, `document_sources_normalized_source_idx`, `document_sources_pdf_hash_idx`, `document_sources_pkey`, `document_sources_source_name_idx`, `document_sources_source_name_source_record_id_key`, `document_sources_source_record_idx`, `document_sources_source_url_idx`
 - Foreign keys: `document_sources_document_id_fkey`: FOREIGN KEY (document_id) REFERENCES legislative_documents(id) ON DELETE CASCADE; `document_sources_documents_v2_fk`: FOREIGN KEY (document_id) REFERENCES documents(id) ON DELETE CASCADE DEFERRABLE INITIALLY DEFERRED
 
@@ -852,13 +1000,40 @@ No tables were deleted during this audit. Legacy tables remain available while s
 | `raw_metadata_json` | jsonb | NO | '{}'::jsonb |
 | `collected_at` | timestamp with time zone | YES |  |
 
+### document_structure_nodes
+
+- Rows: 1900
+- Decision: **keep** — Active application or infrastructure table.
+- Active code references: `server/document/documentStructureService.js`
+- Nullable fields: parent_node_id, page_start, page_end
+- Last-update signal: none
+- Indexes: `document_structure_nodes_document_id_node_id_key`, `document_structure_nodes_parent_idx`, `document_structure_nodes_pkey`
+- Foreign keys: `document_structure_nodes_document_id_fkey`: FOREIGN KEY (document_id) REFERENCES documents(id) ON DELETE CASCADE
+
+| Column | Type | Nullable | Default |
+|---|---|---|---|
+| `id` | bigint | NO | nextval('document_structure_nodes_id_seq'::regclass) |
+| `document_id` | bigint | NO |  |
+| `node_id` | text | NO |  |
+| `parent_node_id` | text | YES |  |
+| `title` | text | NO |  |
+| `node_type` | text | NO |  |
+| `summary` | text | NO | ''::text |
+| `page_start` | integer | YES |  |
+| `page_end` | integer | YES |  |
+| `child_ids_json` | jsonb | NO | '[]'::jsonb |
+| `source_chunk_ids_json` | jsonb | NO | '[]'::jsonb |
+| `content_hash` | text | NO |  |
+| `index_version` | text | NO |  |
+| `generated_at` | timestamp with time zone | NO | now() |
+
 ### document_text_artifacts
 
-- Rows: 3145
+- Rows: 3397
 - Decision: **keep** — Active application or infrastructure table.
-- Active code references: `server/cli/dbVerify.js`, `server/cli/downloadFailures.js`, `server/cli/processFailures.js`, `server/cli/repairProcessingConsistency.js`, `server/cli/runDownloadRecoveryBatch.js`, `server/db.js`, `server/document/documentResearchService.js`, `server/document/readinessService.js`, `server/graph/relationshipEngine.js`, `server/lib/database/capacity.js`, `server/lib/database/legacySyncService.js`, `server/lib/database/maintenance.js`, `server/lib/storage/artifactMigration.js`, `server/policy/draftRoute.js`, `server/profile/profileService.js`, `server/test/capacityPlanning.test.js`
+- Active code references: `server/cli/dbVerify.js`, `server/cli/downloadFailures.js`, `server/cli/pdfQualityAudit.js`, `server/cli/pdfQualityRepair.js`, `server/cli/processFailures.js`, `server/cli/repairProcessingConsistency.js`, `server/cli/runDownloadRecoveryBatch.js`, `server/db.js`, `server/document/documentResearchService.js`, `server/document/readinessService.js`, `server/document/recommendationService.js`, `server/document/researchProfileService.js`, `server/graph/relationshipEngine.js`, `server/lib/database/capacity.js`, `server/lib/database/legacySyncService.js`, `server/lib/database/maintenance.js`, `server/lib/storage/artifactMigration.js`, `server/policy/draftRoute.js`, `server/profile/profileService.js`, `server/test/capacityPlanning.test.js`
 - Nullable fields: language_confidence, english_summary, pdf_quality_class, extracted_text_sha256
-- Last-update signal: updated_at = 2026-08-16T08:47:40.830Z
+- Last-update signal: updated_at = 2026-08-24T02:49:40.699Z
 - Indexes: `document_text_artifacts_extracted_hash_idx`, `document_text_artifacts_language_idx`, `document_text_artifacts_pkey`
 - Foreign keys: `document_text_artifacts_document_id_fkey`: FOREIGN KEY (document_id) REFERENCES legislative_documents(id) ON DELETE CASCADE
 
@@ -884,11 +1059,11 @@ No tables were deleted during this audit. Legacy tables remain available while s
 
 ### document_text_chunks
 
-- Rows: 23551
+- Rows: 24664
 - Decision: **keep** — Active application or infrastructure table.
-- Active code references: `server/cli/dbVerify.js`, `server/cli/documentReadiness.js`, `server/cli/documentsInspect.js`, `server/cli/researchEval.js`, `server/cli/researchReadyAudit.js`, `server/cli/runDownloadRecoveryBatch.js`, `server/document/catalogueAuditService.js`, `server/document/documentResearchService.js`, `server/document/readinessContract.js`, `server/document/readinessService.js`, `server/document/semanticBackfillService.js`, `server/document/semanticCoverageService.js`, `server/lib/database/audit.js`, `server/lib/database/capacity.js`, `server/lib/database/maintenance.js`, `server/test/databaseMaintenance.test.js`, `server/test/embeddingContentHashCache.test.js`
+- Active code references: `server/cli/dbVerify.js`, `server/cli/documentReadiness.js`, `server/cli/documentsInspect.js`, `server/cli/pdfQualityAudit.js`, `server/cli/pdfQualityRepair.js`, `server/cli/researchEval.js`, `server/cli/researchReadyAudit.js`, `server/cli/runDownloadRecoveryBatch.js`, `server/document/catalogueAuditService.js`, `server/document/corpusIntelligenceService.js`, `server/document/documentResearchService.js`, `server/document/documentStructureService.js`, `server/document/largeDocumentService.js`, `server/document/readinessContract.js`, `server/document/readinessService.js`, `server/document/researchProfileService.js`, `server/document/researchReadinessAuditService.js`, `server/document/semanticBackfillService.js`, `server/document/semanticCoverageService.js`, `server/document/semanticReconciliationService.js`, `server/document/temporalLegalService.js`, `server/lib/database/audit.js`, `server/lib/database/capacity.js`, `server/lib/database/maintenance.js`, `server/test/databaseMaintenance.test.js`, `server/test/embeddingContentHashCache.test.js`, `server/test/largeDocumentIntelligence.test.js`
 - Nullable fields: translated_text, token_count, vector_reference, content_hash, embedding_namespace, chunk_sha256, embedding_input_sha256
-- Last-update signal: updated_at = 2026-08-21T07:23:05.048Z
+- Last-update signal: updated_at = 2026-08-24T02:49:49.676Z
 - Indexes: `document_text_chunks_chunk_sha_idx`, `document_text_chunks_content_hash_idx`, `document_text_chunks_document_id_chunk_index_key`, `document_text_chunks_document_idx`, `document_text_chunks_namespace_document_idx`, `document_text_chunks_original_text_fts_idx`, `document_text_chunks_pkey`
 - Foreign keys: `document_text_chunks_document_id_fkey`: FOREIGN KEY (document_id) REFERENCES documents(id) ON DELETE CASCADE
 
@@ -912,12 +1087,12 @@ No tables were deleted during this audit. Legacy tables remain available while s
 
 ### documents
 
-- Rows: 19949
+- Rows: 19980
 - Decision: **keep** — Active application or infrastructure table.
-- Active code references: `server/act/actsRoute.js`, `server/bill/billsRoute.js`, `server/cli/backfillSemanticCoverage.js`, `server/cli/dbVerify.js`, `server/cli/documentReadiness.js`, `server/cli/documentsInspect.js`, `server/cli/downloadAlternatives.js`, `server/cli/downloadFailures.js`, `server/cli/ingestPolicyEdge.js`, `server/cli/processBacklog.js`, `server/cli/processConsistency.js`, `server/cli/processFailures.js`, `server/cli/processPolicyBatch.js`, `server/cli/processRetryable.js`, `server/cli/repairProcessingConsistency.js`, `server/cli/researchEval.js`, `server/cli/researchReadyAudit.js`, `server/cli/runDownloadRecoveryBatch.js`, `server/cli/verifyProcessingConfig.js`, `server/cli/verifyRelease.js`, `server/dashboard/intelligenceService.js`, `server/document/DocumentRepository.js`, `server/document/catalogueAuditService.js`, `server/document/documentComparisonService.js`, `server/document/documentsRoute.js`, `server/document/failureTaxonomy.js`, `server/document/processingWorkerService.js`, `server/document/readinessService.js`, `server/document/recommendationService.js`, `server/document/semanticBackfillService.js`, `server/document/semanticCoverageService.js`, `server/egazette/egazetteService.js`, `server/evaluation/ragEvalV1.js`, `server/evaluation/researchBenchmarks.js`, `server/graph/knowledgeGraphService.js`, `server/graph/relationshipEngine.js`, `server/lib/catalogRepository.js`, `server/lib/catalogService.js`, `server/lib/database/audit.js`, `server/lib/database/capacity.js`, `server/lib/database/cockroachSqlCompat.js`, `server/lib/database/legacySyncService.js`, `server/lib/database/maintenance.js`, `server/lib/database/quality.js`, `server/lib/ingestion/connectors/governanceSourceConnectors.js`, `server/lib/ingestion/connectors/prsConnector.js`, `server/lib/ingestion/core/catalogRepository.js`, `server/lib/ingestion/core/healthCheck.js`, `server/lib/ingestion/core/sourceIdentity.js`, `server/lib/pdfProcessor.js`, `server/lib/prsCatalog.js`, `server/lib/storage/artifactMigration.js`, `server/lib/vectordb.js`, `server/policy/draftRoute.js`, `server/retrieval/evidenceSafetyService.js`, `server/retrieval/researchCache.js`, `server/scripts/ingest-prs-catalog.js`, `server/server.js`, `server/test/capacityPlanning.test.js`, `server/test/cockroachMigrationAudit.test.js`, `server/test/dashboardIntelligence.test.js`, `server/test/databaseMaintenance.test.js`, `server/test/documentComparison.test.js`, `server/test/ingestionCore.test.js`, `server/test/ingestionHealth.test.js`, `server/test/knowledgeLayerV1.test.js`, `server/test/ocrFailureClassification.test.js`, `server/test/processingConfigPreflight.test.js`, `server/test/profileUiContract.test.js`, `server/test/prsCatalog.test.js`, `server/test/ragEvalV1.test.js`, `server/test/retrievalEngineV3.test.js`, `server/test/semanticCoverageV1.test.js`, `server/test/sourceConnectors.test.js`, `server/test/sourceIdentity.test.js`
-- Nullable fields: document_subtype, jurisdiction_level, jurisdiction, state, authority, ministry, department, category, status, year, publication_date, introduced_date, passed_date, assent_date, commencement_date, effective_date, legal_identifier, bill_number, act_number, gazette_identifier, canonical_source_id, canonical_url, primary_pdf_resource_id, search_vector, source_specific_id, alternate_title, source_authority_tier, original_source_page, original_file_url, object_storage_path, file_checksum_sha256, retrieval_date, last_source_update_at, expiry_date, regulator, sector, topic, legislative_status, notification_number, gazette_number, session, version, parent_document_id, extraction_version, content_fingerprint_sha256
-- Last-update signal: updated_at = 2026-08-20T15:06:55.293Z
-- Indexes: `documents_canonical_id_key`, `documents_comparison_ready_idx`, `documents_content_fingerprint_sha256_idx`, `documents_first_seen_idx`, `documents_jurisdiction_idx`, `documents_ministry_idx`, `documents_pkey`, `documents_publication_idx`, `documents_quality_idx`, `documents_regulator_idx`, `documents_research_ready_idx`, `documents_sector_topic_idx`, `documents_source_specific_idx`, `documents_state_idx`, `documents_type_idx`, `documents_updated_idx`, `documents_year_idx`
+- Active code references: `server/act/actsRoute.js`, `server/bill/billsRoute.js`, `server/cli/backfillSemanticCoverage.js`, `server/cli/dbVerify.js`, `server/cli/documentReadiness.js`, `server/cli/documentsInspect.js`, `server/cli/downloadAlternatives.js`, `server/cli/downloadFailures.js`, `server/cli/pdfQualityAudit.js`, `server/cli/pdfQualityRepair.js`, `server/cli/policyEdgeHtmlAudit.js`, `server/cli/policyEdgeHtmlCanary.js`, `server/cli/processBacklog.js`, `server/cli/processConsistency.js`, `server/cli/processFailures.js`, `server/cli/processPolicyBatch.js`, `server/cli/processRetryable.js`, `server/cli/productReliabilityCanary.js`, `server/cli/repairProcessingConsistency.js`, `server/cli/researchEval.js`, `server/cli/researchReadinessAuditV2.js`, `server/cli/researchReadyAudit.js`, `server/cli/runDownloadRecoveryBatch.js`, `server/cli/verifyProcessingConfig.js`, `server/cli/verifyRelease.js`, `server/dashboard/intelligenceService.js`, `server/document/DocumentRepository.js`, `server/document/catalogueAuditService.js`, `server/document/corpusIntelligenceService.js`, `server/document/documentComparisonService.js`, `server/document/documentStructureService.js`, `server/document/documentsRoute.js`, `server/document/failureTaxonomy.js`, `server/document/largeDocumentService.js`, `server/document/pdfCorpusQualityService.js`, `server/document/processingWorkerService.js`, `server/document/readinessService.js`, `server/document/recommendationService.js`, `server/document/researchProfileService.js`, `server/document/researchReadinessAuditService.js`, `server/document/semanticBackfillService.js`, `server/document/semanticCoverageService.js`, `server/document/semanticReconciliationService.js`, `server/document/temporalLegalService.js`, `server/egazette/egazetteService.js`, `server/evaluation/ragEvalV1.js`, `server/evaluation/researchBenchmarks.js`, `server/graph/knowledgeGraphService.js`, `server/graph/relationshipEngine.js`, `server/lib/catalogRepository.js`, `server/lib/catalogService.js`, `server/lib/database/audit.js`, `server/lib/database/capacity.js`, `server/lib/database/cockroachSqlCompat.js`, `server/lib/database/legacySyncService.js`, `server/lib/database/maintenance.js`, `server/lib/database/quality.js`, `server/lib/ingestion/connectors/governanceSourceConnectors.js`, `server/lib/ingestion/connectors/prsConnector.js`, `server/lib/ingestion/core/catalogRepository.js`, `server/lib/ingestion/core/healthCheck.js`, `server/lib/ingestion/core/sourceIdentity.js`, `server/lib/pdfProcessor.js`, `server/lib/prsCatalog.js`, `server/lib/storage/artifactMigration.js`, `server/lib/vectordb.js`, `server/policy/draftRoute.js`, `server/product/complianceCopilotService.js`, `server/product/researchReportService.js`, `server/retrieval/evidenceSafetyService.js`, `server/retrieval/researchCache.js`, `server/scripts/ingest-prs-catalog.js`, `server/server.js`, `server/test/capacityPlanning.test.js`, `server/test/cockroachMigrationAudit.test.js`, `server/test/comparisonRegeneration.test.js`, `server/test/crossStateComparison.test.js`, `server/test/dashboardIntelligence.test.js`, `server/test/databaseMaintenance.test.js`, `server/test/documentComparison.test.js`, `server/test/documentStructureService.test.js`, `server/test/ingestionCore.test.js`, `server/test/ingestionHealth.test.js`, `server/test/knowledgeLayerV1.test.js`, `server/test/largeDocumentIntelligence.test.js`, `server/test/ocrFailureClassification.test.js`, `server/test/pdfTextQualityRecovery.test.js`, `server/test/policyDraftRoute.test.js`, `server/test/processingConfigPreflight.test.js`, `server/test/profileUiContract.test.js`, `server/test/prsCatalog.test.js`, `server/test/ragEvalV1.test.js`, `server/test/researchReadinessAudit.test.js`, `server/test/retrievalEngineV3.test.js`, `server/test/semanticCoverageV1.test.js`, `server/test/sourceConnectors.test.js`, `server/test/sourceIdentity.test.js`
+- Nullable fields: document_subtype, jurisdiction_level, jurisdiction, state, authority, ministry, department, category, status, year, publication_date, introduced_date, passed_date, assent_date, commencement_date, effective_date, legal_identifier, bill_number, act_number, gazette_identifier, canonical_source_id, canonical_url, primary_pdf_resource_id, search_vector, source_specific_id, alternate_title, source_authority_tier, original_source_page, original_file_url, object_storage_path, file_checksum_sha256, retrieval_date, last_source_update_at, expiry_date, regulator, sector, topic, legislative_status, notification_number, gazette_number, session, version, parent_document_id, extraction_version, content_fingerprint_sha256, notified_date, repealed_date, superseded_date, amended_date
+- Last-update signal: updated_at = 2026-08-24T02:56:47.356Z
+- Indexes: `documents_canonical_id_key`, `documents_comparison_ready_idx`, `documents_content_fingerprint_sha256_idx`, `documents_first_seen_idx`, `documents_jurisdiction_idx`, `documents_ministry_idx`, `documents_pkey`, `documents_publication_idx`, `documents_quality_idx`, `documents_regulator_idx`, `documents_research_ready_idx`, `documents_sector_topic_idx`, `documents_source_specific_idx`, `documents_state_idx`, `documents_temporal_effect_idx`, `documents_temporal_end_idx`, `documents_type_idx`, `documents_updated_idx`, `documents_year_idx`
 - Foreign keys: `documents_canonical_source_id_fkey`: FOREIGN KEY (canonical_source_id) REFERENCES source_registry(id) ON DELETE SET NULL; `documents_parent_document_id_fkey`: FOREIGN KEY (parent_document_id) REFERENCES documents(id) ON DELETE SET NULL; `documents_primary_pdf_resource_fk`: FOREIGN KEY (primary_pdf_resource_id) REFERENCES document_resources(id) ON DELETE SET NULL DEFERRABLE INITIALLY DEFERRED
 
 | Column | Type | Nullable | Default |
@@ -987,6 +1162,11 @@ No tables were deleted during this audit. Legacy tables remain available while s
 | `validation_status` | text | NO | 'unverified'::text |
 | `extraction_version` | text | YES |  |
 | `content_fingerprint_sha256` | text | YES |  |
+| `notified_date` | date | YES |  |
+| `repealed_date` | date | YES |  |
+| `superseded_date` | date | YES |  |
+| `amended_date` | date | YES |  |
+| `temporal_metadata_json` | jsonb | NO | '{}'::jsonb |
 
 ### egazette_chats
 
@@ -1039,11 +1219,11 @@ No tables were deleted during this audit. Legacy tables remain available while s
 
 ### ingestion_run_items
 
-- Rows: 15801
+- Rows: 16418
 - Decision: **keep** — Active application or infrastructure table.
 - Active code references: `server/lib/database/audit.js`, `server/lib/database/capacity.js`, `server/lib/database/maintenance.js`, `server/lib/ingestion/core/catalogRepository.js`
 - Nullable fields: source_record_id, document_id, action, error_message
-- Last-update signal: created_at = 2026-08-20T15:06:55.272Z
+- Last-update signal: created_at = 2026-08-23T15:09:15.477Z
 - Indexes: `ingestion_run_items_document_idx`, `ingestion_run_items_pkey`, `ingestion_run_items_run_idx`
 - Foreign keys: `ingestion_run_items_document_id_fkey`: FOREIGN KEY (document_id) REFERENCES documents(id) ON DELETE SET NULL; `ingestion_run_items_run_id_fkey`: FOREIGN KEY (run_id) REFERENCES ingestion_runs(id) ON DELETE CASCADE
 
@@ -1061,11 +1241,11 @@ No tables were deleted during this audit. Legacy tables remain available while s
 
 ### ingestion_runs
 
-- Rows: 822
+- Rows: 881
 - Decision: **keep** — Active application or infrastructure table.
 - Active code references: `server/dashboard/intelligenceService.js`, `server/db.js`, `server/lib/catalogRepository.js`, `server/lib/database/audit.js`, `server/lib/database/capacity.js`, `server/lib/database/maintenance.js`, `server/lib/ingestion/core/catalogRepository.js`, `server/lib/ingestion/core/healthCheck.js`, `server/test/ingestionRunReaper.test.js`
 - Nullable fields: completed_at, collection_name
-- Last-update signal: completed_at = 2026-08-20T15:06:55.280Z
+- Last-update signal: completed_at = 2026-08-23T15:09:15.497Z
 - Indexes: `ingestion_runs_pkey`, `ingestion_runs_source_recent_idx`
 - Foreign keys: none
 
@@ -1087,11 +1267,11 @@ No tables were deleted during this audit. Legacy tables remain available while s
 
 ### intelligence_events
 
-- Rows: 1766
+- Rows: 1797
 - Decision: **keep** — Active application or infrastructure table.
-- Active code references: `server/dashboard/intelligenceService.js`, `server/db.js`, `server/document/DocumentRepository.js`, `server/lib/database/audit.js`, `server/lib/database/capacity.js`, `server/lib/ingestion/core/catalogRepository.js`
+- Active code references: `server/dashboard/intelligenceService.js`, `server/db.js`, `server/document/DocumentRepository.js`, `server/lib/database/audit.js`, `server/lib/database/capacity.js`, `server/lib/ingestion/core/catalogRepository.js`, `server/product/watchlistService.js`, `server/test/databaseV2.test.js`
 - Nullable fields: event_key, summary, document_id, source_url, document_type, jurisdiction, authority, ministry, category, status, event_date
-- Last-update signal: updated_at = 2026-08-20T15:06:55.247Z
+- Last-update signal: updated_at = 2026-08-23T14:59:38.919Z
 - Indexes: `intelligence_events_document_idx`, `intelligence_events_event_key_key`, `intelligence_events_feed_idx`, `intelligence_events_pkey`
 - Foreign keys: `intelligence_events_document_id_fkey`: FOREIGN KEY (document_id) REFERENCES legislative_documents(id) ON DELETE SET NULL
 
@@ -1147,7 +1327,7 @@ No tables were deleted during this audit. Legacy tables remain available while s
 
 - Rows: 0 (empty)
 - Decision: **keep** — Normalized schema-v2 feature table; empty until the feature produces data.
-- Active code references: `server/cli/dbVerify.js`, `server/document/semanticBackfillService.js`, `server/graph/knowledgeLayerService.js`, `server/lib/database/audit.js`, `server/lib/database/capacity.js`, `server/lib/database/maintenance.js`, `server/test/databaseV2.test.js`, `server/test/knowledgeLayerV1.test.js`
+- Active code references: `server/cli/dbVerify.js`, `server/document/corpusIntelligenceService.js`, `server/document/semanticBackfillService.js`, `server/graph/knowledgeLayerService.js`, `server/lib/database/audit.js`, `server/lib/database/capacity.js`, `server/lib/database/maintenance.js`, `server/test/databaseV2.test.js`, `server/test/knowledgeLayerV1.test.js`
 - Nullable fields: knowledge_node_id, knowledge_edge_id, document_id, chunk_id, resource_id, owner_user_id, page_start, page_end, section_label, clause_label, source_url
 - Last-update signal: created_at
 - Indexes: `knowledge_evidence_document_idx`, `knowledge_evidence_edge_hash_idx`, `knowledge_evidence_edge_idx`, `knowledge_evidence_node_hash_idx`, `knowledge_evidence_node_idx`, `knowledge_evidence_owner_idx`, `knowledge_evidence_pkey`
@@ -1202,11 +1382,11 @@ No tables were deleted during this audit. Legacy tables remain available while s
 
 ### legislative_document_resources
 
-- Rows: 20573
+- Rows: 20708
 - Decision: **legacy_archive** — Preserved for backward compatibility while additive triggers mirror data into schema v2.
 - Active code references: `server/cli/ingestPolicyEdge.js`, `server/dashboard/intelligenceService.js`, `server/db.js`, `server/document/documentResearchService.js`, `server/egazette/egazetteService.js`, `server/lib/catalogRepository.js`, `server/lib/database/audit.js`, `server/lib/database/capacity.js`, `server/lib/database/legacySyncService.js`, `server/lib/database/maintenance.js`, `server/lib/ingestion/core/catalogRepository.js`
 - Nullable fields: label, category
-- Last-update signal: updated_at = 2026-08-20T15:06:55.247Z
+- Last-update signal: updated_at = 2026-08-24T02:45:15.555Z
 - Indexes: `legislative_document_resources_document_id_url_key`, `legislative_document_resources_pkey`, `legislative_resources_document_idx`
 - Foreign keys: `legislative_document_resources_document_id_fkey`: FOREIGN KEY (document_id) REFERENCES legislative_documents(id) ON DELETE CASCADE
 
@@ -1226,11 +1406,11 @@ No tables were deleted during this audit. Legacy tables remain available while s
 
 ### legislative_documents
 
-- Rows: 19949
+- Rows: 19980
 - Decision: **legacy_archive** — Preserved for backward compatibility while additive triggers mirror data into schema v2.
-- Active code references: `server/activity/activityService.js`, `server/cli/cockroachBootstrapAudit.js`, `server/cli/dbVerify.js`, `server/cli/documentReadiness.js`, `server/cli/documentsInspect.js`, `server/cli/downloadAlternatives.js`, `server/cli/downloadFailures.js`, `server/cli/ingestPolicyEdge.js`, `server/cli/processBacklog.js`, `server/cli/processFailures.js`, `server/cli/processPolicyBatch.js`, `server/cli/processRetryable.js`, `server/cli/researchEval.js`, `server/cli/researchReadyAudit.js`, `server/cli/runDownloadRecoveryBatch.js`, `server/dashboard/intelligenceService.js`, `server/db.js`, `server/document/DocumentRepository.js`, `server/document/catalogueAuditService.js`, `server/document/processingWorkerService.js`, `server/document/readinessService.js`, `server/document/recommendationService.js`, `server/document/semanticBackfillService.js`, `server/document/semanticCoverageService.js`, `server/egazette/egazetteService.js`, `server/graph/knowledgeGraphService.js`, `server/graph/knowledgeLayerService.js`, `server/graph/relationshipEngine.js`, `server/lib/catalogRepository.js`, `server/lib/database/audit.js`, `server/lib/database/capacity.js`, `server/lib/database/legacySyncService.js`, `server/lib/database/maintenance.js`, `server/lib/ingestion/core/catalogRepository.js`, `server/policy/draftRoute.js`, `server/policy/policyService.js`, `server/profile/profileService.js`, `server/test/databaseMaintenance.test.js`, `server/test/databaseV2.test.js`, `server/test/sourceIdentity.test.js`
-- Nullable fields: year, status, ministry, category, detail_url, pdf_url, source_page_url, content_fetched_at, normalized_title, authority, department, legal_identifier, bill_number, act_number, gazette_identifier, introduced_date, passed_date, enacted_date, publication_date, effective_date, canonical_source, canonical_url, content_hash, text_fingerprint, gazette_id, assent_date, commencement_date, search_vector, file_hash, mime_type, file_size_bytes, processing_status, processing_error, processed_at
-- Last-update signal: updated_at = 2026-08-20T15:06:55.247Z
+- Active code references: `server/activity/activityService.js`, `server/cli/cockroachBootstrapAudit.js`, `server/cli/dbVerify.js`, `server/cli/documentReadiness.js`, `server/cli/documentsInspect.js`, `server/cli/downloadAlternatives.js`, `server/cli/downloadFailures.js`, `server/cli/ingestPolicyEdge.js`, `server/cli/pdfQualityAudit.js`, `server/cli/pdfQualityRepair.js`, `server/cli/policyEdgeHtmlAudit.js`, `server/cli/policyEdgeHtmlCanary.js`, `server/cli/processBacklog.js`, `server/cli/processFailures.js`, `server/cli/processPolicyBatch.js`, `server/cli/processRetryable.js`, `server/cli/researchEval.js`, `server/cli/researchReadyAudit.js`, `server/cli/runDownloadRecoveryBatch.js`, `server/dashboard/intelligenceService.js`, `server/db.js`, `server/document/DocumentRepository.js`, `server/document/catalogueAuditService.js`, `server/document/processingWorkerService.js`, `server/document/readinessService.js`, `server/document/recommendationService.js`, `server/document/researchReadinessAuditService.js`, `server/document/semanticBackfillService.js`, `server/document/semanticCoverageService.js`, `server/document/temporalLegalService.js`, `server/egazette/egazetteService.js`, `server/graph/knowledgeGraphService.js`, `server/graph/knowledgeLayerService.js`, `server/graph/relationshipEngine.js`, `server/lib/catalogRepository.js`, `server/lib/database/audit.js`, `server/lib/database/capacity.js`, `server/lib/database/legacySyncService.js`, `server/lib/database/maintenance.js`, `server/lib/ingestion/core/catalogRepository.js`, `server/policy/draftRoute.js`, `server/policy/policyService.js`, `server/profile/profileService.js`, `server/test/databaseMaintenance.test.js`, `server/test/databaseV2.test.js`, `server/test/sourceIdentity.test.js`
+- Nullable fields: year, status, ministry, category, detail_url, pdf_url, source_page_url, content_fetched_at, normalized_title, authority, department, legal_identifier, bill_number, act_number, gazette_identifier, introduced_date, passed_date, enacted_date, publication_date, effective_date, canonical_source, canonical_url, content_hash, text_fingerprint, gazette_id, assent_date, commencement_date, search_vector, file_hash, mime_type, file_size_bytes, processing_status, processing_error, processed_at, notified_date, repealed_date, superseded_date, amended_date
+- Last-update signal: updated_at = 2026-08-24T02:50:48.654Z
 - Indexes: `legislative_documents_authority_idx`, `legislative_documents_canonical_id_idx`, `legislative_documents_content_hash_idx`, `legislative_documents_gazette_identifier_idx`, `legislative_documents_legal_identifier_idx`, `legislative_documents_metadata_idx`, `legislative_documents_ministry_idx`, `legislative_documents_normalized_title_idx`, `legislative_documents_pkey`, `legislative_documents_publication_idx`, `legislative_documents_scope_idx`, `legislative_documents_search_idx`, `legislative_documents_source_idx`, `legislative_documents_source_name_source_document_id_key`, `legislative_documents_status_idx`, `legislative_documents_text_fingerprint_idx`, `legislative_documents_title_idx`, `legislative_documents_type_date_idx`
 - Foreign keys: none
 
@@ -1286,6 +1466,11 @@ No tables were deleted during this audit. Legacy tables remain available while s
 | `processing_status` | text | YES |  |
 | `processing_error` | text | YES |  |
 | `processed_at` | timestamp with time zone | YES |  |
+| `notified_date` | date | YES |  |
+| `repealed_date` | date | YES |  |
+| `superseded_date` | date | YES |  |
+| `amended_date` | date | YES |  |
+| `temporal_metadata_json` | jsonb | NO | '{}'::jsonb |
 
 ### multi_document_chats
 
@@ -1338,11 +1523,11 @@ No tables were deleted during this audit. Legacy tables remain available while s
 
 ### policy_drafts
 
-- Rows: 0 (empty)
+- Rows: 3
 - Decision: **keep** — Active application or infrastructure table.
 - Active code references: `server/cli/dbVerify.js`, `server/policy/draftRoute.js`
 - Nullable fields: error_message
-- Last-update signal: updated_at
+- Last-update signal: updated_at = 2026-08-24T04:09:52.660Z
 - Indexes: `policy_drafts_pkey`, `policy_drafts_user_recent_idx`
 - Foreign keys: `policy_drafts_user_id_fkey`: FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 
@@ -1360,14 +1545,42 @@ No tables were deleted during this audit. Legacy tables remain available while s
 | `error_message` | text | YES |  |
 | `created_at` | timestamp with time zone | NO | now() |
 | `updated_at` | timestamp with time zone | NO | now() |
+| `draft_json` | jsonb | NO | '{}'::jsonb |
+
+### product_usage_telemetry
+
+- Rows: 1
+- Decision: **keep** — Active application or infrastructure table.
+- Active code references: `server/cli/dbVerify.js`, `server/product/productMetricsService.js`, `server/profile/profileService.js`, `server/test/databaseV2.test.js`, `server/test/productMetrics.test.js`
+- Nullable fields: session_hash
+- Last-update signal: created_at = 2026-08-22T14:12:13.412Z
+- Indexes: `product_usage_telemetry_pkey`, `product_usage_telemetry_type_recent_idx`, `product_usage_telemetry_user_recent_idx`
+- Foreign keys: `product_usage_telemetry_user_id_fkey`: FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+
+| Column | Type | Nullable | Default |
+|---|---|---|---|
+| `id` | bigint | NO | nextval('product_usage_telemetry_id_seq'::regclass) |
+| `user_id` | bigint | NO |  |
+| `event_type` | text | NO |  |
+| `workflow_type` | text | NO |  |
+| `session_hash` | text | YES |  |
+| `success` | boolean | NO | true |
+| `evidence_backed` | boolean | NO | false |
+| `abstained` | boolean | NO | false |
+| `evidence_count` | integer | NO | 0 |
+| `citation_count` | integer | NO | 0 |
+| `time_to_first_evidence_ms` | integer | NO | 0 |
+| `time_to_final_answer_ms` | integer | NO | 0 |
+| `metadata_json` | jsonb | NO | '{}'::jsonb |
+| `created_at` | timestamp with time zone | NO | now() |
 
 ### recommendations
 
-- Rows: 414
+- Rows: 707
 - Decision: **keep** — Active application or infrastructure table.
-- Active code references: `server/cli/downloadAlternatives.js`, `server/cli/verifyGraph.js`, `server/dashboard/intelligenceService.js`, `server/document/DocumentService.js`, `server/document/documentResearchService.js`, `server/document/documentTypes.js`, `server/document/documentsRoute.js`, `server/document/processingWorkerService.js`, `server/document/recommendationService.js`, `server/egazette/egazettesRoute.js`, `server/lib/database/audit.js`, `server/lib/database/capacity.js`, `server/lib/database/maintenance.js`, `server/lib/ingestion/connectors/regulatorConnectors.js`, `server/lib/vectordb.js`, `server/profile/profileService.js`, `server/profile/route.js`, `server/recommendation/recommendationsRoute.js`, `server/server.js`, `server/test/profileUiContract.test.js`, `server/test/recommendationService.test.js`
+- Active code references: `server/cli/complianceRetrievalAudit.js`, `server/cli/downloadAlternatives.js`, `server/cli/verifyGraph.js`, `server/dashboard/intelligenceService.js`, `server/document/DocumentService.js`, `server/document/documentResearchService.js`, `server/document/documentTypes.js`, `server/document/documentsRoute.js`, `server/document/processingWorkerService.js`, `server/document/recommendationService.js`, `server/egazette/egazettesRoute.js`, `server/lib/database/audit.js`, `server/lib/database/capacity.js`, `server/lib/database/maintenance.js`, `server/lib/ingestion/connectors/regulatorConnectors.js`, `server/lib/vectordb.js`, `server/policy/policyDraftService.js`, `server/product/complianceCopilotService.js`, `server/product/crossStateComparisonService.js`, `server/profile/profileService.js`, `server/profile/route.js`, `server/recommendation/recommendationsRoute.js`, `server/server.js`, `server/test/complianceCopilot.test.js`, `server/test/complianceRetrievalFixtures.test.js`, `server/test/crossStateComparison.test.js`, `server/test/policyDraftService.test.js`, `server/test/profileUiContract.test.js`, `server/test/recommendationService.test.js`
 - Nullable fields: user_id, document_id, expires_at
-- Last-update signal: created_at = 2026-08-16T10:21:54.080Z
+- Last-update signal: created_at = 2026-08-24T05:12:48.533Z
 - Indexes: `recommendations_document_score_idx`, `recommendations_expiry_idx`, `recommendations_pkey`, `recommendations_user_recent_idx`
 - Foreign keys: `recommendations_document_id_fkey`: FOREIGN KEY (document_id) REFERENCES documents(id) ON DELETE CASCADE; `recommendations_user_id_fkey`: FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 
@@ -1381,6 +1594,32 @@ No tables were deleted during this audit. Legacy tables remain available while s
 | `reason_json` | jsonb | NO | '{}'::jsonb |
 | `created_at` | timestamp with time zone | NO | now() |
 | `expires_at` | timestamp with time zone | YES |  |
+
+### regulatory_alerts
+
+- Rows: 0 (empty)
+- Decision: **keep** — Active application or infrastructure table.
+- Active code references: `server/cli/dbVerify.js`, `server/product/watchlistService.js`, `server/profile/profileService.js`, `server/test/databaseV2.test.js`, `server/test/regulatoryWatchlists.test.js`
+- Nullable fields: event_date, read_at
+- Last-update signal: created_at
+- Indexes: `regulatory_alerts_pkey`, `regulatory_alerts_user_recent_idx`, `regulatory_alerts_watchlist_id_intelligence_event_id_key`
+- Foreign keys: `regulatory_alerts_intelligence_event_id_fkey`: FOREIGN KEY (intelligence_event_id) REFERENCES intelligence_events(id) ON DELETE CASCADE; `regulatory_alerts_user_id_fkey`: FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE; `regulatory_alerts_watchlist_id_fkey`: FOREIGN KEY (watchlist_id) REFERENCES research_watchlists(id) ON DELETE CASCADE
+
+| Column | Type | Nullable | Default |
+|---|---|---|---|
+| `id` | bigint | NO | nextval('regulatory_alerts_id_seq'::regclass) |
+| `user_id` | bigint | NO |  |
+| `watchlist_id` | bigint | NO |  |
+| `intelligence_event_id` | bigint | NO |  |
+| `title` | text | NO |  |
+| `why_triggered` | text | NO |  |
+| `impact_summary` | text | NO |  |
+| `source_name` | text | NO |  |
+| `source_url` | text | NO |  |
+| `event_date` | date | YES |  |
+| `evidence_json` | jsonb | NO | '{}'::jsonb |
+| `read_at` | timestamp with time zone | YES |  |
+| `created_at` | timestamp with time zone | NO | now() |
 
 ### related_bills
 
@@ -1403,11 +1642,11 @@ No tables were deleted during this audit. Legacy tables remain available while s
 
 ### research_chats
 
-- Rows: 57
+- Rows: 64
 - Decision: **keep** — Active application or infrastructure table.
-- Active code references: `server/cli/dbVerify.js`, `server/lib/database/audit.js`, `server/lib/database/capacity.js`, `server/lib/database/maintenance.js`, `server/profile/profileService.js`
+- Active code references: `server/cli/dbVerify.js`, `server/cli/pdfQualityAudit.js`, `server/lib/database/audit.js`, `server/lib/database/capacity.js`, `server/lib/database/maintenance.js`, `server/profile/profileService.js`
 - Nullable fields: legacy_chat_id, document_id, summary
-- Last-update signal: updated_at = 2026-08-16T10:18:01.344Z
+- Last-update signal: updated_at = 2026-08-24T01:20:29.407Z
 - Indexes: `research_chats_document_idx`, `research_chats_legacy_chat_id_key`, `research_chats_pkey`, `research_chats_user_document_idx`, `research_chats_user_idx`
 - Foreign keys: `research_chats_document_id_fkey`: FOREIGN KEY (document_id) REFERENCES documents(id) ON DELETE SET NULL; `research_chats_user_id_fkey`: FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 
@@ -1466,11 +1705,11 @@ No tables were deleted during this audit. Legacy tables remain available while s
 
 ### research_messages
 
-- Rows: 166
+- Rows: 183
 - Decision: **keep** — Active application or infrastructure table.
 - Active code references: `server/cli/dbVerify.js`, `server/lib/database/audit.js`, `server/lib/database/capacity.js`, `server/lib/database/maintenance.js`, `server/test/databaseMaintenance.test.js`
 - Nullable fields: external_message_id
-- Last-update signal: created_at = 2026-08-16T09:47:10.630Z
+- Last-update signal: created_at = 2026-08-24T01:20:27.753Z
 - Indexes: `research_messages_chat_id_external_message_id_key`, `research_messages_chat_idx`, `research_messages_pkey`
 - Foreign keys: `research_messages_chat_id_fkey`: FOREIGN KEY (chat_id) REFERENCES research_chats(id) ON DELETE CASCADE
 
@@ -1509,13 +1748,13 @@ No tables were deleted during this audit. Legacy tables remain available while s
 
 ### research_query_telemetry
 
-- Rows: 0 (empty)
+- Rows: 95
 - Decision: **keep** — Active application or infrastructure table.
-- Active code references: `server/cli/dbVerify.js`, `server/retrieval/researchTelemetry.js`, `server/test/databaseV2.test.js`
-- Nullable fields: none
-- Last-update signal: created_at
-- Indexes: `research_query_telemetry_created_idx`, `research_query_telemetry_pkey`, `research_query_telemetry_query_id_key`, `research_query_telemetry_type_created_idx`
-- Foreign keys: none
+- Active code references: `server/cli/dbVerify.js`, `server/product/productMetricsService.js`, `server/retrieval/researchTelemetry.js`, `server/test/databaseV2.test.js`, `server/test/productMetrics.test.js`
+- Nullable fields: user_id
+- Last-update signal: created_at = 2026-08-24T05:11:26.725Z
+- Indexes: `research_query_telemetry_created_idx`, `research_query_telemetry_pkey`, `research_query_telemetry_query_id_key`, `research_query_telemetry_type_created_idx`, `research_query_telemetry_user_created_idx`
+- Foreign keys: `research_query_telemetry_user_id_fkey`: FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL
 
 | Column | Type | Nullable | Default |
 |---|---|---|---|
@@ -1552,6 +1791,30 @@ No tables were deleted during this audit. Legacy tables remain available while s
 | `cache_status` | text | NO |  |
 | `flags_json` | jsonb | NO | '{}'::jsonb |
 | `created_at` | timestamp with time zone | NO | now() |
+| `user_id` | bigint | YES |  |
+
+### research_reports
+
+- Rows: 0 (empty)
+- Decision: **keep** — Active application or infrastructure table.
+- Active code references: `server/cli/dbVerify.js`, `server/product/researchReportService.js`, `server/profile/profileService.js`, `server/test/databaseV2.test.js`
+- Nullable fields: none
+- Last-update signal: updated_at
+- Indexes: `research_reports_pkey`, `research_reports_user_recent_idx`
+- Foreign keys: `research_reports_user_id_fkey`: FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+
+| Column | Type | Nullable | Default |
+|---|---|---|---|
+| `id` | bigint | NO | nextval('research_reports_id_seq'::regclass) |
+| `user_id` | bigint | NO |  |
+| `title` | text | NO |  |
+| `research_question` | text | NO |  |
+| `selected_document_ids` | ARRAY | NO | '{}'::bigint[] |
+| `report_json` | jsonb | NO | '{}'::jsonb |
+| `evidence_refs_json` | jsonb | NO | '[]'::jsonb |
+| `verification_status` | text | NO |  |
+| `created_at` | timestamp with time zone | NO | now() |
+| `updated_at` | timestamp with time zone | NO | now() |
 
 ### research_source_chunks
 
@@ -1600,6 +1863,28 @@ No tables were deleted during this audit. Legacy tables remain available while s
 | `error_message` | text | YES |  |
 | `content_text` | text | NO | ''::text |
 | `metadata_json` | jsonb | NO | '{}'::jsonb |
+| `created_at` | timestamp with time zone | NO | now() |
+| `updated_at` | timestamp with time zone | NO | now() |
+
+### research_watchlists
+
+- Rows: 0 (empty)
+- Decision: **keep** — Active application or infrastructure table.
+- Active code references: `server/cli/dbVerify.js`, `server/product/watchlistService.js`, `server/profile/profileService.js`, `server/test/databaseV2.test.js`
+- Nullable fields: last_checked_at
+- Last-update signal: updated_at
+- Indexes: `research_watchlists_pkey`, `research_watchlists_user_active_idx`, `research_watchlists_user_id_watch_type_normalized_value_key`
+- Foreign keys: `research_watchlists_user_id_fkey`: FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+
+| Column | Type | Nullable | Default |
+|---|---|---|---|
+| `id` | bigint | NO | nextval('research_watchlists_id_seq'::regclass) |
+| `user_id` | bigint | NO |  |
+| `watch_type` | text | NO |  |
+| `watch_value` | text | NO |  |
+| `normalized_value` | text | NO |  |
+| `active` | boolean | NO | true |
+| `last_checked_at` | timestamp with time zone | YES |  |
 | `created_at` | timestamp with time zone | NO | now() |
 | `updated_at` | timestamp with time zone | NO | now() |
 
@@ -1668,11 +1953,11 @@ No tables were deleted during this audit. Legacy tables remain available while s
 
 ### schema_migrations
 
-- Rows: 32
+- Rows: 41
 - Decision: **keep** — Active application or infrastructure table.
 - Active code references: `server/cli/dbVerify.js`, `server/lib/database/capacity.js`, `server/lib/database/maintenance.js`, `server/lib/database/migrationLock.js`, `server/lib/database/migrator.js`, `server/test/migrationLock.test.js`
 - Nullable fields: none
-- Last-update signal: applied_at = 2026-08-21T06:49:44.467Z
+- Last-update signal: applied_at = 2026-08-24T04:35:43.498Z
 - Indexes: `schema_migrations_pkey`
 - Foreign keys: none
 
@@ -1684,11 +1969,11 @@ No tables were deleted during this audit. Legacy tables remain available while s
 
 ### source_collection_snapshots
 
-- Rows: 2029
+- Rows: 2094
 - Decision: **keep** — Active application or infrastructure table.
 - Active code references: `server/dashboard/intelligenceService.js`, `server/db.js`, `server/lib/catalogRepository.js`, `server/lib/database/capacity.js`, `server/lib/ingestion/core/catalogRepository.js`
 - Nullable fields: html_hash, response_status, collected_at
-- Last-update signal: fetched_at = 2026-08-20T15:06:52.055Z
+- Last-update signal: fetched_at = 2026-08-23T15:09:13.839Z
 - Indexes: `source_collection_snapshots_pkey`, `source_snapshots_recent_idx`
 - Foreign keys: none
 
@@ -1712,7 +1997,7 @@ No tables were deleted during this audit. Legacy tables remain available while s
 - Decision: **keep** — Active application or infrastructure table.
 - Active code references: `server/dashboard/intelligenceService.js`, `server/db.js`, `server/lib/database/capacity.js`, `server/lib/ingestion/core/catalogRepository.js`
 - Nullable fields: jurisdiction, parent_name, official_url
-- Last-update signal: updated_at = 2026-08-16T02:58:02.473Z
+- Last-update signal: updated_at = 2026-08-23T03:01:04.296Z
 - Indexes: `source_directory_entries_pkey`, `source_directory_entries_scope_idx`, `source_directory_entries_source_name_entry_key_key`
 - Foreign keys: none
 
@@ -1737,9 +2022,9 @@ No tables were deleted during this audit. Legacy tables remain available while s
 
 - Rows: 31
 - Decision: **keep** — Active application or infrastructure table.
-- Active code references: `server/lib/database/audit.js`, `server/lib/database/capacity.js`, `server/lib/database/quality.js`, `server/lib/ingestion/core/catalogRepository.js`
+- Active code references: `server/document/temporalLegalService.js`, `server/lib/database/audit.js`, `server/lib/database/capacity.js`, `server/lib/database/quality.js`, `server/lib/ingestion/core/catalogRepository.js`
 - Nullable fields: reachable, parser_status, last_checked_at, last_successful_run_at, last_failed_run_at, last_error
-- Last-update signal: updated_at = 2026-08-20T15:06:55.288Z
+- Last-update signal: updated_at = 2026-08-23T15:09:15.509Z
 - Indexes: `source_health_pkey`
 - Foreign keys: `source_health_source_name_fkey`: FOREIGN KEY (source_name) REFERENCES source_registry(source_name) ON DELETE CASCADE
 
@@ -1764,9 +2049,9 @@ No tables were deleted during this audit. Legacy tables remain available while s
 
 - Rows: 34
 - Decision: **keep** — Active application or infrastructure table.
-- Active code references: `server/cli/dbVerify.js`, `server/dashboard/intelligenceService.js`, `server/lib/database/audit.js`, `server/lib/database/capacity.js`, `server/lib/database/legacySyncService.js`, `server/lib/ingestion/core/catalogRepository.js`, `server/test/dashboardIntelligence.test.js`
+- Active code references: `server/cli/dbVerify.js`, `server/dashboard/intelligenceService.js`, `server/document/corpusIntelligenceService.js`, `server/document/temporalLegalService.js`, `server/lib/database/audit.js`, `server/lib/database/capacity.js`, `server/lib/database/legacySyncService.js`, `server/lib/ingestion/core/catalogRepository.js`, `server/test/dashboardIntelligence.test.js`, `server/test/temporalLegalIntelligence.test.js`
 - Nullable fields: base_url, jurisdiction, authority, public_label, internal_label, connector_name, ingestion_frequency, last_successful_run_at, last_failed_run_at, notes, source_domain, authority_tier, refresh_schedule, last_attempted_refresh_at, parser_version, source_terms_or_usage_notes
-- Last-update signal: updated_at = 2026-08-20T15:06:55.284Z
+- Last-update signal: updated_at = 2026-08-23T15:09:15.500Z
 - Indexes: `source_registry_normalized_source_name_key`, `source_registry_pkey`, `source_registry_source_name_key`
 - Foreign keys: none
 
@@ -1811,7 +2096,7 @@ No tables were deleted during this audit. Legacy tables remain available while s
 
 - Rows: 0 (empty)
 - Decision: **keep** — Active application or infrastructure table.
-- Active code references: `server/activity/activityService.js`, `server/db.js`, `server/document/semanticBackfillService.js`, `server/document/semanticCoverageService.js`, `server/graph/knowledgeGraphService.js`, `server/lib/database/capacity.js`, `server/profile/profileService.js`, `server/test/activityPrivacy.test.js`
+- Active code references: `server/activity/activityService.js`, `server/db.js`, `server/document/corpusIntelligenceService.js`, `server/document/semanticBackfillService.js`, `server/document/semanticCoverageService.js`, `server/graph/knowledgeGraphService.js`, `server/lib/database/capacity.js`, `server/product/productMetricsService.js`, `server/profile/profileService.js`, `server/test/activityPrivacy.test.js`, `server/test/productMetrics.test.js`
 - Nullable fields: entity_type, entity_id, document_id, session_id, page_path, referrer, search_query
 - Last-update signal: created_at
 - Indexes: `user_activity_events_document_idx`, `user_activity_events_document_recent_idx`, `user_activity_events_pkey`, `user_activity_events_type_idx`, `user_activity_events_user_recent_idx`
@@ -1837,7 +2122,7 @@ No tables were deleted during this audit. Legacy tables remain available while s
 
 - Rows: 6
 - Decision: **keep** — Active application or infrastructure table.
-- Active code references: `server/activity/activityService.js`, `server/dashboard/intelligenceService.js`, `server/db.js`, `server/document/processingWorkerService.js`, `server/document/recommendationService.js`, `server/lib/database/capacity.js`, `server/profile/profileService.js`
+- Active code references: `server/activity/activityService.js`, `server/dashboard/intelligenceService.js`, `server/db.js`, `server/document/processingWorkerService.js`, `server/document/recommendationService.js`, `server/document/researchReadinessAuditService.js`, `server/lib/database/capacity.js`, `server/profile/profileService.js`
 - Nullable fields: none
 - Last-update signal: none
 - Indexes: `user_document_interactions_document_idx`, `user_document_interactions_pkey`, `user_document_interactions_user_id_document_id_interaction__key`, `user_document_interactions_user_recent_idx`
@@ -1937,11 +2222,11 @@ No tables were deleted during this audit. Legacy tables remain available while s
 
 ### user_sessions
 
-- Rows: 0 (empty)
-- Decision: **keep** — Normalized schema-v2 feature table; empty until the feature produces data.
+- Rows: 4
+- Decision: **keep** — Active application or infrastructure table.
 - Active code references: `server/auth/sessionService.js`, `server/db.js`, `server/lib/database/audit.js`, `server/lib/database/capacity.js`, `server/lib/database/maintenance.js`, `server/profile/profileService.js`
 - Nullable fields: user_agent, ip_address, revoked_at
-- Last-update signal: last_seen_at
+- Last-update signal: last_seen_at = 2026-08-24T05:09:02.928Z
 - Indexes: `user_sessions_pkey`, `user_sessions_user_active_idx`
 - Foreign keys: `user_sessions_user_id_fkey`: FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 
@@ -1960,7 +2245,7 @@ No tables were deleted during this audit. Legacy tables remain available while s
 
 - Rows: 10
 - Decision: **keep** — Active application or infrastructure table.
-- Active code references: `server/cli/cockroachBootstrapAudit.js`, `server/cli/verifyRelease.js`, `server/dashboard/intelligenceService.js`, `server/db.js`, `server/document/readinessService.js`, `server/lib/database/audit.js`, `server/lib/database/capacity.js`, `server/lib/database/maintenance.js`, `server/lib/vectordb.js`, `server/models/User.js`, `server/onboarding/onboardingService.js`, `server/profile/profileService.js`, `server/test/activityPrivacy.test.js`, `server/test/profileUiContract.test.js`, `server/test/queueWaitOverflow.test.js`
+- Active code references: `server/cli/cockroachBootstrapAudit.js`, `server/cli/verifyRelease.js`, `server/dashboard/intelligenceService.js`, `server/db.js`, `server/document/readinessService.js`, `server/lib/database/audit.js`, `server/lib/database/capacity.js`, `server/lib/database/maintenance.js`, `server/lib/vectordb.js`, `server/models/User.js`, `server/onboarding/onboardingService.js`, `server/product/productMetricsService.js`, `server/profile/profileService.js`, `server/test/activityPrivacy.test.js`, `server/test/databaseV2.test.js`, `server/test/productMetrics.test.js`, `server/test/profileUiContract.test.js`, `server/test/queueWaitOverflow.test.js`
 - Nullable fields: google_id, avatar, password
 - Last-update signal: created_at = 2026-07-23T07:01:01.289Z
 - Indexes: `users_email_key`, `users_google_id_key`, `users_pkey`

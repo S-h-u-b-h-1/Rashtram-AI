@@ -1,5 +1,53 @@
 const { query } = require("../db");
 const { classifyFailureCode, isRetryableFailure } = require("./failureTaxonomy");
+const { providerConfig } = require("../lib/vectordb");
+
+const RECOVERY_CLASSES = Object.freeze([
+  "NO_RESOURCE",
+  "RESOURCE_FETCH_FAILED",
+  "RESOURCE_READY_NO_TEXT",
+  "TEXT_EXTRACTION_FAILED",
+  "TEXT_LOW_QUALITY",
+  "TEXT_READY_NO_CHUNKS",
+  "CHUNKS_MISSING",
+  "CHUNKS_INVALID",
+  "FTS_NOT_INDEXED",
+  "READINESS_FLAG_MISMATCH",
+  "RETRYABLE_PROCESSING_FAILURE",
+  "NONRETRYABLE_PROCESSING_FAILURE",
+  "MANUAL_REVIEW_REQUIRED",
+  "SEMANTIC_ONLY_MISSING",
+  "ALREADY_USABLE_BUT_FLAGS_STALE",
+  "UNKNOWN",
+]);
+
+const AUTOMATIC_RECOVERY_CLASSES = new Set([
+  "RESOURCE_FETCH_FAILED",
+  "RESOURCE_READY_NO_TEXT",
+  "TEXT_EXTRACTION_FAILED",
+  "TEXT_LOW_QUALITY",
+  "TEXT_READY_NO_CHUNKS",
+  "CHUNKS_MISSING",
+  "CHUNKS_INVALID",
+  "FTS_NOT_INDEXED",
+  "READINESS_FLAG_MISMATCH",
+  "RETRYABLE_PROCESSING_FAILURE",
+  "ALREADY_USABLE_BUT_FLAGS_STALE",
+]);
+
+const STALE_LEGACY_CLASSES = new Set([
+  "FTS_NOT_INDEXED",
+  "READINESS_FLAG_MISMATCH",
+  "ALREADY_USABLE_BUT_FLAGS_STALE",
+]);
+
+const SOURCE_FAILURE_REASONS = new Set([
+  "RESOURCE_FETCH_FAILED",
+  "RESOURCE_ACCESS_DENIED",
+  "PDF_DOWNLOAD_FAILED",
+  "HTML_FETCH_FAILED",
+  "HTML_DYNAMIC_CONTENT",
+]);
 
 const FAILURE_REASONS = Object.freeze({
   NO_RESOURCE: "NO_RESOURCE",
@@ -30,6 +78,74 @@ const FAILURE_REASONS = Object.freeze({
 
 const number = (value) => Number(value || 0);
 const lower = (value) => String(value || "").toLowerCase();
+const sourceHostFor = (...values) => {
+  for (const value of values) {
+    if (!value) continue;
+    try {
+      return new URL(value).hostname.toLowerCase().replace(/^www\./, "");
+    } catch {
+      // Keep auditing deterministic when a legacy locator is malformed.
+    }
+  }
+  return null;
+};
+
+const recoveryClassFor = (row, capabilities, facts = {}) => {
+  const combined = lower([
+    row.failure_code,
+    row.failure_reason,
+    row.readiness_reason,
+    row.failure_stage,
+    row.processing_status,
+    row.extraction_status,
+    row.quality_state,
+  ].join(" "));
+  const processing = ["queued", "running", "processing"].includes(row.processing_status);
+  const failed = row.processing_status === "failed" || row.extraction_status === "failed";
+  const lowQuality = /low.quality|corrupt.*text|encoding|replacement|no usable text|too short/.test(combined);
+  const manual = Boolean(
+    row.dead_letter ||
+    [
+      "processing_failed_permanent",
+      "invalid_or_quarantined",
+      "unsupported_file_type",
+    ].includes(row.quality_state) ||
+    /access.denied|forbidden|unauthorized|401|403|encrypted|password|unsupported|invalid.pdf|corrupt.pdf/.test(combined),
+  );
+  const storedFlagsStale = [
+    [row.resource_ready, capabilities.resourceReady],
+    [row.text_ready, capabilities.textReady],
+    [row.search_ready, capabilities.searchReady],
+    [row.chat_ready, capabilities.chatReady],
+    [row.capability_comparison_ready, capabilities.comparisonReady],
+  ].some(([stored, derived]) => Boolean(stored) !== Boolean(derived));
+
+  if (capabilities.searchReady) {
+    if (storedFlagsStale) return "ALREADY_USABLE_BUT_FLAGS_STALE";
+    if (!capabilities.semanticReady) return "SEMANTIC_ONLY_MISSING";
+    return null;
+  }
+  if (manual) return "MANUAL_REVIEW_REQUIRED";
+  if (!capabilities.resourceReady) {
+    return facts.hasResourceLocator ? "RESOURCE_FETCH_FAILED" : "NO_RESOURCE";
+  }
+  if (failed && /extract|ocr|text/.test(combined)) {
+    return lowQuality ? "TEXT_LOW_QUALITY" : "TEXT_EXTRACTION_FAILED";
+  }
+  if (failed) {
+    return facts.retryable
+      ? "RETRYABLE_PROCESSING_FAILURE"
+      : "NONRETRYABLE_PROCESSING_FAILURE";
+  }
+  if (lowQuality) return "TEXT_LOW_QUALITY";
+  if (facts.claimedChunkCount > 0 && facts.chunkCount === 0) return "CHUNKS_MISSING";
+  if (facts.hasValidatedText && facts.chunkCount === 0) return "TEXT_READY_NO_CHUNKS";
+  if (facts.chunkCount > 0 && !facts.validChunks) return "CHUNKS_INVALID";
+  if (capabilities.resourceReady && !facts.hasValidatedText) return "RESOURCE_READY_NO_TEXT";
+  if (facts.validChunks && !facts.ftsIndexed) return "FTS_NOT_INDEXED";
+  if (storedFlagsStale || processing) return "READINESS_FLAG_MISMATCH";
+  return "UNKNOWN";
+};
 
 const primaryFailureReason = (row, capabilities) => {
   if (capabilities.searchReady) return null;
@@ -73,7 +189,11 @@ const primaryFailureReason = (row, capabilities) => {
 const classifyAuditRow = (row = {}) => {
   const chunkCount = number(row.chunk_count);
   const usableChunkCount = number(row.usable_chunk_count);
-  const vectorCount = number(row.vector_reference_count);
+  const claimedChunkCount = number(row.claimed_chunk_count);
+  const activeVectorCount = number(
+    row.active_vector_reference_count ?? row.vector_reference_count,
+  );
+  const activeHashCount = number(row.active_embedding_hash_count);
   const policyEdgeHtml = ["policyedge", "policy-edge"].includes(lower(row.source)) && !row.pdf_url;
   const resourceType = number(row.html_resource_count) > 0 || policyEdgeHtml
     ? "HTML"
@@ -86,12 +206,21 @@ const classifyAuditRow = (row = {}) => {
     row.resource_ready || number(row.accessible_resource_count) > 0 ||
     (policyEdgeHtml && row.canonical_url),
   );
-  const textReady = Boolean(row.text_ready && chunkCount > 0 && usableChunkCount > 0);
-  const lexicalReady = Boolean(row.search_ready && textReady && row.lexical_ready);
+  const processingEligible = Boolean(
+    row.pdf_url || number(row.pdf_resource_count) > 0 || policyEdgeHtml,
+  );
+  const validChunks = chunkCount > 0 && usableChunkCount === chunkCount;
+  const hasValidatedText = Boolean(
+    number(row.artifact_text_length) >= 80 || row.has_externalized_text ||
+    (validChunks && row.extraction_status === "ready"),
+  );
+  const textReady = hasValidatedText;
+  const ftsIndexed = Boolean(row.fts_index_available ?? row.lexical_ready);
+  const lexicalReady = Boolean(textReady && validChunks && ftsIndexed);
   const retrievalVerified = Boolean(row.retrieval_verified && lexicalReady);
   const semanticReady = Boolean(
-    row.semantic_ready && vectorCount > 0 && vectorCount >= usableChunkCount &&
-    row.embedding_status === "ready",
+    row.semantic_ready && retrievalVerified && activeVectorCount >= chunkCount &&
+    activeHashCount >= chunkCount && row.embedding_status === "ready",
   );
   const capabilities = {
     catalogued: Boolean(row.catalogued ?? true),
@@ -99,8 +228,8 @@ const classifyAuditRow = (row = {}) => {
     textReady,
     searchReady: lexicalReady && retrievalVerified,
     semanticReady,
-    chatReady: Boolean(row.chat_ready && lexicalReady && retrievalVerified),
-    comparisonReady: Boolean(row.capability_comparison_ready && row.chat_ready && lexicalReady && retrievalVerified),
+    chatReady: retrievalVerified,
+    comparisonReady: retrievalVerified,
   };
   const failureReason = primaryFailureReason(row, capabilities);
   const combinedFailure = lower([row.failure_code, row.failure_reason, failureReason].join(" "));
@@ -123,22 +252,58 @@ const classifyAuditRow = (row = {}) => {
     else if (resourceType === "PDF") recoveryGroup = "B_NATIVE_EXTRACTION";
     else recoveryGroup = retryable ? "A_CHEAP_AUTOMATIC" : "F_MANUAL_RESTRICTED";
   }
+  const recoveryClass = recoveryClassFor(row, capabilities, {
+    activeVectorCount,
+    chunkCount,
+    claimedChunkCount,
+    ftsIndexed,
+    hasResourceLocator: Boolean(
+      row.pdf_url || row.source_url || row.canonical_url ||
+      number(row.total_resource_count) > 0,
+    ),
+    hasValidatedText,
+    retryable,
+    validChunks,
+  });
   const accessed = number(row.interaction_count) > 0;
+  const type = lower(row.document_type).replace(/-/g, "_");
+  const source = lower(row.source);
   const primaryAuthority = /^(a|primary|official|statutory)/.test(lower(row.authority_class));
   const recent = row.publication_date && new Date(row.publication_date).getTime() >= Date.now() - 730 * 24 * 60 * 60 * 1000;
-  const priority = accessed ? "P0" : primaryAuthority || recent || lower(row.document_type).match(/act|rule|regulation|notification|circular/) ? "P1" : number(row.year) >= 2000 ? "P2" : "P3";
+  const primaryLegal = /^(act|rule|regulation|notification|circular|gazette|ordinance|order)$/.test(type) ||
+    /amendment/.test(lower(row.title));
+  const policyTier = /^(bill|policy|guideline|consultation_paper)$/.test(type) ||
+    /regulator|ministry/.test(source);
+  const researchMaterial = /^(report|research|brief|paper|dataset|manual|handbook)$/.test(type);
+  const priority = accessed || primaryLegal
+    ? "P0"
+    : policyTier
+      ? "P1"
+      : researchMaterial
+        ? number(row.year) >= 2000 ? "P2" : "P3"
+        : primaryAuthority || recent
+          ? "P1"
+          : number(row.year) >= 2000
+        ? "P2"
+        : "P3";
   return {
     documentId: String(row.document_id),
     source: row.source || "unknown",
+    sourceHost: row.source_host || sourceHostFor(row.pdf_url, row.canonical_url, row.source_url),
+    sourceRetryAvailable: row.source_retry_available !== false,
+    sourceCooldownActive: Boolean(row.source_cooldown_active),
+    sourceWindowExhausted: Boolean(row.source_window_exhausted),
     authorityClass: row.authority_class || "UNKNOWN",
     documentType: row.document_type || "document",
     jurisdiction: row.jurisdiction || null,
     state: row.state || null,
     year: row.year == null ? null : number(row.year),
+    fileSizeBytes: row.file_size_bytes == null ? null : number(row.file_size_bytes),
     title: row.title || "Untitled document",
     resourceType,
     resourceAvailable: resourceReady,
     resourceFetchable: number(row.accessible_resource_count) > 0 || policyEdgeHtml,
+    processingEligible,
     capabilities,
     chunkCount,
     usableChunkCount,
@@ -150,6 +315,8 @@ const classifyAuditRow = (row = {}) => {
     failureClass: failureReason,
     failureCount: number(row.retry_count),
     retryable,
+    activeProcessingJob: Boolean(row.active_processing_job),
+    recoveryClass,
     recoveryGroup,
     priority,
   };
@@ -173,6 +340,9 @@ const summarize = (documents, timings, databaseBytes) => {
   const bySource = {};
   const byResourceType = {};
   const byFailureReason = {};
+  const byRecoveryClass = Object.fromEntries(
+    RECOVERY_CLASSES.map((name) => [name, 0]),
+  );
   const byRecoveryGroup = {};
   const byPriority = {};
   for (const document of documents) {
@@ -182,6 +352,7 @@ const summarize = (documents, timings, databaseBytes) => {
     increment(bySource, document.source);
     increment(byResourceType, document.resourceType);
     increment(byFailureReason, document.failureClass);
+    if (document.recoveryClass) increment(byRecoveryClass, document.recoveryClass);
     increment(byRecoveryGroup, document.recoveryGroup);
     increment(byPriority, document.priority);
   }
@@ -204,6 +375,13 @@ const summarize = (documents, timings, databaseBytes) => {
   const estimatedSequentialMs = eta.every((item) => item.sequentialMs != null)
     ? eta.reduce((sum, item) => sum + item.sequentialMs, 0)
     : null;
+  const notReady = documents.filter((item) => !item.capabilities.searchReady);
+  const theoreticallyProcessable = notReady.filter((item) =>
+    item.processingEligible && AUTOMATIC_RECOVERY_CLASSES.has(item.recoveryClass));
+  const actuallyRecoverableNow = theoreticallyProcessable.filter((item) =>
+    item.sourceRetryAvailable && !item.activeProcessingJob);
+  const retryControlBlocked = theoreticallyProcessable.filter((item) =>
+    !item.sourceRetryAvailable);
   return {
     generatedAt: new Date().toISOString(),
     readOnly: true,
@@ -214,9 +392,29 @@ const summarize = (documents, timings, databaseBytes) => {
     retryable: documents.filter((item) => !item.capabilities.searchReady && item.retryable).length,
     manualReview: documents.filter((item) => item.recoveryGroup === "F_MANUAL_RESTRICTED").length,
     permanentlyUnavailable: documents.filter((item) => !item.capabilities.searchReady && !item.retryable && item.recoveryGroup === "F_MANUAL_RESTRICTED").length,
+    recoveryEligibility: {
+      theoreticallyProcessable: theoreticallyProcessable.length,
+      actuallyRecoverableNow: actuallyRecoverableNow.length,
+      blockedBySourceFailure: notReady.filter((item) =>
+        SOURCE_FAILURE_REASONS.has(item.failureClass)).length,
+      blockedByRetryControls: retryControlBlocked.length,
+      blockedByCooldown: retryControlBlocked.filter((item) => item.sourceCooldownActive).length,
+      blockedBySourceWindow: retryControlBlocked.filter((item) =>
+        !item.sourceCooldownActive && item.sourceWindowExhausted).length,
+      blockedByStaleLegacyState: notReady.filter((item) =>
+        item.qualityState == null || STALE_LEGACY_CLASSES.has(item.recoveryClass)).length,
+      manualReview: notReady.filter((item) =>
+        item.recoveryGroup === "F_MANUAL_RESTRICTED").length,
+      unsupportedNonPdfNonPolicyEdge: notReady.filter((item) =>
+        !item.processingEligible).length,
+      alreadyQueuedOrClaimed: notReady.filter((item) =>
+        item.activeProcessingJob).length,
+      note: "Blocking counts are diagnostic and may overlap. Source failure counts documents with a recorded acquisition failure; retry-control, cooldown, and queued/claimed counts describe whether an attempt can start now.",
+    },
     bySource,
     byResourceType,
     byFailureReason,
+    byRecoveryClass,
     byRecoveryGroup,
     byPriority,
     measuredTiming: timingByGroup,
@@ -230,7 +428,12 @@ const summarize = (documents, timings, databaseBytes) => {
   };
 };
 
-const runResearchReadinessAudit = async ({ includeDocuments = false, sampleLimit = 25 } = {}) => {
+const runResearchReadinessAudit = async ({
+  includeDocuments = false,
+  includeSamples = true,
+  sampleLimit = 25,
+} = {}) => {
+  const activeNamespace = providerConfig().vectorNamespace;
   const [rows, timingResult, sizeResult] = await Promise.all([
     query(`
       SELECT
@@ -240,7 +443,33 @@ const runResearchReadinessAudit = async ({ includeDocuments = false, sampleLimit
         document.publication_date,
         COALESCE(legacy.canonical_source, legacy.source_name, 'unknown') AS source,
         COALESCE(legacy.canonical_url, legacy.detail_url, legacy.source_url) AS canonical_url,
-        legacy.source_url, legacy.pdf_url,
+        legacy.source_url, legacy.pdf_url, legacy.file_size_bytes,
+        source_location.source_host,
+        (
+          COALESCE(domain_state.cooldown_until, '-infinity'::TIMESTAMPTZ) <= NOW()
+          AND (
+            domain_state.window_started_at IS NULL
+            OR domain_state.window_started_at < NOW() - (
+              COALESCE(domain_state.policy_json->>'windowMinutes', '60') || ' minutes'
+            )::INTERVAL
+            OR domain_state.window_attempts < COALESCE(
+              NULLIF(domain_state.policy_json->>'maxAttemptsPerWindow', '')::INTEGER,
+              CASE WHEN source_location.source_host ~* '(^|\\.)prsindia\\.org$' THEN 25 ELSE 50 END
+            )
+          )
+        ) AS source_retry_available,
+        COALESCE(domain_state.cooldown_until, '-infinity'::TIMESTAMPTZ) > NOW()
+          AS source_cooldown_active,
+        (
+          domain_state.window_started_at IS NOT NULL
+          AND domain_state.window_started_at >= NOW() - (
+            COALESCE(domain_state.policy_json->>'windowMinutes', '60') || ' minutes'
+          )::INTERVAL
+          AND domain_state.window_attempts >= COALESCE(
+            NULLIF(domain_state.policy_json->>'maxAttemptsPerWindow', '')::INTEGER,
+            CASE WHEN source_location.source_host ~* '(^|\\.)prsindia\\.org$' THEN 25 ELSE 50 END
+          )
+        ) AS source_window_exhausted,
         state.catalogued, state.resource_ready, state.text_ready,
         state.search_ready, state.semantic_ready, state.chat_ready,
         state.capability_comparison_ready, state.processing_status,
@@ -249,6 +478,18 @@ const runResearchReadinessAudit = async ({ includeDocuments = false, sampleLimit
         state.retrieval_mode, state.retrieval_verified, state.pipeline_stage,
         state.failure_stage, state.failure_code, state.failure_reason,
         state.readiness_reason, state.retry_eligible, state.retry_count,
+        state.chunks_count AS claimed_chunk_count,
+        COALESCE(LENGTH(NULLIF(TRIM(artifact.original_text), '')), 0)::INTEGER
+          AS artifact_text_length,
+        EXISTS (
+          SELECT 1 FROM document_artifact_objects artifact_object
+          WHERE artifact_object.document_id = document.id
+            AND artifact_object.artifact_kind IN ('extracted-text', 'ocr-text')
+            AND artifact_object.status IN ('verified', 'active')
+        ) AS has_externalized_text,
+        TO_REGCLASS('document_text_chunks_original_text_fts_idx') IS NOT NULL
+          AS fts_index_available,
+        COALESCE(resources.total_resource_count, 0)::INTEGER AS total_resource_count,
         COALESCE(resources.accessible_resource_count, 0)::INTEGER AS accessible_resource_count,
         COALESCE(resources.pdf_resource_count, 0)::INTEGER AS pdf_resource_count,
         COALESCE(resources.html_resource_count, 0)::INTEGER AS html_resource_count,
@@ -256,6 +497,10 @@ const runResearchReadinessAudit = async ({ includeDocuments = false, sampleLimit
         COALESCE(chunks.chunk_count, 0)::INTEGER AS chunk_count,
         COALESCE(chunks.usable_chunk_count, 0)::INTEGER AS usable_chunk_count,
         COALESCE(chunks.vector_reference_count, 0)::INTEGER AS vector_reference_count,
+        COALESCE(chunks.active_vector_reference_count, 0)::INTEGER
+          AS active_vector_reference_count,
+        COALESCE(chunks.active_embedding_hash_count, 0)::INTEGER
+          AS active_embedding_hash_count,
         COALESCE(interactions.interaction_count, 0)::INTEGER AS interaction_count,
         COALESCE(ocr.failed_page_count, 0)::INTEGER AS failed_page_count,
         state.search_ready AS lexical_ready,
@@ -263,12 +508,39 @@ const runResearchReadinessAudit = async ({ includeDocuments = false, sampleLimit
         EXISTS (
           SELECT 1 FROM document_processing_jobs job
           WHERE job.document_id = document.id AND job.status = 'dead_letter'
-        ) AS dead_letter
+        ) AS dead_letter,
+        EXISTS (
+          SELECT 1 FROM document_processing_jobs job
+          WHERE job.document_id = document.id AND job.status IN ('queued', 'running')
+        ) AS active_processing_job
       FROM documents document
       JOIN legislative_documents legacy ON legacy.id = document.id
+      LEFT JOIN LATERAL (
+        SELECT NULLIF(LOWER(SUBSTRING(
+          COALESCE(
+            (
+              SELECT resource.url
+              FROM document_resources resource
+              WHERE resource.document_id = document.id
+                AND resource.is_accessible
+                AND resource.resource_type = 'pdf'
+              ORDER BY resource.is_primary DESC, resource.id
+              LIMIT 1
+            ),
+            legacy.pdf_url,
+            legacy.canonical_url,
+            legacy.source_url
+          )
+          FROM '^[a-z]+://([^/:]+)'
+        )), '') AS source_host
+      ) source_location ON TRUE
+      LEFT JOIN document_retry_domain_state domain_state
+        ON domain_state.source_host = source_location.source_host
       LEFT JOIN document_processing_state state ON state.document_id = document.id
+      LEFT JOIN document_text_artifacts artifact ON artifact.document_id = document.id
       LEFT JOIN LATERAL (
         SELECT
+          COUNT(*) AS total_resource_count,
           COUNT(*) FILTER (WHERE is_accessible AND resource_type IN ('pdf', 'html', 'text')) AS accessible_resource_count,
           COUNT(*) FILTER (WHERE is_accessible AND resource_type = 'pdf') AS pdf_resource_count,
           COUNT(*) FILTER (WHERE is_accessible AND resource_type = 'html') AS html_resource_count,
@@ -278,7 +550,16 @@ const runResearchReadinessAudit = async ({ includeDocuments = false, sampleLimit
       LEFT JOIN LATERAL (
         SELECT COUNT(*) AS chunk_count,
           COUNT(*) FILTER (WHERE LENGTH(TRIM(original_text)) > 0) AS usable_chunk_count,
-          COUNT(vector_reference) AS vector_reference_count
+          COUNT(vector_reference) AS vector_reference_count,
+          COUNT(*) FILTER (
+            WHERE embedding_namespace = $1
+              AND vector_reference IS NOT NULL AND vector_reference <> ''
+          ) AS active_vector_reference_count,
+          COUNT(*) FILTER (
+            WHERE embedding_namespace = $1
+              AND embedding_input_sha256 IS NOT NULL
+              AND embedding_input_sha256 <> ''
+          ) AS active_embedding_hash_count
         FROM document_text_chunks chunk WHERE chunk.document_id = document.id
       ) chunks ON TRUE
       LEFT JOIN LATERAL (
@@ -296,7 +577,7 @@ const runResearchReadinessAudit = async ({ includeDocuments = false, sampleLimit
       ) ocr ON TRUE
       WHERE document.visibility_status = 'public'
       ORDER BY document.id
-    `),
+    `, [activeNamespace]),
     query(`
       SELECT recovery_group, COUNT(*)::INTEGER AS completed,
         ROUND(AVG(duration_ms))::INTEGER AS average_ms,
@@ -324,19 +605,27 @@ const runResearchReadinessAudit = async ({ includeDocuments = false, sampleLimit
   const nonReady = documents.filter((item) => !item.capabilities.searchReady);
   return {
     ...summary,
-    samples: {
-      nonReady: nonReady.slice(0, sampleLimit),
-      manualReview: nonReady.filter((item) => item.recoveryGroup === "F_MANUAL_RESTRICTED").slice(0, sampleLimit),
-      retryable: nonReady.filter((item) => item.retryable).slice(0, sampleLimit),
-    },
+    ...(includeSamples ? {
+      samples: {
+        nonReady: nonReady.slice(0, sampleLimit),
+        manualReview: nonReady.filter((item) => item.recoveryGroup === "F_MANUAL_RESTRICTED").slice(0, sampleLimit),
+        retryable: nonReady.filter((item) => item.retryable).slice(0, sampleLimit),
+        byRecoveryClass: Object.fromEntries(RECOVERY_CLASSES.map((name) => [
+          name,
+          documents.filter((item) => item.recoveryClass === name).slice(0, sampleLimit),
+        ])),
+      },
+    } : {}),
     ...(includeDocuments ? { documents } : {}),
   };
 };
 
 module.exports = {
   FAILURE_REASONS,
+  RECOVERY_CLASSES,
   classifyAuditRow,
   primaryFailureReason,
+  recoveryClassFor,
   runResearchReadinessAudit,
   summarize,
 };

@@ -18,6 +18,7 @@ const { effectiveBatchSize } = require("./processingWorkerService");
 const { recordStage } = require("./processingStageService");
 const { normalizeDocumentType, retrievalFamilyForType } = require("./documentTypes");
 const { publicBackfillEligible, semanticPriority } = require("./semanticCoverageService");
+const { canonicalVectorId } = require("./vectorIdentity");
 
 const storeByFamily = {
   act: storeActContentInChunks,
@@ -188,15 +189,23 @@ const buildVectorChunks = ({ document, rows, family, config }) => {
     const embeddingText = String(row.translated_text || row.original_text || "").trim();
     const content = String(row.original_text || row.translated_text || "").trim();
     const chunkIndex = Number(row.chunk_index ?? index);
+    const embeddingInputHash = sha256(embeddingText);
     return {
-      id: row.vector_reference || `${family}-${document.id}-chunk-${chunkIndex}`,
+      id: canonicalVectorId({
+        family,
+        documentId: document.id,
+        chunkIndex,
+        embeddingInputHash,
+        config,
+      }),
       [idKey]: document.id,
       documentId: document.id,
       title: document.title,
       content,
       translatedText: row.translated_text || null,
       embeddingText,
-      embeddingInputHash: sha256(embeddingText),
+      embeddingInputHash,
+      previousVectorReference: row.vector_reference || null,
       previousEmbeddingInputHash: row.embedding_input_sha256,
       previousNamespace: row.embedding_namespace,
       chunkIndex,
@@ -235,6 +244,7 @@ const updateChunkEmbeddingMetadata = async ({ documentId, chunks, config, queryF
   for (const chunk of chunks) {
     await queryFn(
       `UPDATE document_text_chunks SET
+         vector_reference = $8,
          embedding_namespace = $3,
          embedding_input_sha256 = $4,
          metadata_json = metadata_json || jsonb_build_object(
@@ -247,7 +257,7 @@ const updateChunkEmbeddingMetadata = async ({ documentId, chunks, config, queryF
        WHERE document_id = $1 AND chunk_index = $2`,
       [documentId, chunk.chunkIndex, config.vectorNamespace,
         chunk.embeddingInputHash, config.embeddingProvider,
-        config.embeddingModel, String(config.embeddingDimension)],
+        config.embeddingModel, String(config.embeddingDimension), chunk.id],
     );
   }
 };
@@ -314,6 +324,11 @@ const updateSemanticState = async ({ documentId, chunksCount, verified, error = 
        failure_stage = CASE WHEN $3 THEN NULL ELSE 'embedding' END,
        failure_reason = CASE WHEN $3 THEN NULL ELSE $6 END,
        failure_code = CASE WHEN $3 THEN NULL ELSE $7 END,
+       failure_details_json = COALESCE(failure_details_json, '{}'::jsonb) ||
+         jsonb_build_object(
+           'semanticRetrievalVerified', $3::BOOLEAN,
+           'semanticRetrievalVerifiedAt', CASE WHEN $3 THEN NOW() ELSE NULL END
+         ),
        retry_eligible = $8,
        retry_count = CASE WHEN $3 THEN COALESCE(retry_count, 0)
          ELSE COALESCE(retry_count, 0) + 1 END,
@@ -357,6 +372,7 @@ const backfillSemanticDocument = async ({
   const reusableIds = new Set(chunks.filter((chunk) =>
     chunk.previousNamespace === config.vectorNamespace &&
     chunk.previousEmbeddingInputHash === chunk.embeddingInputHash &&
+    chunk.previousVectorReference === chunk.id &&
     !knownMissingIds.has(chunk.id)).map((chunk) => chunk.id));
   const embeddingInputTokens = chunks.reduce((sum, chunk) => sum + estimateEmbeddingTokens(chunk.embeddingText), 0);
   if (dryRun) return {

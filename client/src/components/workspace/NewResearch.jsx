@@ -58,7 +58,6 @@ export function NewResearch() {
       if (!controller.signal.aborted) { setPreparingIds(new Set()); setPreparationNotice("Live preparation updates are unavailable. Open the document to check its status; it has not been marked ready."); }
     }
   };
-
   useEffect(() => {
     let active = true;
     getResearchSources().then((result) => { if (active) { setSources(result.sources || []); setSourceIds([]); } })

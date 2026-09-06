@@ -65,6 +65,7 @@ const {
 } = require("./htmlResourceService");
 const { SOURCE_AUTHORITY } = require("../retrieval/sourceAuthority");
 const { evidenceTextIsReliable, evaluateTextQuality } = require("../lib/pdfTextQuality");
+const { canonicalVectorId } = require("./vectorIdentity");
 
 const TYPE_CONFIG = {
   bill: {
@@ -476,6 +477,13 @@ const getDocument = async (documentType, documentId) => {
   return document;
 };
 
+const pdfResourceCandidates = (document = {}, resources = []) => [
+  ...resources
+    .filter((resource) => resource.resourceType === "pdf" && resource.isAccessible !== false)
+    .map((resource) => resource.url),
+  document.pdfUrl,
+].filter((value, index, values) => value && values.indexOf(value) === index);
+
 const getDocumentContext = async (documentType, documentId) => {
   const cacheKey = `${documentType}:${documentId}`;
   const document = await getDocument(documentType, documentId);
@@ -548,7 +556,7 @@ const postgresChunkMetadata = (metadata = {}) => {
 const saveNormalizedChunks = async (documentId, chunks, languageCode) => {
   const currentNamespace = providerConfig().vectorNamespace;
   const previous = await query(
-    `SELECT chunk_index, content_hash, embedding_namespace
+    `SELECT chunk_index, content_hash, embedding_namespace, vector_reference
      FROM document_text_chunks WHERE document_id = $1`,
     [documentId],
   );
@@ -575,7 +583,8 @@ const saveNormalizedChunks = async (documentId, chunks, languageCode) => {
     const previousRow = previousByIndex.get(Number(chunkIndex));
     const reusable =
       previousRow?.content_hash === contentHash &&
-      previousRow?.embedding_namespace === currentNamespace;
+      previousRow?.embedding_namespace === currentNamespace &&
+      previousRow?.vector_reference === chunk.id;
     if (reusable) {
       cacheHits += 1;
       if (chunk.id) unchangedChunkIds.add(chunk.id);
@@ -667,6 +676,8 @@ const processExtractableSourceDocument = async (
   {
     totalStartedAt,
     indexCheckMs,
+    skipSemantic = false,
+    skipSummary = false,
   } = {},
 ) => {
   const slug = sourceSlug(document);
@@ -808,10 +819,20 @@ const processExtractableSourceDocument = async (
   const htmlChunks = chunkStructuredHtml(extracted, {
     chunkSize: pdfProcessor.chunkSize,
   });
+  const embeddingConfig = providerConfig();
+  const family = retrievalFamilyForType(normalizeDocumentType(
+    document.type || document.documentType || document.document_type || "policy",
+  ));
   const sourceChunks = htmlChunks.map((chunk, index) => {
     const content = chunk.content;
     return {
-      id: `policy-${document.id}-chunk-${index}`,
+      id: canonicalVectorId({
+        family,
+        documentId: document.id,
+        chunkIndex: index,
+        embeddingText: content,
+        config: embeddingConfig,
+      }),
       [config.idField]: String(document.id),
       title: article.title || document.title,
       content,
@@ -847,18 +868,20 @@ const processExtractableSourceDocument = async (
   const previousArtifact = await getTextArtifact(document.id);
   const unchangedCleanContent = previousArtifact?.metadata?.cleanContentHash === extracted.cleanContentHash;
   const summaryStartedAt = Date.now();
-  const summaryResult = unchangedCleanContent && previousArtifact?.englishSummary
+  const summaryResult = previousArtifact?.englishSummary && (unchangedCleanContent || skipSummary)
     ? { summary: previousArtifact.englishSummary, fallback: false, error: null, reused: true }
+    : skipSummary
+      ? { summary: null, fallback: false, error: null, deferred: true }
     : await safeGenerateSummary("policy", summaryContext, {
         sourceLanguage: detectedLanguage.languageCode,
       });
   const { summary } = summaryResult;
   const summarySections = parseSummarySections(summary);
-  const suggestedQuestions = await safeSuggestedQuestions(
-    "policy",
-    summary,
-    summarySections,
-  );
+  const suggestedQuestions = skipSummary
+    ? previousArtifact?.summaryJson?.suggestedQuestions || []
+    : summary
+      ? await safeSuggestedQuestions("policy", summary, summarySections)
+      : [];
   const summaryMs = Date.now() - summaryStartedAt;
 
   await saveTextArtifact(document.id, {
@@ -913,6 +936,9 @@ const processExtractableSourceDocument = async (
   };
   let vectorStorageError = null;
   try {
+    if (skipSemantic) throw Object.assign(new Error("semantic_backfill_deferred"), {
+      semanticDeferred: true,
+    });
     stored = await config.store(
       sourceChunks.map((chunk) => ({
         ...chunk,
@@ -921,10 +947,12 @@ const processExtractableSourceDocument = async (
       { unchangedChunkIds: chunkCacheResult.unchangedChunkIds },
     );
   } catch (error) {
-    vectorStorageError = error;
-    console.warn(
-      `Vector storage unavailable for source document ${document.id}; using local text retrieval fallback: ${error.message}`,
-    );
+    if (!error.semanticDeferred) {
+      vectorStorageError = error;
+      console.warn(
+        `Vector storage unavailable for source document ${document.id}; using local text retrieval fallback: ${error.message}`,
+      );
+    }
   }
   const embeddingInputTokens = sourceChunks.reduce(
     (sum, chunk) => sum + Math.ceil(String(chunk.content || "").length / 4),
@@ -963,7 +991,9 @@ const processExtractableSourceDocument = async (
       ocrPages: 0,
       totalPages: 0,
       chunksStored: Number(stored.chunksStored || 0),
-      embeddingsStored: vectorStorageError ? 0 : Number(stored.chunksStored || 0),
+      embeddingsStored: vectorStorageError || skipSemantic
+        ? 0
+        : Number(stored.chunksStored || 0),
       chunkPersistenceMs,
       downloadChecksumSha256: extracted.rawHtmlHash,
       downloadFinalUrl: article.url || document.sourceUrl,
@@ -974,14 +1004,17 @@ const processExtractableSourceDocument = async (
       contentUnchanged: unchangedCleanContent,
       totalMs: Date.now() - Number(totalStartedAt || Date.now()),
       vectorStorageFailed: Boolean(vectorStorageError),
+      vectorStorageDeferred: Boolean(skipSemantic),
     },
     usage: {
       estimated: true,
-      generationInputTokens: Math.ceil(summaryContext.length / 4),
-      generationOutputTokens: Math.ceil(summary.length / 4),
-      embeddingInputTokens,
+      generationInputTokens: summaryResult.reused || summaryResult.deferred
+        ? 0
+        : Math.ceil(summaryContext.length / 4),
+      generationOutputTokens: summary ? Math.ceil(summary.length / 4) : 0,
+      embeddingInputTokens: skipSemantic ? 0 : embeddingInputTokens,
       ocrUsed: false,
-      retrievalMode: vectorStorageError ? "local_text" : "hybrid",
+      retrievalMode: vectorStorageError || skipSemantic ? "local_text" : "hybrid",
       summaryFallback: summaryResult.fallback,
       contentUnchanged: unchangedCleanContent,
     },
@@ -990,6 +1023,8 @@ const processExtractableSourceDocument = async (
 
 const processDocument = async (documentType, documentId, options = {}) => {
   const forcePdfReextract = Boolean(options.forcePdfReextract);
+  const skipSemantic = Boolean(options.skipSemantic);
+  const skipSummary = Boolean(options.skipSummary);
   const totalStartedAt = Date.now();
   const document = await getDocument(documentType, documentId);
   if (!document) {
@@ -1002,6 +1037,8 @@ const processDocument = async (documentType, documentId, options = {}) => {
     return processExtractableSourceDocument(document, config, {
       totalStartedAt,
       indexCheckMs: 0,
+      skipSemantic,
+      skipSummary,
     });
   }
   const indexCheckStartedAt = Date.now();
@@ -1034,7 +1071,7 @@ const processDocument = async (documentType, documentId, options = {}) => {
       const cachedSections = cachedSummary
         ? parseSummarySections(cachedSummary)
         : {};
-      const cachedQuestions = cachedSummary
+      const cachedQuestions = cachedSummary && !skipSummary
         ? await safeSuggestedQuestions(
             documentType,
             cachedSummary,
@@ -1070,6 +1107,9 @@ const processDocument = async (documentType, documentId, options = {}) => {
         },
       });
       try {
+        if (skipSemantic) throw Object.assign(new Error("semantic_backfill_deferred"), {
+          semanticDeferred: true,
+        });
         await Promise.all(
           matches.map((match) =>
             config.index().update({
@@ -1081,9 +1121,11 @@ const processDocument = async (documentType, documentId, options = {}) => {
           ),
         );
       } catch (error) {
-        console.warn(
-          `Vector metadata update unavailable for document ${documentId}; preserving local text artifact: ${error.message}`,
-        );
+        if (!error.semanticDeferred) {
+          console.warn(
+            `Vector metadata update unavailable for document ${documentId}; preserving local text artifact: ${error.message}`,
+          );
+        }
       }
       await saveNormalizedChunks(
         documentId,
@@ -1109,7 +1151,7 @@ const processDocument = async (documentType, documentId, options = {}) => {
         },
         usage: {
           estimated: true,
-          generationInputTokens: Math.ceil(context.length / 4),
+          generationInputTokens: 0,
           generationOutputTokens: summary ? Math.ceil(summary.length / 4) : 0,
           embeddingInputTokens: 0,
           ocrUsed: Boolean(matches[0]?.metadata?.ocrUsed),
@@ -1130,7 +1172,7 @@ const processDocument = async (documentType, documentId, options = {}) => {
     const cachedSections = cachedSummary
       ? parseSummarySections(cachedSummary)
       : {};
-    const cachedQuestions = cachedSummary
+    const cachedQuestions = cachedSummary && !skipSummary
       ? await safeSuggestedQuestions(
           documentType,
           cachedSummary,
@@ -1165,9 +1207,20 @@ const processDocument = async (documentType, documentId, options = {}) => {
     let vectorStorageError = null;
     let vectorMetrics = { embeddingsMs: 0, pineconeMs: 0 };
     try {
+      if (skipSemantic) throw Object.assign(new Error("semantic_backfill_deferred"), {
+        semanticDeferred: true,
+      });
+      const embeddingConfig = providerConfig();
+      const family = retrievalFamilyForType(documentType);
       const retryChunks = localChunks.map((chunk, index) => ({
         ...chunk,
-        id: chunk.id || `${documentType}-${documentId}-chunk-${index}`,
+        id: canonicalVectorId({
+          family,
+          documentId,
+          chunkIndex: chunk.chunkIndex ?? index,
+          embeddingText: chunk.content,
+          config: embeddingConfig,
+        }),
         [config.idField]: String(documentId),
         billId: String(documentId),
         policyId: String(documentId),
@@ -1181,10 +1234,12 @@ const processDocument = async (documentType, documentId, options = {}) => {
       });
       vectorMetrics = stored.metrics || vectorMetrics;
     } catch (error) {
-      vectorStorageError = error;
-      console.warn(
-        `Semantic retry unavailable for document ${documentId}; keeping PostgreSQL lexical readiness: ${error.message}`,
-      );
+      if (!error.semanticDeferred) {
+        vectorStorageError = error;
+        console.warn(
+          `Semantic retry unavailable for document ${documentId}; keeping PostgreSQL lexical readiness: ${error.message}`,
+        );
+      }
     }
     const chunkSetSha256 = hashChunkSet(localChunks);
     const embeddingInputSha256 = computeChunkContentHash(
@@ -1208,39 +1263,34 @@ const processDocument = async (documentType, documentId, options = {}) => {
         embeddingsMs: Number(vectorMetrics.embeddingsMs || 0),
         pineconeMs: Number(vectorMetrics.pineconeMs || 0),
         vectorStorageFailed: Boolean(vectorStorageError),
+        vectorStorageDeferred: Boolean(skipSemantic),
         totalMs: Date.now() - totalStartedAt,
       },
       chunkSetSha256,
       embeddingInputSha256,
       usage: {
         estimated: true,
-        generationInputTokens: Math.ceil(context.length / 4),
+        generationInputTokens: 0,
         generationOutputTokens: summaryResult.summary
           ? Math.ceil(summaryResult.summary.length / 4)
           : 0,
         embeddingInputTokens: 0,
         ocrUsed: Boolean(storedArtifact?.ocrUsed),
-        retrievalMode: vectorStorageError ? "local_text" : "hybrid",
+        retrievalMode: vectorStorageError || skipSemantic ? "local_text" : "hybrid",
         summaryFallback: summaryResult.fallback,
       },
     };
   }
 
-  if (!document.pdfUrl) {
+  const resources = await DocumentRepository.getResources(documentId);
+  const pdfCandidates = pdfResourceCandidates(document, resources);
+  if (!pdfCandidates.length) {
     const error = new Error(
       "This document does not have a verified official PDF.",
     );
     error.status = 422;
     throw error;
   }
-
-  const resources = await DocumentRepository.getResources(documentId);
-  const pdfCandidates = [
-    document.pdfUrl,
-    ...resources
-      .filter((resource) => resource.resourceType === "pdf")
-      .map((resource) => resource.url),
-  ].filter((value, index, values) => value && values.indexOf(value) === index);
   let processed;
   let processingError;
   for (const pdfUrl of pdfCandidates) {
@@ -1297,9 +1347,17 @@ const processDocument = async (documentType, documentId, options = {}) => {
       summaryFallbackReason: summaryResult.error?.message || null,
     },
   });
+  const embeddingConfig = providerConfig();
+  const family = retrievalFamilyForType(documentType);
   const chunks = processed.chunks.map((chunk, index) => ({
     ...chunk,
-    id: `${documentType}-${documentId}-chunk-${index}`,
+    id: canonicalVectorId({
+      family,
+      documentId,
+      chunkIndex: chunk.chunkIndex ?? index,
+      embeddingText: chunk.content,
+      config: embeddingConfig,
+    }),
     [config.idField]: String(documentId),
     // text-embedding-3-large is multilingual. Preserve and embed each source
     // chunk directly instead of duplicating a generated English summary into
@@ -1330,14 +1388,19 @@ const processDocument = async (documentType, documentId, options = {}) => {
   };
   let vectorStorageError = null;
   try {
+    if (skipSemantic) throw Object.assign(new Error("semantic_backfill_deferred"), {
+      semanticDeferred: true,
+    });
     stored = await config.store(chunks, {
       unchangedChunkIds: chunkCacheResult.unchangedChunkIds,
     });
   } catch (error) {
-    vectorStorageError = error;
-    console.warn(
-      `Vector storage unavailable for document ${documentId}; using local text retrieval fallback: ${error.message}`,
-    );
+    if (!error.semanticDeferred) {
+      vectorStorageError = error;
+      console.warn(
+        `Vector storage unavailable for document ${documentId}; using local text retrieval fallback: ${error.message}`,
+      );
+    }
   }
   const embeddingInputTokens = chunks.reduce(
     (sum, chunk) =>
@@ -1377,14 +1440,15 @@ const processDocument = async (documentType, documentId, options = {}) => {
       staleVectorsRemoved: Number(stored.staleVectorsRemoved || 0),
       totalMs: Date.now() - totalStartedAt,
       vectorStorageFailed: Boolean(vectorStorageError),
+      vectorStorageDeferred: Boolean(skipSemantic),
     },
     usage: {
       estimated: true,
-      generationInputTokens: Math.ceil(summaryContext.length / 4),
+      generationInputTokens: 0,
       generationOutputTokens: summary ? Math.ceil(summary.length / 4) : 0,
-      embeddingInputTokens,
+      embeddingInputTokens: skipSemantic ? 0 : embeddingInputTokens,
       ocrUsed: processed.ocrUsed,
-      retrievalMode: vectorStorageError ? "local_text" : "hybrid",
+      retrievalMode: vectorStorageError || skipSemantic ? "local_text" : "hybrid",
       summaryFallback: summaryResult.fallback,
     },
   };
@@ -2206,6 +2270,7 @@ module.exports = {
   getDocument,
   getDocumentContext,
   isExtractableSourceDocument,
+  pdfResourceCandidates,
   processDocument,
   getTextArtifact,
   retrieveDocumentContext,
