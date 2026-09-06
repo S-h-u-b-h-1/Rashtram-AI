@@ -179,9 +179,10 @@ export function DocumentChatLayout({
       try {
         setLoading(true);
         setError("");
-        const [detail, sourceResponse] = await Promise.all([
+        const [detail, sourceResponse, history] = await Promise.all([
           getDocumentResearch(documentType, documentId),
           getResearchSources().catch(() => ({ sources: [] })),
+          getDocumentChatHistory(documentType, documentId),
         ]);
         if (cancelled) return;
         setStudySources(sourceResponse.sources || []);
@@ -199,11 +200,6 @@ export function DocumentChatLayout({
           page_path: `/app/document/${documentId}`,
           metadata_json: { documentType },
         });
-        const history = await getDocumentChatHistory(
-          documentType,
-          documentId,
-        );
-        if (cancelled) return;
         setNotes(history.notes || []);
         const handoff = new URLSearchParams(window.location.search);
         const restored = handoff.has("sources") ? uniqueIds(handoff.get("sources")) : restoreSourceIds(history.chat?.messages || [], sourceResponse.sources || []);

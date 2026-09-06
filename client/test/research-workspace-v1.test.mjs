@@ -42,6 +42,11 @@ test('Studio keeps summary collapsed and contextual tools accessible', async () 
   assert.match(studio, /Saved outputs/); assert.match(studio, /documents.length >= 2/);
   assert.match(studio, /<details[^>]*><summary[^>]*>Document overview/); assert.match(studio, /Compliance research & tracking/);
 });
+test('workspace initialization loads detail, sources, and history concurrently', async () => {
+  const layout = await read('components/document-chat/DocumentChatLayout.jsx');
+  assert.match(layout, /const \[detail, sourceResponse, history\] = await Promise\.all/);
+  assert.doesNotMatch(layout, /const history = await getDocumentChatHistory/);
+});
 test('Library defaults to usable sources while keeping all-source discovery', async () => {
   const library = await read('components/documents/DocumentExplorer.jsx');
   assert.match(library, /researchReady: "true"/); assert.match(library, /Show all sources/);
