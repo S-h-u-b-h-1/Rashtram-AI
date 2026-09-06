@@ -121,6 +121,7 @@ const createResearchBriefPdf = ({
   sources = [],
   generatedAt = new Date(),
   completeEvidence = false,
+  sourcesOnNewPage = true,
 }) => new Promise((resolve, reject) => {
   const pdf = new PDFDocument({
     size: "A4",
@@ -168,7 +169,8 @@ const createResearchBriefPdf = ({
     .filter((source) => source && typeof source === "object")
     .slice(0, completeEvidence ? undefined : 20);
   if (citedSources.length) {
-    pdf.addPage();
+    if (sourcesOnNewPage || pdf.y > pdf.page.height - pdf.page.margins.bottom - 120) pdf.addPage();
+    else pdf.moveDown(1);
     pdf
       .font("Rashtram-Display")
       .fontSize(18)
