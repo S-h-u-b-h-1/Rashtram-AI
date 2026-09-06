@@ -332,32 +332,55 @@ const checks = [
   },
 ];
 
-const verifyDatabase = async ({ queryFn } = {}) => {
-  const client = queryFn ? null : await getPool().connect();
-  const execute = queryFn || client.query.bind(client);
+const fingerprint = async (client) => {
+  const result = {};
+  for (const table of ['documents', 'document_processing_state', 'dashboard_metrics']) {
+    const { rows } = await client.query(`SELECT COUNT(*)::int AS rows,
+      MD5(COALESCE(STRING_AGG(row_hash, '' ORDER BY row_hash), '')) AS hash
+      FROM (SELECT MD5(row_to_json(t)::text) AS row_hash FROM ${table} t) snapshot`);
+    result[table] = rows[0];
+  }
+  return result;
+};
+
+const verifyDatabase = async (pool = getPool(), selectedChecks = checks) => {
+  const client = await pool.connect();
+  const results = [];
   try {
-    await execute('BEGIN TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY');
-    const results = [];
-    for (const check of checks) {
-      const result = await execute(check.sql);
+    await client.query('BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY');
+    const before = await fingerprint(client);
+    for (const check of selectedChecks) {
+      if (!/^\s*SELECT\b/i.test(check.sql) || /;\s*\S/.test(check.sql)) {
+        throw new Error('Verification accepts a single SELECT statement only');
+      }
+      const result = await client.query(check.sql);
       results.push({ name: check.name, passed: result.rows[0]?.passed === true });
     }
-    const failed = results.filter((result) => !result.passed);
-    await execute('COMMIT');
-    return { ok: !failed.length, readOnly: true, mutationCounts: { created: 0, updated: 0, deleted: 0 }, checks: results, failed: failed.length };
-  } catch (error) {
-    await execute('ROLLBACK').catch(() => undefined);
-    throw error;
+    const after = await fingerprint(client);
+    const unchanged = JSON.stringify(before) === JSON.stringify(after);
+    if (!unchanged) throw new Error('Database fingerprint changed during verification');
+    const failed = results.filter(result => !result.passed).length;
+    return { ok: !failed, checks: results, failed, readOnly: true,
+      fingerprint: { before, after, unchanged } };
   } finally {
-    client?.release();
+    try { await client.query('ROLLBACK'); } finally { client.release(); }
   }
 };
 
-if (require.main === module) verifyDatabase()
-  .then((result) => {
-    console.log(JSON.stringify(result, null, 2));
-    if (!result.ok) process.exitCode = 1;
-  })
+const main = async (args = process.argv.slice(2)) => {
+  if (args.some(arg => arg !== '--apply') || args.length > 1) {
+    throw new Error('Only the explicit --apply option is supported');
+  }
+  // Reconciliation is deliberately opt-in; merely importing or verifying cannot
+  // initialize schema, refresh quality, or update dashboard metrics.
+  const reconciliation = args.includes('--apply')
+    ? await require('../lib/database/quality').refreshDataQuality() : null;
+  const result = await verifyDatabase();
+  return reconciliation ? { ...result, reconciliation } : result;
+};
+
+if (require.main === module) main()
+  .then(result => { console.log(JSON.stringify(result, null, 2)); if (!result.ok) process.exitCode = 1; })
   .catch((error) => {
     console.error(error);
     process.exitCode = 1;
@@ -366,4 +389,4 @@ if (require.main === module) verifyDatabase()
     if (globalThis.__rashtramPostgresPool) await getPool().end();
   });
 
-module.exports = { verifyDatabase, checks };
+module.exports = { checks, fingerprint, verifyDatabase, main };
