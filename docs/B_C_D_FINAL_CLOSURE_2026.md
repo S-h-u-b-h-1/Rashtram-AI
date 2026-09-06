@@ -104,9 +104,9 @@ were verification abstentions. p50 total response time was 550 ms; maximum was
 
 ## 36–41. Gates, database, cleanup and deployment
 
-- Backend: 686 discovered; 684 passed; 2 intentional environment-gated skips;
+- Backend: 691 discovered; 689 passed; 2 intentional environment-gated skips;
   0 failed.
-- Frontend: 42/42 passed. Lint: 0 errors and 8 pre-existing warnings.
+- Frontend: 54/54 passed. Lint: 0 errors and 8 pre-existing warnings.
 - Next.js Webpack production build: passed, 27 routes.
 - Dependency audit: client 0 vulnerabilities; server retains one pre-existing
   moderate transitive `qs` advisory. No high/critical result.
