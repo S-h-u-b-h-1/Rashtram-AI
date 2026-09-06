@@ -28,7 +28,10 @@ const plainMarkdown = (value) =>
 
 const isPdfExportRequest = (value) => {
   const text = compact(value).toLowerCase();
-  const requestsFile = /\b(pdf|download|downloadable|export)\b/.test(text);
+  // Mentioning a source PDF or its pages is evidence intent, not file export.
+  const requestsFile = /\b(download|downloadable|export)\b/.test(text)
+    || /\b(?:create|generate|make|produce|save|convert|provide)\b[^.!?]{0,60}\b(?:a|as|to|into|in)\s+(?:a\s+)?pdf\b/.test(text)
+    || /\b(?:answer|response|report|brief|summary|analysis)\s+(?:as|in)\s+(?:a\s+)?pdf\b/.test(text);
   const refersToOutput = /\b(report|brief|response|answer|analysis|summary|document)\b/.test(text);
   return requestsFile && refersToOutput;
 };

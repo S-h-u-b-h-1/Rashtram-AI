@@ -15,6 +15,10 @@ test("PDF export intent recognizes report downloads without hijacking normal PDF
   );
   assert.equal(isPdfExportRequest("Export this impact brief"), true);
   assert.equal(isPdfExportRequest("What does the official PDF say?"), false);
+  assert.equal(isPdfExportRequest("What does the report say about grants? Cite physical PDF pages."), false);
+  assert.equal(isPdfExportRequest("Summarize this PDF document with page citations."), false);
+  assert.equal(isPdfExportRequest("Create a PDF report of this analysis"), true);
+  assert.equal(isPdfExportRequest("Provide the answer in PDF"), true);
 });
 
 test("report selection skips greetings and previous capability refusals", () => {
