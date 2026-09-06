@@ -18,8 +18,7 @@ import {
   getDocumentReadiness,
   prepareDocumentForComparison,
   recommendDocumentsForComparison,
-  generateResearchReport,
-  downloadResearchReportPdf,
+  downloadComparisonPdf,
   trackActivity,
 } from "@/lib/api";
 import { useComparison } from "@/context/ComparisonContext";
@@ -400,16 +399,11 @@ export function DocumentComparison() {
     router.push(`${chatHref}&q=${encodeURIComponent(question)}`);
   };
   const createReport = async () => {
-    if (reportLoading || !chatDocumentIds.length) return;
+    if (reportLoading || !comparison?.id) return;
     setReportLoading(true);
     setReportError("");
     try {
-      const report = await generateResearchReport({
-        title: `Research report: ${result?.documents?.map((item) => item.title).join(" and ") || "selected documents"}`,
-        researchQuestion: userQuestion || "What are the principal provisions, differences, timeline, authorities, and potential implications across these documents?",
-        documentIds: chatDocumentIds,
-      });
-      await downloadResearchReportPdf(report.id);
+      await downloadComparisonPdf(comparison.id);
     } catch (requestError) { setReportError(requestError.message); }
     finally { setReportLoading(false); }
   };
@@ -613,10 +607,10 @@ export function DocumentComparison() {
           <section className="surface-card p-5 sm:p-6">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <h3 className="font-serif text-2xl text-[#8f1d2c]">Documents compared</h3>
-              <button type="button" onClick={createReport} disabled={reportLoading}
+              <button type="button" onClick={createReport} disabled={reportLoading || !comparison?.id}
                 className="inline-flex items-center justify-center gap-2 rounded-xl border border-[#8f1d2c]/15 bg-white px-4 py-2.5 text-xs font-semibold text-[#8f1d2c] disabled:opacity-45">
                 {reportLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
-                {reportLoading ? "Building cited report…" : "Download research report"}
+                {reportLoading ? "Building comparison PDF…" : "Download comparison PDF"}
               </button>
             </div>
             {reportError && <p role="alert" className="mt-3 text-xs text-[#9a2637]">{reportError}</p>}

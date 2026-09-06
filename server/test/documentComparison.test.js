@@ -7,7 +7,33 @@ const {
   validateComparisonOutput,
   normalizeRequest,
   readinessReason,
+  comparisonAsMarkdown,
 } = require("../document/documentComparisonService");
+
+test("persisted comparisons export every analytical section without regenerating", () => {
+  const markdown = comparisonAsMarkdown({
+    id: "cmp-1",
+    createdAt: "2026-09-06T00:00:00.000Z",
+    result: {
+      documents: [{ title: "Act A" }, { title: "Act B" }],
+      executiveSummary: "Act A applies a narrower reporting duty than Act B.",
+      differences: [{
+        topic: "Reporting",
+        documentA: "Quarterly filing",
+        documentB: "Annual filing",
+        significance: "Different compliance cadence.",
+        citations: ["A-C1", "B-C1"],
+      }],
+      keyTakeaways: ["Check the applicable filing calendar."],
+      limitations: ["Only indexed provisions were compared."],
+    },
+  });
+  assert.match(markdown, /Executive Summary/);
+  assert.match(markdown, /Key Differences/);
+  assert.match(markdown, /Quarterly filing/);
+  assert.match(markdown, /Key Takeaways/);
+  assert.match(markdown, /Only indexed provisions/);
+});
 
 test("comparison output validator rejects analytically empty success", () => {
   const citations = [{ id: "D1-C1", documentId: "101" }, { id: "D2-C1", documentId: "102" }];

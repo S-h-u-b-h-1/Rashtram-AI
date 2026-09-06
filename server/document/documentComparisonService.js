@@ -1631,6 +1631,63 @@ const getComparisons = async (userId, limit = 30) => {
   return result.rows.map(mapComparison);
 };
 
+const comparisonAsMarkdown = (comparison) => {
+  const result = comparison?.result || comparison || {};
+  const documents = Array.isArray(result.documents) ? result.documents : [];
+  const lines = [
+    "# Rashtram AI comparison",
+    `Compared documents: ${documents.map((document) => document.title).filter(Boolean).join(" vs ") || "Selected documents"}`,
+    `Generated: ${comparison?.createdAt || new Date().toISOString()}`,
+    "",
+    "## Executive Summary",
+    String(result.executiveSummary || "Insufficient evidence for a complete comparison."),
+  ];
+  const fields = [
+    ["Key Differences", "differences"],
+    ["Purpose", "purpose"],
+    ["Scope", "scope"],
+    ["Applicability", "applicability"],
+    ["Key Provisions", "keyProvisions"],
+    ["Major Similarities", "similarities"],
+    ["Obligations / Requirements", "obligations"],
+    ["Rights / Protections", "rights"],
+    ["Definitions", "definitions"],
+    ["Authority / Legal Effect", "legalEffect"],
+    ["Timeline / Dates", "timeline"],
+    ["Stakeholder Impact", "stakeholderImpact"],
+    ["What Changed", "whatChanged"],
+    ["Practical Implications", "practicalImplications"],
+    ["Key Takeaways", "keyTakeaways"],
+  ];
+  const renderItem = (item) => {
+    if (typeof item === "string") return `- ${item}`;
+    const label = item.topic || item.dimension || item.term || item.name || item.date || item.point || "Finding";
+    const details = [
+      item.documentA ? `Document A: ${item.documentA}` : null,
+      item.documentB ? `Document B: ${item.documentB}` : null,
+      item.analysis ? `Analysis: ${item.analysis}` : null,
+      item.significance ? `Why it matters: ${item.significance}` : null,
+      item.impact ? `Impact: ${item.impact}` : null,
+      item.event ? `Event: ${item.event}` : null,
+      item.clause ? `Provision: ${item.clause}` : null,
+      item.citations?.length ? `Evidence: ${item.citations.join(", ")}` : null,
+    ].filter(Boolean);
+    return `- ${label}${details.length ? ` — ${details.join("; ")}` : ""}`;
+  };
+  fields.forEach(([title, key]) => {
+    const items = Array.isArray(result[key]) ? result[key] : [];
+    lines.push("", `## ${title}`);
+    if (items.length) lines.push(...items.slice(0, 20).map(renderItem));
+    else lines.push(result.sectionStatus?.[key] === "not_applicable"
+      ? "Not materially applicable to this comparison."
+      : "Insufficient evidence in the selected documents to compare this reliably.");
+  });
+  lines.push("", "## Limitations");
+  const limitations = Array.isArray(result.limitations) ? result.limitations : [];
+  lines.push(...(limitations.length ? limitations.map(renderItem) : ["Verify material conclusions against the cited original sources."]));
+  return lines.join("\n");
+};
+
 const deleteComparison = async (userId, comparisonId) => {
   const result = await query(
     `DELETE FROM document_comparisons
@@ -1654,6 +1711,7 @@ module.exports = {
   validateComparisonOutput,
   getComparison,
   getComparisons,
+  comparisonAsMarkdown,
   normalizeRequest,
   resolveRegenerationRequest,
   sameDocumentScope,
