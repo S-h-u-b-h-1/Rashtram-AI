@@ -407,6 +407,7 @@ export const downloadPolicyDraftDocx = async (draftId) => {
 
 export const createPolicyDraft = async ({
   title,
+  template,
   objective,
   audience,
   geography,
@@ -430,6 +431,7 @@ export const createPolicyDraft = async ({
     },
     body: JSON.stringify({
       title,
+      template,
       objective,
       audience,
       geography,
@@ -460,6 +462,8 @@ export const createPolicyDraft = async ({
         const content = streamEventText(event.content);
         fullText += content;
         onChunk?.(content);
+      } else if (event.type === "done" && typeof event.draftText === 'string') {
+        fullText = event.draftText;
       } else if (event.type === "error") {
         throw new Error(event.error || "Policy drafting was interrupted.");
       }
@@ -495,7 +499,7 @@ export const fetchDocument = async (documentId) => {
 export const createDocumentComparison = async (payload) => {
   return apiRequest("/documents/compare", {
     method: "POST",
-    body: JSON.stringify(payload),
+    body: JSON.stringify({ ...payload, reportVersion: 2 }),
   });
 };
 
@@ -504,7 +508,7 @@ export const regenerateDocumentComparison = async (comparisonId, payload) => {
     `/documents/compare/${encodeURIComponent(comparisonId)}/regenerate`,
     {
       method: "POST",
-      body: JSON.stringify(payload),
+      body: JSON.stringify({ ...payload, reportVersion: 2 }),
     },
   );
 };

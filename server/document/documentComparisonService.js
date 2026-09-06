@@ -25,6 +25,7 @@ const {
 const { applyResearchFlags, resolveResearchFlags } = require("../retrieval/featureFlags");
 const { analysisCacheKey, caches, stableHash } = require("../retrieval/researchCache");
 const { recordResearchTelemetry } = require("../retrieval/researchTelemetry");
+const { buildFindingsV2, VERSION: FINDINGS_VERSION } = require('./comparisonFindingsV2');
 
 const MODES = new Set([
   "summary",
@@ -1281,6 +1282,14 @@ const createComparison = async (userId, payload, options = {}) => {
       authorityClass: passage?.authorityClass,
     };
   });
+  if (payload.reportVersion === 2 || options.previousResult?.comparisonSchemaVersion === FINDINGS_VERSION) {
+    const result = await buildFindingsV2({ documents: comparisonDocuments, evidence: comparisonEvidence,
+      explain: findings => explainVerifiedAmendments(findings, { language, question: userQuestion }), previous: options.previousResult, relationships: sourceVerifiedGraphRelationships });
+    assertCitationDocumentScope(result, documentIds);
+    const persist = comparisonId ? persistRegeneratedComparison : persistInitialComparison;
+    return persist({ userId, comparisonId, title: `Comparison: ${documents.map(d => d.title).join(' and ')}`,
+      documentIds, mode, language, userQuestion, result, recommendedDocuments: [] });
+  }
   const scopedSufficiency = assessAmendmentSufficiency(comparisonDocuments, comparisonEvidence, assessEvidenceSufficiency);
   const sufficiency = scopedSufficiency || (flags.evidenceSufficiency ? assessEvidenceSufficiency(
     userQuestion || comparisonQuery(mode),
@@ -1647,10 +1656,12 @@ const releaseFailedRegeneration = async (
 const regenerateComparison = async (userId, comparisonId, payload = {}, options = {}) => {
   const existing = await getComparison(userId, comparisonId);
   const request = resolveRegenerationRequest(existing, payload);
+  if (payload.reportVersion === 2) request.reportVersion = 2;
   await claimComparisonRegeneration(userId, comparisonId);
   try {
     return await createComparison(userId, request, {
       comparisonId,
+      previousResult: existing.result,
       forceGeneration: true,
       onStage: options.onStage,
     });

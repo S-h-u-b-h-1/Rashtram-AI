@@ -24,6 +24,25 @@ const excerpt = value => {
 };
 const comparisonPdfPresentation = comparison => {
   const result = comparison.result || {};
+  if (result.comparisonSchemaVersion === 'comparison-findings-v2') {
+    const lines = ['## Documents Compared', ...(result.documents || []).map(d => d.title),
+      '## Executive Summary', result.executiveSummary];
+    for (const f of result.findings || []) {
+      if (!['VERIFIED', 'SUPPORTED_LIMITED'].includes(f.confidenceState)) continue;
+      const amendment = ['AMENDS', 'ADDENDUM_TO'].includes(f.relationshipContext);
+      lines.push(`## ${f.title}`, `### ${amendment ? 'Before' : 'Document A'}`, excerpt(f.sourceA.excerpt),
+        `[${f.sourceA.citationIds.join(', ')}]`, `### ${amendment ? 'After' : 'Document B'}`, excerpt(f.sourceB.excerpt),
+        `[${f.sourceB.citationIds.join(', ')}]`, '### Comparison', f.verifiedComparison);
+      if (f.significance) lines.push('### Why it matters', f.significance);
+    }
+    lines.push('## Limitations', ...(result.limitations || []), '## Sources');
+    const used = new Set((result.findings || []).flatMap(f => [...f.sourceA.citationIds, ...f.sourceB.citationIds]));
+    for (const c of result.citations || []) if (used.has(c.id || c.citationId)) lines.push(
+      `[${c.id || c.citationId}] ${c.documentTitle || c.title || 'Source'}${c.pageStart ? ` — page ${c.pageStart}` : ''}`,
+      c.canonicalSourceUrl || c.sourceUrl || c.pdfUrl || 'Source URL unavailable.');
+    return { title: comparison.title || 'Compare Documents', documentType: 'Supported comparison findings', reportText: lines.join('\n\n'),
+      sources: [], completeEvidence: true, sourcesOnNewPage: false, generatedAt: comparison.createdAt || new Date() };
+  }
   const status = statusOf(result);
   if (['AMENDMENT_COMPARISON','ADDENDUM_COMPARISON'].includes(result.comparisonKind) && result.lineage && result.quality?.outputValidation?.valid && result.whatChanged?.length) {
     const facts=result.whatChanged;

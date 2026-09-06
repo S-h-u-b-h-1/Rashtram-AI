@@ -350,12 +350,12 @@ export function DocumentComparison() {
             Grounded document comparison
           </p>
           <h2 className={`mt-2 font-serif ${result ? "text-2xl text-[#8f1d2c]" : "text-3xl"}`}>
-            {comparison?.title ||
+            {result?.comparisonSchemaVersion === 'comparison-findings-v2' ? 'Compare Documents' : comparison?.title ||
               (readinessLoading
                 ? "Checking selected documents"
                 : "Preparing comparison")}
           </h2>
-          {result && <p role="status" className="mt-3 text-sm font-semibold text-[#8f1d2c]">{status.label}</p>}
+          {result && result.comparisonSchemaVersion !== 'comparison-findings-v2' && <p role="status" className="mt-3 text-sm font-semibold text-[#8f1d2c]">{status.label}</p>}
           <div className={`${result ? "mt-4 border-t border-[#8f1d2c]/10 pt-4" : "mt-5"} flex flex-wrap gap-3`}>
             <label className="text-xs">
               <span className="sr-only">Comparison mode</span>
@@ -492,7 +492,7 @@ export function DocumentComparison() {
           <div className="text-center">
             <Loader2 className="mx-auto h-8 w-8 animate-spin text-[#8f1d2c]" />
             <p className="mt-3 text-sm text-[#706a61]">
-              Retrieving and comparing source passages…
+              Analyzing structure and comparing evidence…
             </p>
           </div>
         </div>

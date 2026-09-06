@@ -68,6 +68,10 @@ const detectLineage=(documents,evidence)=>{
    const neighbourhood=n.slice(Math.max(0,index-200),index+reference.length+350);
    if(/\b(?:does not|did not|not intended to|historical|previously amended)\b/.test(neighbourhood))continue;
    const prefix=n.slice(Math.max(0,index-100),index);
+   // A Bill's proposed short title names the future Act, not an instrument
+   // that this Bill amends. Nearby references to amending a schedule do not
+   // turn that self-identification into legal lineage.
+   if (/\b(?:may|shall) be (?:called|cited as)\s+(?:the\s+)?$/.test(prefix)) continue;
    if(!parseInstructions(evidence.filter(x=>String(x.documentId)===String(modifier.id))).length&&
     !/\b(?:act to amend|addendum to|modification of|continuation of)\s+(?:the\s+)?$/.test(prefix))continue;
    const type=/\baddendum\b/.test(neighbourhood)?'ADDENDUM_TO':
@@ -75,6 +79,12 @@ const detectLineage=(documents,evidence)=>{
     /\b(?:amendment|amended|amends|amend)\b/.test(neighbourhood)?'AMENDS':
     /\b(?:partial modification|modified|modification|redefined)\b/.test(neighbourhood)?'MODIFIES':
     /\bin continuation of\b/.test(neighbourhood)?'CONTINUES':null;
+   const suffix=n.slice(index+reference.length,index+reference.length+120);
+   if (type === 'AMENDS' && !(
+     /\b(?:act to amend|bill to amend|amends|amendment of|amendment to)\s+(?:the\s+)?$/.test(prefix) ||
+     /^\s+(?:shall be|is|stands) amended\b/.test(suffix) ||
+     (/\bin\s+(?:the\s+)?$/.test(prefix) && /^\s+in (?:section|clause)\b/.test(suffix))
+   )) continue;
    if(type)found.push({relationshipType:type,baseDocumentReference:{id:String(base.id),title:base.title},
     modifyingDocumentReference:{id:String(modifier.id),title:modifier.title},sourceEvidenceIds:[e.id],
     affectedSections:parseInstructions(evidence.filter(x=>String(x.documentId)===String(modifier.id))).map(i=>i.affectedSection)});

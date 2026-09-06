@@ -1,6 +1,7 @@
 "use client";
 
 import { comparisonSections, comparisonStatus, displayText, sourceHref } from '@/lib/comparison-presentation.mjs';
+import { ComparisonFindingsV2 } from './ComparisonFindingsV2';
 
 function EvidenceLinks({ ids = [], citations }) {
   return <span className="mt-2 flex flex-wrap gap-2">{Array.isArray(ids) && ids.map(id => {
@@ -28,6 +29,7 @@ function Findings({ section, citations }) {
 }
 
 export function ComparisonAnalysis({ result }) {
+  if (result.comparisonSchemaVersion === 'comparison-findings-v2') return <ComparisonFindingsV2 result={result} />;
   const status = comparisonStatus(result);
   const sections = comparisonSections(result);
   const supported = sections.filter(section => section.items.length);

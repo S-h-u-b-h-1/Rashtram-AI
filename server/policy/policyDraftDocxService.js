@@ -43,8 +43,8 @@ const contentParagraphs = (value) => clean(value)
     return bodyParagraph(line.replace(/^[-*•]\s+/, ""), bullet ? { bullet: { level: 0 } } : {});
   });
 
-const sectionHeading = (number, title) => new Paragraph({
-  heading: HeadingLevel.HEADING_1,
+const sectionHeading = (number, title, level = 2) => new Paragraph({
+  heading: level >= 4 ? HeadingLevel.HEADING_3 : level === 3 ? HeadingLevel.HEADING_2 : HeadingLevel.HEADING_1,
   spacing: { before: 320, after: 150 },
   border: { bottom: { color: "D9C5C0", style: BorderStyle.SINGLE, size: 4, space: 4 } },
   children: [new TextRun({ text: `${number}. ${clean(title)}`, bold: true, size: 30, color: BRAND })],
@@ -105,11 +105,12 @@ const buildPolicyDraftDocx = async ({ draft, citations = [], brief = {}, created
 
   let sectionNumber = 2;
   for (const section of canonical.sections) {
-    children.push(sectionHeading(sectionNumber, section.heading || "Policy Analysis"));
+    children.push(sectionHeading(sectionNumber, section.heading || "Policy Analysis", section.level));
     children.push(...contentParagraphs(section.content));
     sectionNumber += 1;
   }
   const collections = [
+    ["Drafting notes — requires review", canonical.unalignedSections || []],
     ["Recommendations", canonical.recommendations],
     ["Implementation Framework", canonical.implementation],
     ["Risks and Mitigations", canonical.risks],

@@ -19,6 +19,7 @@ const {
   policyDraftToMarkdown,
 } = require("./policyDraftService");
 const { buildPolicyDraftDocx } = require("./policyDraftDocxService");
+const { loadTemplate, applyTemplate } = require('./policyTemplateV2');
 
 const router = express.Router();
 const MAX_DOCUMENTS = 8;
@@ -231,6 +232,7 @@ router.post("/generate", generationLimiter, async (req, res) => {
   try {
     const documentIds = safeIds(req.body?.documentIds, MAX_DOCUMENTS);
     const sourceIds = safeIds(req.body?.sourceIds, MAX_SOURCES);
+    brief.template = await loadTemplate(req.body?.template, req.user.id, query);
     const [catalogue, userSources] = await Promise.all([
       loadCatalogueContext(documentIds, brief.objective, req.user.id),
       getSourceContext(req.user.id, sourceIds, brief.objective),
@@ -281,6 +283,7 @@ router.post("/generate", generationLimiter, async (req, res) => {
       try {
         const stream = await generatePolicyDraft(prompt, context, {
           responseLanguage: brief.responseLanguage,
+          template: brief.template,
         });
         sendSSE(res, { type: "status", status: "Writing your policy draft…" });
         for await (const chunk of stream) {
@@ -304,7 +307,8 @@ router.post("/generate", generationLimiter, async (req, res) => {
         sendSSE(res, { type: "status", status: "A grounded fallback draft was prepared." });
         sendSSE(res, { type: "content", content: markdown });
       }
-      const canonicalDraft = policyDraftMarkdownToCanonical(markdown, title);
+      const canonicalDraft = applyTemplate(policyDraftMarkdownToCanonical(markdown, title), brief.template);
+      markdown = policyDraftToMarkdown(canonicalDraft);
       await query(
         `UPDATE policy_drafts SET draft_text = $1, draft_json = $2::jsonb,
            status = 'ready', error_message = NULL, updated_at = NOW()
@@ -315,6 +319,7 @@ router.post("/generate", generationLimiter, async (req, res) => {
         persisted: true,
         draftId: String(draftId),
         generationMode,
+        draftText: markdown,
       });
     } catch (error) {
       const safeError = sanitizeProviderError(error);
