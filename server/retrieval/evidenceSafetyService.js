@@ -156,7 +156,7 @@ const explainableSignals = ({
   },
 });
 
-const detectEvidenceConflicts = (evidence = []) => {
+const detectEvidenceConflicts = (evidence = [], { compareDocuments = false } = {}) => {
   const conflictTerms = /\b(rate|amount|deadline|effective|commence|date|limit|threshold|penalty|fine|period)\b/i;
   const candidates = evidence.filter((item) =>
     conflictTerms.test(String(item.content || "")) && numericFacts(item.content).length,
@@ -166,6 +166,10 @@ const detectEvidenceConflicts = (evidence = []) => {
     for (let rightIndex = leftIndex + 1; rightIndex < candidates.length; rightIndex += 1) {
       const left = candidates[leftIndex];
       const right = candidates[rightIndex];
+      // Different selected instruments can legitimately set different values.
+      // Comparing them is the task, not evidence for a single asserted rule.
+      if (compareDocuments && left.documentId && right.documentId &&
+          String(left.documentId) !== String(right.documentId)) continue;
       if (String(left.documentId || "") === String(right.documentId || "") &&
           Number(left.chunkIndex) === Number(right.chunkIndex)) continue;
       if (lexicalAlignment(left.content, right.content) < 0.28) continue;
@@ -187,7 +191,7 @@ const assessEvidenceSufficiency = (query, evidence = [], options = {}) => {
   const usable = evidence.filter((item) =>
     String(item.content || "").trim() && evidenceTextIsReliable(item),
   );
-  const conflicts = detectEvidenceConflicts(usable);
+  const conflicts = detectEvidenceConflicts(usable, { compareDocuments: options.queryType === "COMPARISON" });
   if (conflicts.length) {
     const level = SUFFICIENCY_LEVELS.CONFLICTING;
     return {

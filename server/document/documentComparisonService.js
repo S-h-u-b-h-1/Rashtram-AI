@@ -5,7 +5,7 @@ const {
 } = require("./documentResearchService");
 const { getDocumentReadiness } = require("./readinessContract");
 const {
-  getDocumentRecommendations,
+  getProblemRecommendations,
 } = require("./recommendationService");
 const {
   getComparisonGraphOverlap,
@@ -1425,28 +1425,13 @@ const createComparison = async (userId, payload, options = {}) => {
   } else {
     generated.quality = { ...(generated.quality || {}), outputValidation };
   }
-  const recommendedDocuments = [
-    ...new Map(
-      (
-        await Promise.all(
-          documents.map((document) =>
-            getDocumentRecommendations(document.id, userId, {
-              limit: 6,
-              includeNonReady: false,
-              useUserProfile: true,
-            }),
-          ),
-        )
-      )
-        .flat()
-        .filter(
-          (recommendation) =>
-            !documentIds.includes(String(recommendation.id)),
-        )
-        .sort((left, right) => right.score - left.score)
-        .map((recommendation) => [String(recommendation.id), recommendation]),
-    ).values(),
-  ].slice(0, 8);
+  const followUpDiscovery = await getProblemRecommendations(null, {
+    problem: [userQuestion, ...documents.map((document) => document.title)].filter(Boolean).join(" ").slice(0, 1600),
+    limit: 20,
+  });
+  const recommendedDocuments = (followUpDiscovery.recommendations || [])
+    .filter((recommendation) => !documentIds.includes(String(recommendation.id)))
+    .slice(0, 8);
   const result = {
     ...generated,
     comparisonSchemaVersion: "comparison-quality-v3",

@@ -5,6 +5,17 @@ const { evaluateBusinessCandidate, inferBusinessSignals, RELEVANCE_TIERS } = req
 const { comparisonAsMarkdown } = require("../document/documentComparisonService");
 const { validateComparisonOutput } = require("../document/documentComparisonService");
 
+test("different instruments may set different values without blocking comparison", () => {
+  const { detectEvidenceConflicts } = require("../retrieval/evidenceSafetyService");
+  const evidence = [
+    { documentId: "1", chunkIndex: 0, content: "The filing deadline period is 30 days for the annual return." },
+    { documentId: "2", chunkIndex: 0, content: "The filing deadline period is 60 days for the annual return." },
+  ];
+  assert.equal(detectEvidenceConflicts(evidence).length, 1);
+  assert.equal(detectEvidenceConflicts(evidence, { compareDocuments: true }).length, 0);
+  assert.equal(detectEvidenceConflicts([evidence[0], { ...evidence[1], documentId: "1", chunkIndex: 1 }], { compareDocuments: true }).length, 1);
+});
+
 test("canonical readiness accepts verified lexical retrieval while semantic indexing is deferred", () => {
   const source = require("node:fs").readFileSync(require.resolve("../document/DocumentRepository"), "utf8");
   assert.equal((source.match(/ps\.embedding_status IN \('fallback', 'deferred'\)/g) || []).length, 2);
