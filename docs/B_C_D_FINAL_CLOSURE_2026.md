@@ -1,6 +1,6 @@
 # Rashtram AI — final B + C + D closure pass
 
-Date: 6 September 2026. Engineering window: approximately 70 minutes. Final
+Date: 6 September 2026. Engineering window: approximately 90 minutes. Final
 decision: **PARTIAL**. Release E was not started.
 
 ## 1–3. Scope, branch and fixes
