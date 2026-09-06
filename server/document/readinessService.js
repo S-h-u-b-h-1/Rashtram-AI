@@ -777,7 +777,7 @@ const runReadinessReconciliation = async ({ queryFn = query } = {}) => {
             )
             OR (
               embedding_status IN ('fallback', 'deferred')
-              AND retrieval_mode IN ('local_text', 'hybrid')
+              AND retrieval_mode IN ('local_text', 'fts', 'hybrid')
             )
           )
           AND retrieval_verified

@@ -1183,7 +1183,7 @@ const updateProcessingStatus = async (
              )
              OR (
                ps.embedding_status IN ('fallback', 'deferred')
-               AND ps.retrieval_mode IN ('local_text', 'hybrid')
+               AND ps.retrieval_mode IN ('local_text', 'fts', 'hybrid')
              )
            )
            AND ps.retrieval_verified
@@ -1213,7 +1213,7 @@ const updateProcessingStatus = async (
              )
              OR (
                ps.embedding_status IN ('fallback', 'deferred')
-               AND ps.retrieval_mode IN ('local_text', 'hybrid')
+               AND ps.retrieval_mode IN ('local_text', 'fts', 'hybrid')
              )
            )
            AND ps.retrieval_verified

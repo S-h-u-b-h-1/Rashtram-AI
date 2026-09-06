@@ -8,7 +8,7 @@ const { validateComparisonOutput } = require("../document/documentComparisonServ
 test("canonical readiness accepts verified lexical retrieval while semantic indexing is deferred", () => {
   const source = require("node:fs").readFileSync(require.resolve("../document/DocumentRepository"), "utf8");
   assert.equal((source.match(/ps\.embedding_status IN \('fallback', 'deferred'\)/g) || []).length, 2);
-  assert.match(source, /ps\.retrieval_mode IN \('local_text', 'hybrid'\)/);
+  assert.match(source, /ps\.retrieval_mode IN \('local_text', 'fts', 'hybrid'\)/);
   assert.match(source, /AND ps\.retrieval_verified/);
   assert.match(source, /AND ps\.extraction_status = 'ready'/);
 });
