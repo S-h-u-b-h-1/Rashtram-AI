@@ -29,6 +29,15 @@ const evaluateCandidate = (record, candidate) => {
   ) {
     return { action: "merge", reason: "exact-source", similarity: 1 };
   }
+  const recordEdition = record.metadata?.edition;
+  const candidateEdition = candidate.metadata_json?.edition;
+  const conflictingEdition = recordEdition && candidateEdition && recordEdition !== candidateEdition;
+  const conflictingPublisherId = record.sourceName === candidate.source_name &&
+    record.metadata?.publisherId && candidate.metadata_json?.publisherId &&
+    record.metadata.publisherId !== candidate.metadata_json.publisherId;
+  if (conflictingEdition || conflictingPublisherId) {
+    return {action:'create',reason:'different-publisher-edition',similarity:0};
+  }
   const recordCanonicalUrl = normalizedIdentifier(
     record.sourceUrl,
   );

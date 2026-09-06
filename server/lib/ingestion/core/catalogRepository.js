@@ -293,6 +293,15 @@ const recordRunItem = async ({
 };
 
 const findCandidates = async (record) => {
+  // Legacy imports can have the canonical source identity without a corresponding
+  // document_sources row. Recover that exact match before fuzzy candidate search.
+  const exact = await query(
+    `SELECT d.*, d.source_document_id AS source_record_id
+       FROM legislative_documents d
+      WHERE d.source_name = $1 AND d.source_document_id = $2`,
+    [record.sourceName, record.sourceRecordId],
+  );
+  if (exact.rows.length) return exact.rows;
   const identifiers = [
     record.legalIdentifier,
     record.gazetteIdentifier,
@@ -964,6 +973,18 @@ const persistRecord = async (record, decision) => {
   const client = await getPool().connect();
   try {
     await client.query("BEGIN");
+    // Serialize repeat ingestion of one publisher identifier across workers.
+    await client.query('SELECT pg_advisory_xact_lock(hashtextextended($1, 0))',
+      [JSON.stringify([record.sourceName, record.sourceRecordId])]);
+    const exact = await client.query(
+      `SELECT d.* FROM legislative_documents d
+       WHERE (d.source_name = $1 AND d.source_document_id = $2)
+          OR EXISTS (SELECT 1 FROM document_sources ds WHERE ds.document_id = d.id
+            AND ds.source_name = $1 AND ds.source_record_id = $2)
+       ORDER BY d.id LIMIT 1`,
+      [record.sourceName, record.sourceRecordId],
+    );
+    if (exact.rows[0]) decision = { action: 'merge', candidate: exact.rows[0], reason: 'exact-source', similarity: 1 };
     const meaningfulUpdate =
       decision.action === "merge" &&
       hasMeaningfulDocumentUpdate(decision.candidate, record);

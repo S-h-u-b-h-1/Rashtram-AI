@@ -170,7 +170,7 @@ test(
         "document_chat_generations",
         `${schema}.document_chat_generations`,
       );
-      const cleaned = await pool.query(cleanupSql, [200, 30, 100]);
+      const cleaned = await pool.query(cleanupSql, [200, 30, 120, 100]);
       assert.equal(cleaned.rowCount, 5);
       const retainedClaims = await pool.query(
         `SELECT status, COUNT(*)::integer AS count

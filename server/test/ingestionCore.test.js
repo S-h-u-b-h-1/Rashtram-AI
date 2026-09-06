@@ -76,6 +76,7 @@ test("normalization creates a universal record without losing source metadata", 
   assert.equal(record.sourcePriority, 20);
   assert.deepEqual(record.metadata, {
     official: true,
+    publicationDate: {raw:null,precision:'UNKNOWN',value:null,date:null},
     sourceClassification: "Official Government Source",
     language: "English",
     country: "India",

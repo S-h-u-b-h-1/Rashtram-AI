@@ -1,4 +1,5 @@
 const { textFingerprint } = require("./hashing");
+const { publicationDateInfo } = require('./publicationDate');
 const {
   DOCUMENT_TYPES,
   normalizeDocumentType: normalizeExplicitDocumentType,
@@ -63,35 +64,7 @@ const normalizeTitle = (value) =>
     .trim();
 
 const normalizeDate = (value) => {
-  if (!value) return null;
-  const monthOnlyMatch = String(value).trim().match(
-    /^(Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)[,\s]+((?:19|20)\d{2})$/i,
-  );
-  if (monthOnlyMatch) {
-    const month = new Date(`${monthOnlyMatch[1]} 1, 2000 UTC`).getUTCMonth() + 1;
-    return `${monthOnlyMatch[2]}-${String(month).padStart(2, "0")}-01`;
-  }
-  const numericMatch = String(value).match(
-    /^(\d{1,2})[-/](\d{1,2})[-/](\d{4})$/,
-  );
-  if (numericMatch) {
-    return `${numericMatch[3]}-${numericMatch[2].padStart(
-      2,
-      "0",
-    )}-${numericMatch[1].padStart(2, "0")}`;
-  }
-  const namedMonthMatch = String(value).match(
-    /^(\d{1,2})[-\s]([A-Za-z]{3,9})[-\s](\d{4})$/,
-  );
-  if (namedMonthMatch) {
-    const date = new Date(
-      `${namedMonthMatch[2]} ${namedMonthMatch[1]}, ${namedMonthMatch[3]} UTC`,
-    );
-    if (!Number.isNaN(date.getTime())) return date.toISOString().slice(0, 10);
-  }
-  const date = value instanceof Date ? value : new Date(value);
-  if (Number.isNaN(date.getTime())) return null;
-  return date.toISOString().slice(0, 10);
+  return publicationDateInfo(value).date;
 };
 
 const normalizeYear = (value, ...dateCandidates) => {
@@ -179,14 +152,15 @@ const normalizeRecord = (record) => {
     );
   }
 
-  const publicationDate = normalizeDate(record.publicationDate);
+  const dateInfo = publicationDateInfo(record.publicationDateRaw || record.publicationDate || record.publicationDateValue || record.metadata?.publicationDate?.raw);
+  const publicationDate = dateInfo.date;
   const enactedDate = normalizeDate(record.enactedDate || record.assentDate);
   const introducedDate = normalizeDate(record.introducedDate);
   const effectiveDate = normalizeDate(
     record.effectiveDate || record.commencementDate,
   );
   const year = normalizeYear(
-    record.year,
+    record.year || dateInfo.value?.slice(0, 4),
     publicationDate,
     enactedDate,
     introducedDate,
@@ -246,6 +220,8 @@ const normalizeRecord = (record) => {
     enactedDate,
     assentDate: enactedDate,
     publicationDate,
+    publicationDatePrecision: dateInfo.precision,
+    publicationDateValue: dateInfo.value,
     effectiveDate,
     commencementDate: effectiveDate,
     year,
@@ -269,6 +245,7 @@ const normalizeRecord = (record) => {
     sourceStatus: cleanText(record.sourceStatus || record.status),
     metadata: {
       ...(record.metadata || record.sourceMetadata || {}),
+      publicationDate: dateInfo,
       ...(house ? { house } : {}),
       sourceClassification,
       language,
