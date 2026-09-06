@@ -1182,7 +1182,7 @@ const updateProcessingStatus = async (
                AND ps.embeddings_count >= ps.chunks_count
              )
              OR (
-               ps.embedding_status = 'fallback'
+               ps.embedding_status IN ('fallback', 'deferred')
                AND ps.retrieval_mode IN ('local_text', 'hybrid')
              )
            )
@@ -1212,7 +1212,7 @@ const updateProcessingStatus = async (
                AND ps.embeddings_count >= ps.chunks_count
              )
              OR (
-               ps.embedding_status = 'fallback'
+               ps.embedding_status IN ('fallback', 'deferred')
                AND ps.retrieval_mode IN ('local_text', 'hybrid')
              )
            )

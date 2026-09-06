@@ -776,7 +776,7 @@ const runReadinessReconciliation = async ({ queryFn = query } = {}) => {
               AND embeddings_count >= chunks_count
             )
             OR (
-              embedding_status = 'fallback'
+              embedding_status IN ('fallback', 'deferred')
               AND retrieval_mode IN ('local_text', 'hybrid')
             )
           )

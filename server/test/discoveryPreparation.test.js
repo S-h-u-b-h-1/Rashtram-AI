@@ -5,6 +5,14 @@ const { evaluateBusinessCandidate, inferBusinessSignals, RELEVANCE_TIERS } = req
 const { comparisonAsMarkdown } = require("../document/documentComparisonService");
 const { validateComparisonOutput } = require("../document/documentComparisonService");
 
+test("canonical readiness accepts verified lexical retrieval while semantic indexing is deferred", () => {
+  const source = require("node:fs").readFileSync(require.resolve("../document/DocumentRepository"), "utf8");
+  assert.equal((source.match(/ps\.embedding_status IN \('fallback', 'deferred'\)/g) || []).length, 2);
+  assert.match(source, /ps\.retrieval_mode IN \('local_text', 'hybrid'\)/);
+  assert.match(source, /AND ps\.retrieval_verified/);
+  assert.match(source, /AND ps\.extraction_status = 'ready'/);
+});
+
 test("a cited comparison with missing analytical sections is partial, not complete", () => {
   const citations = [{ id: "D1-C1", documentId: "1" }, { id: "D2-C1", documentId: "2" }];
   const generated = { generationMode: "ai", executiveSummary: "The instruments differ in reporting scope [D1-C1] [D2-C1].",
