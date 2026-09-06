@@ -220,6 +220,12 @@ router.delete("/chat/history", async (req, res) => {
   }
 });
 
+router.get('/compare-safety-check', (req,res)=>{
+  const result=require('../retrieval/numericSafetyProbe').numericSafetyProbe();
+  res.setHeader('Cache-Control','private, no-store');
+  return res.status(result.ok?200:503).json(result);
+});
+
 router.post("/compare", generationLimiter, async (req, res) => {
   try {
     const comparison = await createComparison(req.user.id, req.body);

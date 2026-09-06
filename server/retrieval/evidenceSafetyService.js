@@ -120,6 +120,7 @@ const authorityValue = (authorityClass) => ({
 })[authorityClass] || 0.5;
 
 const numericFacts = (value) => normalize(value).match(/\b\d+(?:\.\d+)?%?\b/g) || [];
+const { provisionIdentifiers, incompatibleNumericValues } = require('./numericClaims');
 
 const CONFLICT_THEMES = Object.freeze([
   ["deadline", /\b(deadline|within|no later than|due date|period)\b/i],
@@ -148,14 +149,18 @@ const propositionFingerprint = (value) => {
 };
 
 const sameProposition = (left, right) => {
+  const leftIds=provisionIdentifiers(left),rightIds=provisionIdentifiers(right);
+  if(leftIds.length&&rightIds.length&&!leftIds.some(id=>rightIds.includes(id)))return false;
   const a = propositionFingerprint(left);
   const b = propositionFingerprint(right);
-  if (!a.themes.some((theme) => b.themes.includes(theme))) return false;
-  if (a.structural.length && b.structural.length &&
-      a.structural.some((value) => b.structural.includes(value))) return true;
+  if (!a.themes.some((theme) => b.themes.includes(theme)) &&
+      !(/\bage\b/i.test(left)&&/\bage\b/i.test(right))) return false;
   const rightSubjects = new Set(b.subjects);
   const shared = a.subjects.filter((token) => rightSubjects.has(token));
-  return shared.length >= 2 && shared.length / Math.min(a.subjects.length || 1, b.subjects.length || 1) >= 0.45;
+  const bareAgeRule = a.subjects.length===1 && b.subjects.length===1 &&
+    a.subjects[0]==='age' && b.subjects[0]==='age' &&
+    leftIds.some(id=>rightIds.includes(id));
+  return bareAgeRule || (shared.length >= 2 && shared.length / Math.min(a.subjects.length || 1, b.subjects.length || 1) >= 0.45);
 };
 
 const sufficiencyDecision = (level) => ({
@@ -194,7 +199,7 @@ const explainableSignals = ({
 });
 
 const detectEvidenceConflicts = (evidence = [], { compareDocuments = false } = {}) => {
-  const conflictTerms = /\b(rate|amount|deadline|effective|commence|date|limit|threshold|penalty|fine|period)\b/i;
+  const conflictTerms = /\b(rate|amount|deadline|within|effective|commence|date|limit|threshold|penalty|fine|period|age)\b/i;
   const candidates = evidence.filter((item) =>
     conflictTerms.test(String(item.content || "")) && numericFacts(item.content).length,
   );
@@ -206,9 +211,7 @@ const detectEvidenceConflicts = (evidence = [], { compareDocuments = false } = {
       if (String(left.documentId || "") === String(right.documentId || "") &&
           Number(left.chunkIndex) === Number(right.chunkIndex)) continue;
       if (!sameProposition(left.content, right.content)) continue;
-      const leftNumbers = numericFacts(left.content);
-      const rightNumbers = numericFacts(right.content);
-      if (leftNumbers.some((number) => rightNumbers.includes(number))) continue;
+      if (!incompatibleNumericValues(left.content, right.content)) continue;
       const sameDocument = String(left.documentId || "") === String(right.documentId || "");
       conflicts.push({
         left: { label: citationLabelsForEvidence(left, leftIndex)[0], content: String(left.content || "").slice(0, 360) },

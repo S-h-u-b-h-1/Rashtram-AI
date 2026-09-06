@@ -1,8 +1,14 @@
 const { evidenceTextIsReliable } = require("../lib/pdfTextQuality");
+const { classifyNumericTokens } = require('./numericClaims');
 
 const normalize = (value) => String(value || "").toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim();
 
 const nearDuplicate = (left, right) => {
+  const numericSignature = text => JSON.stringify(classifyNumericTokens(text)
+    .filter(token=>token.type!=='PROVISION_IDENTIFIER')
+    .map(token=>[token.type,token.dimension,token.value]).sort());
+  // A one-token numeric difference can be the material conflict we must retain.
+  if(numericSignature(left)!==numericSignature(right))return false;
   const a = new Set(normalize(left).split(" ").filter(Boolean));
   const b = new Set(normalize(right).split(" ").filter(Boolean));
   if (!a.size || !b.size) return false;
