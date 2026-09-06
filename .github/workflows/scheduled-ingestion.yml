@@ -64,6 +64,7 @@ jobs:
           fi
 
       - name: Apply additive database migrations
+        if: ${{ steps.profile.outputs.dry_run != 'true' }}
         run: npm run db:migrate
 
       - name: Run scheduled ingestion
@@ -76,9 +77,9 @@ jobs:
           npm run ingest:scheduled -- --profile=${{ steps.profile.outputs.name }} $EXTRA_ARGS
 
       - name: Verify normalized database
-        if: ${{ steps.profile.outputs.dry_run != 'true' }}
+        if: ${{ !cancelled() && steps.profile.outputs.dry_run != 'true' }}
         run: npm run db:verify
 
       - name: Weekly duplicate audit
-        if: ${{ steps.profile.outputs.name == 'weekly' && steps.profile.outputs.dry_run != 'true' }}
+        if: ${{ !cancelled() && steps.profile.outputs.name == 'weekly' && steps.profile.outputs.dry_run != 'true' }}
         run: npm run catalog:duplicates

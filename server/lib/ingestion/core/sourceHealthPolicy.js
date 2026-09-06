@@ -125,6 +125,8 @@ const classifyConnectorState = ({
   enabled = true,
   now = Date.now(),
   ingestionFrequency,
+  listingQualityAccepted = false,
+  checkedWindow = false,
 } = {}) => {
   const normalizedLive = String(liveStatus || "").toLowerCase();
   const observedFailure = failureClass || null;
@@ -147,7 +149,7 @@ const classifyConnectorState = ({
   if (normalizedLive === "degraded") return CONNECTOR_STATUS.DEGRADED;
   const discovered = Number(sampleRecordsDiscovered || 0) +
     Number(sampleDirectoryEntriesDiscovered || 0);
-  if (normalizedLive === "no data found" || (!discovered && !storedSourceRecords && enabled)) {
+  if (normalizedLive === "no data found" || (!discovered && enabled)) {
     return CONNECTOR_STATUS.NO_DATA;
   }
   if (!enabled) return CONNECTOR_STATUS.NO_DATA;
@@ -155,11 +157,14 @@ const classifyConnectorState = ({
   const { freshHours, staleHours } = freshnessThresholds(sourceName, {
     ingestionFrequency,
   });
-  const ageHours = hoursSince(lastSuccess || lastAttempt, now);
+  const policy = sourcePolicyFor(sourceName, { ingestionFrequency });
+  if (!policy.cadence || policy.cadence === 'manual' || !lastSuccess) return CONNECTOR_STATUS.DELAYED;
+  const ageHours = hoursSince(lastSuccess, now);
   if (ageHours == null) return discovered || storedSourceRecords
     ? CONNECTOR_STATUS.DELAYED
     : CONNECTOR_STATUS.NO_DATA;
-  if (ageHours <= freshHours) return CONNECTOR_STATUS.FRESH;
+  if (ageHours <= freshHours) return listingQualityAccepted && checkedWindow
+    ? CONNECTOR_STATUS.FRESH : CONNECTOR_STATUS.DELAYED;
   if (ageHours <= staleHours) return CONNECTOR_STATUS.DELAYED;
   return CONNECTOR_STATUS.STALE;
 };

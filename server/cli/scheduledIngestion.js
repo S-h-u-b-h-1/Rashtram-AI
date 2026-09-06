@@ -9,6 +9,7 @@ const { runIngestion } = require("../lib/ingestion/core/ingestionRunner");
 const { scheduleForProfile } = require("../lib/ingestion/schedules");
 const { refreshDataQuality } = require("../lib/database/quality");
 const { getPool } = require("../db");
+const { assertScheduleAccepted } = require('../lib/ingestion/core/sourceAcceptance');
 
 const parseArguments = (args) => {
   const options = {
@@ -69,8 +70,12 @@ const main = async () => {
       });
       continue;
     }
-    const summary = await runIngestion(connector, options);
-    summaries.push(summary);
+    try {
+      assertScheduleAccepted(source);
+      summaries.push(await runIngestion(connector, options));
+    } catch (error) {
+      summaries.push({ source, status: "failed", errors: [{ message: error.message }] });
+    }
   }
 
   const quality = options.dryRun ? null : await refreshDataQuality();
@@ -92,10 +97,12 @@ const main = async () => {
       2,
     ),
   );
-  if (failed.length === summaries.length) process.exitCode = 2;
+  // A green scheduler must not conceal broken individual collectors.
+  if (!summaries.length || summaries.some((summary) =>
+    ["failed", "completed_with_errors"].includes(summary.status))) process.exitCode = 2;
 };
 
-main()
+if (require.main === module) main()
   .catch((error) => {
     console.error(error);
     process.exitCode = 1;

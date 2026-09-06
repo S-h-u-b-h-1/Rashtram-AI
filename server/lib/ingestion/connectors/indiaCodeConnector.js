@@ -5,7 +5,9 @@ const { createSnapshot } = require("../core/sourceSnapshots");
 const { normalizeDate } = require("../core/normalizer");
 const { attachConnectorLifecycle } = require("./connectorLifecycle");
 
-const INDIA_CODE_BASE = "https://www.indiacode.nic.in";
+// The publisher now serves the repository under /indiacode. Bare /handle
+// endpoints return 404; identities remain the same across this path migration.
+const INDIA_CODE_BASE = "https://www.indiacode.nic.in/indiacode";
 const CENTRAL_ACTS_HANDLE = "123456789/1362";
 const INDIA_CODE_REQUEST_OPTIONS = {
   headers: {

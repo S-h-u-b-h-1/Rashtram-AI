@@ -26,6 +26,8 @@ test("freshness thresholds are source-cadence aware", () => {
     liveStatus: "connected",
     lastSuccess: "2026-09-05T08:00:00.000Z",
     storedSourceRecords: 1,
+    sampleRecordsDiscovered: 1,
+    listingQualityAccepted: true, checkedWindow: true,
     now,
   }), CONNECTOR_STATUS.FRESH);
   assert.equal(classifyConnectorState({
@@ -33,6 +35,8 @@ test("freshness thresholds are source-cadence aware", () => {
     liveStatus: "connected",
     lastSuccess: "2026-09-04T23:00:00.000Z",
     storedSourceRecords: 1,
+    sampleRecordsDiscovered: 1,
+    listingQualityAccepted: true, checkedWindow: true,
     now,
   }), CONNECTOR_STATUS.STALE);
   assert.equal(classifyConnectorState({
@@ -40,6 +44,8 @@ test("freshness thresholds are source-cadence aware", () => {
     liveStatus: "connected",
     lastSuccess: "2026-08-28T12:00:00.000Z",
     storedSourceRecords: 1,
+    sampleRecordsDiscovered: 1,
+    listingQualityAccepted: true, checkedWindow: true,
     now,
   }), CONNECTOR_STATUS.FRESH);
 });
