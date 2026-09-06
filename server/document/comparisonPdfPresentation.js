@@ -25,6 +25,30 @@ const excerpt = value => {
 const comparisonPdfPresentation = comparison => {
   const result = comparison.result || {};
   const status = statusOf(result);
+  if (['AMENDMENT_COMPARISON','ADDENDUM_COMPARISON'].includes(result.comparisonKind) && result.lineage && result.quality?.outputValidation?.valid && result.whatChanged?.length) {
+    const facts=result.whatChanged;
+    const lines=['## Amendment relationship',
+      `${result.lineage.modifyingDocumentReference.title} — ${result.lineage.relationshipType} — ${result.lineage.baseDocumentReference.title}`,
+      `Evidence status: ${result.quality.outputValidation.status}`,
+      '## Executive Summary',
+      `${facts.length} source-verified changes are set out below. Unresolved instructions are withheld, not inferred.`,
+      ...facts.map(f=>`- Clause ${f.change.section}: ${f.change.operation}. [${f.citations.join(', ')}]`),
+    ];
+    for(const fact of facts){const c=fact.change;lines.push('',`## Affected section ${c.section}${c.proviso?' — proviso':''}`,
+      '### Before:',c.before,`[${c.evidenceBefore}]`,'### After (modifying text):',c.after||`Explicit operation: ${c.operation}.`,`[${c.evidenceAfter}]`,
+      '### What Changed',`Verified operation: ${c.operation}. The before and modifying text above establish this change. [${fact.citations.join(', ')}]`);
+    }
+    lines.push('','## Why it matters',...(result.practicalImplications||[]).map(i=>`${text(i)} [${i.citations.join(', ')}]`));
+    if(!result.practicalImplications?.length)lines.push('No separately verified explanatory analysis is available.');
+    lines.push('','## Limitations',...(result.limitations||[]).map(text),
+      'This is the saved comparison, not regenerated analysis or a statement of current consolidated law.');
+    const used=new Set(facts.flatMap(f=>f.citations));
+    lines.push('','## Sources');
+    for(const citation of result.citations||[])if(used.has(citation.id))lines.push(
+      `- [${citation.id}] ${citation.documentTitle||citation.title||'Source'}; page ${citation.pageStart||citation.page||'not recorded'}${citation.pageEnd&&citation.pageEnd!==citation.pageStart?`–${citation.pageEnd}`:''}.`,
+      citation.canonicalSourceUrl||citation.sourceUrl||citation.pdfUrl||'Source URL not recorded.');
+    return {title:comparison.title||'Amendment comparison',documentType:status,reportText:lines.join('\n\n'),sources:[],completeEvidence:true,sourcesOnNewPage:false,generatedAt:comparison.createdAt||new Date()};
+  }
   const insufficient = status === 'Insufficient evidence';
   const extractive = result.generationMode === 'extractive_fallback';
   const documents = result.documents || [];
@@ -37,6 +61,11 @@ const comparisonPdfPresentation = comparison => {
   });
   const lines = [`## ${insufficient ? 'Requested comparison' : status === 'AI comparative analysis' ? 'Compared documents' : 'Partial Analysis'}`];
   documents.forEach((document, index) => lines.push(`- D${index + 1}: ${document.title || 'Selected document'}`));
+  if (['AMENDMENT_COMPARISON','ADDENDUM_COMPARISON'].includes(result.comparisonKind) && result.lineage) {
+    lines.push('', '## Amendment relationship',
+      `${result.lineage.modifyingDocumentReference.title} — ${result.lineage.relationshipType} — ${result.lineage.baseDocumentReference.title}`,
+      `Affected provisions: ${(result.lineage.affectedSections || []).join(', ')}. Only the verified changes below are findings; unresolved instructions remain listed in Limitations.`);
+  }
   lines.push('', `## ${insufficient ? 'Why a complete analysis could not be produced' : 'Executive Summary'}`, extractive ? 'AI comparative analysis was unavailable. Retrieved excerpts below are source material, not comparative findings.' : text(result.executiveSummary) || 'Insufficient evidence in the selected sources.');
   const supported = sections.filter(section => section.items.length);
   if (status === 'Partial evidence comparison' && supported.length) lines.push('', '## Supported Findings');
@@ -45,7 +74,7 @@ const comparisonPdfPresentation = comparison => {
     if (!detailedStarted && !['differences', 'whatChanged', 'practicalImplications', 'keyTakeaways'].includes(section.key)) {
       lines.push('', '## Detailed Comparison'); detailedStarted = true;
     }
-    lines.push('', `### ${section.title}`);
+    lines.push('', `### ${result.lineage && section.key === 'practicalImplications' ? 'Why it matters' : section.title}`);
     for (const item of section.items) lines.push(`- ${text(item)}${Array.isArray(item?.citations) && item.citations.length ? ` [${item.citations.join(', ')}]` : ''}`);
   }
   const missing = sections.filter(section => !section.items.length && section.state !== 'not_applicable');

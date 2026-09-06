@@ -10,7 +10,8 @@ const {
 const {
   getComparisonGraphOverlap,
 } = require("../graph/knowledgeGraphService");
-const { generateDocumentComparison, providerConfig } = require("../lib/vectordb");
+const { generateDocumentComparison, explainVerifiedAmendments, providerConfig } = require("../lib/vectordb");
+const { loadAmendmentPassages, buildAmendmentComparison, validateAmendment, assessAmendmentSufficiency } = require('./amendmentLineage');
 const { sanitizeProviderError } = require("../lib/providerErrorSanitizer");
 const { planQuery } = require("../retrieval/queryPlanner");
 const { retrievalConfig } = require("../retrieval/retrievalConfig");
@@ -815,7 +816,10 @@ const comparisonEvidenceOverlap = (item, citations) => {
   });
 };
 
-const validateComparisonOutput = (generated = {}, citations = [], { requireCompleteSections = false } = {}) => {
+const validateComparisonOutput = (generated = {}, citations = [], { requireCompleteSections = false, amendmentEvidence = citations } = {}) => {
+  if (['AMENDMENT_COMPARISON','ADDENDUM_COMPARISON'].includes(generated.comparisonKind)) {
+    return validateAmendment(generated, amendmentEvidence);
+  }
   const summary = String(generated.executiveSummary || "").trim();
   const validCitationIds = new Set((citations || []).map((citation) => String(citation.id)));
   // Validate the canonical contract only. Legacy fields are aliases for six of
@@ -1188,6 +1192,18 @@ const createComparison = async (userId, payload, options = {}) => {
     durationMs: Date.now() - startedAt,
   });
 
+  const exactAmendmentPassages=await loadAmendmentPassages(documents,query);
+  for(const e of exactAmendmentPassages){
+    const group=groups.find(g=>String(g.document.id)===e.documentId);
+    if(group){
+      const index=group.passages.findIndex(p=>Number(p.chunkIndex)===Number(e.chunk_index));
+      const exact={...e.metadata_json,content:e.content,chunkIndex:Number(e.chunk_index)};
+      if(index<0)group.passages.push(exact);
+      else if(e.content.length>=group.passages[index].content.length)
+        group.passages[index]={...group.passages[index],...exact};
+    }
+  }
+
   const citations = [];
   const context = groups
     .map(({ document, passages, documentIndex }) => {
@@ -1265,7 +1281,8 @@ const createComparison = async (userId, payload, options = {}) => {
       authorityClass: passage?.authorityClass,
     };
   });
-  const sufficiency = flags.evidenceSufficiency ? assessEvidenceSufficiency(
+  const scopedSufficiency = assessAmendmentSufficiency(comparisonDocuments, comparisonEvidence, assessEvidenceSufficiency);
+  const sufficiency = scopedSufficiency || (flags.evidenceSufficiency ? assessEvidenceSufficiency(
     userQuestion || comparisonQuery(mode),
     comparisonEvidence,
     {
@@ -1278,7 +1295,7 @@ const createComparison = async (userId, payload, options = {}) => {
     decision: "SUFFICIENT",
     signals: {}, reasons: ["Evidence gate disabled by controlled rollout."],
     missing: [], conflicts: [], version: "legacy-pass-through-v1",
-  };
+  });
   const model = providerConfig().chatModel;
   const evidenceHash = stableHash(comparisonEvidence.map((item) => ({
     id: item.citationId,
@@ -1289,7 +1306,7 @@ const createComparison = async (userId, payload, options = {}) => {
   const analysisKey = flags.caching ? analysisCacheKey({
     kind: "comparison", userId, documentIds, mode, language,
     question: userQuestion || comparisonQuery(mode), model,
-    promptVersion: "document-comparison-v3", evidenceHash,
+    promptVersion: "document-comparison-amendment-scoped-v2", evidenceHash,
     versions: groups[0]?.retrievalDiagnostics?.versions || {
       ...settings.versions,
       embeddingVersion: providerConfig().embeddingModel,
@@ -1326,7 +1343,9 @@ const createComparison = async (userId, payload, options = {}) => {
   } else {
     const generationStartedAt = Date.now();
     try {
-      generated = await generateDocumentComparison({
+      generated = await buildAmendmentComparison({documents:comparisonDocuments,evidence:comparisonEvidence,
+        verify:verifyStructuredComparison,explain:explainVerifiedAmendments,scopedSufficiency});
+      if(!generated) generated = await generateDocumentComparison({
         mode,
         language,
         userQuestion,
@@ -1375,7 +1394,7 @@ const createComparison = async (userId, payload, options = {}) => {
     removedUnsupportedItems: 0,
     verifiedCitationCount: citations.length,
   };
-  if (generated.generationMode !== "evidence_abstention" && !cachedAnalysis) {
+  if (generated.generationMode !== "evidence_abstention" && !cachedAnalysis && generated.comparisonArchitecture!=='explicit-lineage-v1') {
     generated = comparisonSectionBackfill({
       documents: comparisonDocuments,
       groups,
@@ -1398,7 +1417,7 @@ const createComparison = async (userId, payload, options = {}) => {
       durationMs: Date.now() - startedAt,
     });
   }
-  let outputValidation = validateComparisonOutput(generated, citations, { requireCompleteSections: true });
+  let outputValidation = validateComparisonOutput(generated, citations, { requireCompleteSections: true, amendmentEvidence: comparisonEvidence });
   if (generated.generationMode === "ai" && Number(generated.repairAttempts || 0) < 1 &&
       (!outputValidation.valid || outputValidation.reason === "INCOMPLETE_SECTIONS")) {
     const repairStartedAt = Date.now();
