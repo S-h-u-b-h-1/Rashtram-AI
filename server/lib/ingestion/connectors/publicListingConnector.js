@@ -4,6 +4,7 @@ const { sha256 } = require("../core/hashing");
 const { inferDocumentType, normalizeDate } = require("../core/normalizer");
 const { createSnapshot } = require("../core/sourceSnapshots");
 const { attachConnectorLifecycle } = require("./connectorLifecycle");
+const { canonicalPublicationUrl } = require('../core/publicationIdentity');
 
 const normalize = (value) =>
   String(value || "")
@@ -28,6 +29,9 @@ const MIME_TYPES = {
   pdf: "application/pdf",
   doc: "application/msword",
   docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  csv: "text/csv",
+  xls: "application/vnd.ms-excel",
+  xlsx: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
   html: "text/html",
 };
 
@@ -52,9 +56,10 @@ const fileMetadata = (url, text = "") => {
   };
 };
 
-const dateFromText = (value) => {
+const dateTokenFromText = (value) => {
   const text = normalize(value);
   const candidates = [
+    text.match(/\b(?:19|20)\d{2}-\d{2}-\d{2}\b/)?.[0],
     text.match(/\b\d{1,2}[/-]\d{1,2}[/-](?:19|20)\d{2}\b/)?.[0],
     text.match(
       /\b\d{1,2}\s+(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\s+(?:19|20)\d{2}\b/i,
@@ -66,8 +71,9 @@ const dateFromText = (value) => {
       /\b(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?),?\s+(?:19|20)\d{2}\b/i,
     )?.[0],
   ].filter(Boolean);
-  return normalizeDate(candidates[0]);
+  return candidates[0] || null;
 };
+const dateFromText = (value) => normalizeDate(dateTokenFromText(value));
 
 const titleFromAnchor = ($, element, config) => {
   const anchor = $(element);
@@ -106,7 +112,8 @@ const parseListing = (html, pageUrl, config) => {
   const seen = new Set();
   $(config.linkSelector || "a[href]").each((_, element) => {
     const href = $(element).attr("href");
-    const url = absoluteUrl(href, pageUrl);
+    const discoveredUrl = absoluteUrl(href, pageUrl);
+    const url = discoveredUrl ? canonicalPublicationUrl(discoveredUrl) : null;
     if (!url || seen.has(url)) return;
     const title = titleFromAnchor($, element, config);
     const context = normalize(
@@ -125,7 +132,7 @@ const parseListing = (html, pageUrl, config) => {
     if (
       config.allowedHosts?.length &&
       !config.allowedHosts.some((host) =>
-        new URL(url).hostname.endsWith(host),
+        new URL(url).hostname === host || new URL(url).hostname.endsWith(`.${host}`),
       )
     ) {
       return;
@@ -160,7 +167,8 @@ const parseListing = (html, pageUrl, config) => {
       department: config.department,
       category: config.category || config.collection,
       status: config.status || "Published",
-      publicationDate: dateFromText(context),
+    publicationDate: typeof config.publicationDate === 'function' ? config.publicationDate(context) : dateFromText(context),
+    publicationDateRaw: typeof config.publicationDate === 'function' ? config.publicationDate(context) : dateTokenFromText(context),
       mimeType: file.mimeType,
       fileSizeBytes: file.fileSizeBytes,
       resources: [
@@ -270,6 +278,7 @@ const createPublicListingConnector = (config) => {
 module.exports = {
   createPublicListingConnector,
   dateFromText,
+  dateTokenFromText,
   fileMetadata,
   isBoilerplateLink,
   parseListing,

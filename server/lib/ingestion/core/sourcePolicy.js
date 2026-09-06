@@ -50,6 +50,11 @@ const sourcePolicyFor = (sourceName, fallback = {}) => {
   })[rawName] || rawName;
   const configured = SOURCE_POLICIES[name];
   if (configured) return { sourceName: name, ...configured };
+  if (name.startsWith('research-')) return {
+    sourceName: name, priority: 'P2', cadence: 'manual', cadenceHours: 720,
+    authorityClass: name.startsWith('research-university-') ? SOURCE_AUTHORITY_CLASSES.ACADEMIC_RESEARCH : SOURCE_AUTHORITY_CLASSES.INSTITUTIONAL_SECONDARY,
+    publicLabel: 'Institutional research (not government policy)',
+  };
   if (name.startsWith("regulator-")) {
     const priority = P1_REGULATORS.has(name) ? "P1" : "P2";
     return {

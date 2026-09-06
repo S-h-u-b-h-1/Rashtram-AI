@@ -1,4 +1,5 @@
 const { digitalSansadConnector } = require("./digitalSansadConnector");
+const { expansionConnectors } = require("./researchExpansionConnectors");
 const { eGazetteConnector } = require("./eGazetteConnector");
 const { indiaCodeConnector } = require("./indiaCodeConnector");
 const { lokSabhaConnector } = require("./lokSabhaConnector");
@@ -50,6 +51,7 @@ const CONNECTORS = [
   ndapConnector,
   ogdConnector,
   ...regulatorConnectors,
+  ...expansionConnectors,
 ];
 
 const CONNECTOR_ALIASES = {

@@ -1,0 +1,16 @@
+{
+  "version": 1,
+  "reviewedAt": "2026-09-06",
+  "pilots": {
+    "union-budget": {"decision":"NEEDS_MORE_WORK","reason":"Edition-scoped identity, date semantics and table/page evidence must pass before collection.","cadence":null},
+    "cag-reports": {"decision":"NEEDS_MORE_WORK","reason":"Full report/chapter relationships, report metadata and table quality require acceptance.","cadence":null},
+    "ministry-home-circulars": {"decision":"NEEDS_MORE_WORK","reason":"Listing dates include display windows; PDF OCR quality and pagination require validation.","cadence":null},
+    "ministry-home-notifications": {"decision":"NEEDS_MORE_WORK","reason":"Notification date semantics, recent-window coverage and PDF quality require validation.","cadence":null},
+    "ministry-education-notices": {"decision":"NEEDS_MORE_WORK","reason":"Configured listing yields no known downloadable publication.","cadence":null},
+    "research-takshashila": {"decision":"NEEDS_MORE_WORK","reason":"Authors, rights review, resource association and page citation quality require acceptance.","cadence":null},
+    "research-nipfp": {"decision":"NEEDS_MORE_WORK","reason":"Working-paper IDs, authors, Hindi month/year precision and PDF quality require acceptance.","cadence":null},
+    "research-ceew": {"decision":"NEEDS_MORE_WORK","reason":"Report/annexure selection, month precision, authors, rights and PDF quality require acceptance.","cadence":null},
+    "research-university-iima": {"decision":"NEEDS_MORE_WORK","reason":"Series number, authors, date precision, rights and extraction require acceptance.","cadence":null},
+    "research-university-apu": {"decision":"BLOCKED","reason":"The verified latest-additions route is disallowed by robots.txt. No workaround attempted; an allowed repository feed or publisher permission is required.","cadence":null}
+  }
+}
