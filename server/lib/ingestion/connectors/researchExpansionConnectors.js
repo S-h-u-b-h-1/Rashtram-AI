@@ -18,6 +18,7 @@ const definitions = [
 ];
 
 const expansionConnectors = definitions.map((definition) => {
+  if (definition.name === 'cag-reports') return require('./cagReportsConnector').cagReportsConnector;
   const config = {
     ...definition,
     ministry: definition.group === 'ministry' ? definition.authority : undefined,
@@ -51,6 +52,36 @@ const expansionConnectors = definitions.map((definition) => {
     };
   }
   config.recordFilter = (record) => !/^(download|view(?: file)?|pdf|full report)$/i.test(record.title.trim());
+  if (['ministry-home-circulars', 'research-nipfp'].includes(definition.name)) {
+    config.nextPageUrl = ($, pageUrl) => {
+      const current = new URL(pageUrl);
+      const page = Number(current.searchParams.get('page') || (definition.name === 'research-nipfp' ? 1 : 0));
+      let next = null;
+      $('a[href]').each((_, element) => {
+        try {
+          const candidate = new URL($(element).attr('href'), pageUrl);
+          if (candidate.origin === current.origin && candidate.pathname === current.pathname &&
+              Number(candidate.searchParams.get('page')) === page + 1 && candidate.searchParams.has('page')) next = candidate.href;
+        } catch { /* Ignore malformed navigation. */ }
+      });
+      return next;
+    };
+  }
+  if (definition.name === 'union-budget') {
+    config.extraFields = ($, anchor) => {
+      const edition = $('h1,h2').text().match(/Union Budget Documents\s+(\d{4}-\d{4})/i)?.[1];
+      if (!edition) throw new Error('Budget edition is not explicitly identified by the publisher');
+      const resourceUrl = new URL(anchor.attr('href'), definition.url).href;
+      const title = anchor.attr('title') || anchor.text();
+      const subtype = /speech/i.test(title) ? 'budget-speech' : /highlight/i.test(title) ? 'budget-highlights'
+        : /finance bill/i.test(title) ? 'finance-bill' : /receipt/i.test(title) ? 'receipts'
+          : /expenditure/i.test(title) ? 'expenditure' : 'budget-document';
+      return {sourceRecordId:publicationIdentity({publisher:definition.name,resourceUrl,edition}),
+        publicationDate:null,publicationDateRaw:null,
+        metadata:{...config.metadata,edition,financialYear:edition,publicationType:subtype,
+          publisherPage:definition.url,dateSemantics:'not_published_on_listing'}};
+    };
+  }
   if (definition.group === 'ministry') {
     config.title = ($, anchor, row) => row.find('td').eq(definition.name === 'ministry-home-notifications' ? 2 : 1).text().trim() || anchor.text();
   }
@@ -69,7 +100,8 @@ const expansionConnectors = definitions.map((definition) => {
   const base = createPublicListingConnector(config);
   const collectListing = base.collect.bind(base);
   base.collect = async (options = {}, context) => {
-    const result = await collectListing({ ...options, maxPages: 1 }, context);
+    require('../../../document/sourceRights').assertCollectionRights(definition.name);
+    const result = await collectListing({ ...options, maxPages: config.nextPageUrl ? Math.min(3, Math.max(1, Number(options.maxPages) || 2)) : 1 }, context);
     if (!definition.detailPattern) return result;
     const candidates = result.records;
     result.records = candidates.filter((record) => record.pdfUrl || record.mimeType !== 'text/html');

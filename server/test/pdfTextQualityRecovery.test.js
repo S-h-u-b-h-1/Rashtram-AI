@@ -101,6 +101,19 @@ test("an unrecoverable page is excluded while good pages remain search-ready mat
   assert.ok(result.chunks.every((chunk) => chunk.metadata.unreliablePages.includes("2")));
 });
 
+test('long-document aggregate repetition cannot reject individually verified pages', async()=>{
+  const processor=new PDFProcessor({pageBufferExtractor:async()=>Buffer.from('blank'),ocrExtractor:async()=>''});
+  const pages=[english,...Array(18).fill(''),hindi];
+  processor.downloadPDF=async()=>Buffer.from('%PDF-fixture');
+  processor.parsePDFBuffer=async()=>({fullText:pages.join('\f'),pages,numPages:pages.length,info:{},metadata:{}});
+  processor.recoverPageWithOcr=async()=>({text:'',quality:{usable:false,score:0,quality:'UNRECOVERABLE'},attempt:1});
+  const result=await processor.processPDFAndCreateChunks('https://example.test/long.pdf','47','Long report');
+  assert.equal(result.pdfQuality.documentTextQuality.usablePages,2);
+  assert.ok(result.chunks.length>0);
+  assert.ok(result.chunks.every(c=>c.pageStart===1||c.pageStart===20));
+  assert.equal(result.pdfQuality.failedPages.length,18);
+});
+
 test("stray form feeds inside a page never fabricate citation page numbers", async () => {
   const processor = new PDFProcessor();
   processor.downloadPDF = async () => Buffer.from("%PDF-page-identity");

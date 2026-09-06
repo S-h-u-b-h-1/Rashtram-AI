@@ -99,6 +99,8 @@ const enqueueProcessing = async (
     throw error;
   }
   if (!storageChecked) await assertBulkProcessingSafe(getPool());
+  const rightsDocument = (await query('SELECT canonical_source, source_name FROM legislative_documents WHERE id = $1', [id])).rows[0];
+  require('./sourceRights').assertPreparationRights(rightsDocument);
   const result = await query(
     `INSERT INTO document_processing_jobs (
        document_id, requested_by, priority, metadata_json,
@@ -222,6 +224,7 @@ const prepareDocument = async (
     error.status = 422;
     throw error;
   }
+  require('./sourceRights').assertPreparationRights(document);
   const { isExtractableSourceDocument } = require("./documentResearchService");
   if (!document.pdfUrl && !isExtractableSourceDocument(document)) {
     const error = new Error(

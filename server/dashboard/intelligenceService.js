@@ -422,6 +422,7 @@ const getSourceHealth = async () => {
     return {
       ...source,
       acceptance: acceptanceFor(source.key),
+      rights: require('../document/sourceRights').rightsFor(source.key),
       scheduled: isScheduleAccepted(source.key) && require('../lib/ingestion/schedules').DAILY_SOURCES.concat(require('../lib/ingestion/schedules').WEEKLY_SOURCES).includes(source.key),
       onboardingEntries: source.key === 'ministry' ? ministryOnboarding.entries : undefined,
       status: publicConnectorStatus(freshnessStatus),

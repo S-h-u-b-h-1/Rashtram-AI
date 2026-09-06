@@ -37,6 +37,10 @@ test('host restrictions require a DNS label boundary', () => {
   assert.equal(officialUrl('https://gov.in.evil.com/'), null);
   assert.equal(officialUrl('http://127.0.0.1/'), null);
 });
+test('non-publication navigation links cannot abort an otherwise valid listing',()=>{
+  const records=parseListing('<a href="mailto:office@example.gov.in">Contact office</a><a href="javascript:void(0)">Menu</a><a href="/report.pdf">A valid publication</a>','https://example.gov.in/',{name:'fixture'});
+  assert.equal(records.length,1);assert.equal(records[0].title,'A valid publication');
+});
 test('MHA circular title and date do not become download labels or invalid months', async () => {
   const connector = expansionConnectors.find((item) => item.name === 'ministry-home-circulars');
   const result = await connector.collect({}, {fetcher: {getText: async () => ({body:'<table><tr><td>1</td><td>Vigilance Awareness Week</td><td><a href="/file.pdf">Download 12 KB</a></td><td>Tue, 08/18/2026 - Wed, 11/18/2026</td></tr></table>',status:200})}});
@@ -47,11 +51,30 @@ test('MHA circular title and date do not become download labels or invalid month
 test('Takshashila remains secondary research, never official policy', () => {
   assert.equal(sourcePolicyFor('research-takshashila').authorityClass, 'INSTITUTIONAL_SECONDARY');
 });
+test('Budget resource identity includes the observed edition without inventing a publication date', async()=>{
+  const connector=expansionConnectors.find(c=>c.name==='union-budget');
+  const collect=edition=>connector.collect({}, {fetcher:{getText:async()=>({status:200,body:`<h1>Union Budget Documents ${edition}</h1><a href="/doc/bh.pdf">Budget Highlights</a><a href="/doc/speech.pdf">Budget Speech</a>`})}});
+  const first=await collect('2026-2027'),repeat=await collect('2026-2027'),older=await collect('2025-2026');
+  assert.equal(first.records.length,2);
+  assert.equal(first.records[0].sourceRecordId,repeat.records[0].sourceRecordId);
+  assert.notEqual(first.records[0].sourceRecordId,older.records[0].sourceRecordId);
+  assert.notEqual(first.records[0].sourceRecordId,first.records[1].sourceRecordId);
+  assert.equal(first.records[0].publicationDateRaw,null);
+  assert.equal(first.records[0].metadata.publicationType,'budget-highlights');
+});
+test('MHA follows only observed same-origin pagination and respects a bounded window',async()=>{
+  const connector=expansionConnectors.find(c=>c.name==='ministry-home-circulars'), urls=[];
+  const result=await connector.collect({maxPages:2},{fetcher:{getText:async url=>{
+    urls.push(url);const page=Number(new URL(url).searchParams.get('page'));
+    return {status:200,body:`<table><tr><td>1</td><td>Circular publication ${page}</td><td><a href="/file${page}.pdf">Download</a></td><td>08/18/2026</td></tr></table><a href="?page=${page+1}">Next</a><a href="https://attacker.test/?page=${page+1}">Next</a>`};
+  }}});
+  assert.equal(urls.length,2);assert.match(urls[1],/mha.gov.in.*page=1$/);assert.equal(result.records.length,2);
+});
 test('CAG navigation PDFs are excluded and chapter files stay attached to one report', async () => {
   const connector = expansionConnectors.find((item) => item.name === 'cag-reports');
   const fetcher = { getText: async (url) => ({status:200,url,body:url.includes('/details/')
-    ? '<a href="/uploads/download_audit_report/2026/full.pdf">Full Report</a><a href="/uploads/download_audit_report/2026/cover.pdf">Cover</a>'
-    : '<a href="/uploads/media/nav.pdf">Navigation file</a><a href="/en/audit-report/details/42">State Finances Report</a>'}) };
+    ? '<div class="auditDetailColl"><h3 class="singTitle">State Finances Report</h3><ul class="guidelinesList"><li><a href="/uploads/download_audit_report/2026/full.pdf">State Finances Report</a></li><li><a href="/uploads/download_audit_report/2026/chapter.pdf">Chapter-I</a></li><li><a href="/uploads/download_audit_report/2026/cover.pdf">Cover</a></li></ul></div>'
+    : '<a href="/uploads/media/nav.pdf">Navigation file</a><div class="AuditReportlisting"><div class="reportDetail"><a href="/en/audit-report/details/42">State Finances Report</a></div></div>'}) };
   const result = await connector.collect({limit:3}, {fetcher});
   assert.equal(result.records.length, 1);
   assert.equal(result.records[0].resources.length, 2);

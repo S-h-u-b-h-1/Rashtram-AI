@@ -3,6 +3,10 @@ const assert = require('node:assert/strict');
 const {definitions} = require('../lib/ingestion/connectors/researchExpansionConnectors');
 const {acceptanceFor,isScheduleAccepted,assertScheduleAccepted} = require('../lib/ingestion/core/sourceAcceptance');
 const {classifyConnectorState} = require('../lib/ingestion/core/sourceHealthPolicy');
+test('schedule acceptance requires production evidence, not only offline extraction',()=>{
+  const {REQUIRED_GATES}=require('../lib/ingestion/core/sourceAcceptance');
+  for(const gate of ['productionDuplicateCanary','boundedProductionCatchup','productionResearchReadiness','productionSourceHealth','productionCoverageUi'])assert.ok(REQUIRED_GATES.includes(gate));
+});
 test('every pilot has an explicit acceptance decision and incomplete sources cannot be scheduled',()=>{
   for(const {name} of definitions){
     assert.ok(['ACCEPTED_FOR_SCHEDULE','MANUAL_ONLY','BLOCKED','NEEDS_MORE_WORK'].includes(acceptanceFor(name).decision));

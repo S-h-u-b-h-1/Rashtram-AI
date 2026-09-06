@@ -37,8 +37,14 @@ export function SourceCatalogue({ sources = [] }) {
       <p className="text-xs text-[#706a61]">{categoryFor(source)}</p>
       <h3 className="mt-2 text-lg font-semibold text-[#29312d]">{source.label}</h3>
       <p className="mt-2 text-sm leading-6 text-[#706a61]">{source.purpose}</p>
-      <p className="mt-3 text-sm font-semibold text-[#8f1d2c]">{source.onboardingStatus === 'pilot' ? 'Pilot · not scheduled' : source.status || 'Not checked'}</p>
+      <p className="mt-3 text-sm font-semibold text-[#8f1d2c]">{source.scheduled ? 'Scheduled' : source.onboardingStatus === 'pilot' ? 'Pilot · not scheduled' : 'Not scheduled'} · {source.status || 'Not checked'}</p>
       {source.acceptance && <p className="mt-2 text-sm leading-6 text-[#706a61]">{source.acceptance.decision.replaceAll('_',' ')} — {source.acceptance.reason}</p>}
+      {source.rights && <div className="mt-3 rounded-xl border border-[#ded5c8] bg-white p-3 text-sm leading-6">
+        <p className="font-semibold">{source.rights.mode === 'METADATA_ONLY' ? 'Metadata only · full-text preparation blocked' : 'Publisher attribution required'}</p>
+        <p className="mt-1 text-[#706a61]">{source.rights.reason}</p>
+        <a href={source.rights.policyUrl} target="_blank" rel="noreferrer" className="inline-flex min-h-11 items-center text-[#8f1d2c] underline">Publisher access policy</a>
+      </div>}
+      <p className="mt-3 text-sm text-[#706a61]">Authority: {source.authorityClass?.replaceAll('_',' ') || categoryFor(source)} · Cadence: {source.expectedCadence || 'Not accepted'}</p>
       <dl className="mt-4 grid grid-cols-2 gap-4 text-sm">
         {[['Last attempt',date(source.lastAttempt)], ['Last successful collection',date(source.lastSuccess)], ['Newest catalogued publication',date(source.lastDocumentSeen)], ['New records in last run',source.lastRunNewRecords ?? 'Not recorded'], ['Updated in last run',source.lastRunUpdatedRecords ?? 'Not recorded'], ['Errors in last run',source.latestRunStatus ? source.errorCount ?? 'Not recorded' : 'Not recorded']].map(([label,value]) => <div key={label}><dt className="text-xs text-[#706a61]">{label}</dt><dd className="mt-1 font-medium">{value}</dd></div>)}
       </dl>

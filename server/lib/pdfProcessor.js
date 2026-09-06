@@ -580,6 +580,9 @@ class PDFProcessor {
       const normalizedText = selectedPages[index];
       const normalizedQuality = this.pageExtractionQuality(normalizedText, { method: "normalized_native" });
       const useNormalized = normalizedQuality.score >= rawQuality.score && normalizedText !== text;
+      // Persist the same representation whose quality was selected. A lower
+      // scoring normalization must not silently replace the accepted raw text.
+      selectedPages[index] = useNormalized ? normalizedText : text;
       return {
         page: index + 1,
         method: useNormalized ? "normalized_native" : "native",
@@ -653,7 +656,15 @@ class PDFProcessor {
       selectedPages = [fullText];
     }
     const documentQuality = aggregateDocumentQuality(pageExtraction);
-    if (!documentQuality.usablePages || !this.hasUsableText(fullText, Math.max(1, documentQuality.usablePages))) {
+    // With physical page boundaries, each retained page has already passed the
+    // quality gate. Repetition spanning pages (including blank separators and
+    // repeated table headers) must not invalidate unrelated verified passages.
+    const usableLetters = selectedPages.reduce((count, text, index) => count +
+      (pageExtraction[index]?.usable ? (String(text).match(LETTER_PATTERN) || []).length : 0), 0);
+    const enoughVerifiedText = hasNativePageBoundaries
+      ? usableLetters >= Math.max(40, documentQuality.usablePages * 20)
+      : this.hasUsableText(fullText, Math.max(1, documentQuality.usablePages));
+    if (!documentQuality.usablePages || !enoughVerifiedText) {
       const error = new Error(
         "No usable text could be extracted from this scanned PDF.",
       );

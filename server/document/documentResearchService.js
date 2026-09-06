@@ -1032,6 +1032,7 @@ const processDocument = async (documentType, documentId, options = {}) => {
     error.status = 404;
     throw error;
   }
+  require('./sourceRights').assertPreparationRights(document);
   const config = typeConfig(documentType);
   if (isExtractableSourceDocument(document)) {
     return processExtractableSourceDocument(document, config, {

@@ -113,7 +113,9 @@ const parseListing = (html, pageUrl, config) => {
   $(config.linkSelector || "a[href]").each((_, element) => {
     const href = $(element).attr("href");
     const discoveredUrl = absoluteUrl(href, pageUrl);
-    const url = discoveredUrl ? canonicalPublicationUrl(discoveredUrl) : null;
+    let url;
+    try { url = discoveredUrl ? canonicalPublicationUrl(discoveredUrl) : null; }
+    catch { return; } // A mailto/javascript/malformed navigation link is not a publication.
     if (!url || seen.has(url)) return;
     const title = titleFromAnchor($, element, config);
     const context = normalize(
@@ -220,16 +222,21 @@ const createPublicListingConnector = (config) => {
         errors: [],
         diagnostics: [],
       };
+      let observedNext = null;
+      const visited = new Set();
       for (let page = 0; page < maximumPages; page += 1) {
         const pageUrl =
           typeof config.pageUrl === "function"
             ? config.pageUrl(page, options)
-            : options.url || config.url;
-        if (!pageUrl || (page > 0 && !config.pageUrl)) break;
+            : page > 0 ? observedNext : options.url || config.url;
+        if (!pageUrl || visited.has(pageUrl)) break;
+        visited.add(pageUrl);
         try {
           const response = await fetcher.getText(pageUrl);
           const records = parseListing(response.body, pageUrl, config);
           combined.records.push(...records);
+          observedNext = typeof config.nextPageUrl === 'function'
+            ? config.nextPageUrl(cheerio.load(response.body), pageUrl) : null;
           combined.snapshots.push(
             createSnapshot({
               sourceName: config.name,

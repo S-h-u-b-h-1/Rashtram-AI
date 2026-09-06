@@ -1,5 +1,6 @@
 const { pilots } = require('../../../config/source-acceptance.json');
-const REQUIRED_GATES = ['identity','datePrecision','pdfQuality','accessReview','databaseConcurrency','listingWindow','pagination'];
+const REQUIRED_GATES = ['identity','datePrecision','pdfQuality','accessReview','databaseConcurrency','listingWindow','pagination',
+  'productionDuplicateCanary','boundedProductionCatchup','productionResearchReadiness','productionSourceHealth','productionCoverageUi'];
 const acceptanceFor = (name) => pilots[name] || null;
 const isScheduleAccepted = (name) => {
   const entry = acceptanceFor(name);

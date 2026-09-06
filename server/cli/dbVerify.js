@@ -4,8 +4,7 @@ const path = require("path");
 require("dotenv").config({
   path: process.env.ENV_FILE || path.resolve(__dirname, "../.env.local"),
 });
-const { getPool, query } = require("../db");
-const { refreshDataQuality } = require("../lib/database/quality");
+const { getPool } = require("../db");
 const migrations = require("../migrations");
 
 const expectedLatestMigration = migrations.at(-1)?.name;
@@ -333,25 +332,32 @@ const checks = [
   },
 ];
 
-const main = async () => {
-  const quality = await refreshDataQuality();
-  const results = [];
-  for (const check of checks) {
-    const result = await query(check.sql);
-    results.push({ name: check.name, passed: result.rows[0]?.passed === true });
+const verifyDatabase = async ({ queryFn } = {}) => {
+  const client = queryFn ? null : await getPool().connect();
+  const execute = queryFn || client.query.bind(client);
+  try {
+    await execute('BEGIN TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY');
+    const results = [];
+    for (const check of checks) {
+      const result = await execute(check.sql);
+      results.push({ name: check.name, passed: result.rows[0]?.passed === true });
+    }
+    const failed = results.filter((result) => !result.passed);
+    await execute('COMMIT');
+    return { ok: !failed.length, readOnly: true, mutationCounts: { created: 0, updated: 0, deleted: 0 }, checks: results, failed: failed.length };
+  } catch (error) {
+    await execute('ROLLBACK').catch(() => undefined);
+    throw error;
+  } finally {
+    client?.release();
   }
-  const failed = results.filter((result) => !result.passed);
-  console.log(
-    JSON.stringify(
-      { ok: !failed.length, quality, checks: results, failed: failed.length },
-      null,
-      2,
-    ),
-  );
-  if (failed.length) process.exitCode = 1;
 };
 
-main()
+if (require.main === module) verifyDatabase()
+  .then((result) => {
+    console.log(JSON.stringify(result, null, 2));
+    if (!result.ok) process.exitCode = 1;
+  })
   .catch((error) => {
     console.error(error);
     process.exitCode = 1;
@@ -359,3 +365,5 @@ main()
   .finally(async () => {
     if (globalThis.__rashtramPostgresPool) await getPool().end();
   });
+
+module.exports = { verifyDatabase, checks };

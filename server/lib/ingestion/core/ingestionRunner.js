@@ -68,6 +68,8 @@ const runIngestion = async (connector, options = {}) => {
   if (!connector?.name || typeof connector.collect !== "function") {
     throw new Error("A connector with name and collect() is required");
   }
+  require('../../../document/sourceRights').assertCollectionRights(connector.name);
+  if (options.downloadPdfs) require('../../../document/sourceRights').assertPreparationRights({sourceName:connector.name});
 
   const requestedCollection =
     options.collection || options.collections || connector.defaultCollection;
