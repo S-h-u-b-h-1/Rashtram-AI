@@ -1,0 +1,2177 @@
+{
+  "generatedAt": "2026-09-06T13:30:37.176Z",
+  "mode": "read-only-bounded-discovery",
+  "sources": [
+    {
+      "source": "prs-india",
+      "startedAt": "2026-09-06T12:58:30.268Z",
+      "checkedAt": "2026-09-06T12:58:32.374Z",
+      "status": "discovery_only",
+      "discovered": 12,
+      "directoryEntries": 0,
+      "datedRecords": 0,
+      "pdfLinks": 9,
+      "newestPublication": null,
+      "pdfQuality": "not_checked",
+      "errors": [],
+      "diagnostics": [
+        {
+          "type": "page-limit-reached",
+          "collection": "state-bills",
+          "pagesFetched": 1,
+          "nextPageUrl": "https://prsindia.org/bills/states?page=2&per-page=50"
+        },
+        {
+          "type": "page-limit-reached",
+          "collection": "state-acts",
+          "pagesFetched": 1,
+          "nextPageUrl": "https://prsindia.org/acts/states?page=2&per-page=50"
+        }
+      ],
+      "fetchSuccess": true,
+      "listingSuccess": true,
+      "extractionSuccess": null,
+      "lastSuccessfulIngestion": null,
+      "dateWindowCorrectness": "NOT_VERIFIED",
+      "paginationCorrectness": "NOT_VERIFIED",
+      "freshness": "NOT_VERIFIED",
+      "blockReason": null,
+      "datePrecision": [
+        {
+          "raw": null,
+          "precision": "UNKNOWN",
+          "value": null,
+          "date": null
+        },
+        {
+          "raw": null,
+          "precision": "UNKNOWN",
+          "value": null,
+          "date": null
+        },
+        {
+          "raw": null,
+          "precision": "UNKNOWN",
+          "value": null,
+          "date": null
+        },
+        {
+          "raw": null,
+          "precision": "UNKNOWN",
+          "value": null,
+          "date": null
+        },
+        {
+          "raw": null,
+          "precision": "UNKNOWN",
+          "value": null,
+          "date": null
+        },
+        {
+          "raw": null,
+          "precision": "UNKNOWN",
+          "value": null,
+          "date": null
+        },
+        {
+          "raw": null,
+          "precision": "UNKNOWN",
+          "value": null,
+          "date": null
+        },
+        {
+          "raw": null,
+          "precision": "UNKNOWN",
+          "value": null,
+          "date": null
+        },
+        {
+          "raw": null,
+          "precision": "UNKNOWN",
+          "value": null,
+          "date": null
+        },
+        {
+          "raw": null,
+          "precision": "UNKNOWN",
+          "value": null,
+          "date": null
+        },
+        {
+          "raw": null,
+          "precision": "UNKNOWN",
+          "value": null,
+          "date": null
+        },
+        {
+          "raw": null,
+          "precision": "UNKNOWN",
+          "value": null,
+          "date": null
+        }
+      ],
+      "sample": [
+        {
+          "title": "Foreign Contribution (Regulation) Amendment Rules, 2026",
+          "sourceUrl": "https://prsindia.org/billtrack/foreign-contribution-regulation-amendment-rules-2026",
+          "pdfUrl": null
+        },
+        {
+          "title": "The National Co-operative Development Corporation (Amendment) Bill, 2026",
+          "sourceUrl": "https://prsindia.org/billtrack/the-national-co-operative-development-corporation-amendment-bill-2026",
+          "pdfUrl": null
+        },
+        {
+          "title": "The Mines and Minerals (Development and Regulation) Amendment Bill, 2026",
+          "sourceUrl": "https://prsindia.org/billtrack/the-mines-and-minerals-development-and-regulation-amendment-bill-2026",
+          "pdfUrl": null
+        }
+      ]
+    },
+    {
+      "source": "india-code",
+      "startedAt": "2026-09-06T12:58:32.379Z",
+      "checkedAt": "2026-09-06T12:58:33.230Z",
+      "status": "no_records_found",
+      "discovered": 0,
+      "directoryEntries": 0,
+      "datedRecords": 0,
+      "pdfLinks": 0,
+      "newestPublication": null,
+      "pdfQuality": "not_checked",
+      "errors": [],
+      "diagnostics": [
+        {
+          "type": "empty-source",
+          "year": 2026,
+          "message": "The official index reports no entries for this period."
+        }
+      ],
+      "fetchSuccess": true,
+      "listingSuccess": false,
+      "extractionSuccess": null,
+      "lastSuccessfulIngestion": null,
+      "dateWindowCorrectness": "NOT_VERIFIED",
+      "paginationCorrectness": "NOT_VERIFIED",
+      "freshness": "NOT_VERIFIED",
+      "blockReason": "UNKNOWN",
+      "datePrecision": [],
+      "sample": []
+    },
+    {
+      "source": "egazette",
+      "startedAt": "2026-09-06T12:58:33.230Z",
+      "checkedAt": "2026-09-06T12:58:34.159Z",
+      "status": "failed",
+      "fetchSuccess": false,
+      "listingSuccess": false,
+      "extractionSuccess": null,
+      "lastSuccessfulIngestion": null,
+      "dateWindowCorrectness": "NOT_VERIFIED",
+      "paginationCorrectness": "NOT_VERIFIED",
+      "freshness": "NOT_VERIFIED",
+      "blockReason": "TLS_CERTIFICATE_FAILURE",
+      "error": "unable to verify the first certificate; if the root CA is installed locally, try running Node.js with --use-system-ca"
+    },
+    {
+      "source": "digital-sansad",
+      "startedAt": "2026-09-06T12:58:34.159Z",
+      "checkedAt": "2026-09-06T12:58:50.169Z",
+      "status": "needs_repair",
+      "discovered": 0,
+      "directoryEntries": 0,
+      "datedRecords": 0,
+      "pdfLinks": 0,
+      "newestPublication": null,
+      "pdfQuality": "not_checked",
+      "errors": [
+        {
+          "stage": "listing",
+          "collection": "committee-reports",
+          "message": "timeout of 8000ms exceeded"
+        }
+      ],
+      "diagnostics": [
+        {
+          "type": "blocked",
+          "collection": "committee-reports",
+          "message": "The Digital Sansad e-Parliament Library is unreachable due to connection timeouts or access controls."
+        }
+      ],
+      "fetchSuccess": false,
+      "listingSuccess": false,
+      "extractionSuccess": null,
+      "lastSuccessfulIngestion": null,
+      "dateWindowCorrectness": "NOT_VERIFIED",
+      "paginationCorrectness": "NOT_VERIFIED",
+      "freshness": "NOT_VERIFIED",
+      "blockReason": "TIMEOUT",
+      "datePrecision": [],
+      "sample": []
+    },
+    {
+      "source": "lok-sabha",
+      "startedAt": "2026-09-06T12:58:50.170Z",
+      "checkedAt": "2026-09-06T12:58:51.285Z",
+      "status": "needs_repair",
+      "discovered": 0,
+      "directoryEntries": 0,
+      "datedRecords": 0,
+      "pdfLinks": 0,
+      "newestPublication": null,
+      "pdfQuality": "not_checked",
+      "errors": [],
+      "diagnostics": [
+        {
+          "type": "blocked",
+          "collection": "questions",
+          "message": "The Lok Sabha questions page requires client-side JavaScript rendering (Next.js hydration) and cannot be crawled statically."
+        }
+      ],
+      "fetchSuccess": true,
+      "listingSuccess": false,
+      "extractionSuccess": null,
+      "lastSuccessfulIngestion": null,
+      "dateWindowCorrectness": "NOT_VERIFIED",
+      "paginationCorrectness": "NOT_VERIFIED",
+      "freshness": "NOT_VERIFIED",
+      "blockReason": "JAVASCRIPT_REQUIRED",
+      "datePrecision": [],
+      "sample": []
+    },
+    {
+      "source": "rajya-sabha",
+      "startedAt": "2026-09-06T12:58:51.286Z",
+      "checkedAt": "2026-09-06T12:58:52.083Z",
+      "status": "needs_repair",
+      "discovered": 0,
+      "directoryEntries": 0,
+      "datedRecords": 0,
+      "pdfLinks": 0,
+      "newestPublication": null,
+      "pdfQuality": "not_checked",
+      "errors": [
+        {
+          "stage": "listing",
+          "collection": "questions",
+          "message": "Parse Error: Missing expected CR after header value"
+        }
+      ],
+      "diagnostics": [
+        {
+          "type": "blocked",
+          "collection": "questions",
+          "message": "The Rajya Sabha questions page requires client-side JavaScript rendering and has malformed HTTP response headers."
+        }
+      ],
+      "fetchSuccess": false,
+      "listingSuccess": false,
+      "extractionSuccess": null,
+      "lastSuccessfulIngestion": null,
+      "dateWindowCorrectness": "NOT_VERIFIED",
+      "paginationCorrectness": "NOT_VERIFIED",
+      "freshness": "NOT_VERIFIED",
+      "blockReason": "JAVASCRIPT_REQUIRED",
+      "datePrecision": [],
+      "sample": []
+    },
+    {
+      "source": "state-legislature",
+      "startedAt": "2026-09-06T12:58:52.083Z",
+      "checkedAt": "2026-09-06T12:58:53.021Z",
+      "status": "discovery_only",
+      "discovered": 3,
+      "directoryEntries": 0,
+      "datedRecords": 0,
+      "pdfLinks": 3,
+      "newestPublication": null,
+      "pdfQuality": "not_checked",
+      "errors": [],
+      "diagnostics": [],
+      "fetchSuccess": true,
+      "listingSuccess": true,
+      "extractionSuccess": null,
+      "lastSuccessfulIngestion": null,
+      "dateWindowCorrectness": "NOT_VERIFIED",
+      "paginationCorrectness": "NOT_VERIFIED",
+      "freshness": "NOT_VERIFIED",
+      "blockReason": null,
+      "datePrecision": [
+        {
+          "raw": null,
+          "precision": "UNKNOWN",
+          "value": null,
+          "date": null
+        },
+        {
+          "raw": null,
+          "precision": "UNKNOWN",
+          "value": null,
+          "date": null
+        },
+        {
+          "raw": null,
+          "precision": "UNKNOWN",
+          "value": null,
+          "date": null
+        }
+      ],
+      "sample": [
+        {
+          "title": "Circular",
+          "sourceUrl": "https://delhiassembly.delhi.gov.in/sites/default/files/dlas/marquee-files/circular.pdf",
+          "pdfUrl": "https://delhiassembly.delhi.gov.in/sites/default/files/dlas/marquee-files/circular.pdf"
+        },
+        {
+          "title": "Bill wise Comparative Analysis of Salary and Allowances of MLAs",
+          "sourceUrl": "https://delhiassembly.delhi.gov.in/sites/default/files/2024-01/comparative_0.pdf",
+          "pdfUrl": "https://delhiassembly.delhi.gov.in/sites/default/files/2024-01/comparative_0.pdf"
+        },
+        {
+          "title": "Committee System",
+          "sourceUrl": "https://delhiassembly.delhi.gov.in/sites/default/files/2025-03/bpii08.pdf",
+          "pdfUrl": "https://delhiassembly.delhi.gov.in/sites/default/files/2025-03/bpii08.pdf"
+        }
+      ]
+    },
+    {
+      "source": "state-gazette",
+      "startedAt": "2026-09-06T12:58:53.021Z",
+      "checkedAt": "2026-09-06T12:58:53.921Z",
+      "status": "needs_repair",
+      "discovered": 0,
+      "directoryEntries": 0,
+      "datedRecords": 0,
+      "pdfLinks": 0,
+      "newestPublication": null,
+      "pdfQuality": "not_checked",
+      "errors": [
+        {
+          "stage": "directory",
+          "message": "unable to verify the first certificate; if the root CA is installed locally, try running Node.js with --use-system-ca"
+        }
+      ],
+      "diagnostics": [
+        {
+          "type": "blocked",
+          "collection": "official-directory",
+          "message": "The state-gazette directory uses interactive ASP.NET controls and did not expose a stable crawlable listing."
+        }
+      ],
+      "fetchSuccess": false,
+      "listingSuccess": false,
+      "extractionSuccess": null,
+      "lastSuccessfulIngestion": null,
+      "dateWindowCorrectness": "NOT_VERIFIED",
+      "paginationCorrectness": "NOT_VERIFIED",
+      "freshness": "NOT_VERIFIED",
+      "blockReason": "TLS_CERTIFICATE_FAILURE",
+      "datePrecision": [],
+      "sample": []
+    },
+    {
+      "source": "state-policy",
+      "startedAt": "2026-09-06T12:58:53.921Z",
+      "checkedAt": "2026-09-06T12:58:55.855Z",
+      "status": "discovery_only",
+      "discovered": 3,
+      "directoryEntries": 0,
+      "datedRecords": 0,
+      "pdfLinks": 3,
+      "newestPublication": null,
+      "pdfQuality": "not_checked",
+      "errors": [],
+      "diagnostics": [],
+      "fetchSuccess": true,
+      "listingSuccess": true,
+      "extractionSuccess": null,
+      "lastSuccessfulIngestion": null,
+      "dateWindowCorrectness": "NOT_VERIFIED",
+      "paginationCorrectness": "NOT_VERIFIED",
+      "freshness": "NOT_VERIFIED",
+      "blockReason": null,
+      "datePrecision": [
+        {
+          "raw": null,
+          "precision": "UNKNOWN",
+          "value": null,
+          "date": null
+        },
+        {
+          "raw": null,
+          "precision": "UNKNOWN",
+          "value": null,
+          "date": null
+        },
+        {
+          "raw": null,
+          "precision": "UNKNOWN",
+          "value": null,
+          "date": null
+        }
+      ],
+      "sample": [
+        {
+          "title": "Haryana Solar Power Policy 2016",
+          "sourceUrl": "https://cdnbbsr.s3waas.gov.in/s3f80ff32e08a25270b5f252ce39522f72/uploads/2020/12/2020120946.pdf",
+          "pdfUrl": "https://cdnbbsr.s3waas.gov.in/s3f80ff32e08a25270b5f252ce39522f72/uploads/2020/12/2020120946.pdf",
+          "publicationDate": null
+        },
+        {
+          "title": "Haryana Bio-Energy Policy 2018",
+          "sourceUrl": "https://cdnbbsr.s3waas.gov.in/s3f80ff32e08a25270b5f252ce39522f72/uploads/2020/12/20201209100.pdf",
+          "pdfUrl": "https://cdnbbsr.s3waas.gov.in/s3f80ff32e08a25270b5f252ce39522f72/uploads/2020/12/20201209100.pdf",
+          "publicationDate": null
+        },
+        {
+          "title": "Procedure and Guidelines for Setting Up of Wind Power Projects",
+          "sourceUrl": "https://cdnbbsr.s3waas.gov.in/s3f80ff32e08a25270b5f252ce39522f72/uploads/2020/12/2020120934-1.pdf",
+          "pdfUrl": "https://cdnbbsr.s3waas.gov.in/s3f80ff32e08a25270b5f252ce39522f72/uploads/2020/12/2020120934-1.pdf",
+          "publicationDate": null
+        }
+      ]
+    },
+    {
+      "source": "ministry",
+      "startedAt": "2026-09-06T12:58:55.855Z",
+      "checkedAt": "2026-09-06T12:58:57.689Z",
+      "status": "directory_only",
+      "discovered": 0,
+      "directoryEntries": 3,
+      "datedRecords": 0,
+      "pdfLinks": 0,
+      "newestPublication": null,
+      "pdfQuality": "not_checked",
+      "errors": [],
+      "diagnostics": [],
+      "fetchSuccess": true,
+      "listingSuccess": false,
+      "extractionSuccess": null,
+      "lastSuccessfulIngestion": null,
+      "dateWindowCorrectness": "NOT_VERIFIED",
+      "paginationCorrectness": "NOT_VERIFIED",
+      "freshness": "NOT_VERIFIED",
+      "blockReason": null,
+      "datePrecision": [],
+      "sample": []
+    },
+    {
+      "source": "ministry-environment",
+      "startedAt": "2026-09-06T12:58:57.689Z",
+      "checkedAt": "2026-09-06T12:59:01.000Z",
+      "status": "discovery_only",
+      "discovered": 3,
+      "directoryEntries": 0,
+      "datedRecords": 0,
+      "pdfLinks": 3,
+      "newestPublication": null,
+      "pdfQuality": "not_checked",
+      "errors": [],
+      "diagnostics": [],
+      "fetchSuccess": true,
+      "listingSuccess": true,
+      "extractionSuccess": null,
+      "lastSuccessfulIngestion": null,
+      "dateWindowCorrectness": "NOT_VERIFIED",
+      "paginationCorrectness": "NOT_VERIFIED",
+      "freshness": "NOT_VERIFIED",
+      "blockReason": null,
+      "datePrecision": [
+        {
+          "raw": null,
+          "precision": "UNKNOWN",
+          "value": null,
+          "date": null
+        },
+        {
+          "raw": null,
+          "precision": "UNKNOWN",
+          "value": null,
+          "date": null
+        },
+        {
+          "raw": null,
+          "precision": "UNKNOWN",
+          "value": null,
+          "date": null
+        }
+      ],
+      "sample": [
+        {
+          "title": "प्रोजेक्ट एलिफेंट की 22वीं संचालन समिति की बैठक की कार्यवाही",
+          "sourceUrl": "https://moef.gov.in/uploads/pdf-uploads/22nd_Steering%20_Committee.pdf",
+          "pdfUrl": "https://moef.gov.in/uploads/pdf-uploads/22nd_Steering%20_Committee.pdf",
+          "publicationDate": null
+        },
+        {
+          "title": "प्रोजेक्ट एलिफेंट की 21वीं संचालन समिति की बैठक की कार्यवाही",
+          "sourceUrl": "https://moef.gov.in/uploads/pdf-uploads/21st_Steering%20Committee.pdf",
+          "pdfUrl": "https://moef.gov.in/uploads/pdf-uploads/21st_Steering%20Committee.pdf",
+          "publicationDate": null
+        },
+        {
+          "title": "प्रोजेक्ट एलिफेंट की 20वीं संचालन समिति की बैठक की कार्यवाही",
+          "sourceUrl": "https://moef.gov.in/uploads/pdf-uploads/20th_Steering%20Committee.pdf",
+          "pdfUrl": "https://moef.gov.in/uploads/pdf-uploads/20th_Steering%20Committee.pdf",
+          "publicationDate": null
+        }
+      ]
+    },
+    {
+      "source": "india-gov",
+      "startedAt": "2026-09-06T12:59:01.000Z",
+      "checkedAt": "2026-09-06T12:59:01.792Z",
+      "status": "directory_only",
+      "discovered": 0,
+      "directoryEntries": 3,
+      "datedRecords": 0,
+      "pdfLinks": 0,
+      "newestPublication": null,
+      "pdfQuality": "not_checked",
+      "errors": [],
+      "diagnostics": [],
+      "fetchSuccess": true,
+      "listingSuccess": false,
+      "extractionSuccess": null,
+      "lastSuccessfulIngestion": null,
+      "dateWindowCorrectness": "NOT_VERIFIED",
+      "paginationCorrectness": "NOT_VERIFIED",
+      "freshness": "NOT_VERIFIED",
+      "blockReason": null,
+      "datePrecision": [],
+      "sample": []
+    },
+    {
+      "source": "policy-edge",
+      "startedAt": "2026-09-06T12:59:01.792Z",
+      "checkedAt": "2026-09-06T12:59:04.968Z",
+      "status": "discovery_only",
+      "discovered": 3,
+      "directoryEntries": 0,
+      "datedRecords": 0,
+      "pdfLinks": 0,
+      "newestPublication": null,
+      "pdfQuality": "not_checked",
+      "errors": [],
+      "diagnostics": [],
+      "fetchSuccess": true,
+      "listingSuccess": true,
+      "extractionSuccess": null,
+      "lastSuccessfulIngestion": null,
+      "dateWindowCorrectness": "NOT_VERIFIED",
+      "paginationCorrectness": "NOT_VERIFIED",
+      "freshness": "NOT_VERIFIED",
+      "blockReason": null,
+      "datePrecision": [
+        {
+          "raw": "November 2026",
+          "precision": "MONTH",
+          "value": "2026-11",
+          "date": null
+        },
+        {
+          "raw": null,
+          "precision": "UNKNOWN",
+          "value": null,
+          "date": null
+        },
+        {
+          "raw": "July 2026",
+          "precision": "MONTH",
+          "value": "2026-07",
+          "date": null
+        }
+      ],
+      "sample": [
+        {
+          "title": "\"The Indian subcontinent is more likely to experience above-normal temperatures and below-normal rainfallduring September–November 2026. A very strong El Niño is expected to persist into early 2027, although India’s eventual conditions will depend on regional climate influences and national forecasts\"WMO Outlook Flags Warmer, Drier September–November as El Niño Strengthens",
+          "sourceUrl": "https://www.policyedge.in/p/wmo-outlook-flags-warmer-drier-septembernovember-as-el-nio-strengthens",
+          "pdfUrl": null,
+          "publicationDate": null
+        },
+        {
+          "title": "\"At a high-level meeting in Belgrade, India argued that the Non-Aligned Movement (NAM) must move beyond its Cold War origins and respond collectively to debt, technology gaps, supply-chain stress, maritime security and terrorism\"India Calls for Revitalised Non-Aligned Movement to Push UN Reform and Global South Priorities",
+          "sourceUrl": "https://www.policyedge.in/p/india-calls-for-revitalised-non-aligned-movement-to-push-un-reform-and-global-south-priorities",
+          "pdfUrl": null,
+          "publicationDate": null
+        },
+        {
+          "title": "\"India has mapped a theoretical geothermal potential of 10.6 GW and identified 42 promising sites. Five government-supported research projects and the July 2026 commissioning of two exploratory wells in Ladakh mark the early testing phase, while commercial generation remains unproven\"India’s Geothermal Strategy Targets Power, Heating and Reuse of Abandoned Oil Wells",
+          "sourceUrl": "https://www.policyedge.in/p/indias-geothermal-strategy-targets-power-heating-and-reuse-of-abandoned-oil-wells",
+          "pdfUrl": null,
+          "publicationDate": null
+        }
+      ]
+    },
+    {
+      "source": "state-directory",
+      "startedAt": "2026-09-06T12:59:04.969Z",
+      "checkedAt": "2026-09-06T12:59:06.181Z",
+      "status": "directory_only",
+      "discovered": 0,
+      "directoryEntries": 3,
+      "datedRecords": 0,
+      "pdfLinks": 0,
+      "newestPublication": null,
+      "pdfQuality": "not_checked",
+      "errors": [],
+      "diagnostics": [],
+      "fetchSuccess": true,
+      "listingSuccess": false,
+      "extractionSuccess": null,
+      "lastSuccessfulIngestion": null,
+      "dateWindowCorrectness": "NOT_VERIFIED",
+      "paginationCorrectness": "NOT_VERIFIED",
+      "freshness": "NOT_VERIFIED",
+      "blockReason": null,
+      "datePrecision": [],
+      "sample": []
+    },
+    {
+      "source": "niti-aayog",
+      "startedAt": "2026-09-06T12:59:06.181Z",
+      "checkedAt": "2026-09-06T12:59:07.218Z",
+      "status": "discovery_only",
+      "discovered": 3,
+      "directoryEntries": 0,
+      "datedRecords": 0,
+      "pdfLinks": 3,
+      "newestPublication": null,
+      "pdfQuality": "not_checked",
+      "errors": [],
+      "diagnostics": [],
+      "fetchSuccess": true,
+      "listingSuccess": true,
+      "extractionSuccess": null,
+      "lastSuccessfulIngestion": null,
+      "dateWindowCorrectness": "NOT_VERIFIED",
+      "paginationCorrectness": "NOT_VERIFIED",
+      "freshness": "NOT_VERIFIED",
+      "blockReason": null,
+      "datePrecision": [
+        {
+          "raw": "August, 2026",
+          "precision": "MONTH",
+          "value": "2026-08",
+          "date": null
+        },
+        {
+          "raw": "August, 2026",
+          "precision": "MONTH",
+          "value": "2026-08",
+          "date": null
+        },
+        {
+          "raw": "August, 2026",
+          "precision": "MONTH",
+          "value": "2026-08",
+          "date": null
+        }
+      ],
+      "sample": [
+        {
+          "title": "Reimagining Skilling for Viksit Bharat@2047",
+          "sourceUrl": "https://niti.gov.in/sites/default/files/2026-08/Reimagining-Skilling-for-Viksit-Bharat-2047.pdf",
+          "pdfUrl": "https://niti.gov.in/sites/default/files/2026-08/Reimagining-Skilling-for-Viksit-Bharat-2047.pdf",
+          "publicationDate": null
+        },
+        {
+          "title": "Key Sectors to Position India as a Global Manufacturing Hub",
+          "sourceUrl": "https://niti.gov.in/sites/default/files/2026-08/Key-Sectors-to-Position-India-as-a-Global-Manufacturing-Hub.pdf",
+          "pdfUrl": "https://niti.gov.in/sites/default/files/2026-08/Key-Sectors-to-Position-India-as-a-Global-Manufacturing-Hub.pdf",
+          "publicationDate": null
+        },
+        {
+          "title": "India’s Services Sector: Insights on Regulatory Regime in Professional Services",
+          "sourceUrl": "https://niti.gov.in/sites/default/files/2026-08/India-Services-Sector-Insights-on-Regulatory-Regime-in-Professional-Services.pdf",
+          "pdfUrl": "https://niti.gov.in/sites/default/files/2026-08/India-Services-Sector-Insights-on-Regulatory-Regime-in-Professional-Services.pdf",
+          "publicationDate": null
+        }
+      ]
+    },
+    {
+      "source": "pib",
+      "startedAt": "2026-09-06T12:59:07.218Z",
+      "checkedAt": "2026-09-06T12:59:08.949Z",
+      "status": "discovery_only",
+      "discovered": 3,
+      "directoryEntries": 0,
+      "datedRecords": 3,
+      "pdfLinks": 0,
+      "newestPublication": "2026-09-05",
+      "pdfQuality": "not_checked",
+      "errors": [],
+      "diagnostics": [],
+      "fetchSuccess": true,
+      "listingSuccess": true,
+      "extractionSuccess": null,
+      "lastSuccessfulIngestion": null,
+      "dateWindowCorrectness": "NOT_VERIFIED",
+      "paginationCorrectness": "NOT_VERIFIED",
+      "freshness": "NOT_VERIFIED",
+      "blockReason": null,
+      "datePrecision": [
+        {
+          "raw": "2026-09-05",
+          "precision": "DAY",
+          "value": "2026-09-05",
+          "date": "2026-09-05"
+        },
+        {
+          "raw": "2026-09-05",
+          "precision": "DAY",
+          "value": "2026-09-05",
+          "date": "2026-09-05"
+        },
+        {
+          "raw": "2026-09-05",
+          "precision": "DAY",
+          "value": "2026-09-05",
+          "date": "2026-09-05"
+        }
+      ],
+      "sample": [
+        {
+          "title": "PRESS COMMUNIQUE",
+          "sourceUrl": "https://pib.gov.in/PressReleseDetail.aspx?PRID=2307069",
+          "publicationDate": "2026-09-05"
+        },
+        {
+          "title": "PRESIDENT OF INDIA PAYS FLORAL TRIBUTES TO DR SARVEPALLI RADHAKRISHNAN ON HIS BIRTH ANNIVERSARY",
+          "sourceUrl": "https://pib.gov.in/PressReleseDetail.aspx?PRID=2306930",
+          "publicationDate": "2026-09-05"
+        },
+        {
+          "title": "PRESIDENT OF INDIA CONFERS NATIONAL AWARDS ON TEACHERS",
+          "sourceUrl": "https://pib.gov.in/PressReleseDetail.aspx?PRID=2306919",
+          "publicationDate": "2026-09-05"
+        }
+      ]
+    },
+    {
+      "source": "mygov",
+      "startedAt": "2026-09-06T12:59:08.949Z",
+      "checkedAt": "2026-09-06T12:59:10.286Z",
+      "status": "discovery_only",
+      "discovered": 3,
+      "directoryEntries": 0,
+      "datedRecords": 0,
+      "pdfLinks": 0,
+      "newestPublication": null,
+      "pdfQuality": "not_checked",
+      "errors": [],
+      "diagnostics": [],
+      "fetchSuccess": true,
+      "listingSuccess": true,
+      "extractionSuccess": null,
+      "lastSuccessfulIngestion": null,
+      "dateWindowCorrectness": "NOT_VERIFIED",
+      "paginationCorrectness": "NOT_VERIFIED",
+      "freshness": "NOT_VERIFIED",
+      "blockReason": null,
+      "datePrecision": [
+        {
+          "raw": null,
+          "precision": "UNKNOWN",
+          "value": null,
+          "date": null
+        },
+        {
+          "raw": null,
+          "precision": "UNKNOWN",
+          "value": null,
+          "date": null
+        },
+        {
+          "raw": null,
+          "precision": "UNKNOWN",
+          "value": null,
+          "date": null
+        }
+      ],
+      "sample": [
+        {
+          "title": "Inviting Ideas on AI and Semiconductors",
+          "sourceUrl": "https://www.mygov.in/group-issue/inviting-ideas-ai-and-semiconductors",
+          "pdfUrl": null,
+          "publicationDate": null
+        },
+        {
+          "title": "Shaheed Bhagat Singh's Vision for Today's Youth - Building the India of Tomorrow",
+          "sourceUrl": "https://www.mygov.in/group-issue/bhagat-singhs-vision-todays-youth-building-india-tomorrow",
+          "pdfUrl": null,
+          "publicationDate": null
+        },
+        {
+          "title": "Inviting Ideas for Next Phase of Rural Sanitation",
+          "sourceUrl": "https://www.mygov.in/group-issue/inviting-ideas-next-phase-rural-sanitation",
+          "pdfUrl": null,
+          "publicationDate": null
+        }
+      ]
+    },
+    {
+      "source": "ndap",
+      "startedAt": "2026-09-06T12:59:10.286Z",
+      "checkedAt": "2026-09-06T12:59:11.084Z",
+      "status": "no_records_found",
+      "discovered": 0,
+      "directoryEntries": 0,
+      "datedRecords": 0,
+      "pdfLinks": 0,
+      "newestPublication": null,
+      "pdfQuality": "not_checked",
+      "errors": [],
+      "diagnostics": [
+        {
+          "type": "empty-source",
+          "collection": "public-datasets",
+          "message": "NDAP is reachable but its dataset catalogue did not expose crawlable dataset links in the server-rendered response."
+        }
+      ],
+      "fetchSuccess": true,
+      "listingSuccess": false,
+      "extractionSuccess": null,
+      "lastSuccessfulIngestion": null,
+      "dateWindowCorrectness": "NOT_VERIFIED",
+      "paginationCorrectness": "NOT_VERIFIED",
+      "freshness": "NOT_VERIFIED",
+      "blockReason": "UNKNOWN",
+      "datePrecision": [],
+      "sample": []
+    },
+    {
+      "source": "ogd-india",
+      "startedAt": "2026-09-06T12:59:11.084Z",
+      "checkedAt": "2026-09-06T12:59:11.310Z",
+      "status": "needs_repair",
+      "discovered": 0,
+      "directoryEntries": 0,
+      "datedRecords": 0,
+      "pdfLinks": 0,
+      "newestPublication": null,
+      "pdfQuality": "not_checked",
+      "errors": [
+        {
+          "stage": "listing",
+          "collection": "open-government-data-catalogues",
+          "page": 0,
+          "message": "robots.txt disallows catalog fetch: https://www.data.gov.in/catalogs"
+        }
+      ],
+      "diagnostics": [
+        {
+          "type": "error",
+          "collection": "open-government-data-catalogues",
+          "message": "The OGD catalogue was reachable but exposed no crawlable catalogue links in the bounded server-rendered sample."
+        }
+      ],
+      "fetchSuccess": false,
+      "listingSuccess": false,
+      "extractionSuccess": null,
+      "lastSuccessfulIngestion": null,
+      "dateWindowCorrectness": "NOT_VERIFIED",
+      "paginationCorrectness": "NOT_VERIFIED",
+      "freshness": "NOT_VERIFIED",
+      "blockReason": "ROBOTS_BLOCK",
+      "datePrecision": [],
+      "sample": []
+    },
+    {
+      "source": "regulator-rbi",
+      "startedAt": "2026-09-06T12:59:11.310Z",
+      "checkedAt": "2026-09-06T12:59:12.354Z",
+      "status": "discovery_only",
+      "discovered": 3,
+      "directoryEntries": 0,
+      "datedRecords": 0,
+      "pdfLinks": 1,
+      "newestPublication": null,
+      "pdfQuality": "not_checked",
+      "errors": [],
+      "diagnostics": [],
+      "fetchSuccess": true,
+      "listingSuccess": true,
+      "extractionSuccess": null,
+      "lastSuccessfulIngestion": null,
+      "dateWindowCorrectness": "NOT_VERIFIED",
+      "paginationCorrectness": "NOT_VERIFIED",
+      "freshness": "NOT_VERIFIED",
+      "blockReason": null,
+      "datePrecision": [
+        {
+          "raw": null,
+          "precision": "UNKNOWN",
+          "value": null,
+          "date": null
+        },
+        {
+          "raw": null,
+          "precision": "UNKNOWN",
+          "value": null,
+          "date": null
+        },
+        {
+          "raw": null,
+          "precision": "UNKNOWN",
+          "value": null,
+          "date": null
+        }
+      ],
+      "sample": [
+        {
+          "title": "Deposits and Accounts – Accounts of Non-resident banks",
+          "sourceUrl": "https://www.rbi.org.in/Scripts/NotificationUser.aspx?Id=13693&Mode=0",
+          "pdfUrl": null,
+          "publicationDate": null
+        },
+        {
+          "title": "Deposits and Accounts – Accounts of Non-resident banks",
+          "sourceUrl": "https://rbidocs.rbi.org.in/rdocs/notification/PDFs/251NT85B7339E9B824E5EB17C055D795CE095.PDF",
+          "pdfUrl": "https://rbidocs.rbi.org.in/rdocs/notification/PDFs/251NT85B7339E9B824E5EB17C055D795CE095.PDF",
+          "publicationDate": null
+        },
+        {
+          "title": "Relief Measures in Areas Affected by Natural Calamities - Reporting through Centralised Information Management System (CIMS) Portal - Introduction of Half-Yearly Return",
+          "sourceUrl": "https://www.rbi.org.in/Scripts/NotificationUser.aspx?Id=13692&Mode=0",
+          "pdfUrl": null,
+          "publicationDate": null
+        }
+      ]
+    },
+    {
+      "source": "regulator-sebi",
+      "startedAt": "2026-09-06T12:59:12.354Z",
+      "checkedAt": "2026-09-06T12:59:13.388Z",
+      "status": "discovery_only",
+      "discovered": 3,
+      "directoryEntries": 0,
+      "datedRecords": 3,
+      "pdfLinks": 0,
+      "newestPublication": "2026-07-14",
+      "pdfQuality": "not_checked",
+      "errors": [],
+      "diagnostics": [],
+      "fetchSuccess": true,
+      "listingSuccess": true,
+      "extractionSuccess": null,
+      "lastSuccessfulIngestion": null,
+      "dateWindowCorrectness": "NOT_VERIFIED",
+      "paginationCorrectness": "NOT_VERIFIED",
+      "freshness": "NOT_VERIFIED",
+      "blockReason": null,
+      "datePrecision": [
+        {
+          "raw": "Jul 14, 2026",
+          "precision": "DAY",
+          "value": "2026-07-14",
+          "date": "2026-07-14"
+        },
+        {
+          "raw": "Jun 03, 2026",
+          "precision": "DAY",
+          "value": "2026-06-03",
+          "date": "2026-06-03"
+        },
+        {
+          "raw": "May 15, 2026",
+          "precision": "DAY",
+          "value": "2026-05-15",
+          "date": "2026-05-15"
+        }
+      ],
+      "sample": [
+        {
+          "title": "Master Circular for Merchant Bankers",
+          "sourceUrl": "https://www.sebi.gov.in/legal/master-circulars/jul-2026/master-circular-for-merchant-bankers_102815.html",
+          "pdfUrl": null,
+          "publicationDate": "2026-07-14"
+        },
+        {
+          "title": "Master Circular for Alternative Investment Funds (AIFs)",
+          "sourceUrl": "https://www.sebi.gov.in/legal/master-circulars/jun-2026/master-circular-for-alternative-investment-funds-aifs-_101817.html",
+          "pdfUrl": null,
+          "publicationDate": "2026-06-03"
+        },
+        {
+          "title": "Master Circular on Surveillance of Securities Market",
+          "sourceUrl": "https://www.sebi.gov.in/legal/master-circulars/may-2026/master-circular-on-surveillance-of-securities-market_101473.html",
+          "pdfUrl": null,
+          "publicationDate": "2026-05-15"
+        }
+      ]
+    },
+    {
+      "source": "regulator-trai",
+      "startedAt": "2026-09-06T12:59:13.388Z",
+      "checkedAt": "2026-09-06T12:59:14.335Z",
+      "status": "discovery_only",
+      "discovered": 3,
+      "directoryEntries": 0,
+      "datedRecords": 1,
+      "pdfLinks": 2,
+      "newestPublication": "2026-08-05",
+      "pdfQuality": "not_checked",
+      "errors": [],
+      "diagnostics": [],
+      "fetchSuccess": true,
+      "listingSuccess": true,
+      "extractionSuccess": null,
+      "lastSuccessfulIngestion": null,
+      "dateWindowCorrectness": "NOT_VERIFIED",
+      "paginationCorrectness": "NOT_VERIFIED",
+      "freshness": "NOT_VERIFIED",
+      "blockReason": null,
+      "datePrecision": [
+        {
+          "raw": null,
+          "precision": "UNKNOWN",
+          "value": null,
+          "date": null
+        },
+        {
+          "raw": null,
+          "precision": "UNKNOWN",
+          "value": null,
+          "date": null
+        },
+        {
+          "raw": "05/08/2026",
+          "precision": "DAY",
+          "value": "2026-08-05",
+          "date": "2026-08-05"
+        }
+      ],
+      "sample": [
+        {
+          "title": "Download PDF for Consultation Paper on Draft Amendments in The Standards of Quality of Service of Access (Wireline and Wireless) and Broadband (Wireline and Wireless) Service Regulations, 2024 - (3.37 MB), opens in new tab",
+          "sourceUrl": "https://www.trai.gov.in/sites/default/files/2026-08/CP_05082026.pdf",
+          "pdfUrl": "https://www.trai.gov.in/sites/default/files/2026-08/CP_05082026.pdf",
+          "publicationDate": null
+        },
+        {
+          "title": "Download PDF for Consultation Paper on Draft Amendments in The Standards of Quality of Service of Access (Wireline and Wireless) and Broadband (Wireline and Wireless) Service Regulations, 2024 - (291.52 KB), opens in new tab",
+          "sourceUrl": "https://www.trai.gov.in/sites/default/files/2026-08/PR_No115of2026_0.pdf",
+          "pdfUrl": "https://www.trai.gov.in/sites/default/files/2026-08/PR_No115of2026_0.pdf",
+          "publicationDate": null
+        },
+        {
+          "title": "Add/View Comments",
+          "sourceUrl": "https://www.trai.gov.in/consultation-paper-draft-amendments-standards-quality-service-access-wireline-and-wireless-and",
+          "pdfUrl": null,
+          "publicationDate": "2026-08-05"
+        }
+      ]
+    },
+    {
+      "source": "regulator-uidai",
+      "startedAt": "2026-09-06T12:59:14.335Z",
+      "checkedAt": "2026-09-06T12:59:15.253Z",
+      "status": "discovery_only",
+      "discovered": 1,
+      "directoryEntries": 0,
+      "datedRecords": 0,
+      "pdfLinks": 1,
+      "newestPublication": null,
+      "pdfQuality": "not_checked",
+      "errors": [],
+      "diagnostics": [],
+      "fetchSuccess": true,
+      "listingSuccess": true,
+      "extractionSuccess": null,
+      "lastSuccessfulIngestion": null,
+      "dateWindowCorrectness": "NOT_VERIFIED",
+      "paginationCorrectness": "NOT_VERIFIED",
+      "freshness": "NOT_VERIFIED",
+      "blockReason": null,
+      "datePrecision": [
+        {
+          "raw": null,
+          "precision": "UNKNOWN",
+          "value": null,
+          "date": null
+        }
+      ],
+      "sample": [
+        {
+          "title": "Citizens Charter",
+          "sourceUrl": "https://backend.uidai.gov.in/get/files/media/document/2026-05/Citizen_Charter_Jan24.pdf",
+          "pdfUrl": "https://backend.uidai.gov.in/get/files/media/document/2026-05/Citizen_Charter_Jan24.pdf",
+          "publicationDate": null
+        }
+      ]
+    },
+    {
+      "source": "regulator-cerc",
+      "startedAt": "2026-09-06T12:59:15.253Z",
+      "checkedAt": "2026-09-06T12:59:16.592Z",
+      "status": "discovery_only",
+      "discovered": 3,
+      "directoryEntries": 0,
+      "datedRecords": 0,
+      "pdfLinks": 3,
+      "newestPublication": null,
+      "pdfQuality": "not_checked",
+      "errors": [],
+      "diagnostics": [],
+      "fetchSuccess": true,
+      "listingSuccess": true,
+      "extractionSuccess": null,
+      "lastSuccessfulIngestion": null,
+      "dateWindowCorrectness": "NOT_VERIFIED",
+      "paginationCorrectness": "NOT_VERIFIED",
+      "freshness": "NOT_VERIFIED",
+      "blockReason": null,
+      "datePrecision": [
+        {
+          "raw": null,
+          "precision": "UNKNOWN",
+          "value": null,
+          "date": null
+        },
+        {
+          "raw": null,
+          "precision": "UNKNOWN",
+          "value": null,
+          "date": null
+        },
+        {
+          "raw": null,
+          "precision": "UNKNOWN",
+          "value": null,
+          "date": null
+        }
+      ],
+      "sample": [
+        {
+          "title": "Electricity Act 2003",
+          "sourceUrl": "https://cercind.gov.in/Act-with-amendment.pdf",
+          "pdfUrl": "https://cercind.gov.in/Act-with-amendment.pdf",
+          "publicationDate": null
+        },
+        {
+          "title": "2. Statement of Reasons",
+          "sourceUrl": "https://cercind.gov.in/regulations/208-third-amendment-for.pdf",
+          "pdfUrl": "https://cercind.gov.in/regulations/208-third-amendment-for.pdf",
+          "publicationDate": null
+        },
+        {
+          "title": "Gazette Gazette No: 272 Gazette Date: 24.05.2022",
+          "sourceUrl": "https://cercind.gov.in/regulations/172-GAZ.pdf",
+          "pdfUrl": "https://cercind.gov.in/regulations/172-GAZ.pdf",
+          "publicationDate": null
+        }
+      ]
+    },
+    {
+      "source": "regulator-irdai",
+      "startedAt": "2026-09-06T12:59:16.593Z",
+      "checkedAt": "2026-09-06T12:59:17.163Z",
+      "status": "needs_repair",
+      "discovered": 0,
+      "directoryEntries": 0,
+      "datedRecords": 0,
+      "pdfLinks": 0,
+      "newestPublication": null,
+      "pdfQuality": "not_checked",
+      "errors": [
+        {
+          "stage": "listing",
+          "collection": "irdai-regulations",
+          "page": 0,
+          "message": "robots.txt disallows catalog fetch: https://irdai.gov.in/regulations"
+        }
+      ],
+      "diagnostics": [
+        {
+          "type": "error",
+          "collection": "irdai-regulations",
+          "message": "The regulator portal was reachable but exposed no matching crawlable records in this bounded sample."
+        }
+      ],
+      "fetchSuccess": false,
+      "listingSuccess": false,
+      "extractionSuccess": null,
+      "lastSuccessfulIngestion": null,
+      "dateWindowCorrectness": "NOT_VERIFIED",
+      "paginationCorrectness": "NOT_VERIFIED",
+      "freshness": "NOT_VERIFIED",
+      "blockReason": "ROBOTS_BLOCK",
+      "datePrecision": [],
+      "sample": []
+    },
+    {
+      "source": "regulator-pfrda",
+      "startedAt": "2026-09-06T12:59:17.163Z",
+      "checkedAt": "2026-09-06T12:59:17.376Z",
+      "status": "needs_repair",
+      "discovered": 0,
+      "directoryEntries": 0,
+      "datedRecords": 0,
+      "pdfLinks": 0,
+      "newestPublication": null,
+      "pdfQuality": "not_checked",
+      "errors": [
+        {
+          "stage": "listing",
+          "collection": "pfrda-circulars",
+          "page": 0,
+          "message": "robots.txt disallows catalog fetch: https://www.pfrda.org.in/web/pfrda/regulatory-framework/circulars"
+        }
+      ],
+      "diagnostics": [
+        {
+          "type": "error",
+          "collection": "pfrda-circulars",
+          "message": "The regulator portal was reachable but exposed no matching crawlable records in this bounded sample."
+        }
+      ],
+      "fetchSuccess": false,
+      "listingSuccess": false,
+      "extractionSuccess": null,
+      "lastSuccessfulIngestion": null,
+      "dateWindowCorrectness": "NOT_VERIFIED",
+      "paginationCorrectness": "NOT_VERIFIED",
+      "freshness": "NOT_VERIFIED",
+      "blockReason": "ROBOTS_BLOCK",
+      "datePrecision": [],
+      "sample": []
+    },
+    {
+      "source": "regulator-nmc",
+      "startedAt": "2026-09-06T12:59:17.376Z",
+      "checkedAt": "2026-09-06T12:59:18.299Z",
+      "status": "needs_repair",
+      "discovered": 0,
+      "directoryEntries": 0,
+      "datedRecords": 0,
+      "pdfLinks": 0,
+      "newestPublication": null,
+      "pdfQuality": "not_checked",
+      "errors": [
+        {
+          "stage": "listing",
+          "collection": "nmc-rules-regulations",
+          "page": 0,
+          "message": "unable to verify the first certificate; if the root CA is installed locally, try running Node.js with --use-system-ca"
+        }
+      ],
+      "diagnostics": [
+        {
+          "type": "error",
+          "collection": "nmc-rules-regulations",
+          "message": "The regulator portal was reachable but exposed no matching crawlable records in this bounded sample."
+        }
+      ],
+      "fetchSuccess": false,
+      "listingSuccess": false,
+      "extractionSuccess": null,
+      "lastSuccessfulIngestion": null,
+      "dateWindowCorrectness": "NOT_VERIFIED",
+      "paginationCorrectness": "NOT_VERIFIED",
+      "freshness": "NOT_VERIFIED",
+      "blockReason": "TLS_CERTIFICATE_FAILURE",
+      "datePrecision": [],
+      "sample": []
+    },
+    {
+      "source": "regulator-aicte",
+      "startedAt": "2026-09-06T12:59:18.300Z",
+      "checkedAt": "2026-09-06T12:59:19.208Z",
+      "status": "discovery_only",
+      "discovered": 1,
+      "directoryEntries": 0,
+      "datedRecords": 0,
+      "pdfLinks": 1,
+      "newestPublication": null,
+      "pdfQuality": "not_checked",
+      "errors": [],
+      "diagnostics": [],
+      "fetchSuccess": true,
+      "listingSuccess": true,
+      "extractionSuccess": null,
+      "lastSuccessfulIngestion": null,
+      "dateWindowCorrectness": "NOT_VERIFIED",
+      "paginationCorrectness": "NOT_VERIFIED",
+      "freshness": "NOT_VERIFIED",
+      "blockReason": null,
+      "datePrecision": [
+        {
+          "raw": null,
+          "precision": "UNKNOWN",
+          "value": null,
+          "date": null
+        }
+      ],
+      "sample": [
+        {
+          "title": "Moratorium on Opening New Institutions",
+          "sourceUrl": "https://www.aicte-india.org/sites/default/files/Moratorium%20New.pdf",
+          "pdfUrl": "https://www.aicte-india.org/sites/default/files/Moratorium%20New.pdf",
+          "publicationDate": null
+        }
+      ]
+    },
+    {
+      "source": "regulator-ugc",
+      "startedAt": "2026-09-06T12:59:19.208Z",
+      "checkedAt": "2026-09-06T12:59:20.119Z",
+      "status": "discovery_only",
+      "discovered": 2,
+      "directoryEntries": 0,
+      "datedRecords": 0,
+      "pdfLinks": 2,
+      "newestPublication": null,
+      "pdfQuality": "not_checked",
+      "errors": [],
+      "diagnostics": [],
+      "fetchSuccess": true,
+      "listingSuccess": true,
+      "extractionSuccess": null,
+      "lastSuccessfulIngestion": null,
+      "dateWindowCorrectness": "NOT_VERIFIED",
+      "paginationCorrectness": "NOT_VERIFIED",
+      "freshness": "NOT_VERIFIED",
+      "blockReason": null,
+      "datePrecision": [
+        {
+          "raw": null,
+          "precision": "UNKNOWN",
+          "value": null,
+          "date": null
+        },
+        {
+          "raw": null,
+          "precision": "UNKNOWN",
+          "value": null,
+          "date": null
+        }
+      ],
+      "sample": [
+        {
+          "title": "UGC Organisational Chart",
+          "sourceUrl": "https://www.ugc.gov.in/pdfnews/UGC%20Organisational%20Chart.pdf",
+          "pdfUrl": "https://www.ugc.gov.in/pdfnews/UGC%20Organisational%20Chart.pdf",
+          "publicationDate": null
+        },
+        {
+          "title": "Website Security Audit Certificate",
+          "sourceUrl": "https://www.ugc.gov.in/pdfnews/7670867_UGC-Certificate.pdf",
+          "pdfUrl": "https://www.ugc.gov.in/pdfnews/7670867_UGC-Certificate.pdf",
+          "publicationDate": null
+        }
+      ]
+    },
+    {
+      "source": "regulator-ec",
+      "startedAt": "2026-09-06T12:59:20.119Z",
+      "checkedAt": "2026-09-06T12:59:20.914Z",
+      "status": "no_records_found",
+      "discovered": 0,
+      "directoryEntries": 0,
+      "datedRecords": 0,
+      "pdfLinks": 0,
+      "newestPublication": null,
+      "pdfQuality": "not_checked",
+      "errors": [],
+      "diagnostics": [
+        {
+          "type": "empty-source",
+          "collection": "election-commission",
+          "message": "The regulator portal was reachable but exposed no matching crawlable records in this bounded sample."
+        }
+      ],
+      "fetchSuccess": true,
+      "listingSuccess": false,
+      "extractionSuccess": null,
+      "lastSuccessfulIngestion": null,
+      "dateWindowCorrectness": "NOT_VERIFIED",
+      "paginationCorrectness": "NOT_VERIFIED",
+      "freshness": "NOT_VERIFIED",
+      "blockReason": "HTML_STRUCTURE_CHANGED",
+      "datePrecision": [],
+      "sample": []
+    },
+    {
+      "source": "regulator-nclat",
+      "startedAt": "2026-09-06T12:59:20.914Z",
+      "checkedAt": "2026-09-06T12:59:36.920Z",
+      "status": "needs_repair",
+      "discovered": 0,
+      "directoryEntries": 0,
+      "datedRecords": 0,
+      "pdfLinks": 0,
+      "newestPublication": null,
+      "pdfQuality": "not_checked",
+      "errors": [
+        {
+          "stage": "listing",
+          "collection": "nclat-daily-orders",
+          "page": 0,
+          "message": "timeout of 8000ms exceeded"
+        }
+      ],
+      "diagnostics": [
+        {
+          "type": "error",
+          "collection": "nclat-daily-orders",
+          "message": "The regulator portal was reachable but exposed no matching crawlable records in this bounded sample."
+        }
+      ],
+      "fetchSuccess": false,
+      "listingSuccess": false,
+      "extractionSuccess": null,
+      "lastSuccessfulIngestion": null,
+      "dateWindowCorrectness": "NOT_VERIFIED",
+      "paginationCorrectness": "NOT_VERIFIED",
+      "freshness": "NOT_VERIFIED",
+      "blockReason": "TIMEOUT",
+      "datePrecision": [],
+      "sample": []
+    },
+    {
+      "source": "regulator-gst-council",
+      "startedAt": "2026-09-06T12:59:36.920Z",
+      "checkedAt": "2026-09-06T12:59:39.408Z",
+      "status": "discovery_only",
+      "discovered": 3,
+      "directoryEntries": 0,
+      "datedRecords": 0,
+      "pdfLinks": 3,
+      "newestPublication": null,
+      "pdfQuality": "not_checked",
+      "errors": [],
+      "diagnostics": [],
+      "fetchSuccess": true,
+      "listingSuccess": true,
+      "extractionSuccess": null,
+      "lastSuccessfulIngestion": null,
+      "dateWindowCorrectness": "NOT_VERIFIED",
+      "paginationCorrectness": "NOT_VERIFIED",
+      "freshness": "NOT_VERIFIED",
+      "blockReason": null,
+      "datePrecision": [
+        {
+          "raw": null,
+          "precision": "UNKNOWN",
+          "value": null,
+          "date": null
+        },
+        {
+          "raw": null,
+          "precision": "UNKNOWN",
+          "value": null,
+          "date": null
+        },
+        {
+          "raw": null,
+          "precision": "UNKNOWN",
+          "value": null,
+          "date": null
+        }
+      ],
+      "sample": [
+        {
+          "title": "101st Constitutional Amendment Act, 2016",
+          "sourceUrl": "https://www.gstcouncil.gov.in/sites/default/files/2024-02/consti-amend-act.pdf",
+          "pdfUrl": "https://www.gstcouncil.gov.in/sites/default/files/2024-02/consti-amend-act.pdf",
+          "publicationDate": null
+        },
+        {
+          "title": "Vacancy Circular to engage Consultant(Grade-1) on contractual basis in Goods and Service Tax Council Secretariat, New Delhi",
+          "sourceUrl": "https://www.gstcouncil.gov.in/sites/default/files/2026-08/vacancy-circular-and-procedure-guidelines-for-engangement_0.pdf",
+          "pdfUrl": "https://www.gstcouncil.gov.in/sites/default/files/2026-08/vacancy-circular-and-procedure-guidelines-for-engangement_0.pdf",
+          "publicationDate": null
+        },
+        {
+          "title": "Appointment of Technical Member (State/UT) in the Goods and Services Tax Appellate Tribunal for the Union Territory of Jammu & Kashmir",
+          "sourceUrl": "https://www.gstcouncil.gov.in/sites/default/files/2026-07/vacancy_circular_gstat_jk_0.pdf",
+          "pdfUrl": "https://www.gstcouncil.gov.in/sites/default/files/2026-07/vacancy_circular_gstat_jk_0.pdf",
+          "publicationDate": null
+        }
+      ]
+    },
+    {
+      "source": "regulator-cbdt",
+      "startedAt": "2026-09-06T12:59:39.408Z",
+      "checkedAt": "2026-09-06T12:59:40.290Z",
+      "status": "no_records_found",
+      "discovered": 0,
+      "directoryEntries": 0,
+      "datedRecords": 0,
+      "pdfLinks": 0,
+      "newestPublication": null,
+      "pdfQuality": "not_checked",
+      "errors": [],
+      "diagnostics": [
+        {
+          "type": "empty-source",
+          "collection": "cbdt-circulars",
+          "message": "The regulator portal was reachable but exposed no matching crawlable records in this bounded sample."
+        }
+      ],
+      "fetchSuccess": true,
+      "listingSuccess": false,
+      "extractionSuccess": null,
+      "lastSuccessfulIngestion": null,
+      "dateWindowCorrectness": "NOT_VERIFIED",
+      "paginationCorrectness": "NOT_VERIFIED",
+      "freshness": "NOT_VERIFIED",
+      "blockReason": "HTML_STRUCTURE_CHANGED",
+      "datePrecision": [],
+      "sample": []
+    },
+    {
+      "source": "regulator-cbic",
+      "startedAt": "2026-09-06T12:59:40.290Z",
+      "checkedAt": "2026-09-06T12:59:41.240Z",
+      "status": "needs_repair",
+      "discovered": 0,
+      "directoryEntries": 0,
+      "datedRecords": 0,
+      "pdfLinks": 0,
+      "newestPublication": null,
+      "pdfQuality": "not_checked",
+      "errors": [
+        {
+          "stage": "listing",
+          "collection": "cbic-tax-information",
+          "page": 0,
+          "message": "unable to verify the first certificate; if the root CA is installed locally, try running Node.js with --use-system-ca"
+        }
+      ],
+      "diagnostics": [
+        {
+          "type": "error",
+          "collection": "cbic-tax-information",
+          "message": "The regulator portal was reachable but exposed no matching crawlable records in this bounded sample."
+        }
+      ],
+      "fetchSuccess": false,
+      "listingSuccess": false,
+      "extractionSuccess": null,
+      "lastSuccessfulIngestion": null,
+      "dateWindowCorrectness": "NOT_VERIFIED",
+      "paginationCorrectness": "NOT_VERIFIED",
+      "freshness": "NOT_VERIFIED",
+      "blockReason": "TLS_CERTIFICATE_FAILURE",
+      "datePrecision": [],
+      "sample": []
+    },
+    {
+      "source": "regulator-cci",
+      "startedAt": "2026-09-06T12:59:41.240Z",
+      "checkedAt": "2026-09-06T12:59:42.214Z",
+      "status": "discovery_only",
+      "discovered": 3,
+      "directoryEntries": 0,
+      "datedRecords": 3,
+      "pdfLinks": 3,
+      "newestPublication": "2026-08-19",
+      "pdfQuality": "not_checked",
+      "errors": [],
+      "diagnostics": [],
+      "fetchSuccess": true,
+      "listingSuccess": true,
+      "extractionSuccess": null,
+      "lastSuccessfulIngestion": null,
+      "dateWindowCorrectness": "NOT_VERIFIED",
+      "paginationCorrectness": "NOT_VERIFIED",
+      "freshness": "NOT_VERIFIED",
+      "blockReason": null,
+      "datePrecision": [
+        {
+          "raw": "2026-08-19",
+          "precision": "DAY",
+          "value": "2026-08-19",
+          "date": "2026-08-19"
+        },
+        {
+          "raw": "2025-05-07",
+          "precision": "DAY",
+          "value": "2025-05-07",
+          "date": "2025-05-07"
+        },
+        {
+          "raw": "2025-02-27",
+          "precision": "DAY",
+          "value": "2025-02-27",
+          "date": "2025-02-27"
+        }
+      ],
+      "sample": [
+        {
+          "title": "The Competition Commission of India (Commitment) Amendment Regulations, 2026",
+          "sourceUrl": "https://www.cci.gov.in/public/legal-framwork/regulations/130/0",
+          "pdfUrl": "https://www.cci.gov.in/public/images/legalframeworkregulation/en/the-competition-commission-of-india-commitment-amendment-regulations-20261787115203.pdf",
+          "publicationDate": "2026-08-19"
+        },
+        {
+          "title": "The Competition Commission of India (Determination of Cost of Production) Regulations, 2025",
+          "sourceUrl": "https://www.cci.gov.in/public/legal-framwork/regulations/119/0",
+          "pdfUrl": "https://www.cci.gov.in/public/images/legalframeworkregulation/en/the-competition-commission-of-india-determination-of-cost-of-production-regulations-20251746632138.pdf",
+          "publicationDate": "2025-05-07"
+        },
+        {
+          "title": "The Competition Commission of India (Manner of Recovery of Monetary Penalty) Regulations, 2025",
+          "sourceUrl": "https://www.cci.gov.in/public/legal-framwork/regulations/117/0",
+          "pdfUrl": "https://www.cci.gov.in/public/images/legalframeworkregulation/en/gazette-notification1740654658.pdf",
+          "publicationDate": "2025-02-27"
+        }
+      ]
+    },
+    {
+      "source": "regulator-nclt",
+      "startedAt": "2026-09-06T12:59:42.215Z",
+      "checkedAt": "2026-09-06T12:59:43.863Z",
+      "status": "needs_repair",
+      "discovered": 0,
+      "directoryEntries": 0,
+      "datedRecords": 0,
+      "pdfLinks": 0,
+      "newestPublication": null,
+      "pdfQuality": "not_checked",
+      "errors": [],
+      "diagnostics": [
+        {
+          "type": "blocked",
+          "collection": "nclt-orders",
+          "message": "NCLT order search requires CAPTCHA interaction; automated collection is intentionally disabled."
+        }
+      ],
+      "fetchSuccess": true,
+      "listingSuccess": false,
+      "extractionSuccess": null,
+      "lastSuccessfulIngestion": null,
+      "dateWindowCorrectness": "NOT_VERIFIED",
+      "paginationCorrectness": "NOT_VERIFIED",
+      "freshness": "NOT_VERIFIED",
+      "blockReason": "CAPTCHA_BLOCK",
+      "datePrecision": [],
+      "sample": []
+    },
+    {
+      "source": "research-ceew",
+      "startedAt": "2026-09-06T12:59:45.176Z",
+      "checkedAt": "2026-09-06T12:59:48.371Z",
+      "status": "discovery_only",
+      "discovered": 1,
+      "directoryEntries": 0,
+      "datedRecords": 0,
+      "pdfLinks": 1,
+      "newestPublication": null,
+      "pdfQuality": "not_checked",
+      "errors": [],
+      "diagnostics": [
+        {
+          "type": "empty-source",
+          "message": "No downloadable document found on https://www.ceew.in/publications/criticality-country-specific-scenarios-inform-transition-risk-assessment-financial"
+        },
+        {
+          "type": "empty-source",
+          "message": "No downloadable document found on https://www.ceew.in/publications/chapter-8-paris-consistent-cdr-scenarios"
+        }
+      ],
+      "fetchSuccess": true,
+      "listingSuccess": true,
+      "extractionSuccess": null,
+      "lastSuccessfulIngestion": null,
+      "dateWindowCorrectness": "NOT_VERIFIED",
+      "paginationCorrectness": "NOT_VERIFIED",
+      "freshness": "NOT_VERIFIED",
+      "blockReason": "UNKNOWN",
+      "datePrecision": [
+        {
+          "raw": "September 2026",
+          "precision": "MONTH",
+          "value": "2026-09",
+          "date": null
+        }
+      ],
+      "sample": [
+        {
+          "title": "A Global Mission LiFEMitigation Potential of Behavioural Change in Passenger Transport in G20 Countries September 2026 | Issue Brief Rohini Dikshit, Chetna Arora , Pallavi Das, Vaibhav Chaturvedi",
+          "sourceUrl": "https://www.ceew.in/publications/mission-life-behaviour-change-passenger-transport-g20",
+          "pdfUrl": "https://www.ceew.in/sites/default/files/ceew-mission-life-behaviour-change-passenger-transport-g20.pdf",
+          "publicationDate": null
+        }
+      ]
+    },
+    {
+      "source": "research-university-apu",
+      "startedAt": "2026-09-06T12:59:49.648Z",
+      "checkedAt": "2026-09-06T12:59:49.863Z",
+      "status": "needs_repair",
+      "discovered": 0,
+      "directoryEntries": 0,
+      "datedRecords": 0,
+      "pdfLinks": 0,
+      "newestPublication": null,
+      "pdfQuality": "not_checked",
+      "errors": [
+        {
+          "stage": "listing",
+          "collection": "academic-research",
+          "page": 0,
+          "message": "robots.txt disallows catalog fetch: https://publications.azimpremjiuniversity.edu.in/cgi/latest"
+        }
+      ],
+      "diagnostics": [
+        {
+          "type": "error",
+          "collection": "academic-research",
+          "message": "The official listing exposed no matching public records."
+        }
+      ],
+      "fetchSuccess": false,
+      "listingSuccess": false,
+      "extractionSuccess": null,
+      "lastSuccessfulIngestion": null,
+      "dateWindowCorrectness": "NOT_VERIFIED",
+      "paginationCorrectness": "NOT_VERIFIED",
+      "freshness": "NOT_VERIFIED",
+      "blockReason": "ROBOTS_BLOCK",
+      "datePrecision": [],
+      "sample": []
+    },
+    {
+      "source": "union-budget",
+      "startedAt": "2026-09-06T12:59:49.864Z",
+      "checkedAt": "2026-09-06T12:59:50.795Z",
+      "status": "discovery_only",
+      "discovered": 3,
+      "directoryEntries": 0,
+      "datedRecords": 0,
+      "pdfLinks": 3,
+      "newestPublication": null,
+      "pdfQuality": "not_checked",
+      "errors": [],
+      "diagnostics": [],
+      "fetchSuccess": true,
+      "listingSuccess": true,
+      "extractionSuccess": null,
+      "lastSuccessfulIngestion": null,
+      "dateWindowCorrectness": "NOT_VERIFIED",
+      "paginationCorrectness": "NOT_VERIFIED",
+      "freshness": "NOT_VERIFIED",
+      "blockReason": null,
+      "datePrecision": [
+        {
+          "raw": null,
+          "precision": "UNKNOWN",
+          "value": null,
+          "date": null
+        },
+        {
+          "raw": null,
+          "precision": "UNKNOWN",
+          "value": null,
+          "date": null
+        },
+        {
+          "raw": null,
+          "precision": "UNKNOWN",
+          "value": null,
+          "date": null
+        }
+      ],
+      "sample": [
+        {
+          "title": "Budget Highlights (Key Features)",
+          "sourceUrl": "https://www.indiabudget.gov.in/doc/bh1.pdf",
+          "pdfUrl": "https://www.indiabudget.gov.in/doc/bh1.pdf",
+          "publicationDate": null
+        },
+        {
+          "title": "Budget Speech",
+          "sourceUrl": "https://www.indiabudget.gov.in/doc/Budget_Speech.pdf",
+          "pdfUrl": "https://www.indiabudget.gov.in/doc/Budget_Speech.pdf",
+          "publicationDate": null
+        },
+        {
+          "title": "Key to Budget Document, 2026",
+          "sourceUrl": "https://www.indiabudget.gov.in/doc/Key_to_Budget_Document_2026.pdf",
+          "pdfUrl": "https://www.indiabudget.gov.in/doc/Key_to_Budget_Document_2026.pdf",
+          "publicationDate": null
+        }
+      ]
+    },
+    {
+      "source": "cag-reports",
+      "startedAt": "2026-09-06T12:59:50.795Z",
+      "checkedAt": "2026-09-06T12:59:56.575Z",
+      "status": "discovery_only",
+      "discovered": 3,
+      "directoryEntries": 0,
+      "datedRecords": 1,
+      "pdfLinks": 3,
+      "newestPublication": "2024-03-31",
+      "pdfQuality": "not_checked",
+      "errors": [],
+      "diagnostics": [],
+      "fetchSuccess": true,
+      "listingSuccess": true,
+      "extractionSuccess": null,
+      "lastSuccessfulIngestion": null,
+      "dateWindowCorrectness": "NOT_VERIFIED",
+      "paginationCorrectness": "NOT_VERIFIED",
+      "freshness": "NOT_VERIFIED",
+      "blockReason": null,
+      "datePrecision": [
+        {
+          "raw": null,
+          "precision": "UNKNOWN",
+          "value": null,
+          "date": null
+        },
+        {
+          "raw": "31 March 2024",
+          "precision": "DAY",
+          "value": "2024-03-31",
+          "date": "2024-03-31"
+        },
+        {
+          "raw": null,
+          "precision": "UNKNOWN",
+          "value": null,
+          "date": null
+        }
+      ],
+      "sample": [
+        {
+          "title": "Report No. 2 of 2026 - Report of the Comptroller and Auditor General of India on State Finances for the Year 2024-25 - Government of Nagaland",
+          "sourceUrl": "https://cag.gov.in/en/audit-report/details/126325",
+          "pdfUrl": "https://cag.gov.in/uploads/download_audit_report/2026/SFAR-State-Finance-Audit-Report-2024-25---NAGALAND-06a99a7f57720f8.02148608.pdf",
+          "publicationDate": null
+        },
+        {
+          "title": "Report No. 1 of 2026 - Report of the Comptroller and Auditor General of India on Social (including Local Governments Audit), Economic, General and Revenue Sectors for the year ended 31 March 2024",
+          "sourceUrl": "https://cag.gov.in/en/audit-report/details/126309",
+          "pdfUrl": "https://cag.gov.in/uploads/download_audit_report/2026/Social-and-Economic-Sectors-Cover-NAGALAND---2024-06a99a3cfc0ccd5.76015225.pdf",
+          "publicationDate": "2024-03-31"
+        },
+        {
+          "title": "Report of the Comptroller and Auditor General of India on State Finances for the year 2024-25 Government of Himachal Pradesh Report No. 2 of 2026 (State Finances Audit Report)",
+          "sourceUrl": "https://cag.gov.in/en/audit-report/details/126303",
+          "pdfUrl": "https://cag.gov.in/uploads/download_audit_report/2026/HP-Report-No-2-of-2026-SFAR-2024-25-English-06a995015d08ee1.68791217.pdf",
+          "publicationDate": null
+        }
+      ]
+    },
+    {
+      "source": "ministry-home-circulars",
+      "startedAt": "2026-09-06T12:59:56.575Z",
+      "checkedAt": "2026-09-06T12:59:57.394Z",
+      "status": "discovery_only",
+      "discovered": 3,
+      "directoryEntries": 0,
+      "datedRecords": 3,
+      "pdfLinks": 3,
+      "newestPublication": "2026-08-27",
+      "pdfQuality": "not_checked",
+      "errors": [],
+      "diagnostics": [],
+      "fetchSuccess": true,
+      "listingSuccess": true,
+      "extractionSuccess": null,
+      "lastSuccessfulIngestion": null,
+      "dateWindowCorrectness": "NOT_VERIFIED",
+      "paginationCorrectness": "NOT_VERIFIED",
+      "freshness": "NOT_VERIFIED",
+      "blockReason": null,
+      "datePrecision": [
+        {
+          "raw": "2026-08-27",
+          "precision": "DAY",
+          "value": "2026-08-27",
+          "date": "2026-08-27"
+        },
+        {
+          "raw": "2026-08-24",
+          "precision": "DAY",
+          "value": "2026-08-24",
+          "date": "2026-08-24"
+        },
+        {
+          "raw": "2026-08-18",
+          "precision": "DAY",
+          "value": "2026-08-18",
+          "date": "2026-08-18"
+        }
+      ],
+      "sample": [
+        {
+          "title": "Fixing the life of Tyres fitted with different types of Vehicles/Equpment and plant etc. of CAPFs.",
+          "sourceUrl": "https://www.mha.gov.in/sites/default/files/FixingTyresfittedCAPFS_27082026.pdf",
+          "pdfUrl": "https://www.mha.gov.in/sites/default/files/FixingTyresfittedCAPFS_27082026.pdf",
+          "publicationDate": "2026-08-27"
+        },
+        {
+          "title": "End of Tenure Leave in r/o Shri Deepak Kumar,IDAS(2010), Director, M/o Home Affairs.",
+          "sourceUrl": "https://www.mha.gov.in/sites/default/files/RelievingDeepakDirOrder_24082026.pdf",
+          "pdfUrl": "https://www.mha.gov.in/sites/default/files/RelievingDeepakDirOrder_24082026.pdf",
+          "publicationDate": "2026-08-24"
+        },
+        {
+          "title": "Observance of Vigilance Awareness week, 2026-reg",
+          "sourceUrl": "https://www.mha.gov.in/sites/default/files/Circular_18082026.pdf",
+          "pdfUrl": "https://www.mha.gov.in/sites/default/files/Circular_18082026.pdf",
+          "publicationDate": "2026-08-18"
+        }
+      ]
+    },
+    {
+      "source": "ministry-home-notifications",
+      "startedAt": "2026-09-06T12:59:57.395Z",
+      "checkedAt": "2026-09-06T12:59:58.207Z",
+      "status": "discovery_only",
+      "discovered": 3,
+      "directoryEntries": 0,
+      "datedRecords": 3,
+      "pdfLinks": 3,
+      "newestPublication": "2019-05-23",
+      "pdfQuality": "not_checked",
+      "errors": [],
+      "diagnostics": [],
+      "fetchSuccess": true,
+      "listingSuccess": true,
+      "extractionSuccess": null,
+      "lastSuccessfulIngestion": null,
+      "dateWindowCorrectness": "NOT_VERIFIED",
+      "paginationCorrectness": "NOT_VERIFIED",
+      "freshness": "NOT_VERIFIED",
+      "blockReason": null,
+      "datePrecision": [
+        {
+          "raw": "21/09/2005",
+          "precision": "DAY",
+          "value": "2005-09-21",
+          "date": "2005-09-21"
+        },
+        {
+          "raw": "23/05/2019",
+          "precision": "DAY",
+          "value": "2019-05-23",
+          "date": "2019-05-23"
+        },
+        {
+          "raw": "18/10/2011",
+          "precision": "DAY",
+          "value": "2011-10-18",
+          "date": "2011-10-18"
+        }
+      ],
+      "sample": [
+        {
+          "title": "Delimitation of Council Constituencies Telangan, order 2015.",
+          "sourceUrl": "https://www.mha.gov.in/sites/default/files/Noti257E_191015_0.PDF",
+          "pdfUrl": "https://www.mha.gov.in/sites/default/files/Noti257E_191015_0.PDF",
+          "publicationDate": "2005-09-21"
+        },
+        {
+          "title": "Declaration of \"Jamaat-ul-Mujahideen Bangladesh \" as Terriost Organisation.",
+          "sourceUrl": "https://www.mha.gov.in/sites/default/files/Notification_28052019.pdf",
+          "pdfUrl": "https://www.mha.gov.in/sites/default/files/Notification_28052019.pdf",
+          "publicationDate": "2019-05-23"
+        },
+        {
+          "title": "The National Disaster Response Force, Group 'A', Gazetted, Combatised Posts Recruitment Rules 2011",
+          "sourceUrl": "https://www.mha.gov.in/sites/default/files/Y_2011GSR764%20%28E%29_H_22012018.PDF",
+          "pdfUrl": "https://www.mha.gov.in/sites/default/files/Y_2011GSR764%20%28E%29_H_22012018.PDF",
+          "publicationDate": "2011-10-18"
+        }
+      ]
+    },
+    {
+      "source": "ministry-education-notices",
+      "startedAt": "2026-09-06T12:59:58.207Z",
+      "checkedAt": "2026-09-06T12:59:59.047Z",
+      "status": "no_records_found",
+      "discovered": 0,
+      "directoryEntries": 0,
+      "datedRecords": 0,
+      "pdfLinks": 0,
+      "newestPublication": null,
+      "pdfQuality": "not_checked",
+      "errors": [],
+      "diagnostics": [
+        {
+          "type": "empty-source",
+          "collection": "circulars-orders-notifications",
+          "message": "The official listing exposed no matching public records."
+        }
+      ],
+      "fetchSuccess": true,
+      "listingSuccess": false,
+      "extractionSuccess": null,
+      "lastSuccessfulIngestion": null,
+      "dateWindowCorrectness": "NOT_VERIFIED",
+      "paginationCorrectness": "NOT_VERIFIED",
+      "freshness": "NOT_VERIFIED",
+      "blockReason": "UNKNOWN",
+      "datePrecision": [],
+      "sample": []
+    },
+    {
+      "source": "research-nipfp",
+      "startedAt": "2026-09-06T13:30:31.382Z",
+      "checkedAt": "2026-09-06T13:30:32.713Z",
+      "status": "discovery_only",
+      "discovered": 3,
+      "directoryEntries": 0,
+      "datedRecords": 0,
+      "pdfLinks": 3,
+      "newestPublication": null,
+      "pdfQuality": "not_checked",
+      "errors": [],
+      "diagnostics": [],
+      "fetchSuccess": true,
+      "listingSuccess": true,
+      "extractionSuccess": null,
+      "lastSuccessfulIngestion": null,
+      "dateWindowCorrectness": "NOT_VERIFIED",
+      "paginationCorrectness": "NOT_VERIFIED",
+      "freshness": "NOT_VERIFIED",
+      "blockReason": null,
+      "datePrecision": [
+        {
+          "raw": "2026-06",
+          "precision": "MONTH",
+          "value": "2026-06",
+          "date": null
+        },
+        {
+          "raw": "2026",
+          "precision": "YEAR",
+          "value": "2026",
+          "date": null
+        },
+        {
+          "raw": "2026",
+          "precision": "YEAR",
+          "value": "2026",
+          "date": null
+        }
+      ],
+      "sample": [
+        {
+          "title": "Credit Constraints among Unincorporated Enterprises in India: An Empirical Investigation Using Unit-Level ASUSE Data",
+          "sourceUrl": "https://www.nipfp.org.in/publication-index-page/working-paper-index-page/credit-constraints-among-unincorporated-enterprises-in-india-an-empirical-investigation-using-unit-level-asuse-data/",
+          "pdfUrl": "https://www.nipfp.org.in/media/documents/WP_449_2026.pdf",
+          "publicationDate": null
+        },
+        {
+          "title": "Fiscal Consolidation and the 16th Finance Commission: The Federal aspects of India's Union Budget 2026",
+          "sourceUrl": "https://www.nipfp.org.in/publication-index-page/working-paper-index-page/fiscal-consolidation-and-the-16th-finance-commission-the-federal-aspects-of-indias-union-budget-2026/",
+          "pdfUrl": "https://www.nipfp.org.in/media/documents/WP_447_2026.pdf",
+          "publicationDate": null
+        },
+        {
+          "title": "Designing Medium Term Debt Management Strategy (MTDS) for Subnational Debt Management in India",
+          "sourceUrl": "https://www.nipfp.org.in/publication-index-page/working-paper-index-page/designing-medium-term-debt-management-strategy-mtds-for-subnational-debt-management-in-india/",
+          "pdfUrl": "https://www.nipfp.org.in/media/documents/WP_448_2026.pdf",
+          "publicationDate": null
+        }
+      ]
+    },
+    {
+      "source": "research-university-iima",
+      "startedAt": "2026-09-06T13:30:32.713Z",
+      "checkedAt": "2026-09-06T13:30:34.039Z",
+      "status": "needs_repair",
+      "discovered": 0,
+      "directoryEntries": 0,
+      "datedRecords": 0,
+      "pdfLinks": 0,
+      "newestPublication": null,
+      "pdfQuality": "not_checked",
+      "errors": [
+        {
+          "stage": "listing",
+          "collection": "academic-research",
+          "page": 0,
+          "message": "Invalid publication URL"
+        }
+      ],
+      "diagnostics": [
+        {
+          "type": "error",
+          "collection": "academic-research",
+          "message": "The official listing exposed no matching public records."
+        }
+      ],
+      "fetchSuccess": false,
+      "listingSuccess": false,
+      "extractionSuccess": null,
+      "lastSuccessfulIngestion": null,
+      "dateWindowCorrectness": "NOT_VERIFIED",
+      "paginationCorrectness": "NOT_VERIFIED",
+      "freshness": "NOT_VERIFIED",
+      "blockReason": "UNKNOWN",
+      "datePrecision": [],
+      "sample": []
+    },
+    {
+      "source": "research-takshashila",
+      "startedAt": "2026-09-06T13:30:34.040Z",
+      "checkedAt": "2026-09-06T13:30:37.174Z",
+      "status": "discovery_only",
+      "discovered": 3,
+      "directoryEntries": 0,
+      "datedRecords": 3,
+      "pdfLinks": 3,
+      "newestPublication": "2026-09-05",
+      "pdfQuality": "not_checked",
+      "errors": [],
+      "diagnostics": [],
+      "fetchSuccess": true,
+      "listingSuccess": true,
+      "extractionSuccess": null,
+      "lastSuccessfulIngestion": null,
+      "dateWindowCorrectness": "NOT_VERIFIED",
+      "paginationCorrectness": "NOT_VERIFIED",
+      "freshness": "NOT_VERIFIED",
+      "blockReason": null,
+      "datePrecision": [
+        {
+          "raw": "2026-09-05",
+          "precision": "DAY",
+          "value": "2026-09-05",
+          "date": "2026-09-05"
+        },
+        {
+          "raw": "2026-09-05",
+          "precision": "DAY",
+          "value": "2026-09-05",
+          "date": "2026-09-05"
+        },
+        {
+          "raw": "2026-09-03",
+          "precision": "DAY",
+          "value": "2026-09-03",
+          "date": "2026-09-03"
+        }
+      ],
+      "sample": [
+        {
+          "title": "China is Armed for an Age of Protracted Economic Warfare",
+          "sourceUrl": "https://takshashila.org.in/content/publications/20260905-china-economic-warfare.html",
+          "pdfUrl": "https://takshashila.org.in/content/publications/assets/china-economic-warfare-20260905.pdf",
+          "publicationDate": "2026-09-05"
+        },
+        {
+          "title": "The Partner System Repriced",
+          "sourceUrl": "https://takshashila.org.in/content/publications/20260905-the-partner-system-repriced.html",
+          "pdfUrl": "https://takshashila.org.in/content/publications/assets/20260905-the-partner-system-repriced.pdf",
+          "publicationDate": "2026-09-05"
+        },
+        {
+          "title": "China’s Taiwan Tryst and The 2027 Question",
+          "sourceUrl": "https://takshashila.org.in/content/publications/China-Taiwan-2027-20260903.html",
+          "pdfUrl": "https://takshashila.org.in/content/publications/assets/China-Taiwan-2027-20260903.pdf",
+          "publicationDate": "2026-09-03"
+        }
+      ]
+    }
+  ]
+}
