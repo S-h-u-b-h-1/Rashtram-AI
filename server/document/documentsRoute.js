@@ -838,6 +838,7 @@ router.post("/prepare-candidates", generationLimiter, async (req, res) => {
       waitUntil(assertBulkProcessingSafe(getPool()).then(() => runWorkerPool({
         allowedDocumentIds, maxJobs: allowedDocumentIds.length, concurrency: 1,
         sourceConcurrency: 1, discoverGraph: false, recoverStale: false,
+        skipSemantic: true, skipSummary: true,
         // Do not start another document near the function's 300-second limit.
         deadlineAt: Date.now() + 120_000,
       })).catch((error) => console.error("Bounded discovery preparation paused:", error.message)));

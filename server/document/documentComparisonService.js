@@ -796,7 +796,7 @@ const comparisonEvidenceOverlap = (item, citations) => {
   });
 };
 
-const validateComparisonOutput = (generated = {}, citations = []) => {
+const validateComparisonOutput = (generated = {}, citations = [], { requireCompleteSections = false } = {}) => {
   const summary = String(generated.executiveSummary || "").trim();
   const validCitationIds = new Set((citations || []).map((citation) => String(citation.id)));
   const analyticalSections = COMPARISON_SECTION_KEYS.filter((section) =>
@@ -877,7 +877,9 @@ const validateComparisonOutput = (generated = {}, citations = []) => {
   if (!isExtractiveFallback && materialUncited.length) {
     return { valid: false, status: "INSUFFICIENT_EVIDENCE", reason: "UNCITED_ANALYSIS" };
   }
-  if (!isExtractiveFallback && representedDocuments.size < 2) {
+  const expectedDocumentIds = new Set(citations.map((citation) => String(citation.documentId || "")).filter(Boolean));
+  if (!isExtractiveFallback && (representedDocuments.size < 2 ||
+    [...expectedDocumentIds].some((id) => !representedDocuments.has(id)))) {
     return { valid: false, status: "PARTIAL_EVIDENCE", reason: "MISSING_SECOND_DOCUMENT_EVIDENCE" };
   }
   if (!isExtractiveFallback && (!comparativeItems.length || !crossDocumentItem ||
@@ -890,10 +892,13 @@ const validateComparisonOutput = (generated = {}, citations = []) => {
   if (!isExtractiveFallback && rawEvidenceCount > Math.max(1, Math.floor(citedSubstantive.length * 0.65))) {
     return { valid: false, status: "PARTIAL_EVIDENCE", reason: "EXTRACTIVE_ONLY" };
   }
+  const missingSections = COMPARISON_SECTION_KEYS.slice(0, 15).filter((key) =>
+    !citedSubstantive.some((item) => item.section === key) && generated.sectionStatus?.[key] !== "not_applicable");
   return {
     valid: true,
-    status: isExtractiveFallback ? "PARTIAL_EVIDENCE" : "SUCCESS",
-    reason: null,
+    status: isExtractiveFallback || (requireCompleteSections && missingSections.length) ? "PARTIAL_EVIDENCE" : "SUCCESS",
+    reason: requireCompleteSections && missingSections.length ? "INCOMPLETE_SECTIONS" : null,
+    missingSections,
     substantiveSections: [...new Set(substantive.map(({ section }) => section))],
     representedDocuments: [...representedDocuments],
     citedItems,
@@ -1371,7 +1376,32 @@ const createComparison = async (userId, payload, options = {}) => {
       durationMs: Date.now() - startedAt,
     });
   }
-  const outputValidation = validateComparisonOutput(generated, citations);
+  let outputValidation = validateComparisonOutput(generated, citations, { requireCompleteSections: true });
+  if (generated.generationMode === "ai" && Number(generated.repairAttempts || 0) < 1 &&
+      (!outputValidation.valid || outputValidation.reason === "INCOMPLETE_SECTIONS")) {
+    const repairStartedAt = Date.now();
+    try {
+      let repaired = await generateDocumentComparison({ mode, language, userQuestion, documents: comparisonDocuments,
+        context: [context, graphContext].filter(Boolean).join("\n\n"), allowRepair: false,
+        repairInstructions: `Validation found ${outputValidation.reason}; sections to review: ${(outputValidation.missingSections || []).join(", ")}. Produce cited cross-document synthesis for every supported section. Explicitly mark unsupported sections insufficient_evidence and genuinely inapplicable sections not_applicable. Never fabricate evidence to fill a section.` });
+      repaired = comparisonSectionBackfill({ citations, generated: { ...repaired, generationMode: "ai", repairAttempts: 1 } });
+      const verifiedRepair = flags.citationVerifier ? verifyStructuredComparison(repaired, comparisonEvidence) : { generated: repaired, report: claimVerification };
+      const repairedValidation = validateComparisonOutput(verifiedRepair.generated, citations, { requireCompleteSections: true });
+      // Preserve the first safe result if a repair makes coverage or validity worse.
+      if (repairedValidation.valid && (!outputValidation.valid ||
+          (repairedValidation.missingSections?.length || 0) <= (outputValidation.missingSections?.length || 0))) {
+        generated = verifiedRepair.generated;
+        claimVerification = verifiedRepair.report;
+        outputValidation = repairedValidation;
+      }
+    } catch (error) {
+      console.warn("Comparison repair unavailable:", sanitizeProviderError(error));
+    } finally {
+      generated.repairAttempts = 1;
+      generationLatencyMs += Date.now() - repairStartedAt;
+    }
+  }
+  if (analysisKey && generated.generationMode !== "evidence_abstention") caches.analysis.set(analysisKey, { generated, claimVerification });
   if (!outputValidation.valid) {
     generated = {
       generationMode: "evidence_abstention",
@@ -1419,7 +1449,7 @@ const createComparison = async (userId, payload, options = {}) => {
   ].slice(0, 8);
   const result = {
     ...generated,
-    comparisonSchemaVersion: "comparison-quality-v2",
+    comparisonSchemaVersion: "comparison-quality-v3",
     evidenceSufficiency: sufficiency,
     claimVerification,
     documents: documents.map(
@@ -1638,6 +1668,7 @@ const comparisonAsMarkdown = (comparison) => {
     "# Rashtram AI comparison",
     `Compared documents: ${documents.map((document) => document.title).filter(Boolean).join(" vs ") || "Selected documents"}`,
     `Generated: ${comparison?.createdAt || new Date().toISOString()}`,
+    `Evidence status: ${result.quality?.outputValidation?.status || "Historical output; not revalidated"}. ${result.comparisonSchemaVersion !== "comparison-quality-v3" ? "This saved output uses an older validation contract; review its limitations." : "Review all section limitations before relying on this analysis."}`,
     "",
     "## Executive Summary",
     String(result.executiveSummary || "Insufficient evidence for a complete comparison."),

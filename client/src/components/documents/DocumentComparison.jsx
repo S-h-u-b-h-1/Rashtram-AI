@@ -371,11 +371,10 @@ export function DocumentComparison() {
   const comparisonSections = useMemo(() => SECTION_CONFIG
     .map(([key, title, aliases]) => {
       const sourceKey = aliases.find((alias) => Array.isArray(result?.[alias]) && result[alias].length) || aliases[0];
-      const items = Array.isArray(result?.[sourceKey]) ? result[sourceKey] : [];
+      const items = Array.isArray(result?.[sourceKey]) ? result[sourceKey].filter((item) => itemText(item).trim()) : [];
       const status = result?.sectionStatus?.[key] || (items.some((item) => itemText(item).trim()) ? "available" : "insufficient_evidence");
       return { key, title, items, status };
-    })
-    .filter((section) => section.status !== "not_applicable" || section.items.length), [result]);
+    }), [result]);
   const isFallbackComparison = result?.generationMode === "extractive_fallback";
   const citationMap = useMemo(
     () =>
@@ -646,6 +645,7 @@ export function DocumentComparison() {
             <h3 className="font-serif text-2xl text-[#8f1d2c]">
               Executive summary
             </h3>
+            {(result.quality?.outputValidation?.status !== "SUCCESS" || result.comparisonSchemaVersion !== "comparison-quality-v3") && <p role="status" className="mt-3 rounded-lg bg-[#fffaf0] p-3 text-xs leading-5 text-[#81796e]">This saved comparison has limited evidence coverage or uses an older validation contract. Review the section limitations; it is not a complete legal assessment.</p>}
             <p className="mt-3 whitespace-pre-wrap text-sm leading-7 text-[#514d46]">
               {result.executiveSummary}
             </p>

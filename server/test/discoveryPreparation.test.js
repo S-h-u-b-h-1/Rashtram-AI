@@ -3,6 +3,18 @@ const assert = require("node:assert/strict");
 const { automaticCandidates } = require("../document/discoveryPreparationService");
 const { evaluateBusinessCandidate, inferBusinessSignals, RELEVANCE_TIERS } = require("../document/recommendationService");
 const { comparisonAsMarkdown } = require("../document/documentComparisonService");
+const { validateComparisonOutput } = require("../document/documentComparisonService");
+
+test("a cited comparison with missing analytical sections is partial, not complete", () => {
+  const citations = [{ id: "D1-C1", documentId: "1" }, { id: "D2-C1", documentId: "2" }];
+  const generated = { generationMode: "ai", executiveSummary: "The instruments differ in reporting scope [D1-C1] [D2-C1].",
+    differences: [{ analysis: "D1 differs from D2: D1 addresses reporting while D2 addresses disclosure.", citations: ["D1-C1", "D2-C1"] }] };
+  const result = validateComparisonOutput(generated, citations, { requireCompleteSections: true });
+  assert.equal(result.valid, true);
+  assert.equal(result.status, "PARTIAL_EVIDENCE");
+  assert.ok(result.missingSections.includes("scope"));
+  assert.equal(validateComparisonOutput(generated, [...citations, { id: "D3-C1", documentId: "3" }]).valid, false);
+});
 
 test("automatic preparation preserves relevance order, excludes ready/secondary records and caps at three", () => {
   const items = Array.from({ length: 7 }, (_, id) => ({ id, authorityClass: "PRIMARY_OFFICIAL", relevanceTier: RELEVANCE_TIERS.HIGH, researchReady: false }));

@@ -1540,6 +1540,8 @@ const generateDocumentComparison = async ({
   userQuestion,
   documents,
   context,
+  repairInstructions = "",
+  allowRepair = true,
 }) => {
   const comparisonIntent = classifyAnswerIntent(userQuestion || "Compare the selected documents", {
     task: "comparison",
@@ -1618,6 +1620,7 @@ ${adaptiveLayers}
 Comparison mode: ${mode}
 Response language: ${responseLanguage}
 Focused comparison question: ${userQuestion || "None; provide the requested mode."}
+${repairInstructions ? `One bounded repair is required: ${repairInstructions}` : ""}
 Documents:
 ${JSON.stringify(documents)}
 
@@ -1668,16 +1671,14 @@ ${sourceContext}
         timeoutMs: Number(
           overrides.timeoutMs || process.env.COMPARISON_AI_TIMEOUT_MS || 22_000,
         ),
-        attempts: Number(process.env.COMPARISON_AI_ATTEMPTS || 1),
+        attempts: 1,
         maxQueueWaitMs: Number(
           process.env.COMPARISON_AI_MAX_QUEUE_WAIT_MS || 4_000,
         ),
         maxRetryAfterMs: Number(
           process.env.COMPARISON_AI_MAX_RETRY_AFTER_MS || 0,
         ),
-        maxModels: Number(
-          overrides.maxModels || process.env.COMPARISON_AI_MAX_MODELS || 1,
-        ),
+        maxModels: 1,
         generationConfig: {
           temperature: Number(process.env.COMPARISON_AI_TEMPERATURE || profile.temperature),
           topP: Number(process.env.COMPARISON_AI_TOP_P || profile.topP),
@@ -1692,7 +1693,7 @@ ${sourceContext}
     );
     const rawText = responseText(response);
     try {
-      return parseJsonResponse(rawText);
+      return { ...parseJsonResponse(rawText), repairAttempts: 0 };
     } catch (error) {
       error.comparisonJsonParseFailure = true;
       error.rawComparisonResponse = rawText;
@@ -1707,12 +1708,13 @@ Do not add Markdown. Do not explain the repair.
 Preserve the existing comparison content where possible.
 If a field is broken or incomplete, close it safely or use an empty array.
 The output must be one JSON object with these keys:
-executiveSummary, similarities, differences, keyClauses, stakeholders,
-complianceImpact, timeline, authorityDifferences, impactAssessment,
-keyFindings, suggestedQuestions.
+executiveSummary, purpose, scope, applicability, keyProvisions, similarities,
+differences, obligations, rights, definitions, legalEffect, timeline,
+stakeholderImpact, whatChanged, practicalImplications, keyTakeaways,
+limitations, suggestedQuestions, sectionStatus.
 
 Malformed JSON:
-${String(rawText || "").slice(0, 16_000)}
+${String(rawText || "").slice(0, 48_000)}
 `;
     const response = await runGeneration("generateContent", repairPrompt, {
       useCircuitBreaker: false,
@@ -1728,44 +1730,19 @@ ${String(rawText || "").slice(0, 16_000)}
         temperature: 0,
         responseMimeType: "application/json",
         maxOutputTokens: Number(
-          process.env.COMPARISON_JSON_REPAIR_MAX_OUTPUT_TOKENS || 2_400,
+          process.env.COMPARISON_JSON_REPAIR_MAX_OUTPUT_TOKENS || 6_144,
         ),
       },
     });
-    return parseJsonResponse(responseText(response));
+    return { ...parseJsonResponse(responseText(response)), repairAttempts: 1 };
   };
 
   try {
     return await generate(context);
   } catch (error) {
+    if (!allowRepair) throw error;
     if (error.comparisonJsonParseFailure && error.rawComparisonResponse) {
       return repairJson(error.rawComparisonResponse);
-    }
-    const compactLimit = Number(
-      process.env.COMPARISON_COMPACT_CONTEXT_CHAR_LIMIT || 18_000,
-    );
-    const compactContext = String(context || "").slice(0, compactLimit);
-    if (compactContext && compactContext.length < String(context || "").length) {
-      try {
-        return await generate(compactContext, {
-          timeoutMs: Number(
-            process.env.COMPARISON_COMPACT_AI_TIMEOUT_MS || 8_000,
-          ),
-          maxModels: 2,
-          maxOutputTokens: Number(
-            process.env.COMPARISON_COMPACT_AI_MAX_OUTPUT_TOKENS || 2_400,
-          ),
-        });
-      } catch (compactError) {
-        if (
-          compactError.comparisonJsonParseFailure &&
-          compactError.rawComparisonResponse
-        ) {
-          return repairJson(compactError.rawComparisonResponse);
-        }
-        compactError.cause = error;
-        throw compactError;
-      }
     }
     throw error;
   }
