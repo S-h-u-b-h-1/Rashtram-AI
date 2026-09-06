@@ -1313,7 +1313,9 @@ const getProblemRecommendations = async (userId, payload) => {
   );
   const recommendationGroups = {
     essential: recommendations.filter((item) => item.priority === "essential"),
-    important: recommendations.filter((item) => item.priority === "important"),
+    important: recommendations
+      .filter((item) => item.priority === "important")
+      .slice(0, 8),
     background: [
       ...recommendations.filter((item) => item.priority === "background"),
       ...lowerConfidenceRecommendations,
