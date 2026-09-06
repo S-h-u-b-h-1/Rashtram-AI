@@ -51,3 +51,40 @@ test('mention inside amendment of a different Act does not establish lineage', a
     evidence:[{id:'B',documentId:'2',content:'Amendments to other Acts. The Tribunal under the Example Act, 2023. The Other Act, 2000 shall be amended: section 43A shall be omitted.'}] });
   assert.equal(report.relationship,'NO_VERIFIED_RELATIONSHIP');
 });
+test('bounded findings retain overflow in saved results, regeneration and PDF', async () => {
+  const documents = [{id:'1',title:'A'}, {id:'2',title:'B'}];
+  const evidence = documents.flatMap(d => Array.from({length:16}, (_, i) => ({
+    id:`${d.id}-${i}`, documentId:d.id, chunkIndex:i,
+    content:`The designated authority for category ${String.fromCharCode(65+i)} shall maintain accurate records of all registered applicants.`,
+  })));
+  const report = await buildFindingsV2({documents,evidence});
+  assert.equal(report.findings.length,12);
+  assert.equal(report.additionalFindings.length,4);
+  assert.equal(report.presentation.additionalFindingCount,4);
+  const regenerated = await buildFindingsV2({documents,evidence,previous:report});
+  assert.equal(regenerated.factualFingerprint,report.factualFingerprint);
+  const pdf=comparisonPdfPresentation({result:report}).reportText;
+  assert.ok(pdf.includes('4 additional findings are retained'));
+  for(const f of report.findings) assert.ok(pdf.includes(f.sourceA.excerpt));
+});
+test('explicit provision grouping retains every distinct supporting proposition', async () => {
+  const documents=[{id:'1',title:'A'},{id:'2',title:'B'}];
+  const evidence=documents.flatMap(d=>[
+    {id:`${d.id}-a`,documentId:d.id,section:'7',content:'The authority shall maintain a public register of all applications received.'},
+    {id:`${d.id}-b`,documentId:d.id,section:'7',content:'The authority shall publish an annual report describing its completed activities.'},
+  ]);
+  const report=await buildFindingsV2({documents,evidence});
+  assert.equal(report.findings.length,1);
+  assert.equal(report.findings[0].supportingFindings.length,1);
+  assert.equal(report.presentation.consolidatedCount,1);
+  const regenerated=await buildFindingsV2({documents,evidence,previous:report});
+  assert.equal(regenerated.factualFingerprint,report.factualFingerprint);
+});
+test('new relationship provenance invalidates frozen relationship cache',async()=>{
+  const documents=[{id:'1',title:'A',type:'bill'},{id:'2',title:'B',type:'act'}];
+  const evidence=documents.map(d=>({id:d.id,documentId:d.id,content:'The authority shall maintain a public register of all applications received.'}));
+  const previous=await buildFindingsV2({documents,evidence});
+  const report=await buildFindingsV2({documents,evidence,previous,relationships:[{type:'BILL_TO_ACT',isVerified:true,sourceDocumentId:'1',targetDocumentId:'2'}]});
+  assert.equal(report.relationship,'BILL_TO_ACT');
+  assert.notEqual(report.evidenceHash,previous.evidenceHash);
+});

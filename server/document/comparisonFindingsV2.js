@@ -28,6 +28,34 @@ const source = (citation, excerpt, section) => ({ documentId: String(citation.do
   excerpt, citationIds: [citation.id || citation.citationId] });
 const operationLabel = operation => ({ MODIFY: 'modification', SUBSTITUTE: 'substitution', ADD: 'addition', INSERT: 'insertion', DELETE: 'deletion', REPEAL: 'repeal', RENUMBER: 'renumbering' })[operation] || 'a change';
 
+// Presentation grouping never manufactures a broader proposition. All members
+// remain available as exact source pairs, including those outside the first page.
+const consolidateFindings = candidates => {
+  const groups = new Map();
+  const identity = f => fingerprint([f.relationshipContext, f.findingType,
+    [f.sourceA, f.sourceB].map(s => [s.documentId, propositionKey(s.excerpt), clean(s.excerpt)]).sort()]);
+  const unique = [...new Map(candidates.map(f => [identity(f), f])).values()];
+  for (const f of unique) {
+    const sections = [f.sourceA, f.sourceB].map(s => clean(s.section));
+    // Only explicit provision identifiers justify grouping different sentences.
+    // Broad chapter headings and inferred topical resemblance are insufficient.
+    const provision = sections.every(s => /^(?:(?:section|clause|provision)\s+)?\d+[A-Za-z]?(?:\.[\dA-Za-z]+)*(?:\([\da-z]+\))*$/i.test(s));
+    const key = provision ? JSON.stringify([f.relationshipContext, f.findingType,
+      f.sourceA.documentId, f.sourceB.documentId, sections]) : identity(f);
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(f);
+  }
+  const findings = [...groups.values()].map(members => {
+    members.sort((a, b) => (b.confidenceState === 'VERIFIED') - (a.confidenceState === 'VERIFIED') ||
+      (b.sourceA.excerpt.length + b.sourceB.excerpt.length) - (a.sourceA.excerpt.length + a.sourceB.excerpt.length) || a.id.localeCompare(b.id));
+    return { ...members[0], supportingFindings: members.slice(1) };
+  });
+  findings.sort((a, b) => (b.findingType !== 'SIMILARITY') - (a.findingType !== 'SIMILARITY') ||
+    (b.confidenceState === 'VERIFIED') - (a.confidenceState === 'VERIFIED') || a.id.localeCompare(b.id));
+  return { findings, duplicateCount: candidates.length - unique.length,
+    consolidatedCount: unique.length - findings.length };
+};
+
 // A finding is admissible only when both exact excerpts can be located in the
 // saved evidence and every citation belongs to its declared selected document.
 const validateFinding = (finding, evidence, documentIds) => {
@@ -42,7 +70,7 @@ const validateFinding = (finding, evidence, documentIds) => {
 
 const buildFindingsV2 = async ({ documents, evidence, explain, previous, relationships = [] }) => {
   const ids = documents.map(d => String(d.id));
-  const evidenceHash = fingerprint(evidence.map(c => [String(c.documentId), c.chunkIndex, clean(c.content || c.snippet)]).sort());
+  const evidenceHash = fingerprint([evidence.map(c => [String(c.documentId), c.chunkIndex, clean(c.content || c.snippet)]).sort(), relationships]);
   let findings = [], relationship = 'NO_VERIFIED_RELATIONSHIP', omitted = 0;
   const permittedRelationships = new Set(['BILL_TO_ACT', 'RULE_UNDER_ACT', 'CIRCULAR_UNDER_PARENT', 'SUPERSEDES', 'RELATED_POLICY', 'RELATED_SUBJECT']);
   const verifiedRelationship = documents.length === 2 ? relationships.find(r => r.isVerified === true &&
@@ -51,8 +79,10 @@ const buildFindingsV2 = async ({ documents, evidence, explain, previous, relatio
   // Default regeneration reuses the factual layer. Re-evaluate only if the
   // retrieved evidence changed; never reuse a fact whose excerpts disappeared.
   if (previous?.comparisonSchemaVersion === VERSION && previous.evidenceHash === evidenceHash &&
-      previous.findings.every(f => validateFinding(f, evidence, ids))) {
-    findings = structuredClone(previous.findings).map(f => ({ ...f, significance: '' }));
+      [...previous.findings, ...(previous.additionalFindings || [])].every(f =>
+        [f, ...(f.supportingFindings || [])].every(member => validateFinding(member, evidence, ids)))) {
+    findings = structuredClone([...previous.findings, ...(previous.additionalFindings || [])])
+      .flatMap(f => [f, ...(f.supportingFindings || [])]).map(({ supportingFindings, ...f }) => ({ ...f, significance: '' }));
     relationship = previous.relationship;
     omitted = previous.omittedFindingCount || 0;
   } else {
@@ -110,7 +140,10 @@ const buildFindingsV2 = async ({ documents, evidence, explain, previous, relatio
       return { ...f, sourceA, sourceB, relationshipContext: relationship };
     });
   }
-  const frozen = structuredClone(findings);
+  const consolidation = consolidateFindings(findings);
+  findings = consolidation.findings.slice(0, 12);
+  const additionalFindings = consolidation.findings.slice(12);
+  const frozen = structuredClone([...findings, ...additionalFindings]);
   const explanationStatus = { attempted: false, accepted: 0 };
   if (findings.length && explain) {
     explanationStatus.attempted = true;
@@ -138,7 +171,9 @@ const buildFindingsV2 = async ({ documents, evidence, explain, previous, relatio
   const limitations = [...new Set(findings.flatMap(f => f.limitations))];
   if (omitted) limitations.push(`${omitted} additional provision${omitted === 1 ? ' was' : 's were'} omitted because the available text did not support reliable comparison.`);
   limitations.push('This report compares the cited text; it does not verify current legal applicability.');
-  return { comparisonSchemaVersion: VERSION, findings, relationship, evidenceHash,
+  return { comparisonSchemaVersion: VERSION, findings, additionalFindings, relationship, evidenceHash,
+    presentation: { visibleLimit: 12, additionalFindingCount: additionalFindings.length,
+      duplicateCount: consolidation.duplicateCount, consolidatedCount: consolidation.consolidatedCount },
     structure: documents.map(d => ({ documentId: String(d.id), title: d.title, documentType: d.type,
       publisher: d.authority || d.ministry || null, date: d.publicationDate || null,
       provisions: evidence.filter(c => String(c.documentId) === String(d.id)).map(c => ({

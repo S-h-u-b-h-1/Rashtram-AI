@@ -25,18 +25,27 @@ const excerpt = value => {
 const comparisonPdfPresentation = comparison => {
   const result = comparison.result || {};
   if (result.comparisonSchemaVersion === 'comparison-findings-v2') {
-    const lines = ['## Documents Compared', ...(result.documents || []).map(d => d.title),
+    const allFindings = result.findings || [];
+    const lines = ['## Documents Compared', ...(result.documents || []).map(d =>
+      [d.title, d.type, d.authority || d.ministry, d.publicationDate || d.year].filter(Boolean).join(' · ')),
+      `Relationship: ${(result.relationship || 'NO_VERIFIED_RELATIONSHIP').replaceAll('_', ' ')}`,
       '## Executive Summary', result.executiveSummary];
-    for (const f of result.findings || []) {
+    for (const f of allFindings) {
       if (!['VERIFIED', 'SUPPORTED_LIMITED'].includes(f.confidenceState)) continue;
       const amendment = ['AMENDS', 'ADDENDUM_TO'].includes(f.relationshipContext);
       lines.push(`## ${f.title}`, `### ${amendment ? 'Before' : 'Document A'}`, excerpt(f.sourceA.excerpt),
         `[${f.sourceA.citationIds.join(', ')}]`, `### ${amendment ? 'After' : 'Document B'}`, excerpt(f.sourceB.excerpt),
         `[${f.sourceB.citationIds.join(', ')}]`, '### Comparison', f.verifiedComparison);
       if (f.significance) lines.push('### Why it matters', f.significance);
+      for (const member of f.supportingFindings || []) lines.push('### Supporting evidence',
+        member.sourceA.excerpt, `[${member.sourceA.citationIds.join(', ')}]`,
+        member.sourceB.excerpt, `[${member.sourceB.citationIds.join(', ')}]`, member.verifiedComparison);
     }
+    if (result.additionalFindings?.length) lines.push('## Additional findings',
+      `${result.additionalFindings.length} additional findings are retained in this saved comparison. Open “Additional verified findings” in the app to review them. This PDF contains the primary findings, not the expanded appendix.`);
     lines.push('## Limitations', ...(result.limitations || []), '## Sources');
-    const used = new Set((result.findings || []).flatMap(f => [...f.sourceA.citationIds, ...f.sourceB.citationIds]));
+    const used = new Set(allFindings.flatMap(f => [f, ...(f.supportingFindings || [])])
+      .flatMap(f => [...f.sourceA.citationIds, ...f.sourceB.citationIds]));
     for (const c of result.citations || []) if (used.has(c.id || c.citationId)) lines.push(
       `[${c.id || c.citationId}] ${c.documentTitle || c.title || 'Source'}${c.pageStart ? ` — page ${c.pageStart}` : ''}`,
       c.canonicalSourceUrl || c.sourceUrl || c.pdfUrl || 'Source URL unavailable.');
