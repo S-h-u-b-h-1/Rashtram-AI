@@ -5,9 +5,9 @@ const configureUnicodeFonts = (pdf) => {
   const fonts = path.join(__dirname, "../assets/fonts");
   // This Noto release includes Latin and Devanagari in the same font, so mixed
   // text retains complete shaping runs and requires no text/font interception.
-  pdf.registerFont("Helvetica", path.join(fonts, "NotoSansDevanagari-Regular.ttf"));
-  pdf.registerFont("Helvetica-Bold", path.join(fonts, "NotoSansDevanagari-Bold.ttf"));
-  pdf.registerFont("Times-Bold", path.join(fonts, "NotoSansDevanagari-Bold.ttf"));
+  pdf.registerFont("Rashtram-Regular", path.join(fonts, "NotoSansDevanagari-Regular.ttf"));
+  pdf.registerFont("Rashtram-Bold", path.join(fonts, "NotoSansDevanagari-Bold.ttf"));
+  pdf.registerFont("Rashtram-Display", path.join(fonts, "NotoSansDevanagari-Bold.ttf"));
 };
 
 const compact = (value) =>
@@ -90,24 +90,24 @@ const renderReportText = (pdf, text) => {
       if (pdf.y > pdf.page.height - pdf.page.margins.bottom - 85) pdf.addPage();
       pdf
         .moveDown(0.35)
-        .font("Helvetica-Bold")
+        .font("Rashtram-Bold")
         .fontSize(heading[1].length === 1 ? 16 : 13)
         .fillColor("#8f1d2c")
-        .text(heading[2], { lineGap: 2 })
+        .text(heading[2], { lineGap: 2, lineBreak: true, width: 487 })
         .moveDown(0.2);
       continue;
     }
     const bullet = line.match(/^[-*]\s+(.+)$/);
     if (bullet) {
       pdf
-        .font("Helvetica")
+        .font("Rashtram-Regular")
         .fontSize(10.5)
         .fillColor("#29312d");
       writeWrappedText(pdf, `• ${bullet[1]}`, { indent: 12, lineGap: 3 });
       continue;
     }
     pdf
-      .font("Helvetica")
+      .font("Rashtram-Regular")
       .fontSize(10.5)
       .fillColor("#29312d");
     writeWrappedText(pdf, line, { lineGap: 3 });
@@ -124,7 +124,8 @@ const createResearchBriefPdf = ({
 }) => new Promise((resolve, reject) => {
   const pdf = new PDFDocument({
     size: "A4",
-    margins: { top: 54, right: 54, bottom: 54, left: 54 },
+    // Reserve a separate footer band; the footer baseline is at y=775.
+    margins: { top: 54, right: 54, bottom: 88, left: 54 },
     bufferPages: true,
     info: {
       Title: `${title || "Research report"} — Rashtram AI`,
@@ -139,19 +140,19 @@ const createResearchBriefPdf = ({
   pdf.on("error", reject);
 
   pdf
-    .font("Helvetica-Bold")
+    .font("Rashtram-Bold")
     .fontSize(10)
     .fillColor("#8f1d2c")
     .text("RASHTRAM AI · EVIDENCE-GROUNDED RESEARCH", { characterSpacing: 1.1 });
   pdf.moveDown(0.8);
   pdf
-    .font("Times-Bold")
+    .font("Rashtram-Display")
     .fontSize(23)
     .fillColor("#8f1d2c")
     .text(compact(title) || "Research brief", { lineGap: 3 });
   pdf.moveDown(0.45);
   pdf
-    .font("Helvetica")
+    .font("Rashtram-Regular")
     .fontSize(9)
     .fillColor("#706a61")
     .text([
@@ -169,7 +170,7 @@ const createResearchBriefPdf = ({
   if (citedSources.length) {
     pdf.addPage();
     pdf
-      .font("Times-Bold")
+      .font("Rashtram-Display")
       .fontSize(18)
       .fillColor("#8f1d2c")
       .text("Cited evidence");
@@ -183,13 +184,13 @@ const createResearchBriefPdf = ({
         source.clause ? `Clause ${source.clause}` : null,
       ].filter(Boolean).join(" · ");
       pdf
-        .font("Helvetica-Bold")
+        .font("Rashtram-Bold")
         .fontSize(9.5)
-        .fillColor("#8f1d2c")
-        .text(`${source.citationId || index + 1}. ${location || "Retrieved source passage"}`);
+        .fillColor("#8f1d2c");
+      writeWrappedText(pdf, `${source.citationId || index + 1}. ${location || "Retrieved source passage"}`, { lineGap: 1 });
       if (source.content) {
         pdf
-          .font("Helvetica")
+          .font("Rashtram-Regular")
           .fontSize(9)
           .fillColor("#29312d");
         writeWrappedText(pdf, completeEvidence ? compact(source.content) : compact(source.content).slice(0, 900), { lineGap: 2 });
@@ -197,7 +198,7 @@ const createResearchBriefPdf = ({
       const sourceUrl = source.sourceUrl || source.pdfUrl;
       if (sourceUrl) {
         pdf
-          .font("Helvetica")
+          .font("Rashtram-Regular")
           .fontSize(8)
           .fillColor("#874047");
         writeWrappedText(pdf, completeEvidence ? String(sourceUrl) : String(sourceUrl).slice(0, 1_500), { link: sourceUrl, underline: true });
@@ -209,8 +210,10 @@ const createResearchBriefPdf = ({
   const pageRange = pdf.bufferedPageRange();
   for (let index = 0; index < pageRange.count; index += 1) {
     pdf.switchToPage(index);
+    const bodyBottomMargin = pdf.page.margins.bottom;
+    pdf.page.margins.bottom = 0;
     pdf
-      .font("Helvetica")
+      .font("Rashtram-Regular")
       .fontSize(8)
       .fillColor("#8a8277")
       .text(
@@ -219,6 +222,7 @@ const createResearchBriefPdf = ({
         775,
         { align: "center", width: 487, lineBreak: false },
       );
+    pdf.page.margins.bottom = bodyBottomMargin;
   }
   pdf.end();
 });

@@ -54,6 +54,8 @@ export function StudioPanel({ document = {}, catalogueSources, summary, notes = 
     <div className="flex items-center justify-between px-4 py-3"><h2 className="text-sm font-semibold text-[#29312d]">Studio</h2>{onCollapse && <button type="button" onClick={onCollapse} className="hidden h-11 w-11 place-items-center rounded-lg text-[#706a61] lg:grid" aria-label="Collapse research tools"><PanelRightClose className="h-4 w-4" /></button>}</div>
     <div className="px-3 pb-4">
       <h3 className="px-3 text-xs font-semibold text-[#706a61]">Create</h3>
+      {disabled && <p role="status" className="px-3 py-2 text-xs leading-5 text-[#706a61]">Creation tools are unavailable while sources are preparing or a response is running. Select a ready source and wait for the current operation to finish.</p>}
+      {!disabled && !onRunWorkflow && <p className="px-3 py-2 text-xs leading-5 text-[#706a61]">Summary and guided research require an active chat workspace.</p>}
       <div className="mt-2 grid grid-cols-2 gap-1">
         <button type="button" disabled={disabled || !onRunWorkflow} className={actionClass} onClick={() => runWorkflow(workflows.find((item) => item.id === 'executive_brief'))}><FileText className="h-4 w-4 shrink-0 text-[#8f1d2c]" />Summary</button>
         <button type="button" disabled={disabled || !canCompare} title={canCompare ? 'Compare selected Library documents' : 'Select at least two comparison-ready Library documents'} className={actionClass} onClick={() => router.push(`/app/compare?ids=${documentIds.join(',')}`)}><GitCompareArrows className="h-4 w-4 shrink-0 text-[#8f1d2c]" />Comparison</button>

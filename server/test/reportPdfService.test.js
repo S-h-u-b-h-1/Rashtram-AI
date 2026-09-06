@@ -64,4 +64,7 @@ test("mixed Hindi and Latin export retains Indic shaping without a font error", 
   const pdf = await createResearchBriefPdf({ title: "हिन्दी और English — ₹1,000",
     reportText: "# निष्कर्ष / Findings\nभारत में डेटा संरक्षण आवश्यक है। [C1]" });
   assert.equal(pdf.subarray(0, 5).toString("latin1"), "%PDF-");
+  const parsed = await require("pdf-parse")(pdf);
+  assert.match(parsed.text, /भारत/);
+  assert.match(parsed.text, /English/);
 });
