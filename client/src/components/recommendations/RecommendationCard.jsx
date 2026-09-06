@@ -9,7 +9,6 @@ import {
   GitCompareArrows,
   Landmark,
   Loader2,
-  ShieldCheck,
 } from "lucide-react";
 import {
   canPrepareForResearch,
@@ -17,10 +16,11 @@ import {
   comparisonHrefForDocuments,
   useComparison,
 } from "@/context/ComparisonContext";
-import { trackActivity } from "@/lib/api";
+import { getDocumentReadiness, trackActivity } from "@/lib/api";
 import { formatDate, humanize } from "@/lib/document-links";
 import {
   compareActionState,
+  recommendationReadinessLabel,
   recommendationResearchHref,
 } from "./recommendation-utils.mjs";
 
@@ -44,8 +44,9 @@ export function RecommendationCard({
   const disabledReason = comparisonDisabledReason(recommendation);
   const canPrepare = canPrepareForResearch(recommendation);
   const confidence = recommendation.confidence || "medium";
+  const needsReadinessCheck = recommendation.researchReady && Boolean(disabledReason) && !selected;
   const compareAction = compareActionState(
-    canPrepare ? "" : disabledReason,
+    canPrepare || needsReadinessCheck ? "" : disabledReason,
     selected,
   );
   const documentType = humanize(
@@ -88,17 +89,13 @@ export function RecommendationCard({
         </span>
         <span
           className="inline-flex items-center gap-1 rounded-full bg-[#eee0dc] px-2.5 py-1 text-[9px] font-bold capitalize text-[#8f1d2c]"
-          title={`${Math.round(Number(recommendation.score || 0) * 100)}% recommendation score`}
         >
-          <ShieldCheck className="h-3 w-3" />
-          {recommendation.researchReady
-            ? `${confidence} · research ready`
-            : `${confidence} · preparation required`}
+          {recommendationReadinessLabel(recommendation, preparing)}
         </span>
       </div>
       <div className="mt-4 flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <h3 className="line-clamp-3 text-[15px] font-semibold leading-6 text-[#29312d]">
+          <h3 className="[overflow-wrap:anywhere] text-[15px] font-semibold leading-6 text-[#29312d]">
             {recommendation.title}
           </h3>
         </div>
@@ -134,36 +131,25 @@ export function RecommendationCard({
       {(!compact || recommendation.graphRelationship) && (
         <div className="mt-4 border-l-2 border-[#c1a06f]/55 pl-3">
           <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-[#874047]">
-            Why this matches
+            Why this matters
           </p>
-          <p className="mt-1 line-clamp-3 text-xs leading-5 text-[#625d55]">
+          <p className="mt-1 text-xs leading-5 text-[#625d55]">
             {recommendation.whyThisMatters || recommendation.reason || "Recommended from your recent research context."}
           </p>
         </div>
       )}
       {recommendation.focusAreas?.length > 0 && (
         <p className="mt-3 text-[10px] leading-4 text-[#81796e]">
-          <span className="font-bold uppercase tracking-[0.1em] text-[#874047]">Focus on:</span>{" "}
+          <span className="font-bold uppercase tracking-[0.1em] text-[#874047]">What to focus on:</span>{" "}
           {recommendation.focusAreas.join(" · ")}
         </p>
       )}
-      {recommendation.signals?.length > 0 && (
-        <div className="mt-3 flex flex-wrap gap-1.5">
-          {recommendation.signals.slice(0, 4).map((signal) => (
-            <span
-              key={signal}
-              className="rounded-full border border-[#8f1d2c]/6 bg-[#f7f2eb] px-2 py-1 text-[9px] font-medium text-[#706a61]"
-            >
-              {humanize(signal.replace(/([a-z])([A-Z])/g, "$1_$2"))}
-            </span>
-          ))}
-        </div>
-      )}
+      <p className="my-3 text-[11px] leading-5 text-[#706a61]">{recommendation.currentnessCaution || "Verify commencement, amendments and current applicability in the source."}</p>
       <div className="mt-auto flex flex-wrap gap-2 border-t border-[#8f1d2c]/7 pt-4">
         <Link
           href={recommendationResearchHref(recommendation)}
           onClick={() => track("recommendation_opened")}
-          className="inline-flex min-h-9 flex-1 items-center justify-center gap-1.5 rounded-xl bg-[#8f1d2c] px-3 py-2 text-[10px] font-semibold text-white transition hover:bg-[#7d1826]"
+          className="inline-flex min-h-11 flex-1 items-center justify-center gap-1.5 rounded-xl bg-[#8f1d2c] px-3 py-2 text-[10px] font-semibold text-white transition hover:bg-[#7d1826]"
         >
           {recommendation.researchReady ? "Research" : "Prepare for Research"}
           <ArrowRight className="h-3 w-3" />
@@ -177,6 +163,17 @@ export function RecommendationCard({
             setPreparing(true);
             setCompareError("");
             try {
+              if (needsReadinessCheck) {
+                const readiness = await getDocumentReadiness(recommendation.id);
+                if (!readiness.comparisonReady) {
+                  setCompareError(readiness.reason || readiness.readinessReason || "This source is ready for research, but comparison retrieval is unavailable.");
+                  return;
+                }
+                const verified = { ...recommendation, comparisonReady: true, researchReady: true, capabilities: { ...recommendation.capabilities, chatReady: true, comparisonReady: true } };
+                const added = onCompare ? await onCompare(verified) : addDocument(verified);
+                if (added?.ok === false) setCompareError(added.reason);
+                return;
+              }
               if (onCompare) {
                 const result = await onCompare(recommendation);
                 if (result?.ok !== false) track("recommendation_added_to_compare");
@@ -217,11 +214,12 @@ export function RecommendationCard({
           )}
           {preparing
             ? "Preparing…"
-            : canPrepare
+            : needsReadinessCheck ? "Check for comparison" : canPrepare
               ? "Prepare & compare"
               : onCompare ? "Compare" : compareAction.label}
         </button>
       </div>
+      {compareAction.disabled && !selected && <p className="mt-2 text-xs leading-5 text-[#706a61]">{disabledReason}</p>}
       {compareError && (
         <p role="alert" className="mt-2 text-[10px] leading-4 text-[#8f1d2c]">
           {compareError}

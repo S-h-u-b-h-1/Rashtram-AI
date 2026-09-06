@@ -10,6 +10,7 @@ export function ChatInput({
   onSend,
   onStop,
   onRegenerate,
+  canRegenerate = false,
   onClear,
   responseLanguage,
   onResponseLanguageChange,
@@ -80,7 +81,9 @@ export function ChatInput({
             <button
               type="button"
               onClick={onRegenerate}
-              disabled={disabled || sending}
+              disabled={disabled || sending || !canRegenerate || !onRegenerate}
+              title={!canRegenerate ? "Ask a question first." : disabled || sending ? "Wait for a ready source and the current response." : "Generate another response to your last question"}
+              aria-describedby={!canRegenerate ? "regenerate-reason" : undefined}
               className="inline-flex min-h-11 min-w-11 justify-center items-center gap-1 rounded-lg px-2 text-[10px] font-semibold text-[#874047] disabled:opacity-40"
               aria-label="Regenerate last response"
             >
@@ -99,6 +102,7 @@ export function ChatInput({
             </button>
           </div>
         </div>
+        {!canRegenerate && <p id="regenerate-reason" className="mt-1 text-[11px] text-[#706a61]">Regenerate: ask a question first.</p>}
       </div>
     </div>
   );

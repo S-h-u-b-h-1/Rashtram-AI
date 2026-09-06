@@ -688,6 +688,7 @@ export function DocumentChatLayout({
             onSend={submitQuestion}
             onStop={stopGeneration}
             onRegenerate={regenerate}
+            canRegenerate={messages.some(message => message.sender === 'user')}
             onClear={clear}
             responseLanguage={responseLanguage}
             onResponseLanguageChange={setResponseLanguage}

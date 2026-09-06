@@ -135,7 +135,7 @@ export function NewResearch() {
     </form>
     <p className="mt-3 text-center text-xs text-[#706a61]">Choose your sources before Rashtram answers. Your research stays private to your account.</p>
     {error && <p role="alert" className="mt-4 rounded-lg bg-[#f4e4e0] p-3 text-sm text-[#85434a]">{error}</p>}
-    <div className="mt-4 grid gap-2 sm:grid-cols-2" aria-label="Quick research actions">
+    <div role="group" className="mt-4 grid gap-2 sm:grid-cols-2" aria-label="Quick research actions">
       <Link href={`/app/policy-drafter?ids=${selected.join(",")}&sources=${readySourceIds.join(",")}`} className="group rounded-xl border border-[#8f1d2c]/12 bg-white px-4 py-3 text-left transition hover:border-[#8f1d2c]/30 hover:bg-[#fffaf0]"><span className="block text-sm font-semibold text-[#8f1d2c]">Draft a policy <ArrowRight className="ml-1 inline h-3.5 w-3.5 transition group-hover:translate-x-0.5" /></span><span className="mt-1 block text-xs text-[#706a61]">Turn selected evidence into a policy draft.</span></Link>
       <Link href={`/app/compare?ids=${selected.join(",")}`} className="group rounded-xl border border-[#8f1d2c]/12 bg-white px-4 py-3 text-left transition hover:border-[#8f1d2c]/30 hover:bg-[#fffaf0]"><span className="block text-sm font-semibold text-[#8f1d2c]">Compare documents <ArrowRight className="ml-1 inline h-3.5 w-3.5 transition group-hover:translate-x-0.5" /></span><span className="mt-1 block text-xs text-[#706a61]">Compare two or more research-ready sources.</span></Link>
     </div>
