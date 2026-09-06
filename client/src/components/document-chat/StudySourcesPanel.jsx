@@ -22,8 +22,8 @@ import {
 } from "@/lib/research-upload.mjs";
 
 const sourceLabel = (source) =>
-  source.sourceLabel ||
-  (source.sourceType === "pdf_upload" ? "PDF upload" : "External web source");
+  source.sourceType === "pdf_upload" ? "PDF upload" :
+  source.sourceLabel || "External web source";
 
 export function StudySourcesPanel({
   sources,
@@ -236,6 +236,7 @@ export function StudySourcesPanel({
                       : source.status === "failed" ? "Preparation failed" : "Preparing evidence"}
                   </p>
                   {source.status === "failed" &&
+                    onRetry &&
                     source.metadata?.durableOriginal === true &&
                     source.metadata?.uploadStage === "failed_retryable" && (
                       <button
