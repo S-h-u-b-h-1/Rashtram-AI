@@ -391,7 +391,7 @@ export function DocumentComparison() {
               <button
                 type="button"
                 disabled={!canRunComparison}
-                aria-describedby="comparison-action-reason"
+                aria-describedby={!canRunComparison ? "comparison-action-reason" : undefined}
                 onClick={runComparison}
                 className={`rounded-xl px-4 py-2 text-xs font-semibold disabled:opacity-50 ${result ? "bg-[#8f1d2c] text-white" : "bg-[#fffaf0] text-[#8f1d2c]"}`}
               >
