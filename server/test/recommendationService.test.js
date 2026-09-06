@@ -3,10 +3,13 @@ const assert = require("node:assert/strict");
 
 const {
   RELEVANCE_TIERS,
+  PREMISE_CLASSES,
   authorityLabel,
   buildProblemUnderstanding,
+  buildProblemSearchPlan,
   buildResearchPlan,
   classifyProblemIntent,
+  classifyProblemPremise,
   confidenceForScore,
   evaluateBusinessCandidate,
   hasDocumentSummarySubjectOverlap,
@@ -265,6 +268,52 @@ test("business signals expand regulated activities without generic policy noise"
   assert.ok(signals.jurisdictions.includes("Gujarat"));
   assert.ok(signals.expansions.includes("EPR"));
   assert.ok(signals.regulators.includes("CPCB"));
+});
+
+test("natural-language legal problems become a bounded multi-query catalogue plan", () => {
+  const input = {
+    problem: "An NBFC in West Bengal needs RBI registration and capital requirements before starting lending.",
+    states: [],
+  };
+  const inferred = inferBusinessSignals(input);
+  const plan = buildProblemSearchPlan(input, inferred);
+  assert.ok(plan.concepts.some((value) => /registration/i.test(value)));
+  assert.ok(plan.regulators.some((value) => /RBI|Reserve Bank/i.test(value)));
+  assert.ok(plan.jurisdictions.includes("West Bengal"));
+  assert.ok(plan.subqueries.length >= 2 && plan.subqueries.length <= 5);
+  assert.ok(plan.subqueries.some((value) => /RBI|Reserve Bank/i.test(value)));
+});
+
+test("named instruments survive interpretation without sending the full sentence as one query", () => {
+  const input = { problem: "A telecom operator needs authorisation provisions under the Telecommunications Act 2023." };
+  const plan = buildProblemSearchPlan(input, inferBusinessSignals(input));
+  assert.ok(plan.likelyTitles.some((value) => /Telecommunications Act 2023/i.test(value)));
+  assert.ok(plan.subqueries.every((value) => value.length < input.problem.length));
+});
+
+test("NBFC, cyber-security and battery problems retain the legal search anchor", () => {
+  const nbfc = buildProblemSearchPlan({ problem: "An NBFC needs RBI registration and capital requirements." });
+  assert.ok(nbfc.likelyTitles.some((value) => /Non-Banking Financial Company/i.test(value)));
+  assert.ok(nbfc.concepts.some((value) => /net owned fund/i.test(value)));
+  const cyber = buildProblemSearchPlan({ problem: "A cloud service must understand CERT-In cybersecurity incident duties." });
+  assert.ok(cyber.subqueries.some((value) => /cyber security/i.test(value)));
+  const battery = buildProblemSearchPlan({ problem: "A battery producer needs EPR under Battery Waste Management Rules." });
+  assert.ok(battery.likelyTitles.some((value) => /^Battery Waste Management Rules/i.test(value)));
+  assert.ok(battery.subqueries.every((value) => !/^A battery producer/i.test(value)));
+});
+
+test("premise gate rejects future, fictional, contradictory and impossible requests", () => {
+  const cases = [
+    ["The Galactic Banana Banking Authority requires NBFC moon licences.", PREMISE_CLASSES.NONSENSICAL],
+    ["Give enacted provisions of India's Digital Lending Act 2099.", PREMISE_CLASSES.UNSUPPORTED],
+    ["Confirm FSSAI grants licences to operate stock exchanges under food safety law.", PREMISE_CLASSES.CONTRADICTORY],
+    ["Find GST registration law enacted by the Indian state of Atlantis.", PREMISE_CLASSES.NONSENSICAL],
+    ["Find the West Bengal notification issued by Odisha government governing only Kolkata shops.", PREMISE_CLASSES.CONTRADICTORY],
+  ];
+  for (const [problem, expected] of cases) {
+    assert.equal(classifyProblemPremise({ problem }).classification, expected);
+  }
+  assert.equal(classifyProblemPremise({ problem: "A trader needs GST registration rules." }).classification, PREMISE_CLASSES.SUPPORTED);
 });
 
 test("jurisdiction and sector mismatch reject attractive but irrelevant distractors", () => {

@@ -31,6 +31,15 @@ const CLAIM_CLASSES = Object.freeze({
   HYPOTHETICAL: "HYPOTHETICAL",
 });
 
+const CURRENT_CLAIM_PATTERNS = Object.freeze([
+  /\bhas not (?:yet )?(?:become|been enacted as) an? act\b/i,
+  /\b(?:is|are|remains?) (?:currently |still )?(?:in force|operative|applicable|pending|active)\b/i,
+  /\bhas been (?:repealed|superseded|amended|enacted|passed)\b/i,
+  /\b(?:currently|presently) requires?\b/i,
+  /\b(?:the )?latest (?:rule|regulation|circular|notification|position|requirement)\b/i,
+  /\bas of (?:today|now|20\d{2})\b/i,
+]);
+
 const matches = (value, expression) => expression.test(String(value || ""));
 
 const classifyAnswerIntent = (question, options = {}) => {
@@ -219,6 +228,36 @@ const enforceFreshnessGuard = (answer, verification = {}) => {
   return alreadyCaveated ? qualified : [warning, "", qualified].filter(Boolean).join("\n");
 };
 
+const detectCurrentStatusClaims = (answer) => {
+  const sentences = String(answer || "").split(/(?<=[.!?])\s+|\n+/).map((value) => value.trim()).filter(Boolean);
+  return sentences.filter((sentence) => {
+    if (/\b(?:in|during|under|according to) (?:19|20)\d{2}\b/i.test(sentence) &&
+        !/\b(?:currently|presently|still|latest|today|now)\b/i.test(sentence)) return false;
+    return CURRENT_CLAIM_PATTERNS.some((pattern) => pattern.test(sentence));
+  });
+};
+
+const qualifyUnverifiedCurrentClaims = (answer, verification = {}) => {
+  const value = String(answer || "").trim();
+  const claims = detectCurrentStatusClaims(value);
+  if (!claims.length) return { answer: value, claims: [], guarded: false };
+  if (verification.status === "VERIFIED_CURRENT") {
+    return { answer: value, claims, guarded: false };
+  }
+  let guarded = value
+    .replace(/\b(?:the )?([A-Z][^.!?\n]{0,100}?\bBill) has not (?:yet )?(?:become|been enacted as) an? Act\b/gi,
+      "The available evidence does not establish whether $1 has become an Act")
+    .replace(/\b(?:it|this (?:act|rule|regulation|notification|policy)) (?:is|remains) (?:currently |still )?in force\b/gi,
+      "its current force could not be verified from the indexed authoritative sources")
+    .replace(/\b(?:it|this (?:rule|regulation|notification|policy)) (?:is|remains) (?:currently |still )?(?:operative|applicable|pending|active)\b/gi,
+      "its current status could not be verified from the indexed authoritative sources");
+  const warning = "Current-status note: the indexed authoritative sources do not fully verify the present enactment, force, repeal, or supersession position.";
+  if (!/current-status note:|current position:|could not verify.*current|current status could not be verified/i.test(guarded)) {
+    guarded = `${warning}\n\n${guarded}`;
+  }
+  return { answer: guarded, claims, guarded: true };
+};
+
 module.exports = {
   ANSWER_INTENTS,
   CLAIM_CLASSES,
@@ -228,7 +267,9 @@ module.exports = {
   classifyFreshness,
   classifyMaterialClaim,
   detectAnswerStyle,
+  detectCurrentStatusClaims,
   enforceFreshnessGuard,
+  qualifyUnverifiedCurrentClaims,
   generationProfileFor,
   requiresCurrentVerification,
 };

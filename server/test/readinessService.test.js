@@ -21,6 +21,7 @@ const {
   buildExtractiveSummary,
   parseSummarySections,
 } = require("../document/documentResearchService");
+const { hasExactSemanticRetrieval, hasPreparatoryResource } = require("../document/readinessContract");
 
 test("PDF failures are classified by permanent and retriable cause", () => {
   const missing = classifyProcessingFailure({
@@ -164,6 +165,57 @@ test("semantic failure does not remove verified lexical research readiness", () 
   assert.equal(mapped.readiness, "research_ready");
   assert.equal(mapped.researchReady, true);
   assert.equal(mapped.semanticReady, false);
+});
+
+test("public semantic readiness fails closed when exact reconciled truth is false", () => {
+  const base = {
+    semanticReady: false,
+    embeddingStatus: "ready",
+    retrievalVerified: true,
+    retrievalMode: "hybrid",
+    embeddingsCount: 2,
+    failureDetails: { semanticRetrievalVerified: true },
+  };
+  assert.equal(hasExactSemanticRetrieval({
+    document: base, chunkCount: 2, textChunkCount: 2, vectorRefs: 2,
+  }), false);
+  assert.equal(hasExactSemanticRetrieval({
+    document: { ...base, semanticReady: true },
+    chunkCount: 2, textChunkCount: 2, vectorRefs: 2,
+  }), true);
+  assert.equal(hasExactSemanticRetrieval({
+    document: { ...base, semanticReady: true, retrievalMode: "local_text" },
+    chunkCount: 2, textChunkCount: 2, vectorRefs: 2,
+  }), false);
+});
+
+test("repository mapping cannot revive reconciled semantic false from stale capability JSON", () => {
+  const mapped = mapDocument({
+    id: 1252,
+    title: "Reconciled lexical record",
+    document_type: "act",
+    canonical_url: "https://example.gov.in/act",
+    research_ready: true,
+    comparison_ready: true,
+    semantic_ready: false,
+    capability_state: { semanticReady: true, searchReady: true, chatReady: true },
+    retrieval_mode: "hybrid",
+    embedding_status: "ready",
+  });
+  assert.equal(mapped.semanticReady, false);
+  assert.equal(mapped.capabilities.semanticReady, false);
+});
+
+test("a SEBI-style catalogue page cannot advertise preparation from an unverified PDF field", () => {
+  const document = {
+    type: "circular",
+    source: "sebi",
+    sourceUrl: "https://www.sebi.gov.in/legal/circulars/example.html",
+    pdfUrl: "https://www.sebi.gov.in/legal/circulars/example.html",
+    hasAccessibleResource: false,
+  };
+  assert.equal(hasPreparatoryResource(document, { has_accessible_resource: false }), false);
+  assert.equal(hasPreparatoryResource(document, { has_accessible_resource: true }), true);
 });
 
 test("document mapping exposes permanent download failures for source-only UI", () => {

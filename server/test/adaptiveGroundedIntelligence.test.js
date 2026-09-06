@@ -10,8 +10,10 @@ const {
   classifyFreshness,
   classifyMaterialClaim,
   detectAnswerStyle,
+  detectCurrentStatusClaims,
   enforceFreshnessGuard,
   generationProfileFor,
+  qualifyUnverifiedCurrentClaims,
   requiresCurrentVerification,
 } = require("../retrieval/adaptiveIntelligenceService");
 const {
@@ -103,6 +105,21 @@ test("freshness guard never lets an unqualified current-status answer escape", (
   );
   assert.doesNotMatch(contradictory, /is currently at/i);
   assert.match(contradictory, /is described in the selected document as at the introduction stage/i);
+});
+
+test("implicit present-status claims are detected and qualified when current evidence is unavailable", () => {
+  const claim = "The Digital Markets Bill has not yet become an Act.";
+  assert.deepEqual(detectCurrentStatusClaims(claim), [claim]);
+  const guarded = qualifyUnverifiedCurrentClaims(claim, { status: "UNVERIFIED" });
+  assert.equal(guarded.guarded, true);
+  assert.match(guarded.answer, /does not establish whether/i);
+  assert.match(guarded.answer, /Current-status note/i);
+  const verified = qualifyUnverifiedCurrentClaims(claim, { status: "VERIFIED_CURRENT" });
+  assert.equal(verified.answer, claim);
+});
+
+test("dated historical statements do not trigger a present-status claim", () => {
+  assert.deepEqual(detectCurrentStatusClaims("According to the 2023 record, the Bill was pending."), []);
 });
 
 test("task profiles keep extraction conservative and synthesis moderately flexible", () => {

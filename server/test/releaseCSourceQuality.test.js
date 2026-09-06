@@ -136,6 +136,34 @@ test("strict source context rejects generic web evidence and returns a clear lim
   assert.match(result.limitations[0].reason, /not authoritative enough/i);
 });
 
+test("generic web is limited for ordinary research but excluded from compliance evidence", async () => {
+  const row = {
+    id: 8,
+    title: "Independent commentary",
+    source_url: "https://example.com/commentary",
+    file_name: null,
+    source_type: "external_url",
+    source_metadata_json: {
+      authorityClass: SOURCE_AUTHORITY_CLASSES.GENERIC_WEB,
+      extractionStatus: EXTRACTION_STATUS.GOOD,
+    },
+    chunk_index: 0,
+    content: "This commentary discusses possible effects of the policy on firms and consumers in detail.",
+    chunk_metadata_json: {},
+  };
+  const queryFn = async () => ({ rows: [row] });
+  const ordinary = await getSourceContext(1, [8], "policy effects", {
+    purpose: "research", queryFn,
+  });
+  assert.equal(ordinary.sources.length, 1);
+  assert.equal(ordinary.sources[0].evidenceStatus, EVIDENCE_STATUS.LIMITED);
+  const compliance = await getSourceContext(1, [8], "What must a company file?", {
+    purpose: "compliance", queryFn,
+  });
+  assert.equal(compliance.sources.length, 0);
+  assert.match(compliance.limitations[0].reason, /not authoritative enough/i);
+});
+
 test("unsafe URL failures return the external-source quality contract", async () => {
   await assert.rejects(
     () => assertPublicUrl("http://127.0.0.1/private"),

@@ -16,6 +16,7 @@ const {
   assessEvidenceSufficiency,
   buildAbstentionResponse,
   buildGroundedExtractiveAnswer,
+  ensureCompleteAnswer,
   summarizeVerification,
   verifyAndRepairAnswer,
 } = require("../retrieval/evidenceSafetyService");
@@ -53,7 +54,9 @@ const {
   ANSWER_INTENTS,
   classifyAnswerIntent,
   classifyFreshness,
+  detectCurrentStatusClaims,
   enforceFreshnessGuard,
+  qualifyUnverifiedCurrentClaims,
   requiresCurrentVerification,
 } = require("../retrieval/adaptiveIntelligenceService");
 const {
@@ -522,7 +525,7 @@ router.post("/chat", generationLimiter, async (req, res) => {
       reasons: ["Evidence gate disabled by controlled rollout."], missing: [],
       conflicts: [], version: "legacy-pass-through-v1",
     };
-    const currentVerification = freshnessRequired
+    let currentVerification = freshnessRequired
       ? {
           required: true,
           status: passageGroups.length > 0 && passageGroups.every((group) =>
@@ -630,14 +633,57 @@ router.post("/chat", generationLimiter, async (req, res) => {
               abstained: false, version: "legacy-unverified-v1",
             };
         verificationLatencyMs = Date.now() - verificationStartedAt;
+        const implicitCurrentClaims = detectCurrentStatusClaims(verification.answer);
+        if (!currentVerification.required && implicitCurrentClaims.length) {
+          try {
+            const temporalChecks = await Promise.all(documents.map(async (document) => {
+              const [temporalRetrieval, freshness] = await Promise.all([
+                retrieveDocumentContext(document.type, document.id,
+                  "current enactment in force amendment repeal supersession latest status",
+                  { topK: 3, document, accountId: req.user.id, freshnessRequired: true }),
+                loadDocumentSourceFreshness(document).catch(() => ({ status: "error" })),
+              ]);
+              return assessCurrentVerification({
+                document, passages: temporalRetrieval.passages, freshness,
+              });
+            }));
+            currentVerification = {
+              required: true,
+              status: temporalChecks.length && temporalChecks.every((item) => item.status === "VERIFIED_CURRENT")
+                ? "VERIFIED_CURRENT"
+                : temporalChecks.some((item) => item.status === "PARTIALLY_VERIFIED")
+                  ? "PARTIALLY_VERIFIED" : "UNVERIFIED",
+              checkedAt: new Date().toISOString(),
+              triggeredBy: "generated_current_status_claim",
+              detectedClaims: implicitCurrentClaims.slice(0, 5),
+              documents: temporalChecks.map((item, index) => ({
+                documentId: documents[index].id, status: item.status,
+              })),
+            };
+          } catch {
+            currentVerification = {
+              required: true, status: "UNVERIFIED", checkedAt: new Date().toISOString(),
+              triggeredBy: "generated_current_status_claim",
+              detectedClaims: implicitCurrentClaims.slice(0, 5),
+            };
+          }
+        }
         fullResponse = enforceFreshnessGuard(verification.answer, currentVerification);
+        const temporalGuard = qualifyUnverifiedCurrentClaims(fullResponse, currentVerification);
+        fullResponse = ensureCompleteAnswer(temporalGuard.answer, {
+          fallback: buildGroundedExtractiveAnswer(message, verificationEvidence),
+        }).answer;
         generationMode = verification.abstained ? "verification_abstention" : "ai_verified";
       } catch (generationError) {
         providerError = sanitizeProviderError(generationError);
         console.warn(
           `Cross-document chat generation unavailable; using extractive fallback: ${providerError}`,
         );
-        fullResponse = buildGroundedExtractiveAnswer(message, verificationEvidence);
+        const fallbackTemporalGuard = qualifyUnverifiedCurrentClaims(
+          buildGroundedExtractiveAnswer(message, verificationEvidence),
+          currentVerification,
+        );
+        fullResponse = ensureCompleteAnswer(fallbackTemporalGuard.answer).answer;
         generationMode = "extractive_fallback";
       }
     }

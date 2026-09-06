@@ -18,6 +18,18 @@ const fakeIndex = (existingIds, { queryError, deleteSpy } = {}) => ({
   },
 });
 
+const safeLedger = (documentId, ids) => ids.map((vectorId) => ({
+  vectorId,
+  documentId,
+  namespace: require("../lib/vectordb").providerConfig().vectorNamespace,
+  chunkIdentity: vectorId,
+  contentIdentity: `retired:${vectorId}`,
+  noActivePgReference: true,
+  noRoutingReference: true,
+  noCurrentHashReference: true,
+  classification: "SAFE_TO_DELETE",
+}));
+
 test("reprocess with fewer chunks deletes exactly the stale vector IDs", async () => {
   const documentId = "doc-1";
   const oldIds = Array.from({ length: 10 }, (_, i) => `bill-${documentId}-chunk-${i}`);
@@ -31,6 +43,7 @@ test("reprocess with fewer chunks deletes exactly the stale vector IDs", async (
     index,
     idField: "billId",
     chunkIdField: "billId",
+    deletionLedger: safeLedger(documentId, oldIds.slice(6)),
   });
 
   assert.equal(removed, 4);
@@ -38,6 +51,21 @@ test("reprocess with fewer chunks deletes exactly the stale vector IDs", async (
     [...deletedIds].sort(),
     [6, 7, 8, 9].map((i) => `bill-${documentId}-chunk-${i}`).sort(),
   );
+});
+
+test("stale vectors are retained when per-ID deletion proof is absent", async () => {
+  const documentId = "doc-no-ledger";
+  let deleteCalled = false;
+  const removed = await cleanupStaleVectors({
+    chunks: [chunk(documentId, 0)],
+    index: fakeIndex([
+      `bill-${documentId}-chunk-0`, `bill-${documentId}-chunk-1`,
+    ], { deleteSpy: () => { deleteCalled = true; } }),
+    idField: "billId",
+    chunkIdField: "billId",
+  });
+  assert.equal(removed, 0);
+  assert.equal(deleteCalled, false);
 });
 
 test("superset/unchanged chunk set never calls deleteMany", async () => {

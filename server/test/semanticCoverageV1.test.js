@@ -21,6 +21,7 @@ const {
 const {
   VECTOR_RECONCILIATION_CLASSES,
   auditSemanticVectorState,
+  deleteSafeOrphanVectors,
   diagnosticForRow,
   reconcileSemanticReadinessTruth,
   semanticReadinessTruth,
@@ -375,12 +376,31 @@ test("chunk reconciliation excludes hierarchical routing vectors from stale clea
     },
     idField: "actId",
     chunkIdField: "documentId",
+    deletionLedger: [{
+      vectorId: "stale-chunk", documentId: "77",
+      namespace: config.vectorNamespace,
+      chunkIdentity: "77:stale", contentIdentity: "retired-hash",
+      noActivePgReference: true, noRoutingReference: true,
+      noCurrentHashReference: true, classification: "SAFE_TO_DELETE",
+    }],
   });
   assert.deepEqual(receivedFilter, {
     $and: [{ actId: { $eq: "77" } }, { routingOnly: { $ne: true } }],
   });
   assert.equal(removed, 1);
   assert.deepEqual(deleted, ["stale-chunk"]);
+});
+
+test("explicit orphan deletion requires a per-ID SAFE_TO_DELETE ledger", async () => {
+  const audit = { safeOrphans: [{ indexName: "act", vectorReference: "legacy-1" }] };
+  const indexes = {
+    bill: { deleteMany: async () => { throw new Error("unexpected"); } },
+    act: { deleteMany: async () => { throw new Error("unexpected"); } },
+  };
+  await assert.rejects(
+    () => deleteSafeOrphanVectors({ audit, indexes }),
+    (error) => error.code === "VECTOR_DELETE_LEDGER_REQUIRED",
+  );
 });
 
 test("unverifiable vector-only records are explicitly quarantined instead of deleted", async () => {

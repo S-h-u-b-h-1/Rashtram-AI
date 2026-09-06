@@ -31,7 +31,7 @@ const {
   assessEvidenceSufficiency,
   buildAbstentionResponse,
   buildGroundedExtractiveAnswer,
-  validateAnswerCompleteness,
+  ensureCompleteAnswer,
   summarizeVerification,
   verifyAndRepairAnswer,
 } = require("../retrieval/evidenceSafetyService");
@@ -51,7 +51,9 @@ const {
   ANSWER_INTENTS,
   classifyAnswerIntent,
   classifyFreshness,
+  detectCurrentStatusClaims,
   enforceFreshnessGuard,
+  qualifyUnverifiedCurrentClaims,
   requiresCurrentVerification,
 } = require("../retrieval/adaptiveIntelligenceService");
 const {
@@ -1162,7 +1164,7 @@ router.post("/", generationLimiter, async (req, res) => {
         ? loadDocumentSourceFreshness(document).catch(() => ({ status: "error" }))
         : Promise.resolve({ status: "not_required", checkedThrough: null }),
     ]);
-    const currentVerification = freshnessRequired
+    let currentVerification = freshnessRequired
       ? assessCurrentVerification({ document, passages: retrieval.passages, freshness: sourceFreshness })
       : { required: false, status: "NOT_REQUIRED", checkedAt: new Date().toISOString() };
     const passages = selectContextPassages(retrieval.passages, {
@@ -1429,15 +1431,62 @@ router.post("/", generationLimiter, async (req, res) => {
             abstained: false, version: "legacy-unverified-v1",
           };
       const verificationLatency = Date.now() - verificationStartedAt;
+      const implicitCurrentClaims = detectCurrentStatusClaims(verification.answer);
+      if (!freshnessRequired && implicitCurrentClaims.length) {
+        try {
+          const temporalQuestion = "Verify the current enactment, force, amendment, repeal, supersession, and operative status of this document.";
+          const temporalPlan = applyResearchFlags(planQuery(temporalQuestion), flags);
+          const [temporalRetrieval, implicitFreshness] = await Promise.all([
+            retrieveDocumentContext(documentType, documentId, temporalQuestion, {
+              topK: Math.min(6, settings.finalPassages),
+              plan: temporalPlan,
+              document,
+              flags,
+              accountId: req.user.id,
+              freshnessRequired: true,
+            }),
+            loadDocumentSourceFreshness(document).catch(() => ({ status: "error" })),
+          ]);
+          currentVerification = {
+            ...assessCurrentVerification({
+              document,
+              passages: temporalRetrieval.passages,
+              freshness: implicitFreshness,
+            }),
+            triggeredBy: "generated_current_status_claim",
+            detectedClaims: implicitCurrentClaims.slice(0, 5),
+          };
+        } catch {
+          currentVerification = {
+            required: true,
+            status: "UNVERIFIED",
+            checkedAt: new Date().toISOString(),
+            triggeredBy: "generated_current_status_claim",
+            detectedClaims: implicitCurrentClaims.slice(0, 5),
+            limitation: "Current-source verification could not be completed.",
+          };
+        }
+      }
       verification.answer = enforceFreshnessGuard(verification.answer, currentVerification);
-      const completeness = validateAnswerCompleteness(verification.answer);
-      if (!completeness.complete) {
-        // One bounded safety action: replace a dangling provider response with
-        // the already-retrieved evidence. Never persist visibly incomplete text
-        // as a successful answer and never loop repairs.
-        verification.answer = buildGroundedExtractiveAnswer(message, evidence);
+      const temporalGuard = qualifyUnverifiedCurrentClaims(
+        verification.answer,
+        currentVerification,
+      );
+      verification.answer = temporalGuard.answer;
+      verification.temporalGuard = {
+        guarded: temporalGuard.guarded,
+        detectedClaims: temporalGuard.claims.length,
+      };
+      const completeness = ensureCompleteAnswer(verification.answer, {
+        fallback: buildGroundedExtractiveAnswer(message, evidence),
+      });
+      if (completeness.replaced) {
+        verification.answer = completeness.answer;
         verification.abstained = true;
-        verification.completeness = completeness;
+        verification.completeness = completeness.validation;
+      } else {
+        verification.answer = completeness.answer;
+        verification.completeness = { complete: true, reason: null };
       }
       responsePersistence = await persistGeneratedChatResponse({
         lifecycle,
@@ -1488,7 +1537,9 @@ router.post("/", generationLimiter, async (req, res) => {
       console.warn(
         `Unified document chat generation unavailable; using extractive fallback: ${providerError}`,
       );
-      const fallback = buildGroundedExtractiveAnswer(message, evidence);
+      const fallback = ensureCompleteAnswer(
+        buildGroundedExtractiveAnswer(message, evidence),
+      ).answer;
       responsePersistence = await persistGeneratedChatResponse({
         lifecycle,
         userId: req.user.id,

@@ -458,12 +458,25 @@ const auditSemanticVectorState = async ({
 const deleteSafeOrphanVectors = async ({
   audit,
   indexes = { bill: getIndex(), act: getActIndex() },
+  deletionLedger = [],
 } = {}) => {
+  const approved = new Map((Array.isArray(deletionLedger) ? deletionLedger : [])
+    .filter((item) => item?.classification === "SAFE_TO_DELETE" && item.vectorReference)
+    .map((item) => [String(item.vectorReference), item]));
+  const proposed = (audit?.safeOrphans || []).map((item) => String(item.vectorReference));
+  if (proposed.length && proposed.some((id) => !approved.has(id))) {
+    const error = new Error(
+      "Vector deletion is disabled until every proposed ID has a persisted SAFE_TO_DELETE ledger entry.",
+    );
+    error.code = "VECTOR_DELETE_LEDGER_REQUIRED";
+    throw error;
+  }
   const deleted = [];
   for (const indexName of ["bill", "act"]) {
-    const ids = audit.safeOrphans
+    const ids = (audit?.safeOrphans || [])
       .filter((item) => item.indexName === indexName)
-      .map((item) => item.vectorReference);
+      .map((item) => item.vectorReference)
+      .filter((id) => approved.has(String(id)));
     for (let offset = 0; offset < ids.length; offset += PINECONE_PAGE_SIZE) {
       const batch = ids.slice(offset, offset + PINECONE_PAGE_SIZE);
       if (!batch.length) continue;

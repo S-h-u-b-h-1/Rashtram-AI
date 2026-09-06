@@ -17,6 +17,8 @@ const {
   validateClaims,
   verifyAndRepairAnswer,
   validateAnswerCompleteness,
+  ensureCompleteAnswer,
+  safePassageExcerpt,
   verifyStructuredComparison,
 } = require("../retrieval/evidenceSafetyService");
 const { QUERY_TYPES } = require("../retrieval/queryPlanner");
@@ -41,6 +43,32 @@ test("answer completeness validator catches dangling promised passages", () => {
   assert.equal(validateAnswerCompleteness("The strongest supporting passage is:").complete, false);
   assert.equal(validateAnswerCompleteness("The evidence is: ").reason, "DANGLING_PROMISE");
   assert.equal(validateAnswerCompleteness("The provision may increase reporting effort.").complete, true);
+});
+
+test("safe extractive excerpts never end mid-word, mid-sentence, or on a dangling clause", () => {
+  const paragraph = "Section 4 establishes registration duties for every covered intermediary. Section 5 requires an annual return before 30 June. A final sentence continues with additional implementation detail that should not be cut in the middle";
+  const excerpt = safePassageExcerpt(paragraph, 95);
+  assert.equal(validateAnswerCompleteness(excerpt).complete, true);
+  assert.match(excerpt, /intermediary\.$/);
+  assert.doesNotMatch(excerpt, /midd$/);
+  const dangling = safePassageExcerpt("Evidence includes:", 100);
+  assert.doesNotMatch(dangling, /:$/);
+  assert.equal(validateAnswerCompleteness(dangling).complete, true);
+});
+
+test("safe extractive excerpts retain complete Devanagari sentences", () => {
+  const excerpt = safePassageExcerpt("यह अधिनियम छोटे उद्यमों पर लागू होता है। इसके अंतर्गत वार्षिक विवरण देना आवश्यक है।", 55);
+  assert.match(excerpt, /।$/);
+  assert.equal(validateAnswerCompleteness(excerpt).complete, true);
+});
+
+test("the final completeness guard replaces an unfinished provider response once", () => {
+  const guarded = ensureCompleteAnswer("The supporting passage is:", {
+    fallback: "The retrieved evidence does not safely support a completed answer.",
+  });
+  assert.equal(guarded.replaced, true);
+  assert.equal(guarded.validation.reason, "DANGLING_PROMISE");
+  assert.match(guarded.answer, /does not safely support/);
 });
 
 test("high-confidence exact section evidence receives a HIGH assessment", () => {
@@ -130,6 +158,25 @@ test("closely aligned authoritative sources with different values surface a conf
   assert.equal(assessment.decision, "CONFLICT");
   assert.equal(assessment.signals.sourceConsistency, "CONFLICTING");
   assert.match(buildAbstentionResponse(assessment), /inconsistent/i);
+});
+
+test("different numbers in unrelated legal propositions are not contradictions", () => {
+  const conflicts = detectEvidenceConflicts([
+    evidence({ documentId: "a", content: "The late filing penalty is 10 percent of the assessed amount." }),
+    evidence({ documentId: "b", content: "The rulemaking consultation period is 30 days." }),
+  ]);
+  assert.equal(conflicts.length, 0);
+});
+
+test("same number in different provisions and different stakeholder thresholds do not create false conflicts", () => {
+  assert.equal(detectEvidenceConflicts([
+    evidence({ documentId: "a", content: "The filing deadline for an annual return is 30 days." }),
+    evidence({ documentId: "b", content: "The appeal period after an order is 30 days." }),
+  ]).length, 0);
+  assert.equal(detectEvidenceConflicts([
+    evidence({ documentId: "a", content: "A small company capital threshold is 50 lakh rupees." }),
+    evidence({ documentId: "b", content: "A listed issuer disclosure threshold is 100 lakh rupees." }),
+  ]).length, 0);
 });
 
 test("an empty evidence set returns an explainable abstention decision", () => {

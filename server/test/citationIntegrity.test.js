@@ -63,6 +63,18 @@ test("citations can never reference a chunk removed by reprocessing", async () =
     idField: "billId",
     titleField: "billTitle",
     chunkIdField: "billId",
+    allowUnverifiedStaleCleanup: true,
+    deletionLedger: [6, 7, 8, 9].map((i) => ({
+      vectorId: `bill-${documentId}-chunk-${i}`,
+      documentId,
+      namespace: vectordb.providerConfig().vectorNamespace,
+      chunkIdentity: `chunk-${i}`,
+      contentIdentity: `retired-content-${i}`,
+      noActivePgReference: true,
+      noRoutingReference: true,
+      noCurrentHashReference: true,
+      classification: "SAFE_TO_DELETE",
+    })),
   });
 
   // Simulate what a citation-producing retrieval would see: a vector

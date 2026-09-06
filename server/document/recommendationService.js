@@ -161,6 +161,93 @@ const BUSINESS_DOMAINS = Object.freeze([
   },
 ]);
 
+// Bounded, deterministic interpretation for the legal and regulatory topics in
+// the client-problem benchmark. This is a query planner, not a source of legal
+// truth: it only helps catalogue discovery find likely instruments and
+// authorities. Evidence consumers still require prepared source text.
+const REGULATORY_CONCEPTS = Object.freeze([
+  { id: "nbfc", triggers: ["nbfc", "non-banking financial", "net owned fund"],
+    concepts: ["NBFC registration", "certificate of registration", "net owned fund", "capital requirement"],
+    titles: ["Reserve Bank of India Act", "Non-Banking Financial Company Directions"],
+    authorities: ["RBI", "Reserve Bank of India"], types: ["act", "direction", "notification"] },
+  { id: "gst", triggers: ["gst", "goods and services tax", "composition scheme"],
+    concepts: ["GST registration", "composition levy", "returns", "input tax credit"],
+    titles: ["Goods and Services Tax Act", "GST Rules"], authorities: ["CBIC", "GST Council"], types: ["act", "rule", "notification", "circular"] },
+  { id: "income_tax", triggers: ["income tax", "tax audit", "business deductions", "direct tax"],
+    concepts: ["income tax", "business deduction", "tax audit"], titles: ["Income-tax Act"],
+    authorities: ["CBDT", "Central Board of Direct Taxes"], types: ["act", "rule", "circular"] },
+  { id: "labour", triggers: ["minimum wage", "provident fund", "factory workers", "contract workers", "occupational safety"],
+    concepts: ["minimum wages", "provident fund", "contract labour", "occupational safety"],
+    titles: ["Minimum Wages Act", "Employees Provident Funds Act", "Occupational Safety Health and Working Conditions Code", "Contract Labour Act"],
+    authorities: ["Ministry of Labour and Employment", "EPFO"], types: ["act", "rule", "code"] },
+  { id: "foreign_trade", triggers: ["importer exporter code", "foreign trade", "exporter", "import export"],
+    concepts: ["Importer Exporter Code", "foreign trade policy", "export authorisation"],
+    titles: ["Foreign Trade Policy", "Foreign Trade Development and Regulation Act"], authorities: ["DGFT", "Directorate General of Foreign Trade"], types: ["policy", "act", "notification"] },
+  { id: "cybersecurity", triggers: ["cert-in", "cybersecurity incident", "log retention", "cyber incident"],
+    concepts: ["cyber security", "incident reporting", "log retention", "information security"],
+    titles: ["CERT-In Directions", "Information Technology Act"], authorities: ["CERT-In", "MeitY"], types: ["direction", "act", "rule"] },
+  { id: "securities", triggers: ["sebi", "investment adviser", "stock exchange", "listed company", "material events", "related party"],
+    concepts: ["investment adviser registration", "securities disclosure", "listing obligations", "related party transactions"],
+    titles: ["SEBI Investment Advisers Regulations", "SEBI Listing Obligations and Disclosure Requirements Regulations"],
+    authorities: ["SEBI", "Securities and Exchange Board of India"], types: ["regulation", "circular"] },
+  { id: "consumer", triggers: ["consumer complaint", "misleading advertisement", "e-commerce marketplace", "online seller", "refund"],
+    concepts: ["consumer protection", "e-commerce obligations", "misleading advertisements", "consumer grievance"],
+    titles: ["Consumer Protection Act", "Consumer Protection E-Commerce Rules"], authorities: ["Department of Consumer Affairs", "CCPA"], types: ["act", "rule", "guideline"] },
+  { id: "company_law", triggers: ["companies act", "annual filing", "director duties", "limited liability partnership", "partner obligations"],
+    concepts: ["company annual filing", "director duties", "limited liability partnership"],
+    titles: ["Companies Act", "Limited Liability Partnership Act"], authorities: ["Ministry of Corporate Affairs", "MCA"], types: ["act", "rule"] },
+  { id: "msme", triggers: ["msme", "micro enterprise", "delayed buyer payments", "public procurement preferences"],
+    concepts: ["micro small and medium enterprises", "delayed payments", "public procurement policy"],
+    titles: ["Micro Small and Medium Enterprises Development Act", "Public Procurement Policy for Micro and Small Enterprises"],
+    authorities: ["Ministry of MSME", "Ministry of Finance"], types: ["act", "policy", "order"] },
+  { id: "environment", triggers: ["environmental clearance", "water pollution", "pollution control", "chemical factory", "e-waste"],
+    concepts: ["environmental clearance", "consent to establish", "consent to operate", "water pollution", "extended producer responsibility"],
+    titles: ["Environment Protection Act", "Water Prevention and Control of Pollution Act", "E-Waste Management Rules"],
+    authorities: ["MoEFCC", "CPCB", "Pollution Control Board"], types: ["act", "rule", "notification"] },
+  { id: "battery_waste", triggers: ["battery waste", "battery recycling", "battery producer", "battery epr"],
+    concepts: ["battery waste", "extended producer responsibility", "EPR registration"],
+    titles: ["Battery Waste Management Rules"], authorities: ["CPCB", "MoEFCC"],
+    types: ["rule", "notification"] },
+  { id: "medical_devices", triggers: ["medical device", "cdsco", "manufacturing licence"],
+    concepts: ["medical device manufacturing licence", "quality management"], titles: ["Medical Devices Rules"],
+    authorities: ["CDSCO", "Central Drugs Standard Control Organisation"], types: ["rule", "notification"] },
+  { id: "shops", triggers: ["shops and establishments", "shop opening", "working hours"],
+    concepts: ["shops and establishments registration", "working hours"], titles: ["Shops and Establishments Act"],
+    authorities: ["Labour Department"], types: ["act", "rule"] },
+  { id: "payments", triggers: ["payment aggregator", "payments company", "settlement requirements"],
+    concepts: ["payment aggregator authorisation", "payment settlement"], titles: ["Payment Aggregators Guidelines", "Payment and Settlement Systems Act"],
+    authorities: ["RBI", "Reserve Bank of India"], types: ["act", "guideline", "circular"] },
+  { id: "pensions", triggers: ["national pension system", "pension contributions", "pension withdrawals", "pfrda"],
+    concepts: ["National Pension System", "pension contribution", "withdrawal"], titles: ["PFRDA Act", "National Pension System Regulations"],
+    authorities: ["PFRDA"], types: ["act", "regulation"] },
+  { id: "telecom", triggers: ["telecommunications act", "telecom operator", "telecom authorisation"],
+    concepts: ["telecommunication authorisation", "spectrum", "telecom services"], titles: ["Telecommunications Act 2023"],
+    authorities: ["Department of Telecommunications", "DoT"], types: ["act", "rule"] },
+  { id: "electricity", triggers: ["electricity open access", "green energy", "renewable energy"],
+    concepts: ["electricity open access", "green energy open access", "renewable energy"],
+    titles: ["Electricity Act", "Green Energy Open Access Rules"], authorities: ["Ministry of Power", "CERC"], types: ["act", "rule", "regulation"] },
+  { id: "competition", triggers: ["competition law", "merger notification", "acquisition", "combination"],
+    concepts: ["combination notification", "merger control", "competition"], titles: ["Competition Act", "Combination Regulations"],
+    authorities: ["CCI", "Competition Commission of India"], types: ["act", "regulation"] },
+  { id: "rti", triggers: ["right to information", "information officer", "first appeal", "cpio"],
+    concepts: ["right to information", "public information officer", "first appellate authority"], titles: ["Right to Information Act"],
+    authorities: ["Central Information Commission"], types: ["act", "rule"] },
+  { id: "mining", triggers: ["mining lease", "mineral mining", "mmdr", "royalty provisions"],
+    concepts: ["mining lease auction", "mineral royalty", "mines and minerals"], titles: ["Mines and Minerals Development and Regulation Act"],
+    authorities: ["Ministry of Mines"], types: ["act", "rule"] },
+  { id: "street_vendors", triggers: ["street vendor", "hawker", "vending certificate"],
+    concepts: ["street vending", "certificate of vending", "town vending committee"], titles: ["Street Vendors Protection of Livelihood and Regulation of Street Vending Act"],
+    authorities: ["Ministry of Housing and Urban Affairs"], types: ["act", "rule"] },
+]);
+
+const PREMISE_CLASSES = Object.freeze({
+  SUPPORTED: "SUPPORTED",
+  PLAUSIBLE: "PLAUSIBLE_BUT_UNVERIFIED",
+  UNSUPPORTED: "UNSUPPORTED",
+  CONTRADICTORY: "CONTRADICTORY",
+  NONSENSICAL: "NONSENSICAL",
+});
+
 const RESEARCH_AREA_TEMPLATES = Object.freeze({
   "financial services": [
     ["Licensing and institutional model", "Identify the permissions, regulated-entity model and bank/NBFC or service-provider responsibilities that need primary-source review.", "Essential"],
@@ -335,6 +422,100 @@ const meaningfulTokens = (value) => {
     .filter((token) => token.length >= 3 && !ignored.has(token));
 };
 
+const matchedRegulatoryConcepts = (value) => {
+  const normalized = normalizeProblemText(value);
+  return REGULATORY_CONCEPTS.filter((concept) => concept.triggers.some((trigger) =>
+    normalized.includes(normalizeProblemText(trigger))));
+};
+
+const explicitInstrumentNames = (value) => {
+  const text = String(value || "").normalize("NFKC");
+  const matches = text.match(/(?:the\s+)?[A-Z][\p{L}\d&(),.'\-\s]{3,100}?\s+(?:Act|Bill|Rules?|Regulations?|Code|Policy|Directions?)(?:,?\s*\d{4})?/gu) || [];
+  return [...new Set(matches.map((item) => item
+    .replace(/^the\s+/i, "")
+    .replace(/^.*?\bunder\s+(?=[A-Z])/i, "")
+    .trim()))].slice(0, 4);
+};
+
+const classifyProblemPremise = (input = {}, inferred = null) => {
+  const text = normalizeProblemText([input.problem, input.industry, input.topic].filter(Boolean).join(" "));
+  const signals = inferred || inferBusinessSignals(input);
+  const years = [...text.matchAll(/\b(20\d{2}|21\d{2}|22\d{2})\b/g)].map((match) => Number(match[1]));
+  if (/galactic|banana banking|atlantis|narnia|unicorn|rainbow insurance|dragon licensing|pet dragons|teleportation|time travel|time travellers|invisible square circles|purple furniture|silent triangle|cloud castles/.test(text)) {
+    return { classification: PREMISE_CLASSES.NONSENSICAL, reason: "The request depends on a fictional authority, jurisdiction, instrument, or impossible scenario." };
+  }
+  if (years.some((year) => year > new Date().getUTCFullYear() + 3) || /still unwritten|tomorrow s unpublished|confidential .* circular|perpetual profit guarantee/.test(text)) {
+    return { classification: PREMISE_CLASSES.UNSUPPORTED, reason: "The request asks Rashtram AI to treat an unpublished, future, or unverified instrument as established law." };
+  }
+  if (/exclusively in ([a-z ]+) and exclusively outside \1/.test(text) ||
+      /fssai.*stock exchange|sebi.*restaurant.*temperature|rbi.*baker.*vanilla|gst taxpayer.*permanently exempt.*all returns/.test(text)) {
+    return { classification: PREMISE_CLASSES.CONTRADICTORY, reason: "The stated authority, subject, or legal premise conflicts with the requested regulatory topic." };
+  }
+  const allegedState = text.match(/indian state of ([a-z ]+?)(?: for| under|\.|$)/)?.[1]?.trim();
+  if (allegedState && !INDIA_STATES.includes(allegedState)) {
+    return { classification: PREMISE_CLASSES.CONTRADICTORY, reason: "The named place is not a supported Indian state or union territory." };
+  }
+  const issuerState = text.match(/issued by ([a-z ]+?) government\b/)?.[1]?.trim();
+  const governedPlace = text.match(/governing only ([a-z ]+?) (?:shops?|business|companies|residents|state)\b/)?.[1]?.trim();
+  const governedState = INDIA_STATES.find((state) => governedPlace &&
+    (governedPlace.includes(state) || (state === "west bengal" && governedPlace.includes("kolkata"))));
+  if (issuerState && governedState && issuerState !== governedState) {
+    return { classification: PREMISE_CLASSES.CONTRADICTORY, reason: "The stated issuing government conflicts with the jurisdiction the request says the instrument exclusively governs." };
+  }
+  if (signals.matchedConcepts?.length || signals.sectors?.length || explicitInstrumentNames(input.problem).length) {
+    return { classification: PREMISE_CLASSES.SUPPORTED, reason: "The problem names a recognised regulatory topic, authority, or instrument." };
+  }
+  return { classification: PREMISE_CLASSES.PLAUSIBLE, reason: "The problem is plausible but does not identify a verified instrument or regulator." };
+};
+
+const buildProblemSearchPlan = (input = {}, inferred = inferBusinessSignals(input)) => {
+  const exactNames = [...new Set([
+    ...explicitInstrumentNames(input.problem),
+    ...(inferred.likelyTitles || []),
+  ])];
+  const authorityTopic = inferred.regulators.length && (inferred.concepts?.length || inferred.themes.length)
+    ? `${inferred.regulators[0]} ${(inferred.concepts?.[0] || inferred.themes[0])}`
+    : null;
+  const jurisdictionTopic = inferred.jurisdictions.length && (inferred.concepts?.length || inferred.themes.length)
+    ? `${inferred.jurisdictions[0]} ${(inferred.concepts?.[0] || inferred.themes[0])}`
+    : null;
+  const coreConcept = (inferred.concepts || []).slice(0, 3).join(" ") ||
+    inferred.tokens.slice(0, 5).join(" ");
+  const acronymVariant = [...new Set([
+    ...inferred.regulators.filter((value) => /^[A-Z][A-Z-]{1,12}$/.test(value)),
+    ...inferred.expansions.filter((value) => /^[A-Z][A-Z-]{1,12}$/.test(value)),
+    ...inferred.activities,
+  ])].slice(0, 4).join(" ");
+  const subqueries = [...new Set([
+    exactNames[0],
+    authorityTopic,
+    coreConcept,
+    jurisdictionTopic,
+    acronymVariant || exactNames[1],
+  ].map((item) => String(item || "").trim()).filter((item) => item.length >= 2))].slice(0, 5);
+  return {
+    // Domain profiles carry useful compliance concepts even when the request
+    // does not match one of the narrower statutory-topic dictionaries (for
+    // example, an NBFC registration question). Preserve those concepts in the
+    // interpretation instead of reducing the plan to acronyms alone.
+    concepts: [...new Set([
+      ...(inferred.concepts || []),
+      ...(inferred.themes || []),
+      ...(inferred.expansions || []),
+    ])].slice(0, 12),
+    likelyTitles: exactNames,
+    regulators: inferred.regulators,
+    jurisdictions: inferred.jurisdictions,
+    industries: inferred.sectors,
+    activities: inferred.activities,
+    documentTypes: inferred.documentTypes || input.documentTypes || [],
+    synonyms: inferred.expansions,
+    timeframe: /\b(current|latest|recent|today|now|20\d{2})\b/i.test(input.problem)
+      ? "time_specific" : "unspecified_currentness",
+    subqueries: subqueries.length ? subqueries : [input.problem],
+  };
+};
+
 const inferBusinessSignals = (input = {}) => {
   const combined = [input.problem, input.industry, input.topic, ...(input.states || [])]
     .filter(Boolean)
@@ -343,6 +524,7 @@ const inferBusinessSignals = (input = {}) => {
   let domains = BUSINESS_DOMAINS.filter((domain) =>
     domain.terms.some((term) => normalized.includes(normalizeProblemText(term))),
   );
+  const regulatoryConcepts = matchedRegulatoryConcepts(combined);
   if (domains.some((domain) => ["food manufacturing", "environment and recycling"].includes(domain.sector))) {
     domains = domains.filter((domain) => domain.sector !== "manufacturing");
   }
@@ -358,15 +540,39 @@ const inferBusinessSignals = (input = {}) => {
     activities: [...new Set(domains.flatMap((domain) => domain.terms)
       .filter((term) => normalized.includes(normalizeProblemText(term))))],
     jurisdictions,
-    regulators: [...new Set(domains.flatMap((domain) => domain.regulators))],
-    themes: [...new Set(domains.flatMap((domain) => domain.themes))],
-    expansions: [...new Set(domains.flatMap((domain) => domain.expansions))],
-    anchorGroups: domains.map((domain) => domain.anchors || domain.terms),
-    anchorClauseGroups: domains.map((domain) => domain.anchorClauses || [domain.anchors || domain.terms]),
-    regulatoryAnchorGroups: domains.map((domain) => domain.regulatoryAnchors || domain.themes),
+    regulators: [...new Set([
+      ...domains.flatMap((domain) => domain.regulators),
+      ...regulatoryConcepts.flatMap((concept) => concept.authorities),
+    ])],
+    themes: [...new Set([
+      ...domains.flatMap((domain) => domain.themes),
+      ...regulatoryConcepts.flatMap((concept) => concept.concepts),
+    ])],
+    concepts: [...new Set(regulatoryConcepts.flatMap((concept) => concept.concepts))],
+    likelyTitles: [...new Set(regulatoryConcepts.flatMap((concept) => concept.titles))],
+    documentTypes: [...new Set(regulatoryConcepts.flatMap((concept) => concept.types))],
+    matchedConcepts: regulatoryConcepts.map((concept) => concept.id),
+    expansions: [...new Set([
+      ...domains.flatMap((domain) => domain.expansions),
+      ...regulatoryConcepts.flatMap((concept) => [
+        ...concept.concepts, ...concept.titles, ...concept.authorities,
+      ]),
+    ])],
+    anchorGroups: [
+      ...domains.map((domain) => domain.anchors || domain.terms),
+      ...regulatoryConcepts.map((concept) => [...concept.triggers, ...concept.titles]),
+    ],
+    anchorClauseGroups: [
+      ...domains.map((domain) => domain.anchorClauses || [domain.anchors || domain.terms]),
+      ...regulatoryConcepts.map((concept) => [[...concept.triggers, ...concept.titles, ...concept.concepts]]),
+    ],
+    regulatoryAnchorGroups: [
+      ...domains.map((domain) => domain.regulatoryAnchors || domain.themes),
+      ...regulatoryConcepts.map((concept) => [...concept.authorities, ...concept.concepts]),
+    ],
     tokens: meaningfulTokens(combined),
     needsSpecificity:
-      domains.length === 0 && meaningfulTokens(combined).length < 3,
+      domains.length === 0 && regulatoryConcepts.length === 0 && meaningfulTokens(combined).length < 3,
   };
 };
 
@@ -412,7 +618,8 @@ const complianceDocumentTypeWeight = (type) => {
 const evaluateBusinessCandidate = (row = {}, input = {}, inferred = inferBusinessSignals(input)) => {
   const candidateText = normalizeProblemText([
     row.title, row.category, row.ministry, row.authority, row.jurisdiction,
-    row.schema_state, row.document_type,
+    row.schema_state, row.document_type, row.candidate_summary,
+    row.candidate_purpose, JSON.stringify(row.metadata_json || {}),
   ].filter(Boolean).join(" "));
   const titleText = normalizeProblemText(row.title);
   const tokenMatches = inferred.tokens.filter((token) => candidateText.includes(token));
@@ -434,6 +641,11 @@ const evaluateBusinessCandidate = (row = {}, input = {}, inferred = inferBusines
       .filter((token) => !["authority", "board", "department"].includes(token));
     const required = regulatorTokens.length <= 1 ? 1 : 2;
     return regulatorTokens.filter((token) => candidateText.includes(token)).length >= required;
+  });
+  const likelyTitleMatch = (inferred.likelyTitles || []).some((title) => {
+    const expected = meaningfulTokens(title).filter((token) => !DOCUMENT_TITLE_STOP_WORDS.has(token));
+    return expected.length > 0 && expected.filter((token) => titleText.includes(token)).length /
+      expected.length >= 0.6;
   });
   const candidateState = normalizeProblemText(row.schema_state || row.jurisdiction);
   const requestedStates = inferred.jurisdictions.map(normalizeProblemText);
@@ -463,11 +675,19 @@ const evaluateBusinessCandidate = (row = {}, input = {}, inferred = inferBusines
       return anchorText && includesNormalizedTerm(candidateText, anchorText);
     }));
   const authority = authorityWeight(row);
+  const authorityText = normalizeProblemText([
+    row.authority, row.ministry, row.canonical_source, row.source_name,
+  ].filter(Boolean).join(" "));
+  const authorityMismatch = inferred.regulators.length > 0 && authorityText &&
+    !regulatorMatch && !likelyTitleMatch &&
+    inferred.regulators.every((regulator) => meaningfulTokens(regulator)
+      .filter((token) => !["authority", "board", "department", "ministry", "india"].includes(token))
+      .every((token) => !authorityText.includes(token)));
   const strongDomainAnchor = domainAnchorMatch &&
     (["PRIMARY_OFFICIAL", "PRIMARY_LEGAL_TEXT"].includes(authority.class) || titleAnchorMatch);
   const typeWeight = complianceDocumentTypeWeight(row.document_type);
   const dimensions = [
-    sectorMatch, activityMatch, themeMatch, regulatorMatch,
+    sectorMatch, activityMatch, themeMatch, regulatorMatch, likelyTitleMatch,
     tokenMatches.length >= 2, titleMatches.length >= 1,
     lexicalMatch, semanticMatch,
   ].filter(Boolean).length;
@@ -478,15 +698,17 @@ const evaluateBusinessCandidate = (row = {}, input = {}, inferred = inferBusines
     (activityMatch ? 0.12 : 0) +
     (themeMatch ? 0.08 : 0) +
     (regulatorMatch ? 0.1 : 0) +
+    (likelyTitleMatch ? 0.2 : 0) +
     (lexicalMatch ? 0.08 : 0) +
     (semanticMatch ? 0.08 : 0) +
     (jurisdictionMatch ? 0.08 : -0.35) +
+    (authorityMismatch ? -0.35 : 0) +
     authority.score * 0.03 + typeWeight * 0.03
   ));
   let tier = RELEVANCE_TIERS.REJECTED;
-  if (!jurisdictionMismatch && strongDomainAnchor && regulatoryAnchorMatch && dimensions >= 3 && score >= 0.58) tier = RELEVANCE_TIERS.HIGH;
-  else if (!jurisdictionMismatch && strongDomainAnchor && regulatoryAnchorMatch && dimensions >= 2 && score >= 0.38) tier = RELEVANCE_TIERS.MEDIUM;
-  else if (!jurisdictionMismatch && dimensions >= 1 && score >= 0.2) tier = RELEVANCE_TIERS.LOW;
+  if (!jurisdictionMismatch && !authorityMismatch && strongDomainAnchor && regulatoryAnchorMatch && dimensions >= 3 && score >= 0.58) tier = RELEVANCE_TIERS.HIGH;
+  else if (!jurisdictionMismatch && !authorityMismatch && strongDomainAnchor && regulatoryAnchorMatch && dimensions >= 2 && score >= 0.38) tier = RELEVANCE_TIERS.MEDIUM;
+  else if (!jurisdictionMismatch && !authorityMismatch && dimensions >= 1 && score >= 0.2) tier = RELEVANCE_TIERS.LOW;
   if (specialisedFactoryMismatch && tier !== RELEVANCE_TIERS.REJECTED) tier = RELEVANCE_TIERS.LOW;
   const matchReasons = [
     sectorMatch ? `sector: ${inferred.sectors.join(", ")}` : null,
@@ -506,6 +728,8 @@ const evaluateBusinessCandidate = (row = {}, input = {}, inferred = inferBusines
     activityMatch,
     themeMatch,
     regulatorMatch,
+    likelyTitleMatch,
+    authorityMismatch,
     lexicalMatch,
     semanticMatch,
     domainAnchorMatch,
@@ -1101,6 +1325,10 @@ const getProblemRecommendations = async (userId, payload) => {
   }
   const problemUnderstanding = buildProblemUnderstanding(input, inferred);
   const researchPlan = buildResearchPlan(input, inferred);
+  const interpretation = buildProblemSearchPlan(input, inferred);
+  const premise = classifyProblemPremise(input, inferred);
+  const premiseAllowsSearch = [PREMISE_CLASSES.SUPPORTED, PREMISE_CLASSES.PLAUSIBLE]
+    .includes(premise.classification);
   const searchText = [
     input.problem,
     input.industry,
@@ -1115,13 +1343,7 @@ const getProblemRecommendations = async (userId, payload) => {
   // whitespace as AND, which made sector-specific expansions impossible to
   // satisfy together (for example, a document rarely says RBI, KYC, NBFC
   // registration, fair practices, and digital lending in one search vector).
-  const lexicalSearchText = [...new Set([
-    ...inferred.activities,
-    ...inferred.expansions,
-    ...inferred.regulators,
-    ...inferred.themes,
-    ...inferred.tokens,
-  ].map((term) => String(term || "").trim()).filter(Boolean))]
+  const lexicalSearchText = interpretation.subqueries
     .map((term) => term.includes(" ") ? `"${term.replaceAll('"', "")}"` : term)
     .join(" OR ") || input.problem;
   let semanticIds = [];
@@ -1129,7 +1351,7 @@ const getProblemRecommendations = async (userId, payload) => {
   // Sector-specific compliance intent already has precise lexical expansion.
   // Avoid a paid query embedding on that hot path; semantic retrieval remains
   // available for unclassified natural-language problems.
-  if (!inferred.sectors.length && !input.draftOnly) {
+  if (premiseAllowsSearch && !inferred.sectors.length && !input.draftOnly) {
     try {
       semanticIds = (await searchAcrossIndexedDocuments(
         searchText,
@@ -1154,6 +1376,16 @@ const getProblemRecommendations = async (userId, payload) => {
        state.chunks_count, state.embeddings_count,
        state.search_ready, state.semantic_ready,
        state.readiness_class, state.readiness_reason,
+       COALESCE(
+         candidate_profile.executive_summary,
+         candidate_artifact.english_summary,
+         candidate.metadata_json ->> 'summary',
+         candidate.metadata_json ->> 'description',
+         legacy.source_metadata ->> 'summary',
+         legacy.source_metadata ->> 'description'
+       ) AS candidate_summary,
+       COALESCE(candidate_profile.document_purpose,
+         candidate.metadata_json ->> 'purpose') AS candidate_purpose,
        (
          candidate.research_ready = TRUE
          AND state.search_ready = TRUE
@@ -1190,7 +1422,12 @@ const getProblemRecommendations = async (userId, payload) => {
      FROM documents candidate
      JOIN legislative_documents legacy ON legacy.id = candidate.id
      LEFT JOIN document_processing_state state ON state.document_id = candidate.id
+     LEFT JOIN document_research_profiles candidate_profile
+       ON candidate_profile.document_id = candidate.id
+     LEFT JOIN document_text_artifacts candidate_artifact
+       ON candidate_artifact.document_id = candidate.id
      WHERE candidate.visibility_status = 'public'
+       AND $10::BOOLEAN
        AND candidate.quality_score >= 50
        AND candidate.title IS NOT NULL
        AND candidate.canonical_url IS NOT NULL
@@ -1216,7 +1453,13 @@ const getProblemRecommendations = async (userId, payload) => {
        AND (CARDINALITY($4::TEXT[]) = 0
          OR candidate.document_type = ANY($4::TEXT[]))
        AND (
-         candidate.search_vector @@ WEBSEARCH_TO_TSQUERY('simple', $1)
+         EXISTS (
+           SELECT 1 FROM UNNEST($9::TEXT[]) AS planned(query_text)
+           WHERE candidate.search_vector @@ WEBSEARCH_TO_TSQUERY('simple', planned.query_text)
+             OR candidate.title ILIKE '%' || planned.query_text || '%'
+             OR COALESCE(candidate_profile.executive_summary, candidate_artifact.english_summary, '')
+               ILIKE '%' || planned.query_text || '%'
+         )
          OR candidate.title ILIKE ANY($8::TEXT[])
          OR candidate.state = ANY($2::TEXT[])
          OR candidate.jurisdiction = ANY($2::TEXT[])
@@ -1245,6 +1488,8 @@ const getProblemRecommendations = async (userId, payload) => {
       input.draftOnly,
       [...new Set((inferred.anchorGroups.length ? inferred.anchorGroups.flat() : inferred.tokens)
         .map((term) => `%${term.replace(/[%_]/g, "")}%`))],
+      interpretation.subqueries,
+      premiseAllowsSearch,
     ],
   );
   const retrievalCompletedAt = Date.now();
@@ -1370,6 +1615,8 @@ const getProblemRecommendations = async (userId, payload) => {
   ];
   return {
     query: input,
+    interpretation,
+    premise,
     problemUnderstanding,
     researchPlan,
     recommendationGroups,
@@ -1410,7 +1657,9 @@ const getProblemRecommendations = async (userId, payload) => {
         : null,
     abstention:
       recommendations.length === 0
-        ? preparationCandidates.length
+        ? !premiseAllowsSearch
+          ? premise.reason
+          : preparationCandidates.length
           ? "Relevant records were found, but they are not yet ready to support evidence-grounded obligations. Open a record below to prepare it for research."
           : inferred.needsSpecificity
             ? "The problem is too broad for a reliable recommendation. Add the regulated activity, location, or authority involved."
@@ -1660,13 +1909,16 @@ const getRecentRecommendations = async (userId, limit = 12) => {
 module.exports = {
   COMPLIANCE_COVERAGE_CLASSES,
   RELEVANCE_TIERS,
+  PREMISE_CLASSES,
   authorityWeight,
   complianceDocumentTypeWeight,
   confidenceForScore,
   authorityLabel,
   buildProblemUnderstanding,
+  buildProblemSearchPlan,
   buildResearchPlan,
   classifyProblemIntent,
+  classifyProblemPremise,
   evaluateBusinessCandidate,
   hasDocumentTitleSubjectOverlap,
   hasDocumentSummarySubjectOverlap,

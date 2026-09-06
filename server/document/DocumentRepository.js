@@ -40,9 +40,12 @@ const canonicalCapabilitiesFromRow = (row = {}, context = {}) => {
   const comparisonReady =
     storedValue("comparisonReady", "comparison_ready") ??
     Boolean(row.comparison_ready);
-  const semanticReady =
-    storedValue("semanticReady", "semantic_ready") ??
-    Boolean(row.semantic_ready);
+  // The reconciled relational flag is authoritative whenever it is present.
+  // A stale capability_state JSON snapshot must never promote a document that
+  // reconciliation has demoted after an exact namespace/vector audit.
+  const semanticReady = row.semantic_ready != null
+    ? Boolean(row.semantic_ready)
+    : Boolean(storedValue("semanticReady", "semantic_ready"));
   const textReady =
     storedValue("textReady", "text_ready") ??
     Boolean(searchReady || chatReady);

@@ -121,6 +121,43 @@ const authorityValue = (authorityClass) => ({
 
 const numericFacts = (value) => normalize(value).match(/\b\d+(?:\.\d+)?%?\b/g) || [];
 
+const CONFLICT_THEMES = Object.freeze([
+  ["deadline", /\b(deadline|within|no later than|due date|period)\b/i],
+  ["penalty", /\b(penalty|fine|punishable|imprisonment)\b/i],
+  ["rate", /\b(rate|percent|percentage|levy|interest)\b/i],
+  ["amount", /\b(amount|rupees?|₹|crore|lakh|fee)\b/i],
+  ["threshold", /\b(limit|threshold|turnover|capital|minimum|maximum)\b/i],
+  ["effective_date", /\b(effective|commence|commencement|comes? into force)\b/i],
+]);
+
+const propositionFingerprint = (value) => {
+  const text = String(value || "");
+  const themes = CONFLICT_THEMES.filter(([, expression]) => expression.test(text))
+    .map(([name]) => name);
+  const ignored = new Set([
+    ...CONFLICT_THEMES.flatMap(([name]) => name.split("_")),
+    "act", "annual", "authority", "bill", "days", "document", "filing",
+    "law", "month", "months", "provision", "regulation", "rule", "section",
+    "shall", "states", "years",
+  ]);
+  const subjects = tokens(text).filter((token) =>
+    !ignored.has(token) && !/^\d+(?:\.\d+)?%?$/.test(token));
+  const structural = [...String(text).matchAll(/\b(?:section|clause|rule|regulation)\s+([\w().-]+)/gi)]
+    .map((match) => match[1].toLowerCase());
+  return { themes, subjects, structural };
+};
+
+const sameProposition = (left, right) => {
+  const a = propositionFingerprint(left);
+  const b = propositionFingerprint(right);
+  if (!a.themes.some((theme) => b.themes.includes(theme))) return false;
+  if (a.structural.length && b.structural.length &&
+      a.structural.some((value) => b.structural.includes(value))) return true;
+  const rightSubjects = new Set(b.subjects);
+  const shared = a.subjects.filter((token) => rightSubjects.has(token));
+  return shared.length >= 2 && shared.length / Math.min(a.subjects.length || 1, b.subjects.length || 1) >= 0.45;
+};
+
 const sufficiencyDecision = (level) => ({
   [SUFFICIENCY_LEVELS.HIGH]: "SUFFICIENT",
   [SUFFICIENCY_LEVELS.MEDIUM]: "SUFFICIENT",
@@ -166,20 +203,21 @@ const detectEvidenceConflicts = (evidence = [], { compareDocuments = false } = {
     for (let rightIndex = leftIndex + 1; rightIndex < candidates.length; rightIndex += 1) {
       const left = candidates[leftIndex];
       const right = candidates[rightIndex];
-      // Different selected instruments can legitimately set different values.
-      // Comparing them is the task, not evidence for a single asserted rule.
-      if (compareDocuments && left.documentId && right.documentId &&
-          String(left.documentId) !== String(right.documentId)) continue;
       if (String(left.documentId || "") === String(right.documentId || "") &&
           Number(left.chunkIndex) === Number(right.chunkIndex)) continue;
-      if (lexicalAlignment(left.content, right.content) < 0.28) continue;
+      if (!sameProposition(left.content, right.content)) continue;
       const leftNumbers = numericFacts(left.content);
       const rightNumbers = numericFacts(right.content);
       if (leftNumbers.some((number) => rightNumbers.includes(number))) continue;
+      const sameDocument = String(left.documentId || "") === String(right.documentId || "");
       conflicts.push({
         left: { label: citationLabelsForEvidence(left, leftIndex)[0], content: String(left.content || "").slice(0, 360) },
         right: { label: citationLabelsForEvidence(right, rightIndex)[0], content: String(right.content || "").slice(0, 360) },
-        reason: "Authoritative evidence contains different values for a closely related fact.",
+        sameDocument,
+        comparisonDifference: Boolean(compareDocuments && !sameDocument),
+        reason: compareDocuments && !sameDocument
+          ? "The selected instruments state different values for the same proposition; preserve this as a cited comparison difference."
+          : "Authoritative evidence contains different values for the same proposition.",
       });
     }
   }
@@ -192,16 +230,19 @@ const assessEvidenceSufficiency = (query, evidence = [], options = {}) => {
     String(item.content || "").trim() && evidenceTextIsReliable(item),
   );
   const conflicts = detectEvidenceConflicts(usable, { compareDocuments: options.queryType === "COMPARISON" });
-  if (conflicts.length) {
+  const blockingConflicts = options.queryType === "COMPARISON"
+    ? conflicts.filter((conflict) => conflict.sameDocument)
+    : conflicts;
+  if (blockingConflicts.length) {
     const level = SUFFICIENCY_LEVELS.CONFLICTING;
     return {
       level,
       decision: sufficiencyDecision(level),
       score: 0,
-      signals: explainableSignals({ conflicts, retrievalVerified: options.retrievalVerified }),
+      signals: explainableSignals({ conflicts: blockingConflicts, retrievalVerified: options.retrievalVerified }),
       reasons: ["Retrieved sources contain materially inconsistent evidence."],
       missing: [],
-      conflicts,
+      conflicts: blockingConflicts,
       version: config.version,
     };
   }
@@ -564,6 +605,29 @@ const summarizeVerification = (verification = {}) => ({
   version: verification.version || safetyConfig().claimVerifierVersion,
 });
 
+const safePassageExcerpt = (value, maximum = 520) => {
+  const text = String(value || "").normalize("NFKC")
+    .replace(/\r\n?/g, "\n").replace(/[ \t]+/g, " ").trim();
+  if (!text) return "";
+  const hardMaximum = Math.max(maximum, Math.min(maximum * 4, 2_000));
+  const candidate = text.slice(0, hardMaximum);
+  const boundaries = [];
+  for (const match of candidate.matchAll(/[.!?।](?:["'”’)]*)?(?=\s|$)/gu)) {
+    boundaries.push(match.index + match[0].length);
+  }
+  for (const match of candidate.matchAll(/\n(?=\s*(?:[-*•]|\d+[.)])\s+)/g)) {
+    boundaries.push(match.index);
+  }
+  const preferred = boundaries.filter((index) => index <= maximum && index >= 60).at(-1);
+  const extended = boundaries.filter((index) => index > maximum && index <= hardMaximum).at(0);
+  const end = preferred || extended;
+  if (end) return candidate.slice(0, end).replace(/[,:;–—-]+$/u, "").trim();
+  if (text.length <= maximum) {
+    return /[.!?।]["'”’)]*$/u.test(text) ? text : `${text.replace(/[,:;–—-]+$/u, "").trim()}.`;
+  }
+  return "The retrieved passage is longer than the safe extractive display limit; open the cited source to read it in full.";
+};
+
 const buildGroundedExtractiveAnswer = (query, evidence = []) => {
   const usable = evidence.filter((item) =>
     String(item.content || "").trim() && evidenceTextIsReliable(item),
@@ -579,7 +643,7 @@ const buildGroundedExtractiveAnswer = (query, evidence = []) => {
     "",
     ...usable.map((item, index) => {
       const label = citationLabelsForEvidence(item, index)[0];
-      return `- ${String(item.content).replace(/\s+/g, " ").trim().slice(0, 520)} [${label}]`;
+      return `- ${safePassageExcerpt(item.content, 520)} [${label}]`;
     }),
     "",
     `Research question: ${String(query || "").trim()}`,
@@ -609,6 +673,21 @@ const validateAnswerCompleteness = (answer) => {
     return { complete: false, reason: "TRAILING_PUNCTUATION" };
   }
   return { complete: true, reason: null };
+};
+
+const ensureCompleteAnswer = (answer, { fallback = "" } = {}) => {
+  const primary = String(answer || "").trim();
+  const primaryValidation = validateAnswerCompleteness(primary);
+  if (primaryValidation.complete) {
+    return { answer: primary, validation: primaryValidation, replaced: false };
+  }
+  const safeFallback = String(fallback || "").trim();
+  const fallbackValidation = validateAnswerCompleteness(safeFallback);
+  if (fallbackValidation.complete) {
+    return { answer: safeFallback, validation: primaryValidation, replaced: true };
+  }
+  const abstention = "The response could not be completed safely. Please retry; no incomplete answer was saved.";
+  return { answer: abstention, validation: primaryValidation, replaced: true };
 };
 
 const verifyStructuredComparison = (generated, citations = []) => {
@@ -699,6 +778,7 @@ module.exports = {
   citationSupportsClaim,
   classifyClaim,
   detectEvidenceConflicts,
+  ensureCompleteAnswer,
   extractCitationLabels,
   extractClaims,
   explainableSignals,
@@ -706,6 +786,7 @@ module.exports = {
   safetyConfig,
   sufficiencyDecision,
   summarizeVerification,
+  safePassageExcerpt,
   validateClaims,
   verifyAndRepairAnswer,
   validateAnswerCompleteness,

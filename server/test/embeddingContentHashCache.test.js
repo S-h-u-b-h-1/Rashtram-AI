@@ -96,9 +96,28 @@ test("storeContentInChunks skips embedding entirely when every chunk is unchange
   assert.equal(result.chunksStored, 0);
   assert.equal(result.embeddingCacheHits, 4);
   assert.equal(result.embeddingCacheMisses, 0);
-  // cleanupStaleVectors still runs against the FULL chunk id set, so
-  // nothing here should look stale even though none were re-upserted.
+  // Ordinary embedding writes never run destructive stale-vector cleanup.
   assert.equal(deleteManyCalled, null, "unchanged-but-still-valid chunks must not be deleted as stale");
+});
+
+test("ordinary embedding writes never delete superseded vectors without a ledger", async () => {
+  let queried = false;
+  let deleted = false;
+  const fakeIndex = {
+    upsert: async () => {},
+    query: async () => { queried = true; return { matches: [{ id: "legacy" }] }; },
+    deleteMany: async () => { deleted = true; },
+  };
+  const result = await vectordb.storeContentInChunks({
+    chunks: [{ id: "canonical", billId: "44", chunkIndex: 0, content: "Current text", title: "Bill" }],
+    index: fakeIndex,
+    idField: "billId",
+    titleField: "billTitle",
+    chunkIdField: "billId",
+  });
+  assert.equal(queried, false);
+  assert.equal(deleted, false);
+  assert.equal(result.staleVectorsRemoved, 0);
 });
 
 test("storeContentInChunks only embeds the changed subset, keeping the full set for cleanup", async () => {

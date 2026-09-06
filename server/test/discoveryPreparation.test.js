@@ -5,14 +5,19 @@ const { evaluateBusinessCandidate, inferBusinessSignals, RELEVANCE_TIERS } = req
 const { comparisonAsMarkdown } = require("../document/documentComparisonService");
 const { validateComparisonOutput } = require("../document/documentComparisonService");
 
-test("different instruments may set different values without blocking comparison", () => {
-  const { detectEvidenceConflicts } = require("../retrieval/evidenceSafetyService");
+test("different instruments preserve same-proposition differences without blocking comparison", () => {
+  const { assessEvidenceSufficiency, detectEvidenceConflicts } = require("../retrieval/evidenceSafetyService");
   const evidence = [
     { documentId: "1", chunkIndex: 0, content: "The filing deadline period is 30 days for the annual return." },
     { documentId: "2", chunkIndex: 0, content: "The filing deadline period is 60 days for the annual return." },
   ];
   assert.equal(detectEvidenceConflicts(evidence).length, 1);
-  assert.equal(detectEvidenceConflicts(evidence, { compareDocuments: true }).length, 0);
+  const comparisonDifferences = detectEvidenceConflicts(evidence, { compareDocuments: true });
+  assert.equal(comparisonDifferences.length, 1);
+  assert.equal(comparisonDifferences[0].comparisonDifference, true);
+  assert.notEqual(assessEvidenceSufficiency("Compare filing deadlines", evidence, {
+    queryType: "COMPARISON", retrievalVerified: true,
+  }).level, "CONFLICTING");
   assert.equal(detectEvidenceConflicts([evidence[0], { ...evidence[1], documentId: "1", chunkIndex: 1 }], { compareDocuments: true }).length, 1);
 });
 

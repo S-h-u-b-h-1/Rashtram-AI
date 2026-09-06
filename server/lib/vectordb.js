@@ -1939,6 +1939,11 @@ const storeContentInChunks = async ({
   // cleanupStaleVectors below still sees the complete expected ID set;
   // only the embed/upsert loop is narrowed.
   unchangedChunkIds = new Set(),
+  // Ordinary processing/backfill may upsert current vectors, but it must not
+  // destructively infer that every non-current ID is safe to delete. Cleanup is
+  // an explicit reconciliation operation with an independently reviewed ledger.
+  allowUnverifiedStaleCleanup = false,
+  deletionLedger = [],
 }) => {
   let totalStored = 0;
   let embeddingsMs = 0;
@@ -1993,12 +1998,9 @@ const storeContentInChunks = async ({
     totalStored += vectors.length;
   }
 
-  const staleVectorsRemoved = await cleanupStaleVectors({
-    chunks,
-    index,
-    idField,
-    chunkIdField,
-  });
+  const staleVectorsRemoved = allowUnverifiedStaleCleanup
+    ? await cleanupStaleVectors({ chunks, index, idField, chunkIdField, deletionLedger })
+    : 0;
 
   return {
     chunksStored: totalStored,
@@ -2063,7 +2065,9 @@ const storeRoutingRepresentations = async ({
 // producing wrong citations, duplicated context, or outdated answers on
 // retrieval. Best-effort: a cleanup failure must never fail the store that
 // already succeeded above, so it's caught and logged, not thrown.
-const cleanupStaleVectors = async ({ chunks, index, idField, chunkIdField }) => {
+const cleanupStaleVectors = async ({
+  chunks, index, idField, chunkIdField, deletionLedger = [],
+}) => {
   const documentIdValue = String(
     chunks[0]?.[chunkIdField] ?? chunks[0]?.billId ?? chunks[0]?.documentId ?? "",
   );
@@ -2091,6 +2095,29 @@ const cleanupStaleVectors = async ({ chunks, index, idField, chunkIdField }) => 
 
     const staleIds = existingIds.filter((id) => !newIds.has(id));
     if (staleIds.length === 0) return 0;
+
+    const proofById = new Map((Array.isArray(deletionLedger) ? deletionLedger : [])
+      .map((entry) => [String(entry?.vectorId || ""), entry]));
+    const safe = staleIds.every((vectorId) => {
+      const proof = proofById.get(String(vectorId));
+      return Boolean(
+        proof &&
+        proof.classification === "SAFE_TO_DELETE" &&
+        String(proof.documentId) === documentIdValue &&
+        String(proof.namespace || "").trim() &&
+        String(proof.chunkIdentity || "").trim() &&
+        String(proof.contentIdentity || "").trim() &&
+        proof.noActivePgReference === true &&
+        proof.noRoutingReference === true &&
+        proof.noCurrentHashReference === true
+      );
+    });
+    if (!safe) {
+      console.warn(
+        `Stale-vector cleanup for ${idField}=${documentIdValue} was skipped because a complete SAFE_TO_DELETE ledger was not supplied.`,
+      );
+      return 0;
+    }
 
     await index.deleteMany(staleIds);
     return staleIds.length;

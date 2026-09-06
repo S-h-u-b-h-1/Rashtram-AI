@@ -31,6 +31,31 @@ const SOURCE_ONLY_FAILURE_CODES = new Set([
   FAILURE_CODES.HTML_CONTENT_TYPE_MISMATCH,
 ]);
 
+const hasExactSemanticRetrieval = ({
+  document = {},
+  chunkCount = 0,
+  textChunkCount = 0,
+  vectorRefs = 0,
+} = {}) => Boolean(
+  document.semanticReady === true &&
+  document.embeddingStatus === "ready" &&
+  document.retrievalVerified === true &&
+  ["hybrid", "vector"].includes(document.retrievalMode) &&
+  Number(chunkCount) > 0 &&
+  Number(textChunkCount) >= Number(chunkCount) &&
+  Number(document.embeddingsCount || 0) >= Number(chunkCount) &&
+  Number(vectorRefs) >= Number(chunkCount) &&
+  Boolean(
+    document.failureDetails?.semanticRetrievalVerified === true ||
+    (["hybrid", "vector"].includes(document.retrievalMode) &&
+      document.embeddingStatus === "ready")
+  )
+);
+
+const hasPreparatoryResource = (document = {}, resources = {}) => Boolean(
+  resources.has_accessible_resource || isExtractableSourceDocument(document)
+);
+
 const getDocumentReadiness = async (documentId) => {
   const document = await DocumentRepository.getById(documentId);
   if (!document) return null;
@@ -69,11 +94,12 @@ const getDocumentReadiness = async (documentId) => {
   const resourceCount = Number(resources.resources || 0);
   const embeddings = Number(document.embeddingsCount || 0);
   const hasChunks = chunkCount > 0 && textChunkCount > 0;
-  const hasVectorRetrieval =
-    document.embeddingStatus === "ready" &&
-    embeddings >= chunkCount &&
-    vectorRefs >= chunkCount &&
-    hasChunks;
+  // Public readiness must follow the reconciled semantic truth flag. Stale
+  // namespace references and legacy IDs may still exist in PostgreSQL, but
+  // their presence cannot promote a document back to hybrid retrieval.
+  const hasVectorRetrieval = hasExactSemanticRetrieval({
+    document, chunkCount, textChunkCount, vectorRefs,
+  });
   const hasLocalTextRetrieval = hasChunks;
   const hasRetrieval = hasVectorRetrieval || hasLocalTextRetrieval;
   const terminalSourceOnlyFailure =
@@ -82,12 +108,10 @@ const getDocumentReadiness = async (documentId) => {
       document.retryEligible === false &&
       document.failureCode !== FAILURE_CODES.PDF_SCANNED_OCR_REQUIRED
     );
-  const hasAlternativeExtractableSource =
-    Boolean(resources.has_accessible_resource) ||
-    isExtractableSourceDocument(document);
-  const processableBySource =
-    hasAlternativeExtractableSource ||
-    (Boolean(document.pdfUrl) && !terminalSourceOnlyFailure);
+  const hasVerifiedSupportedResource = hasPreparatoryResource(document, resources);
+  // Durable extracted text remains usable if an upstream link later disappears;
+  // only *new* preparation requires a currently verified supported resource.
+  const resourceReady = hasVerifiedSupportedResource || hasChunks;
   const processingStatus = document.processingStatus || "not_started";
   const extractionReady = document.extractionStatus === "ready";
   const processingReady = READY_STATUSES.has(processingStatus);
@@ -101,7 +125,7 @@ const getDocumentReadiness = async (documentId) => {
   const genuinelyReady =
     document.visibilityStatus !== "hidden_invalid" &&
     Boolean(document.title) &&
-    processableBySource &&
+    resourceReady &&
     processingReady &&
     extractionReady &&
     document.chunkingStatus === "ready" &&
@@ -137,7 +161,7 @@ const getDocumentReadiness = async (documentId) => {
       (terminalSourceOnlyFailure
         ? "Only the source page is available; the linked file cannot be prepared for research."
         : "Document processing failed.");
-  } else if (!processableBySource) {
+  } else if (!resourceReady) {
     status = document.sourceUrl ? "source_only" : "not_ready";
     reasonCode = document.sourceUrl ? "source_only" : "no_source";
     reason = document.sourceUrl
@@ -167,12 +191,12 @@ const getDocumentReadiness = async (documentId) => {
   const canPrepare =
     !genuinelyReady &&
     document.visibilityStatus !== "hidden_invalid" &&
-    processableBySource &&
+    hasVerifiedSupportedResource &&
     !processing &&
     !terminalSourceOnlyFailure;
   const capabilities = deriveCapabilities({
     catalogued: true,
-    resourceReady: processableBySource,
+    resourceReady,
     textReady: extractionReady && hasChunks,
     chunksCount: chunkCount,
     lexicalReady: hasLocalTextRetrieval,
@@ -197,9 +221,7 @@ const getDocumentReadiness = async (documentId) => {
       publicValid: document.visibilityStatus !== "hidden_invalid",
       hasSource: Boolean(document.sourceUrl || document.pdfUrl),
       hasAccessibleResource: Boolean(
-        resources.has_accessible_resource ||
-        (document.pdfUrl && !terminalSourceOnlyFailure) ||
-        isExtractableSourceDocument(document),
+        hasVerifiedSupportedResource,
       ),
       hasExtractedText: extractionReady && hasChunks,
       hasChunks,
@@ -232,4 +254,6 @@ const getDocumentReadiness = async (documentId) => {
 
 module.exports = {
   getDocumentReadiness,
+  hasExactSemanticRetrieval,
+  hasPreparatoryResource,
 };

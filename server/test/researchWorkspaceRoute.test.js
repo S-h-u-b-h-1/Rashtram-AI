@@ -35,6 +35,8 @@ function harness({ failPersistence = false } = {}) {
       assessEvidenceSufficiency: (message, evidence, options) => { assert.equal(options.retrievalVerified, true); assert.ok(evidence.length); return { level: 'MEDIUM' }; },
       verifyAndRepairAnswer: async (answer, evidence) => { calls.verification++; assert.ok(evidence[0].userSource); return { answer, supportedFacts: 1 }; },
       summarizeVerification: () => ({ supportedFacts: 1 }),
+      buildGroundedExtractiveAnswer: () => "Complete source fallback.",
+      ensureCompleteAnswer: (answer) => ({ answer, replaced: false, validation: { complete: true } }),
     },
     '../retrieval/adaptiveIntelligenceService': {
       ANSWER_INTENTS: { GENERAL_CONTEXT: 'GENERAL_CONTEXT', CURRENT_STATUS: 'CURRENT_STATUS', TIMELINE: 'TIMELINE' },
@@ -42,6 +44,8 @@ function harness({ failPersistence = false } = {}) {
       classifyFreshness: (message) => message.includes('current') ? 'current' : 'not_required',
       requiresCurrentVerification: (freshness) => freshness === 'current',
       enforceFreshnessGuard: (answer, verification) => verification.required ? `${answer}\nCurrent status: ${verification.status}` : answer,
+      detectCurrentStatusClaims: () => [],
+      qualifyUnverifiedCurrentClaims: (answer) => ({ answer, claims: [], guarded: false }),
     },
     '../lib/vectordb': { providerConfig: () => ({}), generateResponse: async function* () { calls.generation++; yield { text: () => 'Verified source answer [S7-C1].' }; } },
     '../lib/sse': require('../lib/sse'),
