@@ -543,18 +543,19 @@ export const recommendDocumentsForComparison = async (payload) =>
     body: JSON.stringify(payload),
   });
 
-export const getDocumentReadiness = async (documentId) =>
-  apiRequest(`/documents/${encodeURIComponent(documentId)}/readiness`);
+export const getDocumentReadiness = async (documentId, { signal } = {}) =>
+  apiRequest(`/documents/${encodeURIComponent(documentId)}/readiness`, { skipCache: true, signal });
 
 export const prepareDocumentForComparison = async (documentId) =>
   apiRequest(`/documents/${encodeURIComponent(documentId)}/prepare`, {
     method: "POST",
   });
 
-export const prepareResearchCandidates = async (documentIds) =>
+export const prepareResearchCandidates = async (documentIds, { problem, signal } = {}) =>
   apiRequest("/documents/prepare-candidates", {
     method: "POST",
-    body: JSON.stringify({ documentIds: [...new Set((documentIds || []).map(String))].slice(0, 5) }),
+    body: JSON.stringify({ documentIds: [...new Set((documentIds || []).map(String))].slice(0, 5), problem }),
+    signal,
   });
 
 export const getRecentRecommendations = async (limit = 12) => {

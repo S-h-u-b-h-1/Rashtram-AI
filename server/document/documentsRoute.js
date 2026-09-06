@@ -316,9 +316,11 @@ router.get("/compare/:comparisonId/pdf", async (req, res) => {
     const result = comparison.result || {};
     const pdf = await createResearchBriefPdf({
       title: comparison.title || "Document comparison",
-      documentType: "Validated comparative analysis",
+      documentType: "Saved comparative analysis — review stated evidence limitations",
+      completeEvidence: true,
       reportText: comparisonAsMarkdown(comparison),
       sources: (result.citations || []).map((citation) => ({
+        citationId: citation.id || citation.citationId,
         documentTitle: citation.documentTitle,
         page: citation.page ?? citation.pageStart,
         section: citation.sectionTitle || citation.sectionId,
@@ -825,26 +827,22 @@ router.post("/:id/prepare", generationLimiter, async (req, res) => {
 
 router.post("/prepare-candidates", generationLimiter, async (req, res) => {
   try {
-    const documentIds = [...new Set((Array.isArray(req.body?.documentIds) ? req.body.documentIds : [])
-      .map((id) => String(id || "").trim()).filter((id) => /^\d+$/.test(id)))].slice(0, 5);
-    if (!documentIds.length) return res.status(400).json({ error: "Select at least one catalogue document." });
-    const candidates = await Promise.all(documentIds.map(async (documentId) => {
-      const readiness = await getDocumentReadiness(documentId);
-      if (!readiness) return { documentId, status: "unavailable", reason: "Document not found." };
-      if (readiness.researchReady || readiness.comparisonReady) {
-        return { documentId, status: "ready", readiness: readiness.readinessClass };
-      }
-      if (!readiness.canPrepare) {
-        return { documentId, status: "unavailable", reason: readiness.reason || readiness.readinessReason || "Preparation is not available for this source." };
-      }
-      const job = await enqueueProcessing(documentId, req.user.id, {
-        priority: 95,
-        reason: "just_in_time_discovery",
-        maxAttempts: 2,
-      });
-      return { documentId, status: "preparing", jobId: job?.id || null, readiness: readiness.readinessClass };
-    }));
-    return res.json({ candidates, queued: candidates.filter((item) => item.status === "preparing").length });
+    const { prepareDiscoveryCandidates } = require("./discoveryPreparationService");
+    const result = await prepareDiscoveryCandidates(req.user.id, req.body);
+    const allowedDocumentIds = result.candidates.filter((item) => item.status === "queued").map((item) => item.documentId);
+    if (allowedDocumentIds.length) {
+      const { waitUntil } = require("@vercel/functions");
+      const { runWorkerPool } = require("./processingWorkerService");
+      const { assertBulkProcessingSafe } = require("../lib/database/capacity");
+      const { getPool } = require("../db");
+      waitUntil(assertBulkProcessingSafe(getPool()).then(() => runWorkerPool({
+        allowedDocumentIds, maxJobs: allowedDocumentIds.length, concurrency: 1,
+        sourceConcurrency: 1, discoverGraph: false, recoverStale: false,
+        // Do not start another document near the function's 300-second limit.
+        deadlineAt: Date.now() + 120_000,
+      })).catch((error) => console.error("Bounded discovery preparation paused:", error.message)));
+    }
+    return res.json(result);
   } catch (error) {
     return sendError(res, error, "Just-in-time document preparation failed");
   }

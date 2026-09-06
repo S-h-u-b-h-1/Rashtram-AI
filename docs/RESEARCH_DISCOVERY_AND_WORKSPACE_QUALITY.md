@@ -1,5 +1,36 @@
 # Research discovery and workspace quality
 
+## Completion audit — 6 September 2026 (in progress)
+
+This audit supersedes earlier unverified completion/deployment statements below.
+The live read-only snapshot initially contained 20,200 catalogue records and 3,496
+ready records; a later snapshot contained 20,203 and 3,497 while normal ingestion
+continued. Discovery must never describe the full count as evidence-ready.
+
+Corrections in this pass: a single relevance-ranked home result contract, no
+ready-first concatenation, shared discovery groups in Suggested Documents,
+server-validated automatic preparation of at most three relevant trusted sources,
+actual scoped background-worker dispatch, retained job attempt budgets,
+uncached status polling, public/quarantine readiness gating, selected-source
+handoff to quick actions, and lossless persisted comparison exports with Hindi fonts.
+
+Read-only `process:audit`: zero missing states, eight existing canonical/state
+flag mismatches, six failed jobs eligible for dead-letter reconciliation, zero
+unsafe failure rows. Before/after database fingerprints matched; no reconciliation
+was applied. These are not being represented as a clean production integrity pass.
+
+Five read-only discovery baseline totals (ms): lending 2553, battery 1597, SaaS
+5258, food 1364, Tamil Nadu factory 2242. First measured revised totals: 800,
+2400, 2308, 1490, 1770. These are single-run diagnostics, not percentile or causal
+performance claims. Food and factory false negatives were found and corrected.
+Exact digital-lending and battery-waste regulatory coverage remains limited;
+unrelated state lending laws and general industrial news must not fill that gap.
+
+Server regression run: 635 pass, zero fail, two skipped (disposable database
+fixtures unavailable). Frontend build and lint passed. Authenticated production
+verification, scoped JIT canaries, final PDF visual inspection and deployment
+identity verification are pending; this pass is not yet classified complete.
+
 ## Product contract
 
 Rashtram separates catalogue discovery from evidence readiness. The catalogue remains the discovery surface for roughly 20,000 records; a record is not evidence until its readiness contract says that text and retrieval are ready.

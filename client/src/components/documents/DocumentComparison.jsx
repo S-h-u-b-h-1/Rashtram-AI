@@ -44,7 +44,14 @@ const SECTION_CONFIG = [
 ];
 
 const itemText = (item) => {
+  if (item == null) return "";
   if (typeof item === "string") return item;
+  const textValue = (value) => {
+    if (value == null) return "";
+    if (Array.isArray(value)) return value.map(textValue).filter(Boolean).join("; ");
+    if (typeof value === "object") return Object.values(value).map(textValue).filter(Boolean).join("; ");
+    return String(value);
+  };
   return [
     item.topic,
     item.dimension,
@@ -68,6 +75,7 @@ const itemText = (item) => {
     item.focus,
   ]
     .filter(Boolean)
+    .map(textValue)
     .join(" — ");
 };
 

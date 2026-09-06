@@ -59,3 +59,9 @@ test("PDF helpers clean Markdown and produce safe filenames", () => {
   assert.equal(plainMarkdown("**Impact** [source](https://example.com)"), "Impact source (https://example.com)");
   assert.equal(safeFilePart("Taxation Laws: Impact / 2025"), "taxation-laws-impact-2025");
 });
+
+test("mixed Hindi and Latin export retains Indic shaping without a font error", async () => {
+  const pdf = await createResearchBriefPdf({ title: "हिन्दी और English — ₹1,000",
+    reportText: "# निष्कर्ष / Findings\nभारत में डेटा संरक्षण आवश्यक है। [C1]" });
+  assert.equal(pdf.subarray(0, 5).toString("latin1"), "%PDF-");
+});

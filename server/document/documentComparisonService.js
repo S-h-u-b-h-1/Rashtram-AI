@@ -1659,26 +1659,26 @@ const comparisonAsMarkdown = (comparison) => {
     ["Practical Implications", "practicalImplications"],
     ["Key Takeaways", "keyTakeaways"],
   ];
+  const valueText = (value) => {
+    if (value == null) return "";
+    if (Array.isArray(value)) return value.map(valueText).filter(Boolean).join("; ");
+    if (typeof value === "object") return Object.entries(value)
+      .filter(([key]) => !["id", "documentId", "chunkId"].includes(key))
+      .map(([key, nested]) => `${key.replace(/([a-z])([A-Z])/g, "$1 $2")}: ${valueText(nested)}`).join("; ");
+    return String(value);
+  };
   const renderItem = (item) => {
+    if (item == null) return "";
     if (typeof item === "string") return `- ${item}`;
-    const label = item.topic || item.dimension || item.term || item.name || item.date || item.point || "Finding";
-    const details = [
-      item.documentA ? `Document A: ${item.documentA}` : null,
-      item.documentB ? `Document B: ${item.documentB}` : null,
-      item.analysis ? `Analysis: ${item.analysis}` : null,
-      item.significance ? `Why it matters: ${item.significance}` : null,
-      item.impact ? `Impact: ${item.impact}` : null,
-      item.event ? `Event: ${item.event}` : null,
-      item.clause ? `Provision: ${item.clause}` : null,
-      item.citations?.length ? `Evidence: ${item.citations.join(", ")}` : null,
-    ].filter(Boolean);
-    return `- ${label}${details.length ? ` — ${details.join("; ")}` : ""}`;
+    return `- ${valueText(item)}`;
   };
   fields.forEach(([title, key]) => {
-    const items = Array.isArray(result[key]) ? result[key] : [];
+    const legacyFields = { keyProvisions: "keyClauses", obligations: "complianceImpact", legalEffect: "authorityDifferences", stakeholderImpact: "stakeholders", practicalImplications: "impactAssessment", keyTakeaways: "keyFindings" };
+    const items = Array.isArray(result[key]) && result[key].length ? result[key] :
+      Array.isArray(result[legacyFields[key]]) ? result[legacyFields[key]] : [];
     lines.push("", `## ${title}`);
-    if (items.length) lines.push(...items.slice(0, 20).map(renderItem));
-    else lines.push(result.sectionStatus?.[key] === "not_applicable"
+    if (items.length) lines.push(...items.map(renderItem));
+    else lines.push(/not.applicable/i.test(valueText(result.sectionStatus?.[key]))
       ? "Not materially applicable to this comparison."
       : "Insufficient evidence in the selected documents to compare this reliably.");
   });

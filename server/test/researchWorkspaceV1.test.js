@@ -42,10 +42,14 @@ test('catalogue discovery is broad by default and readiness filtering stays expl
 test('workspace contract exposes bounded just-in-time preparation and no false readiness', () => {
   const route = fs.readFileSync(path.join(__dirname, '../document/documentsRoute.js'), 'utf8');
   const workspace = fs.readFileSync(path.join(__dirname, '../../client/src/components/workspace/NewResearch.jsx'), 'utf8');
+  const preparation = fs.readFileSync(path.join(__dirname, '../document/discoveryPreparationService.js'), 'utf8');
   assert.match(route, /router\.post\("\/prepare-candidates"/);
   assert.match(route, /slice\(0, 5\)/);
-  assert.match(route, /reason: "just_in_time_discovery"/);
-  assert.match(workspace, /fetchDocuments\(\{ search: query, semantic: true, sortBy: "relevance", limit: 20, signal: controller\.signal \}\)/);
+  assert.match(preparation, /just_in_time_discovery/);
+  assert.match(route, /waitUntil\(/);
+  assert.match(route, /recoverStale: false/);
+  assert.match(workspace, /recommendForProblem\(\{ problem: query, limit: 20 \}/);
+  assert.doesNotMatch(workspace, /fetchDocuments\(/);
   assert.doesNotMatch(workspace, /researchReady:\s*true/);
   assert.match(workspace, /never treated as evidence until ready/);
   assert.match(workspace, /\.slice\(0, 3\)/);

@@ -175,6 +175,7 @@ const claimNextJob = async (
        LEFT JOIN document_retry_domain_state domain_state
          ON domain_state.source_host = queued.source_host
        WHERE queued.status = 'queued'
+         AND queued.attempt < queued.max_attempts
          AND queued.next_attempt_at <= NOW()
          AND (
            $3::BIGINT[] IS NULL
@@ -424,6 +425,7 @@ const workerLoop = async ({
   discoverGraph,
   sourceConcurrency,
   allowedDocumentIds = null,
+  deadlineAt = Infinity,
 }) => {
   const results = [];
   await updateWorker(workerId, {
@@ -433,7 +435,7 @@ const workerLoop = async ({
   });
   let claimFailures = 0;
   let idlePolls = 0;
-  while (results.length < jobLimit) {
+  while (results.length < jobLimit && Date.now() < deadlineAt) {
     let job;
     try {
       job = await claimNextJob(
@@ -601,7 +603,7 @@ const runWorkerPool = async (options = {}) => {
     { length: concurrency },
     (_, index) => base + (index < remainder ? 1 : 0),
   ).filter(Boolean);
-  const recovered = await recoverStaleJobs(options.staleMinutes);
+  const recovered = options.recoverStale === false ? 0 : await recoverStaleJobs(options.staleMinutes);
   const workerResults = await Promise.all(
     allocations.map((jobLimit, index) =>
       workerLoop({
@@ -610,6 +612,7 @@ const runWorkerPool = async (options = {}) => {
         jobLimit,
         discoverGraph: options.discoverGraph !== false,
         allowedDocumentIds: options.allowedDocumentIds || null,
+        deadlineAt: options.deadlineAt || Infinity,
         sourceConcurrency: clamp(
           options.sourceConcurrency,
           Number(process.env.PROCESSING_SOURCE_CONCURRENCY) || 2,

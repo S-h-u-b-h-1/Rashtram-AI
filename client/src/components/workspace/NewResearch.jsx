@@ -5,7 +5,7 @@ import { ArrowRight, FileText, Link2, Loader2, Search, Upload, X } from "lucide-
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
-import { addResearchPdfSource, addResearchUrlSource, deleteResearchSource, fetchDocuments, getDocumentReadiness, getResearchSources, prepareResearchCandidates, recommendForProblem, retryResearchPdfSource } from "@/lib/api";
+import { addResearchPdfSource, addResearchUrlSource, deleteResearchSource, getDocumentReadiness, getResearchSources, prepareResearchCandidates, recommendForProblem, retryResearchPdfSource } from "@/lib/api";
 import { canPrepareDocumentForResearch, isResearchReady } from "@/lib/document-readiness";
 import { formatDate, humanize } from "@/lib/document-links";
 import { selectedPersonalSources, workspaceHref } from "@/lib/research-workspace.mjs";
@@ -33,32 +33,37 @@ export function NewResearch() {
   const [discoveryMs, setDiscoveryMs] = useState(null);
   const [problemUnderstanding, setProblemUnderstanding] = useState(null);
   const [researchPlan, setResearchPlan] = useState([]);
-  const [recommendedSources, setRecommendedSources] = useState([]);
+  const [preparationNotice, setPreparationNotice] = useState("");
+  const [showAllMatches, setShowAllMatches] = useState(false);
   const [error, setError] = useState("");
   const [sourceError, setSourceError] = useState("");
   const requestRef = useRef(null);
+  const pollTimer = useRef(null);
   const owner = user?.id || user?._id;
 
   const refreshPreparedCandidates = async (ids, controller, attempt = 0) => {
-    if (controller.signal.aborted || !ids.length || attempt > 4) return;
+    if (controller.signal.aborted || !ids.length) return;
     try {
-      const readiness = await Promise.all(ids.map((id) => getDocumentReadiness(id)));
+      const readiness = await Promise.all(ids.map((id) => getDocumentReadiness(id, { signal: controller.signal })));
       if (controller.signal.aborted) return;
       setDocuments((current) => current.map((document) => {
         const updated = readiness.find((item) => String(item?.id || item?.documentId) === String(document.id));
         return updated ? { ...document, ...updated, capabilities: updated.capabilities || document.capabilities } : document;
       }));
-      const pending = readiness.filter((item) => item && !item.researchReady && item.canPrepare !== false).map((item) => String(item.documentId || item.id));
+      const pending = readiness.filter((item) => item && !item.researchReady && ["queued", "processing", "running"].includes(item.status)).map((item) => String(item.documentId || item.id));
       setPreparingIds(new Set(pending));
-      if (pending.length && attempt < 4) setTimeout(() => refreshPreparedCandidates(pending, controller, attempt + 1), 2_500);
-    } catch { /* The initial discovery result remains visible if a readiness refresh is unavailable. */ }
+      if (pending.length && attempt < 59) pollTimer.current = setTimeout(() => refreshPreparedCandidates(pending, controller, attempt + 1), 5_000);
+      else if (pending.length) { setPreparingIds(new Set()); setPreparationNotice("Preparation is taking longer than expected or waiting for a source cooldown. Ready sources remain usable. Open the pending document to check its status."); }
+    } catch {
+      if (!controller.signal.aborted) { setPreparingIds(new Set()); setPreparationNotice("Live preparation updates are unavailable. Open the document to check its status; it has not been marked ready."); }
+    }
   };
 
   useEffect(() => {
     let active = true;
     getResearchSources().then((result) => { if (active) { setSources(result.sources || []); setSourceIds([]); } })
       .catch(() => { if (active) setSourceError("Your saved sources could not be loaded. You can still find documents in Library."); });
-    return () => { active = false; requestRef.current?.abort(); };
+    return () => { active = false; requestRef.current?.abort(); clearTimeout(pollTimer.current); };
   }, [owner]);
 
   const discover = async (event) => {
@@ -66,36 +71,38 @@ export function NewResearch() {
     const query = question.trim();
     if (query.length < 3) { setError("Enter a topic or research question to find sources."); return; }
     requestRef.current?.abort();
+    clearTimeout(pollTimer.current);
     const controller = new AbortController();
     requestRef.current = controller;
     const startedAt = typeof performance !== "undefined" ? performance.now() : Date.now();
-    setFinding(true); setError(""); setDocuments([]); setSelected([]); setSearchedQuestion(query); setDiscoveryMs(null); setPreparingIds(new Set()); setProblemUnderstanding(null); setResearchPlan([]); setRecommendedSources([]);
+    setFinding(true); setError(""); setDocuments([]); setSelected([]); setSearchedQuestion(query); setDiscoveryMs(null); setPreparingIds(new Set()); setProblemUnderstanding(null); setResearchPlan([]); setPreparationNotice("");
+    setShowAllMatches(false);
     try {
-      const [result, intelligence] = await Promise.all([
-        fetchDocuments({ search: query, semantic: true, sortBy: "relevance", limit: 20, signal: controller.signal }),
-        query.length >= 12 ? recommendForProblem({ problem: query, limit: 20 }, { signal: controller.signal }).catch(() => null) : Promise.resolve(null),
-      ]);
+      const intelligence = await recommendForProblem({ problem: query, limit: 20 }, { signal: controller.signal });
       if (!controller.signal.aborted) {
-        const found = result.documents || [];
+        const found = intelligence.discoveryCandidates || [];
         setDocuments(found);
         setProblemUnderstanding(intelligence?.problemUnderstanding || null);
         setResearchPlan(intelligence?.researchPlan || []);
-        setRecommendedSources([...(intelligence?.recommendations || []), ...(intelligence?.preparationCandidates || [])].slice(0, 6));
         setDiscoveryMs(Math.round((typeof performance !== "undefined" ? performance.now() : Date.now()) - startedAt));
         const justInTime = found
-          .filter((document) => !isResearchReady(document) && canPrepareDocumentForResearch(document))
+          .filter((document) => !isResearchReady(document) && ["PRIMARY_OFFICIAL", "PRIMARY_LEGAL_TEXT"].includes(document.authorityClass) && canPrepareDocumentForResearch(document))
           .slice(0, 3)
           .map((document) => String(document.id));
         if (justInTime.length) {
           setPreparingIds(new Set(justInTime));
-          prepareResearchCandidates(justInTime)
+          prepareResearchCandidates(justInTime, { problem: query, signal: controller.signal })
             .then((prepared) => {
               if (controller.signal.aborted) return;
-              const queued = new Set((prepared.candidates || []).filter((item) => item.status === "preparing").map((item) => String(item.documentId)));
+              const queued = new Set((prepared.candidates || []).filter((item) => ["queued", "running"].includes(item.status)).map((item) => String(item.documentId)));
+              setDocuments((current) => current.map((document) => {
+                const outcome = prepared.candidates?.find((item) => String(item.documentId) === String(document.id));
+                return outcome ? { ...document, preparationStatus: outcome.status, preparationReason: outcome.reason } : document;
+              }));
               setPreparingIds(queued);
               if (queued.size) refreshPreparedCandidates([...queued], controller);
             })
-            .catch(() => { if (!controller.signal.aborted) setPreparingIds(new Set()); });
+            .catch((failure) => { if (!controller.signal.aborted) { setPreparingIds(new Set()); setPreparationNotice(failure.message || "Preparation could not start. You can still use ready sources."); } });
         }
       }
     } catch (failure) {
@@ -129,13 +136,13 @@ export function NewResearch() {
     <p className="mt-3 text-center text-xs text-[#706a61]">Choose your sources before Rashtram answers. Your research stays private to your account.</p>
     {error && <p role="alert" className="mt-4 rounded-lg bg-[#f4e4e0] p-3 text-sm text-[#85434a]">{error}</p>}
     <div className="mt-4 grid gap-2 sm:grid-cols-2" aria-label="Quick research actions">
-      <Link href="/app/policy-drafter" className="group rounded-xl border border-[#8f1d2c]/12 bg-white px-4 py-3 text-left transition hover:border-[#8f1d2c]/30 hover:bg-[#fffaf0]"><span className="block text-sm font-semibold text-[#8f1d2c]">Draft a policy <ArrowRight className="ml-1 inline h-3.5 w-3.5 transition group-hover:translate-x-0.5" /></span><span className="mt-1 block text-xs text-[#706a61]">Turn selected evidence into a policy draft.</span></Link>
-      <Link href="/app/compare" className="group rounded-xl border border-[#8f1d2c]/12 bg-white px-4 py-3 text-left transition hover:border-[#8f1d2c]/30 hover:bg-[#fffaf0]"><span className="block text-sm font-semibold text-[#8f1d2c]">Compare documents <ArrowRight className="ml-1 inline h-3.5 w-3.5 transition group-hover:translate-x-0.5" /></span><span className="mt-1 block text-xs text-[#706a61]">Compare two or more research-ready sources.</span></Link>
+      <Link href={`/app/policy-drafter?ids=${selected.join(",")}&sources=${readySourceIds.join(",")}`} className="group rounded-xl border border-[#8f1d2c]/12 bg-white px-4 py-3 text-left transition hover:border-[#8f1d2c]/30 hover:bg-[#fffaf0]"><span className="block text-sm font-semibold text-[#8f1d2c]">Draft a policy <ArrowRight className="ml-1 inline h-3.5 w-3.5 transition group-hover:translate-x-0.5" /></span><span className="mt-1 block text-xs text-[#706a61]">Turn selected evidence into a policy draft.</span></Link>
+      <Link href={`/app/compare?ids=${selected.join(",")}`} className="group rounded-xl border border-[#8f1d2c]/12 bg-white px-4 py-3 text-left transition hover:border-[#8f1d2c]/30 hover:bg-[#fffaf0]"><span className="block text-sm font-semibold text-[#8f1d2c]">Compare documents <ArrowRight className="ml-1 inline h-3.5 w-3.5 transition group-hover:translate-x-0.5" /></span><span className="mt-1 block text-xs text-[#706a61]">Compare two or more research-ready sources.</span></Link>
     </div>
-    {searchedQuestion && (problemUnderstanding || researchPlan.length > 0 || recommendedSources.length > 0) && <section className="mt-5 rounded-xl border border-[#8f1d2c]/12 bg-[#fffaf0] p-4" aria-label="Research understanding and recommendations">
+    {searchedQuestion && (problemUnderstanding || researchPlan.length > 0) && <section className="mt-5 rounded-xl border border-[#8f1d2c]/12 bg-[#fffaf0] p-4" aria-label="Research understanding and recommendations">
       {problemUnderstanding && <div><p className="text-[10px] font-bold uppercase tracking-[0.16em] text-[#874047]">Understanding your research</p><h3 className="mt-1 font-serif text-xl text-[#8f1d2c]">{problemUnderstanding.statement}</h3><p className="mt-2 text-xs leading-5 text-[#706a61]">Goal: {problemUnderstanding.goal} · Jurisdiction: {problemUnderstanding.jurisdiction} · Authority: {problemUnderstanding.regulator}</p></div>}
       {researchPlan.length > 0 && <div className="mt-4"><p className="text-[10px] font-bold uppercase tracking-[0.16em] text-[#874047]">Topics that matter</p><div className="mt-2 flex flex-wrap gap-2">{researchPlan.slice(0, 6).map((item) => <span key={item.area} className="rounded-full border border-[#8f1d2c]/10 bg-white px-2.5 py-1.5 text-[11px] text-[#625d55]">{item.area}</span>)}</div></div>}
-      {recommendedSources.length > 0 && <div className="mt-4"><p className="text-[10px] font-bold uppercase tracking-[0.16em] text-[#874047]">Recommended sources</p><div className="mt-2 grid gap-2 sm:grid-cols-2">{recommendedSources.map((source) => <div key={source.id} className="rounded-lg border border-[#8f1d2c]/8 bg-white px-3 py-2"><p className="text-xs font-semibold leading-5 text-[#29312d]">{source.title}</p><p className="mt-1 text-[10px] leading-4 text-[#706a61]">{source.authorityLabel || source.authority || source.ministry || "Authority not classified"} · {humanize(source.documentType || source.type || "document")} · {source.jurisdiction || source.state || "India"}</p><p className={`mt-1 text-[10px] font-semibold ${source.researchReady ? "text-[#34725b]" : "text-[#a06a22]"}`}>{source.researchReady ? "Ready" : "Preparation required"}</p></div>)}</div></div>}
+      {problemUnderstanding?.timeframe && <p className="mt-3 text-xs leading-5 text-[#706a61]">{problemUnderstanding.timeframe}</p>}
     </section>}
     {showSources && <section className="mt-5 overflow-hidden rounded-xl border border-[#8f1d2c]/15">
       <div className="flex items-center justify-between px-4 py-2"><h3 className="text-sm font-semibold">Add your sources</h3><button type="button" onClick={() => setShowSources(false)} className="grid h-11 w-11 place-items-center" aria-label="Close source picker"><X className="h-4 w-4" /></button></div>
@@ -146,17 +153,22 @@ export function NewResearch() {
         onDelete={async (id) => { await deleteResearchSource(id); setSources((current) => current.filter((item) => String(item.id) !== String(id))); setSourceIds((current) => current.filter((item) => item !== String(id))); }} /></div>
     </section>}
     {finding && <p role="status" className="py-8 text-center text-sm text-[#706a61]">Finding relevant sources…</p>}
+    {preparationNotice && <p role="status" className="mt-4 rounded-lg bg-[#fffaf0] p-3 text-xs leading-5 text-[#706a61]">{preparationNotice}</p>}
     {searchedQuestion && !finding && !error && <section className="mt-7" aria-label="Choose research sources">
-      <div className="flex flex-wrap items-baseline justify-between gap-2"><h3 className="text-base font-semibold">{documents.length ? `${documents.length} catalogue matches` : "No catalogue sources found for this question"}</h3><p className="text-xs text-[#706a61]">Select up to 5 ready sources · {discoveryMs != null ? `found in ${(discoveryMs / 1000).toFixed(1)}s` : ""}</p></div>
+      <div className="flex flex-wrap items-baseline justify-between gap-2"><h3 className="text-base font-semibold">{documents.length ? "Recommended sources" : "No sufficiently relevant catalogue sources found"}</h3><p className="text-xs text-[#706a61]">Select up to 5 ready sources · {discoveryMs != null ? `found in ${(discoveryMs / 1000).toFixed(1)}s` : ""}</p></div>
       {!documents.length && <p className="mt-3 text-sm leading-6 text-[#706a61]">Try the instrument name or a shorter topic. You can also add a PDF or link, or <Link className="text-[#8f1d2c] underline" href={`/app/library?q=${encodeURIComponent(searchedQuestion)}`}>browse Library</Link>. No answer has been generated.</p>}
       {documents.length > 0 && <p className="mt-2 text-xs leading-5 text-[#706a61]">Catalogue matches include sources that still need preparation. They are never treated as evidence until ready.</p>}
-      <div className="mt-3 divide-y divide-[#8f1d2c]/10">{documents.map((document) => { const checked = selected.includes(String(document.id)); const ready = isResearchReady(document); const preparing = preparingIds.has(String(document.id)) || ["processing_pending", "queued", "processing"].includes(document.readinessClass); return <article key={document.id} className={`py-4 ${checked ? "bg-[#f1ece3]" : ""}`}>
+      <div className="mt-3 divide-y divide-[#8f1d2c]/10">{documents.slice(0, showAllMatches ? 20 : 8).map((document) => { const checked = selected.includes(String(document.id)); const ready = isResearchReady(document); const preparing = preparingIds.has(String(document.id)); return <article key={document.id} className={`py-4 ${checked ? "bg-[#f1ece3]" : ""}`}>
         <label className={`flex items-start gap-3 rounded-lg px-3 ${ready ? "cursor-pointer" : "cursor-default"}`}><input type="checkbox" className="mt-1 h-5 w-5 shrink-0 accent-[#8f1d2c]" checked={checked} disabled={!ready || (!checked && selected.length >= 5)} onChange={() => toggleDocument(document.id)} />
           <span className="min-w-0"><span className="block text-sm font-semibold leading-6">{document.title}</span><span className="mt-1 block text-xs leading-5 text-[#706a61]">{[humanize(document.type || document.documentType), document.authority || document.ministry, document.jurisdiction || document.state, formatDate(document.publicationDate, document.year || "Date unavailable")].filter(Boolean).join(" · ")}</span>
-          <span className="mt-2 block text-xs leading-5 text-[#706a61]">{document.relevanceExplanation || document.matchExplanation || "Discovered from the full catalogue. Review the source before including it."}</span><span className={`mt-2 block text-xs font-medium ${ready ? "text-[#34725b]" : preparing ? "text-[#a06a22]" : "text-[#81796e]"}`}>{ready ? "Ready to research" : preparing ? "Preparing for research" : document.hasAccessibleResource ? "Source available · needs processing" : "Metadata only · needs preparation"}</span></span>
+          <span className="mt-2 block text-xs leading-5 text-[#706a61]">{document.relevanceExplanation || document.matchExplanation || "Discovered from the full catalogue. Review the source before including it."}</span>
+          <span className="mt-1 block text-xs leading-5 text-[#706a61]">{document.authorityLabel} · Focus: {(document.focusAreas || []).slice(0, 3).join("; ") || "Review applicability"}</span>
+          <span className="mt-1 block text-[11px] leading-5 text-[#81796e]">{document.currentnessCaution}</span>
+          <span className={`mt-2 block text-xs font-medium ${ready ? "text-[#34725b]" : preparing ? "text-[#a06a22]" : "text-[#81796e]"}`}>{ready ? "Ready to research" : preparing ? document.status === "queued" ? "Queued for preparation" : "Preparing for research" : document.preparationReason || document.reason || document.readinessReason || (document.hasAccessibleResource || document.pdfUrl ? "Source available · preparation required" : "Metadata only · preparation required")}</span></span>
         </label>
-        <div className="pl-11 pt-1">{(document.sourceUrl || document.pdfUrl) && <a href={document.sourceUrl || document.pdfUrl} target="_blank" rel="noreferrer" className="inline-flex min-h-11 items-center gap-1 text-xs text-[#8f1d2c]"><FileText className="h-3.5 w-3.5" />Preview source</a>}</div>
+        <div className="flex flex-wrap gap-4 pl-11 pt-1">{(document.sourceUrl || document.pdfUrl) && <a href={document.sourceUrl || document.pdfUrl} target="_blank" rel="noreferrer" className="inline-flex min-h-11 items-center gap-1 text-xs text-[#8f1d2c]"><FileText className="h-3.5 w-3.5" />Preview source</a>}<Link href={`/app/document/${document.id}`} className="inline-flex min-h-11 items-center text-xs text-[#8f1d2c]">{ready ? "Open research workspace" : "Review preparation status"}</Link></div>
       </article>; })}</div>
+      {documents.length > 8 && <button type="button" onClick={() => setShowAllMatches((current) => !current)} className="mt-3 min-h-11 text-xs font-semibold text-[#8f1d2c]">{showAllMatches ? "Show fewer sources" : `Show ${documents.length - 8} more matches`}</button>}
     </section>}
     {count > 0 && <div className="sticky bottom-0 z-10 mt-5 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[#8f1d2c]/15 bg-[#f8f6f1] p-4 shadow-sm">
       <p className="text-sm">{count} {count === 1 ? "source" : "sources"} selected</p>

@@ -100,8 +100,8 @@ const BUSINESS_DOMAINS = Object.freeze([
     expansions: ["battery waste", "EPR", "pollution control", "CPCB", "state pollution control board"],
     regulators: ["CPCB", "Pollution Control Board"],
     themes: ["environmental permission", "waste management", "extended producer responsibility"],
-    anchors: ["battery", "recycling", "battery waste", "epr"],
-    anchorClauses: [["battery", "battery waste"], ["recycling", "epr"]],
+    anchors: ["battery", "batteries", "recycling", "battery waste", "epr"],
+    anchorClauses: [["battery", "batteries", "battery waste"], ["recycling", "epr", "circular economy"]],
     regulatoryAnchors: ["epr", "waste", "pollution", "cpcb", "rule", "registration", "environment"],
   },
   {
@@ -111,7 +111,7 @@ const BUSINESS_DOMAINS = Object.freeze([
     regulators: ["FSSAI", "Food Safety and Standards Authority of India"],
     themes: ["food licence", "safety", "labour", "factory permissions"],
     anchors: ["food", "fssai", "food safety"],
-    anchorClauses: [["food", "fssai"], ["manufacturing", "licence", "license", "factory", "fssai"]],
+    anchorClauses: [["food safety", "fssai"], ["standards", "licence", "license", "factory", "fssai"]],
     regulatoryAnchors: ["fssai", "food safety", "licence", "license", "factory", "labour", "regulation"],
   },
   {
@@ -140,7 +140,8 @@ const BUSINESS_DOMAINS = Object.freeze([
     expansions: ["Factories Act", "factory licence", "pollution consent", "labour compliance"],
     regulators: ["Factory Inspectorate", "Pollution Control Board"],
     themes: ["factory permissions", "worker safety", "environmental permission"],
-    anchors: ["manufacturing", "factory", "industrial unit"],
+    anchors: ["factories", "factory", "occupational safety", "industrial unit"],
+    regulatoryAnchors: ["factories", "factory", "occupational safety", "labour", "licence", "license", "rule"],
   },
   {
     sector: "logistics and transport",
@@ -266,15 +267,16 @@ const buildResearchPlan = (input = {}, inferred = {}) => {
 
 const authorityLabel = (authorityClass) => ({
   PRIMARY_OFFICIAL: "Primary official source",
+  PRIMARY_LEGAL_TEXT: "Legal text hosted by PRS; verify against official publication",
   OFFICIAL_SECONDARY: "Official supporting material",
   INSTITUTIONAL: "Institutional research",
   SECONDARY_RESEARCH: "Secondary research",
 }[authorityClass] || "Source authority not yet classified");
 
 const recommendationPriority = (item = {}) => {
-  if (item.authorityClass === "PRIMARY_OFFICIAL" && item.relevanceTier === RELEVANCE_TIERS.HIGH) return "essential";
+  if (["PRIMARY_OFFICIAL", "PRIMARY_LEGAL_TEXT"].includes(item.authorityClass) && item.relevanceTier === RELEVANCE_TIERS.HIGH) return "essential";
   if ([RELEVANCE_TIERS.HIGH, RELEVANCE_TIERS.MEDIUM].includes(item.relevanceTier) &&
-      ["PRIMARY_OFFICIAL", "OFFICIAL_SECONDARY"].includes(item.authorityClass)) return "important";
+      ["PRIMARY_OFFICIAL", "PRIMARY_LEGAL_TEXT", "OFFICIAL_SECONDARY"].includes(item.authorityClass)) return "important";
   return "background";
 };
 
@@ -299,6 +301,9 @@ const enrichProblemRecommendation = (recommendation, input, inferred, researchPl
     (focusAreas.join(", ") || "the governing framework") + "; confirm exact applicability in the source.";
   return {
     ...recommendation,
+    currentnessCaution: /bill|draft|consultation/.test(`${recommendation.documentType} ${recommendation.title}`.toLowerCase())
+      ? "Proposal or draft: do not treat this as an enacted requirement."
+      : "Publication date does not establish current legal force; verify commencement, amendments and applicability.",
     priority: recommendationPriority(recommendation),
     authorityLabel: authority,
     focusAreas,
@@ -338,7 +343,7 @@ const inferBusinessSignals = (input = {}) => {
   let domains = BUSINESS_DOMAINS.filter((domain) =>
     domain.terms.some((term) => normalized.includes(normalizeProblemText(term))),
   );
-  if (domains.some((domain) => domain.sector === "food manufacturing")) {
+  if (domains.some((domain) => ["food manufacturing", "environment and recycling"].includes(domain.sector))) {
     domains = domains.filter((domain) => domain.sector !== "manufacturing");
   }
   const jurisdictions = [
@@ -373,6 +378,9 @@ const authorityWeight = (row = {}) => {
   );
   if (/policyedge|policy edge/.test(source)) {
     return { score: 0.35, class: "SECONDARY_RESEARCH" };
+  }
+  if (/prsindia org files bills acts/.test(source) && ["act", "bill", "ordinance", "rule", "regulation"].includes(row.document_type)) {
+    return { score: 0.9, class: "PRIMARY_LEGAL_TEXT" };
   }
   if (/adb|world bank|worldbank|who|oecd|imf|university|institute/.test(source)) {
     return { score: 0.65, class: "INSTITUTIONAL" };
@@ -435,6 +443,9 @@ const evaluateBusinessCandidate = (row = {}, input = {}, inferred = inferBusines
     candidateState.includes(state) || state.includes(candidateState),
   );
   const jurisdictionMismatch = explicitState && !jurisdictionMatch;
+  const specialisedFactoryMismatch = inferred.sectors.includes("manufacturing") &&
+    ["cotton", "sugar", "jute", "cement", "tobacco"].some((sector) => includesNormalizedTerm(titleText, sector) &&
+      !includesNormalizedTerm(input.problem, sector));
   const lexicalMatch = Number(row.problem_rank || 0) > 0;
   const semanticMatch = Boolean(row.semantic_match);
   const domainAnchorMatch = inferred.sectors.length === 0 ||
@@ -453,7 +464,7 @@ const evaluateBusinessCandidate = (row = {}, input = {}, inferred = inferBusines
     }));
   const authority = authorityWeight(row);
   const strongDomainAnchor = domainAnchorMatch &&
-    (authority.class === "PRIMARY_OFFICIAL" || titleAnchorMatch);
+    (["PRIMARY_OFFICIAL", "PRIMARY_LEGAL_TEXT"].includes(authority.class) || titleAnchorMatch);
   const typeWeight = complianceDocumentTypeWeight(row.document_type);
   const dimensions = [
     sectorMatch, activityMatch, themeMatch, regulatorMatch,
@@ -476,13 +487,14 @@ const evaluateBusinessCandidate = (row = {}, input = {}, inferred = inferBusines
   if (!jurisdictionMismatch && strongDomainAnchor && regulatoryAnchorMatch && dimensions >= 3 && score >= 0.58) tier = RELEVANCE_TIERS.HIGH;
   else if (!jurisdictionMismatch && strongDomainAnchor && regulatoryAnchorMatch && dimensions >= 2 && score >= 0.38) tier = RELEVANCE_TIERS.MEDIUM;
   else if (!jurisdictionMismatch && dimensions >= 1 && score >= 0.2) tier = RELEVANCE_TIERS.LOW;
+  if (specialisedFactoryMismatch && tier !== RELEVANCE_TIERS.REJECTED) tier = RELEVANCE_TIERS.LOW;
   const matchReasons = [
     sectorMatch ? `sector: ${inferred.sectors.join(", ")}` : null,
     activityMatch ? `activity: ${inferred.activities.join(", ")}` : null,
     regulatorMatch ? `regulator: ${inferred.regulators.join(", ")}` : null,
     themeMatch ? `theme: ${inferred.themes.join(", ")}` : null,
     explicitState && jurisdictionMatch ? `jurisdiction: ${inferred.jurisdictions.join(", ")}` : null,
-    lexicalMatch || semanticMatch ? "indexed evidence matches the problem" : null,
+    lexicalMatch || semanticMatch ? "catalogue metadata matches the topic; content applicability requires review" : null,
   ].filter(Boolean);
   return {
     tier,
@@ -1058,9 +1070,9 @@ const getDocumentRecommendations = async (
 
 const validateProblemRequest = (payload = {}) => {
   const problem = String(payload.problem || "").normalize("NFKC").trim();
-  if (problem.length < 12 || problem.length > 2_000) {
+  if (problem.length < 3 || problem.length > 2_000) {
     const error = new Error(
-      "Describe the business or policy problem in 12 to 2,000 characters.",
+      "Describe the research topic in 3 to 2,000 characters.",
     );
     error.status = 400;
     throw error;
@@ -1078,6 +1090,7 @@ const validateProblemRequest = (payload = {}) => {
 };
 
 const getProblemRecommendations = async (userId, payload) => {
+  const startedAt = Date.now();
   const input = validateProblemRequest(payload);
   const inferred = inferBusinessSignals(input);
   if (!input.states.length && inferred.jurisdictions.length) {
@@ -1109,6 +1122,7 @@ const getProblemRecommendations = async (userId, payload) => {
     .map((term) => term.includes(" ") ? `"${term.replaceAll('"', "")}"` : term)
     .join(" OR ") || input.problem;
   let semanticIds = [];
+  const analysisCompletedAt = Date.now();
   // Sector-specific compliance intent already has precise lexical expansion.
   // Avoid a paid query embedding on that hot path; semantic retrieval remains
   // available for unclassified natural-language problems.
@@ -1198,6 +1212,7 @@ const getProblemRecommendations = async (userId, payload) => {
          OR candidate.document_type = ANY($4::TEXT[]))
        AND (
          candidate.search_vector @@ WEBSEARCH_TO_TSQUERY('simple', $1)
+         OR candidate.title ILIKE ANY($8::TEXT[])
          OR candidate.state = ANY($2::TEXT[])
          OR candidate.jurisdiction = ANY($2::TEXT[])
          OR ($3::TEXT <> '' AND (
@@ -1206,7 +1221,9 @@ const getProblemRecommendations = async (userId, payload) => {
          ))
          OR candidate.id = ANY($6::BIGINT[])
        )
-     ORDER BY semantic_match DESC,
+     ORDER BY (candidate.title ILIKE ANY($8::TEXT[])) DESC,
+       (CARDINALITY($2::TEXT[]) = 0 OR candidate.state IS NULL OR candidate.state = ANY($2::TEXT[])) DESC,
+       semantic_match DESC,
        problem_rank DESC,
        state_match DESC,
        industry_match DESC,
@@ -1218,11 +1235,14 @@ const getProblemRecommendations = async (userId, payload) => {
       input.states,
       input.industry,
       input.documentTypes,
-      Math.max(input.limit * 3, 30),
+      Math.max(input.limit * 3, 60),
       semanticIds,
       input.draftOnly,
+      [...new Set((inferred.anchorGroups.length ? inferred.anchorGroups.flat() : inferred.tokens)
+        .map((term) => `%${term.replace(/[%_]/g, "")}%`))],
     ],
   );
+  const retrievalCompletedAt = Date.now();
   const candidates = result.rows
     .map((row) => {
       const relevance = evaluateBusinessCandidate(row, input, inferred);
@@ -1260,11 +1280,22 @@ const getProblemRecommendations = async (userId, payload) => {
           : "A lower-confidence discovery result; applicability is not established.",
       }, input, inferred, researchPlan);
     })
-    .sort((left, right) =>
-      right.score - left.score ||
+    .sort((left, right) => {
+      const priorityScore = (item) => item.score -
+        (!/\b(bill|draft|compare|historical|history)\b/i.test(input.problem) && /bill|ordinance/.test(item.documentType) ? 0.16 : 0) -
+        (/amendment/i.test(item.title) ? 0.02 : 0);
+      return priorityScore(right) - priorityScore(left) ||
       right.relevance.authorityScore - left.relevance.authorityScore ||
-      right.relevance.documentTypeScore - left.relevance.documentTypeScore,
-    );
+      right.relevance.documentTypeScore - left.relevance.documentTypeScore;
+    });
+  // Discovery order must not depend on ingestion progress. Evidence consumers
+  // continue to use the separate, ready-only recommendations contract below.
+  const discoveryCandidates = candidates
+    .filter((item) => [RELEVANCE_TIERS.HIGH, RELEVANCE_TIERS.MEDIUM].includes(item.relevanceTier))
+    .slice(0, input.limit);
+  const discoveryGroups = Object.fromEntries(["essential", "important", "background"].map((priority) =>
+    [priority, discoveryCandidates.slice(0, 8).filter((item) => item.priority === priority)]));
+  const rankingCompletedAt = Date.now();
   const recommendations = candidates
     .filter((item) => item.researchReady && (!input.draftOnly || item.draftUsable) && [RELEVANCE_TIERS.HIGH, RELEVANCE_TIERS.MEDIUM].includes(item.relevanceTier))
     .slice(0, Math.min(input.limit, 8));
@@ -1337,6 +1368,10 @@ const getProblemRecommendations = async (userId, payload) => {
     problemUnderstanding,
     researchPlan,
     recommendationGroups,
+    discoveryCandidates,
+    discoveryGroups,
+    timings: { analysisMs: analysisCompletedAt - startedAt, retrievalMs: retrievalCompletedAt - analysisCompletedAt,
+      rankingMs: rankingCompletedAt - retrievalCompletedAt, persistenceAndResponseMs: Date.now() - rankingCompletedAt, totalMs: Date.now() - startedAt },
     inferredSignals: {
       sectors: inferred.sectors,
       activities: inferred.activities,

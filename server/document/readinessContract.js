@@ -40,7 +40,11 @@ const getDocumentReadiness = async (documentId) => {
        COUNT(*)::INTEGER AS chunks,
        COUNT(vector_reference)::INTEGER AS vector_refs,
        COALESCE(SUM(CASE WHEN LENGTH(TRIM(original_text)) > 0 THEN 1 ELSE 0 END), 0)::INTEGER
-         AS text_chunks
+         AS text_chunks,
+       (SELECT jsonb_build_object('status', job.status, 'nextAttemptAt', job.next_attempt_at,
+         'attempt', job.attempt, 'maxAttempts', job.max_attempts, 'heartbeatAt', job.heartbeat_at)
+        FROM document_processing_jobs job WHERE job.document_id = $1
+        ORDER BY job.id DESC LIMIT 1) AS latest_job
      FROM document_text_chunks
      WHERE document_id = $1`,
     [document.id],
@@ -91,7 +95,9 @@ const getDocumentReadiness = async (documentId) => {
     processingStatus === "failed" ||
     document.extractionStatus === "failed" ||
     document.embeddingStatus === "failed";
-  const processing = PROCESSING_STATUSES.has(processingStatus);
+  const latestJob = counts.latest_job;
+  const jobPending = ["queued", "running"].includes(latestJob?.status);
+  const processing = jobPending || PROCESSING_STATUSES.has(processingStatus);
   const genuinelyReady =
     document.visibilityStatus !== "hidden_invalid" &&
     Boolean(document.title) &&
@@ -114,9 +120,9 @@ const getDocumentReadiness = async (documentId) => {
     reasonCode = "invalid_or_quarantined";
     reason = "Invalid or quarantined catalogue record.";
   } else if (processing) {
-    status = "processing";
+    status = latestJob?.status === "queued" ? "queued" : "processing";
     reasonCode = "processing";
-    reason = "Document processing is in progress.";
+    reason = status === "queued" ? "Queued for preparation; source cooldowns and capacity limits are respected." : "Document processing is in progress.";
   } else if (failed) {
     status = terminalSourceOnlyFailure && document.sourceUrl
       ? "source_only"
@@ -160,6 +166,7 @@ const getDocumentReadiness = async (documentId) => {
       : null;
   const canPrepare =
     !genuinelyReady &&
+    document.visibilityStatus !== "hidden_invalid" &&
     processableBySource &&
     !processing &&
     !terminalSourceOnlyFailure;
@@ -181,10 +188,11 @@ const getDocumentReadiness = async (documentId) => {
     status,
     researchReady: genuinelyReady,
     comparisonReady: genuinelyReady,
-    capabilities,
+    capabilities: { ...capabilities, chatReady: genuinelyReady, comparisonReady: genuinelyReady },
     canPrepare,
     reasonCode,
     reason,
+    preparationJob: latestJob || null,
     requirements: {
       publicValid: document.visibilityStatus !== "hidden_invalid",
       hasSource: Boolean(document.sourceUrl || document.pdfUrl),

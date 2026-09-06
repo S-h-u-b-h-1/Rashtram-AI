@@ -55,7 +55,7 @@ export function BusinessProblemRecommender() {
         problem,
         limit: 20,
       });
-      setResult(response);
+      setResult({ ...response, recommendationGroups: response.discoveryGroups || response.recommendationGroups });
       trackActivity({
         event_type: "business_problem_searched",
         entity_type: "recommendation_query",
@@ -192,7 +192,7 @@ export function BusinessProblemRecommender() {
               </p>
             </section>
           )}
-          {(result.preparationCandidates || []).length > 0 && (
+          {!result.discoveryGroups && (result.preparationCandidates || []).length > 0 && (
             <RecommendationSection
               title="Relevant records that need preparation"
               eyebrow="Catalogue coverage found"

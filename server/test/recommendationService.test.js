@@ -251,9 +251,10 @@ test("problem recommender validates and normalizes bounded input", () => {
   assert.equal(value.documentTypes.includes("policy"), true);
   assert.equal(value.limit, 20);
   assert.throws(
-    () => validateProblemRequest({ problem: "too short" }),
-    /12 to 2,000/i,
+    () => validateProblemRequest({ problem: "ab" }),
+    /3 to 2,000/i,
   );
+  assert.equal(validateProblemRequest({ problem: "RBI" }).problem, "RBI");
 });
 
 test("business signals expand regulated activities without generic policy noise", () => {

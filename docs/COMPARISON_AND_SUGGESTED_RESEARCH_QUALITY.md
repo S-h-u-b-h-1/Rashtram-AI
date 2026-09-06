@@ -1,6 +1,18 @@
 # Rashtram AI — Comparison and Suggested Research Quality Fix
 
-Status: local implementation complete; production quality proof is partial because the current environment rejected the required network/listener test permission.
+Status: completion audit in progress on 6 September 2026. Earlier local-completion
+and deployment assertions are superseded by the measured audit in
+RESEARCH_DISCOVERY_AND_WORKSPACE_QUALITY.md. Network access works when approved;
+it is not an inherent environment blocker. Production acceptance remains pending.
+
+The new export retains all persisted findings and legacy section aliases,
+preserves citation identifiers, avoids raw object serialization, and bundles
+open-license English/Hindi fonts. Saved comparisons 30, 31 and 86 were selected
+from the authenticated account's My Research page for read-only export checks.
+The first two are historical extractive fallbacks; export compatibility is not
+proof of new substantive AI generation. Visual checks exposed malformed source
+text and line overflow, which are being addressed without silently regenerating
+or replacing the stored comparison. No fresh comparison generation was run yet.
 
 Scope is intentionally limited to the Comparison workflow and Suggested Documents / Recommended Reading. No corpus, connector, search architecture, release, or broad UI redesign changes are included in this pass.
 

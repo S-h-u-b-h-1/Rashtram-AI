@@ -303,6 +303,8 @@ const runComplianceCopilot = async (userId, payload = {}, adapters = {}) => {
     problemUnderstanding: recommendationResult.problemUnderstanding || null,
     researchPlan: recommendationResult.researchPlan || [],
     recommendationGroups,
+    discoveryGroups: recommendationResult.discoveryGroups,
+    discoveryCandidates: recommendationResult.discoveryCandidates,
     ...result,
     preparationCandidates: recommendationResult.preparationCandidates || [],
     lowerConfidenceRecommendations:
