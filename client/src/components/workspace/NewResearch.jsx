@@ -99,7 +99,8 @@ export function NewResearch() {
                 return outcome ? { ...document, preparationStatus: outcome.status, preparationReason: outcome.reason } : document;
               }));
               setPreparingIds(queued);
-              if (queued.size) refreshPreparedCandidates([...queued], controller);
+              const refreshIds = (prepared.candidates || []).filter((item) => ["queued", "running", "ready"].includes(item.status)).map((item) => String(item.documentId));
+              if (refreshIds.length) refreshPreparedCandidates(refreshIds, controller);
             })
             .catch((failure) => { if (!controller.signal.aborted) { setPreparingIds(new Set()); setPreparationNotice(failure.message || "Preparation could not start. You can still use ready sources."); } });
         }
