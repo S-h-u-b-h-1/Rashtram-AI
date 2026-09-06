@@ -1144,8 +1144,10 @@ const getProblemRecommendations = async (userId, payload) => {
   }
   const result = await query(
     `SELECT legacy.*, candidate.state AS schema_state,
-       candidate.research_ready, candidate.quality_score,
-       candidate.source_authority_tier,
+       (candidate.research_ready AND state.research_ready AND state.search_ready
+         AND state.processing_status = 'ready' AND state.extraction_status = 'ready'
+         AND state.chunking_status = 'ready' AND state.chunks_count > 0) AS research_ready,
+       candidate.quality_score, candidate.source_authority_tier,
        candidate.visibility_status, candidate.metadata_json,
        state.processing_status, state.extraction_status,
        state.embedding_status, state.chunking_status,
