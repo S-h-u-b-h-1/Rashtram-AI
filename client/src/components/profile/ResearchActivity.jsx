@@ -51,14 +51,14 @@ export function ResearchActivity({ stats }) {
     <section aria-labelledby="profile-activity-heading">
       <div className="mb-3 flex flex-wrap items-end justify-between gap-2 px-1">
         <div>
-          <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-[#874047]">
+          <p className="text-xs font-bold uppercase tracking-[0.18em] text-[#874047]">
             Your activity
           </p>
           <h2 id="profile-activity-heading" className="mt-1 font-serif text-xl text-[#8f1d2c]">
             Research at a glance
           </h2>
         </div>
-        <p className="text-[11px] text-[#81796e]">
+        <p className="text-xs text-[#81796e]">
           Account-derived metrics only
         </p>
       </div>
@@ -77,10 +77,10 @@ export function ResearchActivity({ stats }) {
               <p className="mt-3 font-serif text-2xl leading-none text-[#8f1d2c] sm:text-[1.7rem]">
                 {Number(item.value || 0).toLocaleString()}
               </p>
-              <p className="mt-1.5 text-[11px] font-semibold leading-4 text-[#514d46]">
+              <p className="mt-1.5 text-xs font-semibold leading-snug text-[#514d46]">
                 {item.label}
               </p>
-              <p className="mt-1 hidden text-[9px] leading-4 text-[#91887d] sm:block xl:hidden 2xl:block">
+              <p className="mt-1 hidden text-xs leading-snug text-[#91887d] sm:block xl:hidden 2xl:block">
                 {item.detail}
               </p>
             </article>

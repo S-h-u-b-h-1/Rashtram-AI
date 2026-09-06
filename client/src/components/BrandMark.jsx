@@ -38,7 +38,7 @@ export function BrandMark({
       {!compact && (
         <span
           className={cn(
-            "text-[15px] font-semibold tracking-[-0.02em]",
+            "text-sm font-semibold tracking-[-0.02em]",
             inverse ? "text-white" : "text-[#8f1d2c]",
           )}
         >

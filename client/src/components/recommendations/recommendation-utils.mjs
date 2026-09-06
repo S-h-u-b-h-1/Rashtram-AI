@@ -96,3 +96,19 @@ export const compareActionState = (disabledReason, selected) => ({
   disabled: Boolean(disabledReason) && !selected,
   label: selected ? "Remove compare" : "Add to compare",
 });
+
+export const researchAreas = (plans = []) => {
+  const seen = new Set();
+  return plans.filter(plan => {
+    const key = String(plan.area || '').trim().toLowerCase();
+    if (!key || seen.has(key)) return false;
+    seen.add(key); return true;
+  }).slice(0, 6);
+};
+
+export const recommendationReadinessLabel = (document = {}, preparing = false) => {
+  if (preparing || ['processing', 'preparing', 'queued'].includes(document.processingStatus)) return 'Preparing';
+  if (document.capabilities?.chatReady ?? document.researchReady) return 'Ready to research';
+  if (document.authorityClass === 'PRIMARY_OFFICIAL') return 'Official source found — not ready yet';
+  return 'Supporting source · preparation required';
+};

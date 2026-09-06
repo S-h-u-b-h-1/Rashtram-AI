@@ -26,7 +26,7 @@ export function PlatformCoverageOverview({ coverage }) {
     <section className="surface-card p-5 sm:p-6">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#874047]">
+          <p className="text-xs font-bold uppercase tracking-[0.2em] text-[#874047]">
             Data collection and platform coverage
           </p>
           <h2 className="mt-2 font-serif text-2xl text-[#8f1d2c]">
@@ -36,7 +36,7 @@ export function PlatformCoverageOverview({ coverage }) {
             Live counts from PostgreSQL. No estimates or projected records.
           </p>
         </div>
-        <p className="text-[10px] text-[#81796e]">
+        <p className="text-xs text-[#81796e]">
           Latest ingestion {formatRelativeTime(coverage.lastRefresh)}
         </p>
       </div>
@@ -50,7 +50,7 @@ export function PlatformCoverageOverview({ coverage }) {
             <p className="mt-3 font-serif text-2xl text-[#8f1d2c]">
               {Number(value || 0).toLocaleString("en-IN")}
             </p>
-            <p className="mt-1 text-[10px] text-[#81796e]">{label}</p>
+            <p className="mt-1 text-xs text-[#81796e]">{label}</p>
           </article>
         ))}
       </div>

@@ -27,7 +27,7 @@ export function AmendmentTrackerPanel({ documentId }) {
         </div>
         {!tracker && (
           <button type="button" onClick={load} disabled={loading || !documentId}
-            className="rounded-lg bg-[#eee0dc] px-3 py-2 text-[10px] font-bold text-[#8f1d2c] disabled:opacity-45">
+            className="rounded-lg bg-[#eee0dc] px-3 py-2 text-xs font-bold text-[#8f1d2c] disabled:opacity-45">
             {loading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "Check versions"}
           </button>
         )}

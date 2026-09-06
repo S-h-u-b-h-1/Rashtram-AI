@@ -240,7 +240,7 @@ export function DocumentExplorer({
         </div>
         <p className="mt-3 text-xs leading-5 text-[#706a61]">{filters.researchReady === "true" ? "Showing sources ready for cited research." : "Showing the full collection, including sources not yet prepared for chat."} <button type="button" className="min-h-11 px-2 font-semibold text-[#8f1d2c] underline" onClick={() => updateFilter("researchReady", filters.researchReady === "true" ? "" : "true")}>{filters.researchReady === "true" ? "Show all sources" : "Show ready sources"}</button></p>
         {dataNote && (
-          <p className="mt-3 rounded-xl border border-[#8f1d2c]/8 bg-white/55 px-3 py-2 text-[11px] leading-5 text-[#706a61]">
+          <p className="mt-3 rounded-xl border border-[#8f1d2c]/8 bg-white/55 px-3 py-2 text-xs leading-5 text-[#706a61]">
             {dataNote}
           </p>
         )}
@@ -253,7 +253,7 @@ export function DocumentExplorer({
               filters: requestFilters,
             })
           }
-          className="mt-3 inline-flex items-center gap-1.5 text-[10px] font-semibold text-[#874047]"
+          className="mt-3 inline-flex items-center gap-1.5 text-xs font-semibold text-[#874047]"
         >
           <BookmarkPlus className="h-3.5 w-3.5" />
           Save this search
@@ -279,7 +279,7 @@ export function DocumentExplorer({
               </p>
               {query.trim() && suggestions.length > 0 && (
                 <div className="mt-7 text-left">
-                  <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-[#874047]">
+                  <p className="text-xs font-bold uppercase tracking-[0.16em] text-[#874047]">
                     Related documents you may be looking for
                   </p>
                   <div className="mt-3 divide-y divide-[#8f1d2c]/8 overflow-hidden rounded-2xl border border-[#8f1d2c]/10 bg-white">
@@ -292,7 +292,7 @@ export function DocumentExplorer({
                         <p className="text-sm font-semibold text-[#29312d]">
                           {suggestion.title}
                         </p>
-                        <p className="mt-1 text-[11px] text-[#706a61]">
+                        <p className="mt-1 text-xs text-[#706a61]">
                           {[humanize(suggestion.type), suggestion.suggestionReason]
                             .filter(Boolean)
                             .join(" · ")}
@@ -326,7 +326,7 @@ export function DocumentExplorer({
                 >
                   {sourceOnlyActions ? (
                     <div
-                      className="mt-1 grid h-8 w-8 place-items-center rounded-lg border border-[#8f1d2c]/10 bg-[#f7f2eb] text-[10px] font-bold uppercase text-[#81796e]"
+                      className="mt-1 grid h-8 w-8 place-items-center rounded-lg border border-[#8f1d2c]/10 bg-[#f7f2eb] text-xs font-bold uppercase text-[#81796e]"
                       title="Only the source page is available"
                     >
                       Src
@@ -351,11 +351,11 @@ export function DocumentExplorer({
                   )}
                   <div className="min-w-0">
                     <div className="flex flex-wrap gap-1.5">
-                      <span className="rounded-full bg-[#eee0dc] px-2 py-1 text-[9px] font-bold uppercase tracking-[0.1em] text-[#8f1d2c]">
+                      <span className="rounded-full bg-[#eee0dc] px-2 py-1 text-xs font-bold uppercase tracking-[0.1em] text-[#8f1d2c]">
                         {humanize(document.type)}
                       </span>
                       {document.status && (
-                        <span className="rounded-full bg-[#e2ece6] px-2 py-1 text-[9px] font-semibold text-[#315a49]">
+                        <span className="rounded-full bg-[#e2ece6] px-2 py-1 text-xs font-semibold text-[#315a49]">
                           {document.status}
                         </span>
                       )}
@@ -363,10 +363,10 @@ export function DocumentExplorer({
                         title={document.readinessReason || undefined}
                         className={
                           readiness === "research_ready"
-                            ? "rounded-full bg-[#e2ece6] px-2 py-1 text-[9px] font-semibold text-[#315a49]"
+                            ? "rounded-full bg-[#e2ece6] px-2 py-1 text-xs font-semibold text-[#315a49]"
                             : readiness === "processing_failed"
-                              ? "rounded-full bg-[#f4dfdc] px-2 py-1 text-[9px] font-semibold text-[#85434a]"
-                              : "rounded-full bg-[#eee7dc] px-2 py-1 text-[9px] font-semibold text-[#706a61]"
+                              ? "rounded-full bg-[#f4dfdc] px-2 py-1 text-xs font-semibold text-[#85434a]"
+                              : "rounded-full bg-[#eee7dc] px-2 py-1 text-xs font-semibold text-[#706a61]"
                         }
                       >
                         {READINESS_LABELS[readiness] || "Available"}
@@ -420,7 +420,7 @@ export function DocumentExplorer({
                           const result = addDocument(document);
                           if (!result.ok) setError(result.reason);
                         }}
-                        className="inline-flex items-center gap-1.5 rounded-xl border border-[#8f1d2c]/10 bg-white px-3 py-2 text-[10px] font-semibold text-[#8f1d2c] disabled:cursor-not-allowed disabled:bg-[#ddd5ca] disabled:text-[#81796e]"
+                        className="inline-flex items-center gap-1.5 rounded-xl border border-[#8f1d2c]/10 bg-white px-3 py-2 text-xs font-semibold text-[#8f1d2c] disabled:cursor-not-allowed disabled:bg-[#ddd5ca] disabled:text-[#81796e]"
                       >
                         {preparingCompareId === document.id ? (
                           <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -447,7 +447,7 @@ export function DocumentExplorer({
                             metadata_json: { documentType: document.type },
                           })
                         }
-                        className="inline-flex items-center gap-1.5 rounded-xl bg-[#8f1d2c] px-3 py-2 text-[10px] font-semibold text-white"
+                        className="inline-flex items-center gap-1.5 rounded-xl bg-[#8f1d2c] px-3 py-2 text-xs font-semibold text-white"
                       >
                         {researchReady
                           ? "Open research"
@@ -462,7 +462,7 @@ export function DocumentExplorer({
                           document.processingError ||
                           "A readable, indexed PDF is required for research."
                         }
-                        className="inline-flex cursor-not-allowed items-center rounded-xl bg-[#ddd5ca] px-3 py-2 text-[10px] font-semibold text-[#81796e]"
+                        className="inline-flex cursor-not-allowed items-center rounded-xl bg-[#ddd5ca] px-3 py-2 text-xs font-semibold text-[#81796e]"
                       >
                         Research not available
                       </span>
@@ -506,7 +506,7 @@ export function DocumentExplorer({
         >
           Previous
         </button>
-        <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[#706a61]">
+        <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[#706a61]">
           Page {pagination.page || page} of {pagination.totalPages || 1}
         </p>
         <button

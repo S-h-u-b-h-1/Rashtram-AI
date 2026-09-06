@@ -44,7 +44,7 @@ export function DashboardHero({ data, onSearch }) {
       <div className="relative grid gap-5 xl:grid-cols-[minmax(0,1fr)_420px]">
         <div className="min-w-0">
           <div className="max-w-3xl">
-            <div className="flex flex-wrap items-center gap-2 text-[11px] text-white/55">
+            <div className="flex flex-wrap items-center gap-2 text-xs text-white/55">
               <span className="rounded-full border border-white/12 bg-white/6 px-3 py-1.5 font-semibold uppercase tracking-[0.14em] text-[#c1a06f]">
                 Research Desk
               </span>
@@ -116,7 +116,7 @@ export function DashboardHero({ data, onSearch }) {
           </div>
 
           <div className="rounded-2xl border border-white/12 bg-white/[0.055] p-4">
-            <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-[#c1a06f]">
+            <p className="text-xs font-bold uppercase tracking-[0.16em] text-[#c1a06f]">
               Simple research flow
             </p>
             <div className="mt-3 grid gap-2 text-xs text-white/68">
@@ -126,7 +126,7 @@ export function DashboardHero({ data, onSearch }) {
                     key={step}
                     className="flex items-center gap-2 rounded-xl bg-white/[0.055] px-3 py-2"
                   >
-                    <span className="grid h-5 w-5 shrink-0 place-items-center rounded-full bg-[#fffaf0] text-[10px] font-bold text-[#8f1d2c]">
+                    <span className="grid h-5 w-5 shrink-0 place-items-center rounded-full bg-[#fffaf0] text-xs font-bold text-[#8f1d2c]">
                       {index + 1}
                     </span>
                     <span>{step}</span>
@@ -172,7 +172,7 @@ export function DashboardHero({ data, onSearch }) {
                   <Icon className="h-3.5 w-3.5 text-[#c1a06f]" />
                   {label}
                 </span>
-                <span className="mt-1 block text-[11px] text-white/45">
+                <span className="mt-1 block text-xs text-white/45">
                   {hint}
                 </span>
               </Link>

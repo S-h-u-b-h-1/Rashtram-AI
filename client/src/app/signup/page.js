@@ -218,7 +218,7 @@ export default function Signup() {
 
               <div className="flex items-center gap-3">
                 <div className="h-px flex-1 bg-[#8f1d2c]/10" />
-                <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[#898176]">
+                <span className="text-xs font-semibold uppercase tracking-[0.18em] text-[#898176]">
                   or use email
                 </span>
                 <div className="h-px flex-1 bg-[#8f1d2c]/10" />

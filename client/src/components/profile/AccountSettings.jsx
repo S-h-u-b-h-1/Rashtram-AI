@@ -35,7 +35,7 @@ const split = (value) =>
 const inputClass =
   "h-11 w-full rounded-xl border border-[#8f1d2c]/10 bg-white px-3 text-sm text-[#352f2b] outline-none transition placeholder:text-[#aaa196] focus:border-[#a85a52] focus:ring-4 focus:ring-[#a85a52]/10";
 const labelClass =
-  "text-[10px] font-semibold uppercase tracking-[0.11em] text-[#776f65]";
+  "text-xs font-semibold uppercase tracking-[0.11em] text-[#776f65]";
 
 const PANELS = [
   { id: "details", label: "Account details", icon: UserRound },
@@ -49,7 +49,7 @@ function Field({ label, hint, wide = false, children }) {
     <label className={`space-y-1.5 ${wide ? "sm:col-span-2" : ""}`}>
       <span className={labelClass}>{label}</span>
       {children}
-      {hint && <span className="block text-[10px] leading-4 text-[#91887d]">{hint}</span>}
+      {hint && <span className="block text-xs leading-snug text-[#91887d]">{hint}</span>}
     </label>
   );
 }
@@ -57,7 +57,7 @@ function Field({ label, hint, wide = false, children }) {
 function SectionHeading({ eyebrow, title, description }) {
   return (
     <div>
-      <p className="text-[9px] font-bold uppercase tracking-[0.18em] text-[#874047]">
+      <p className="text-xs font-bold uppercase tracking-[0.18em] text-[#874047]">
         {eyebrow}
       </p>
       <h3 className="mt-1.5 font-serif text-xl text-[#8f1d2c]">{title}</h3>
@@ -235,7 +235,7 @@ export function AccountSettings({
     <section id="account-settings" className="surface-card scroll-mt-6 overflow-hidden">
       <div className="border-b border-[#8f1d2c]/8 px-5 py-5 sm:px-6 lg:flex lg:items-end lg:justify-between lg:gap-6">
         <div>
-          <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#874047]">
+          <p className="text-xs font-bold uppercase tracking-[0.2em] text-[#874047]">
             Account center
           </p>
           <h2 className="mt-1.5 font-serif text-2xl text-[#8f1d2c]">
@@ -245,7 +245,7 @@ export function AccountSettings({
             Profile details, research preferences, saved work, and security—organized in one place.
           </p>
         </div>
-        <div className="mt-4 inline-flex items-center gap-2 rounded-full bg-[#e8f0eb] px-3 py-2 text-[10px] font-semibold text-[#34725b] lg:mt-0">
+        <div className="mt-4 inline-flex items-center gap-2 rounded-full bg-[#e8f0eb] px-3 py-2 text-xs font-semibold text-[#34725b] lg:mt-0">
           <ShieldCheck className="h-3.5 w-3.5" />
           {user.authenticationProvider} sign-in connected
         </div>
@@ -404,7 +404,7 @@ export function AccountSettings({
                 <article key={item.id} className="flex items-start gap-3 rounded-xl border border-[#8f1d2c]/8 bg-[#f6f2eb] p-3">
                   <div className="min-w-0 flex-1">
                     <p className="line-clamp-2 text-xs font-semibold leading-5 text-[#29312d]">{item.title}</p>
-                    <p className="mt-1 text-[9px] uppercase tracking-[0.08em] text-[#8a8277]">{humanize(item.itemType)}</p>
+                    <p className="mt-1 text-xs uppercase tracking-[0.08em] text-[#8a8277]">{humanize(item.itemType)}</p>
                   </div>
                   {item.documentId && item.researchReady && (
                     <button type="button" onClick={() => isSelected(item.documentId) ? removeDocument(item.documentId) : addDocument({ id: item.documentId, title: item.title, type: item.documentType, pdfUrl: item.pdfUrl, processingStatus: item.processingStatus, researchReady: item.researchReady })} aria-label={`${isSelected(item.documentId) ? "Remove" : "Add"} ${item.title} ${isSelected(item.documentId) ? "from" : "to"} comparison`} className="grid h-8 w-8 place-items-center rounded-lg text-[#8f1d2c] hover:bg-[#eee0dc]">
@@ -429,7 +429,7 @@ export function AccountSettings({
                   {account.notes.slice(0, 4).map((note) => (
                     <article key={note.id} className="rounded-xl border border-[#8f1d2c]/8 bg-[#fffaf2] p-3">
                       <p className="line-clamp-3 text-xs leading-5 text-[#514d46]">{note.body}</p>
-                      <p className="mt-1 text-[9px] text-[#8a8277]">{humanize(note.documentType)} · {formatDate(note.updatedAt)}</p>
+                      <p className="mt-1 text-xs text-[#8a8277]">{humanize(note.documentType)} · {formatDate(note.updatedAt)}</p>
                     </article>
                   ))}
                 </div>
@@ -449,7 +449,7 @@ export function AccountSettings({
               {(account?.collections || []).slice(0, 8).map((collection) => (
                 <article key={collection.id} className="rounded-xl border border-[#8f1d2c]/8 bg-[#f6f2eb] p-3.5">
                   <p className="text-xs font-semibold text-[#29312d]">{collection.name}</p>
-                  <p className="mt-1 text-[10px] text-[#81796e]">{collection.items?.length || 0} documents</p>
+                  <p className="mt-1 text-xs text-[#81796e]">{collection.items?.length || 0} documents</p>
                 </article>
               ))}
               {!account?.collections?.length && (
@@ -463,7 +463,7 @@ export function AccountSettings({
                 <p className={labelClass}>Saved searches</p>
                 <div className="mt-2 flex flex-wrap gap-2">
                   {account.savedSearches.slice(0, 8).map((search) => (
-                    <span key={search.id} className="rounded-full bg-[#eee0dc] px-3 py-2 text-[10px] text-[#874047]">{search.name}</span>
+                    <span key={search.id} className="rounded-full bg-[#eee0dc] px-3 py-2 text-xs text-[#874047]">{search.name}</span>
                   ))}
                 </div>
               </div>
@@ -500,8 +500,8 @@ export function AccountSettings({
               <div className="mt-3 space-y-2">
                 {(account?.sessions || []).slice(0, 4).map((session) => (
                   <article key={session.id} className="flex items-start gap-3 rounded-xl border border-[#8f1d2c]/8 bg-white p-3">
-                    <div className="min-w-0 flex-1"><p className="line-clamp-1 text-xs font-semibold text-[#29312d]">{session.userAgent || "Browser session"}</p><p className="mt-1 text-[10px] text-[#81796e]">Last active {formatDate(session.lastSeenAt)}</p></div>
-                    {!session.revokedAt ? <button type="button" onClick={() => revokeSession(session.id)} className="text-[9px] font-semibold text-[#914148]">Revoke</button> : <span className="text-[9px] text-[#91887d]">Revoked</span>}
+                    <div className="min-w-0 flex-1"><p className="line-clamp-1 text-xs font-semibold text-[#29312d]">{session.userAgent || "Browser session"}</p><p className="mt-1 text-xs text-[#81796e]">Last active {formatDate(session.lastSeenAt)}</p></div>
+                    {!session.revokedAt ? <button type="button" onClick={() => revokeSession(session.id)} className="text-xs font-semibold text-[#914148]">Revoke</button> : <span className="text-xs text-[#91887d]">Revoked</span>}
                   </article>
                 ))}
                 {!account?.sessions?.length && <p className="text-xs leading-5 text-[#81796e]">New session-aware logins will appear here.</p>}
@@ -521,7 +521,7 @@ export function AccountSettings({
           <div className="rounded-2xl border border-[#914148]/20 bg-[#fff7f4] p-4 sm:flex sm:items-center sm:justify-between sm:gap-6 sm:p-5">
             <div className="flex items-start gap-3">
               <div className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-[#914148]/10 text-[#914148]"><AlertTriangle className="h-5 w-5" /></div>
-              <div><p className="text-[9px] font-bold uppercase tracking-[0.16em] text-[#914148]">Danger zone</p><h3 className="mt-1 text-sm font-semibold text-[#29312d]">Delete your account</h3><p className="mt-1 max-w-2xl text-xs leading-5 text-[#706a61]">Permanently removes your profile, sessions, saved work, notes, chats, comparisons, activity, and preferences. Public catalogue data is unaffected.</p></div>
+              <div><p className="text-xs font-bold uppercase tracking-[0.16em] text-[#914148]">Danger zone</p><h3 className="mt-1 text-sm font-semibold text-[#29312d]">Delete your account</h3><p className="mt-1 max-w-2xl text-xs leading-5 text-[#706a61]">Permanently removes your profile, sessions, saved work, notes, chats, comparisons, activity, and preferences. Public catalogue data is unaffected.</p></div>
             </div>
             <Dialog.Trigger asChild>
               <button type="button" className="mt-4 inline-flex h-10 shrink-0 items-center gap-2 rounded-xl bg-[#914148] px-4 text-xs font-semibold text-white shadow-sm hover:bg-[#7d3037] sm:mt-0">
@@ -545,7 +545,7 @@ export function AccountSettings({
           className="fixed left-1/2 top-1/2 z-[101] max-h-[calc(100dvh-2rem)] w-[calc(100%-2rem)] max-w-lg -translate-x-1/2 -translate-y-1/2 overflow-y-auto rounded-[1.5rem] border border-white/10 bg-[#fffaf4] p-5 shadow-[0_30px_90px_rgba(20,10,12,0.35)] outline-none sm:p-6"
         >
             <div className="flex items-start justify-between gap-4">
-              <div className="flex items-start gap-3"><div className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-[#914148]/10 text-[#914148]"><AlertTriangle className="h-5 w-5" /></div><div><p className="text-[9px] font-bold uppercase tracking-[0.16em] text-[#914148]">Permanent action</p><h2 id="delete-account-title" className="mt-1 font-serif text-2xl text-[#8f1d2c]">Delete your account?</h2></div></div>
+              <div className="flex items-start gap-3"><div className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-[#914148]/10 text-[#914148]"><AlertTriangle className="h-5 w-5" /></div><div><p className="text-xs font-bold uppercase tracking-[0.16em] text-[#914148]">Permanent action</p><h2 id="delete-account-title" className="mt-1 font-serif text-2xl text-[#8f1d2c]">Delete your account?</h2></div></div>
               <Dialog.Close asChild>
                 <button type="button" disabled={deletingAccount} aria-label="Close account deletion dialog" className="grid h-9 w-9 place-items-center rounded-lg text-[#81796e] hover:bg-[#eee8de]"><X className="h-4 w-4" /></button>
               </Dialog.Close>

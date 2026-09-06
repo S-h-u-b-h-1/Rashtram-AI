@@ -65,7 +65,7 @@ export function GoogleSignInButton({ onSignIn, disabled = false }) {
       {unavailable && (
         <p
           id="google-sign-in-status"
-          className="mt-2 text-center text-[11px] leading-5 text-[#81796e]"
+          className="mt-2 text-center text-xs leading-5 text-[#81796e]"
         >
           {status.message}
         </p>

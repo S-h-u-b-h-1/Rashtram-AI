@@ -48,7 +48,7 @@ export function SourceHealthPanel({ sources, compact = false }) {
       <section className="surface-card flex flex-wrap items-center justify-between gap-3 px-5 py-4">
         <div>
           <p className="text-xs font-semibold text-[#29312d]">Source status</p>
-          <p className="mt-1 text-[11px] text-[#777066]">
+          <p className="mt-1 text-xs text-[#777066]">
             {connected} of {publicSourceGroups.length} source groups connected
           </p>
         </div>
@@ -61,7 +61,7 @@ export function SourceHealthPanel({ sources, compact = false }) {
   return (
     <section className="surface-card p-5 sm:p-6">
       <div>
-        <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#874047]">
+        <p className="text-xs font-bold uppercase tracking-[0.2em] text-[#874047]">
           Source status
         </p>
         <h2 className="mt-2 font-serif text-2xl text-[#8f1d2c]">
@@ -88,13 +88,13 @@ export function SourceHealthPanel({ sources, compact = false }) {
                   <h3 className="text-sm font-semibold text-[#29312d]">
                     {source.label}
                   </h3>
-                  <p className="mt-1 line-clamp-2 text-[11px] leading-5 text-[#81796e]">
+                  <p className="mt-1 line-clamp-2 text-xs leading-5 text-[#81796e]">
                     {source.purpose}
                   </p>
                 </div>
                 <span
                   className={cn(
-                    "inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-1 text-[10px] font-semibold",
+                    "inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-1 text-xs font-semibold",
                     style.className,
                   )}
                 >
@@ -102,7 +102,7 @@ export function SourceHealthPanel({ sources, compact = false }) {
                   {source.status}
                 </span>
               </div>
-              <div className="mt-4 flex items-center justify-between text-[10px] uppercase tracking-[0.08em] text-[#928a7f]">
+              <div className="mt-4 flex items-center justify-between text-xs uppercase tracking-[0.08em] text-[#928a7f]">
                 <span>{source.documentCount.toLocaleString()} records</span>
                 <span>{formatRelativeTime(source.lastRefresh)}</span>
               </div>

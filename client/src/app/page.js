@@ -199,7 +199,7 @@ export default function Home() {
                 >
                   <capability.icon className="h-5 w-5" />
                 </div>
-                <p className="mt-8 text-[11px] font-bold uppercase tracking-[0.2em] text-[#8a8277]">
+                <p className="mt-8 text-xs font-bold uppercase tracking-[0.2em] text-[#8a8277]">
                   {capability.eyebrow}
                 </p>
                 <h3 className="mt-3 font-serif text-2xl leading-tight tracking-[-0.02em] text-[#8f1d2c]">

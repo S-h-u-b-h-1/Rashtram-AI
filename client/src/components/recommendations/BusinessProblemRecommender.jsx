@@ -9,9 +9,14 @@ import {
   refreshRegulatoryWatchlists,
   trackActivity,
 } from "@/lib/api";
+import { useComparison, comparisonHrefForDocuments } from "@/context/ComparisonContext";
+import { researchAreas } from "./recommendation-utils.mjs";
 import { RecommendationSection } from "./RecommendationSection";
 
 export function BusinessProblemRecommender() {
+  const { documents: selectedDocuments } = useComparison();
+  const compareHref = comparisonHrefForDocuments(selectedDocuments);
+  const [submittedProblem, setSubmittedProblem] = useState("");
   const [problem, setProblem] = useState("");
   const [result, setResult] = useState(null);
   const [error, setError] = useState("");
@@ -21,17 +26,17 @@ export function BusinessProblemRecommender() {
   const hasPrimaryRecommendation = Boolean(result?.recommendations?.some((item) => item.authorityClass === "PRIMARY_OFFICIAL"));
   const noReadyOfficialSource = Boolean(result && (!hasPrimaryRecommendation || result.coverageClass === "D_PRIMARY_SOURCE_MISSING"));
   const recommendationGroups = [
-    ["essential", "Essential reading"],
-    ["important", "Important supporting material"],
-    ["background", "Background / context"],
+    ["essential", "Essential"],
+    ["important", "Important"],
+    ["background", "Background"],
   ];
 
   const watchProblem = async () => {
-    if (watching || problem.trim().length < 2) return;
+    if (watching || submittedProblem.trim().length < 2) return;
     setWatching(true);
     setWatchStatus("");
     try {
-      await createRegulatoryWatchlist({ watchType: "topic", watchValue: problem });
+      await createRegulatoryWatchlist({ watchType: "topic", watchValue: submittedProblem });
       const refresh = await refreshRegulatoryWatchlists();
       setWatchStatus(`Watchlist saved. ${refresh.created || 0} verified alert${refresh.created === 1 ? "" : "s"} found.`);
     } catch (requestError) {
@@ -55,6 +60,8 @@ export function BusinessProblemRecommender() {
         problem,
         limit: 20,
       });
+      setSubmittedProblem(problem);
+      setWatchStatus("");
       setResult({ ...response, recommendationGroups: response.discoveryGroups || response.recommendationGroups });
       trackActivity({
         event_type: "business_problem_searched",
@@ -72,16 +79,16 @@ export function BusinessProblemRecommender() {
   };
 
   return (
-    <div className="min-w-0 space-y-5 pb-5">
+    <div className="min-w-0 space-y-5 pb-5 [overflow-wrap:anywhere]">
       <section className="surface-card overflow-hidden">
         <div className="bg-[#8f1d2c] p-6 text-white sm:p-8">
-          <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-white/55">
+          <p className="text-xs font-bold uppercase tracking-[0.2em] text-white/80">
             Business and compliance research
           </p>
           <h1 className="mt-2 max-w-3xl font-serif text-3xl sm:text-4xl">
             Find policies and laws relevant to your business problem
           </h1>
-          <p className="mt-3 max-w-2xl text-sm leading-6 text-white/65">
+          <p className="mt-3 max-w-2xl text-sm leading-6 text-white/80">
             Describe the situation in your own words. Rashtram AI will infer
             the relevant sectors, jurisdictions, themes, and document types.
           </p>
@@ -126,7 +133,7 @@ export function BusinessProblemRecommender() {
         <>
           {result.problemUnderstanding && (
             <section className="surface-card p-5 sm:p-6" aria-labelledby="problem-understanding-title">
-              <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-[#874047]">Understanding your problem</p>
+              <p className="text-xs font-bold uppercase tracking-[0.18em] text-[#874047]">Understanding your problem</p>
               <h2 id="problem-understanding-title" className="mt-2 font-serif text-2xl text-[#8f1d2c]">
                 {result.problemUnderstanding.statement}
               </h2>
@@ -141,23 +148,29 @@ export function BusinessProblemRecommender() {
           )}
           {result.researchPlan?.length > 0 && (
             <section className="surface-card p-5 sm:p-6" aria-labelledby="research-plan-title">
-              <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-[#874047]">Research plan</p>
-              <h2 id="research-plan-title" className="mt-2 font-serif text-2xl text-[#8f1d2c]">Areas you should research</h2>
+              <p className="text-xs font-bold uppercase tracking-[0.18em] text-[#874047]">Research plan</p>
+              <h2 id="research-plan-title" className="mt-2 font-serif text-2xl text-[#8f1d2c]">What you should research</h2>
               <ol className="mt-4 grid gap-3 lg:grid-cols-2">
-                {result.researchPlan.map((plan) => (
+                {researchAreas(result.researchPlan).map((plan) => (
                   <li key={plan.area} className="rounded-xl border border-[#8f1d2c]/8 bg-[#f7f2eb] p-3">
-                    <div className="flex items-center justify-between gap-2"><span className="text-sm font-semibold text-[#29312d]">{plan.order}. {plan.area}</span><span className="text-[9px] font-bold uppercase tracking-[0.1em] text-[#874047]">{plan.priority}</span></div>
+                    <div className="flex items-center justify-between gap-2"><span className="text-sm font-semibold text-[#29312d]">{plan.order}. {plan.area}</span><span className="text-xs font-bold uppercase tracking-[0.1em] text-[#874047]">{String(plan.priority || "").toLowerCase()}</span></div>
                     <p className="mt-1 text-xs leading-5 text-[#706a61]">{plan.rationale}</p>
                   </li>
                 ))}
               </ol>
             </section>
           )}
+          <section className="flex flex-wrap items-center justify-between gap-3 px-1" aria-label="Recommended readings and comparison selection">
+            <h2 className="font-serif text-2xl text-[#8f1d2c]">Recommended readings</h2>
+            <div>
+              {compareHref ? <Link href={compareHref} className="inline-flex min-h-11 items-center rounded-xl bg-[#8f1d2c] px-4 text-xs font-semibold text-white">Compare selected ({selectedDocuments.length})</Link> : <><button disabled aria-describedby="suggested-compare-reason" className="min-h-11 rounded-xl bg-[#eee0dc] px-4 text-xs text-[#706a61]">Compare selected</button><p id="suggested-compare-reason" className="mt-1 text-xs text-[#706a61]">Select at least two ready sources. Up to five can be compared.</p></>}
+            </div>
+          </section>
           {recommendationGroups.some(([key]) => result.recommendationGroups?.[key]?.length) ? recommendationGroups.map(([key, title]) => result.recommendationGroups?.[key]?.length ? (
             <RecommendationSection
               key={key}
-              title={noReadyOfficialSource && key === "background" ? "Related sources" : title}
-              eyebrow="Problem-aware reading list"
+              title={title}
+              eyebrow=""
               recommendations={result.recommendationGroups[key]}
               pagePath="/app/recommend"
               emptyMessage=""
@@ -182,7 +195,7 @@ export function BusinessProblemRecommender() {
               </div>
             </section>
           )}
-          {result.abstention && (
+          {result.abstention && !noReadyOfficialSource && (
             <section role="status" className="surface-card border border-[#8f1d2c]/12 p-5 sm:p-6">
               <h2 className="font-serif text-2xl text-[#8f1d2c]">
                 Insufficient relevant evidence
@@ -203,19 +216,19 @@ export function BusinessProblemRecommender() {
           )}
           {(result.lowerConfidenceRecommendations || []).length > 0 && (
             <RecommendationSection
-              title="More possible matches"
-              eyebrow="Lower-confidence discovery results"
+              title="Optional deeper reading"
+              eyebrow=""
               recommendations={result.lowerConfidenceRecommendations}
               pagePath="/app/recommend"
               emptyMessage=""
             />
           )}
-          {result.primarySourceGap && (
+          {result.primarySourceGap && !noReadyOfficialSource && !result.abstention && (
             <p className="rounded-xl border border-[#c1a06f]/35 bg-[#fffaf0] px-4 py-3 text-xs leading-5 text-[#70434a]">
               {result.primarySourceGap}
             </p>
           )}
-          {result.coverageExplanation && (
+          {result.coverageExplanation && !noReadyOfficialSource && !result.primarySourceGap && (
             <p role="status" className="rounded-xl border border-[#8f1d2c]/12 bg-[#f7f2eb] px-4 py-3 text-xs leading-5 text-[#70434a]">
               {result.coverageExplanation}
             </p>
@@ -239,7 +252,7 @@ export function BusinessProblemRecommender() {
             </button>
           </section>
           <div className="grid gap-5 lg:grid-cols-2">
-            <section className="surface-card p-5 sm:p-6">
+            {result.complianceThemes?.length > 0 && <section className="surface-card p-5 sm:p-6">
               <h2 className="font-serif text-2xl text-[#8f1d2c]">
                 {result.sourceSupportedThemes?.length
                   ? "Source-supported themes"
@@ -255,8 +268,8 @@ export function BusinessProblemRecommender() {
                   </span>
                 ))}
               </div>
-            </section>
-            <section className="surface-card p-5 sm:p-6">
+            </section>}
+            {result.suggestedQuestions?.length > 0 && <section className="surface-card p-5 sm:p-6">
               <h2 className="font-serif text-2xl text-[#8f1d2c]">
                 Suggested next questions
               </h2>
@@ -265,7 +278,7 @@ export function BusinessProblemRecommender() {
                   <li key={question}>• {question}</li>
                 ))}
               </ul>
-            </section>
+            </section>}
           </div>
           {result.evidenceStatus === "sufficient_relevant_evidence" ? (
             <section className="surface-card p-5 sm:p-6">
@@ -294,14 +307,14 @@ export function BusinessProblemRecommender() {
                 </div>
               </div>
             </section>
-          ) : (
+          ) : !noReadyOfficialSource && !result.abstention ? (
             <section className="surface-card p-5 sm:p-6">
               <h2 className="font-serif text-2xl text-[#8f1d2c]">What the sources say</h2>
               <p className="mt-2 text-sm leading-6 text-[#625d55]">
                 Insufficient relevant evidence. No obligation was generated from metadata or lower-confidence matches.
               </p>
             </section>
-          )}
+          ) : null}
           <p className="flex items-center gap-2 rounded-xl bg-[#eee0dc] px-4 py-3 text-xs text-[#70434a]">
             <ShieldAlert className="h-4 w-4" />
             {result.disclaimer}

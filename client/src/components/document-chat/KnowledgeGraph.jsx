@@ -118,7 +118,7 @@ export function KnowledgeGraph({ graph, compact = true, highlightedPath = [] }) 
             <h3 className="text-xs font-bold uppercase tracking-[0.12em] text-[#514d46]">
               Related legal network
             </h3>
-            <p className="mt-0.5 text-[10px] text-[#81796e]">
+            <p className="mt-0.5 text-xs text-[#81796e]">
               {layout.nodes.length} nodes · {layout.edges.length} relationships
             </p>
           </div>
@@ -241,7 +241,7 @@ export function KnowledgeGraph({ graph, compact = true, highlightedPath = [] }) 
                         x={node.x}
                         y={node.y + radius + 13}
                         textAnchor="middle"
-                        className="pointer-events-none fill-[#514d46] text-[9px]"
+                        className="pointer-events-none fill-[#514d46] text-xs"
                         opacity={matches ? 1 : 0.25}
                       >
                         {String(node.label || "").slice(0, 34)}
@@ -268,7 +268,7 @@ export function KnowledgeGraph({ graph, compact = true, highlightedPath = [] }) 
           </div>
           {hoveredEdge && (
             <div className="border-t border-[#8f1d2c]/8 bg-[#f7f2eb] px-4 py-3">
-              <p className="text-[10px] font-bold uppercase tracking-[0.1em] text-[#8f1d2c]">
+              <p className="text-xs font-bold uppercase tracking-[0.1em] text-[#8f1d2c]">
                 {humanize(hoveredEdge.type)}
                 {hoveredEdge.confidence != null
                   ? ` · ${Math.round(hoveredEdge.confidence * 100)}% confidence`

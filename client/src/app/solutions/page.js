@@ -55,7 +55,7 @@ export default function SolutionsPage() {
     <main className="min-h-dvh bg-[#eee8df] px-5 py-16 sm:py-20">
       <section className="mx-auto max-w-6xl">
         <div className="max-w-3xl">
-          <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#874047]">
+          <p className="text-xs font-bold uppercase tracking-[0.2em] text-[#874047]">
             Research use cases
           </p>
           <h1 className="mt-4 font-serif text-5xl leading-tight text-[#8f1d2c] sm:text-7xl">
@@ -94,7 +94,7 @@ export default function SolutionsPage() {
         </div>
 
         <section className="mt-16 rounded-3xl bg-[#8f1d2c] p-8 text-white sm:p-12">
-          <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-white/55">
+          <p className="text-xs font-bold uppercase tracking-[0.2em] text-white/55">
             Research method
           </p>
           <h2 className="mt-3 font-serif text-3xl">Find. Read. Ask. Cite.</h2>

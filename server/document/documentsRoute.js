@@ -1,3 +1,4 @@
+const { createComparisonPdf } = require("./comparisonPdfPresentation");
 const express = require("express");
 const crypto = require("node:crypto");
 const { generationLimiter } = require("../middleware/security");
@@ -34,7 +35,6 @@ const {
   deleteComparison,
   getComparison,
   regenerateComparison,
-  comparisonAsMarkdown,
 } = require("./documentComparisonService");
 const {
   getComparisonRecommendations,
@@ -316,22 +316,7 @@ router.get("/compare/:comparisonId/pdf", async (req, res) => {
   try {
     const comparison = await getComparison(req.user.id, req.params.comparisonId);
     if (!comparison) return res.status(404).json({ error: "Comparison not found." });
-    const result = comparison.result || {};
-    const pdf = await createResearchBriefPdf({
-      title: comparison.title || "Document comparison",
-      documentType: "Saved comparative analysis — review stated evidence limitations",
-      completeEvidence: true,
-      reportText: comparisonAsMarkdown(comparison),
-      sources: (result.citations || []).map((citation) => ({
-        citationId: citation.id || citation.citationId,
-        documentTitle: citation.documentTitle,
-        page: citation.page ?? citation.pageStart,
-        section: citation.sectionTitle || citation.sectionId,
-        content: citation.snippet || citation.content,
-        sourceUrl: citation.canonicalSourceUrl || citation.sourceUrl || citation.pdfUrl,
-      })),
-      generatedAt: comparison.createdAt,
-    });
+    const pdf = await createComparisonPdf(comparison);
     res.setHeader("Content-Type", "application/pdf");
     res.setHeader("Content-Length", String(pdf.length));
     res.setHeader("Cache-Control", "private, no-store");

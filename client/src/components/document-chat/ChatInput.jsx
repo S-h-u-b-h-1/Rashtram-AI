@@ -10,6 +10,7 @@ export function ChatInput({
   onSend,
   onStop,
   onRegenerate,
+  canRegenerate = false,
   onClear,
   responseLanguage,
   onResponseLanguageChange,
@@ -61,7 +62,7 @@ export function ChatInput({
             against the original record.
           </p>
           <div className="flex items-center gap-3">
-            <label className="flex items-center gap-1.5 text-[10px] font-semibold text-[#874047]">
+            <label className="flex items-center gap-1.5 text-xs font-semibold text-[#874047]">
               <span className="hidden sm:inline">Response language</span>
               <span className="sm:hidden">Language</span>
               <select
@@ -70,7 +71,7 @@ export function ChatInput({
                   onResponseLanguageChange(event.target.value)
                 }
                 disabled={sending}
-                className="min-h-11 rounded-lg border border-[#8f1d2c]/10 bg-white px-2 py-1 text-[10px] text-[#514d46]"
+                className="min-h-11 rounded-lg border border-[#8f1d2c]/10 bg-white px-2 py-1 text-xs text-[#514d46]"
               >
                 <option value="Auto">Auto</option>
                 <option value="English">English</option>
@@ -80,8 +81,10 @@ export function ChatInput({
             <button
               type="button"
               onClick={onRegenerate}
-              disabled={disabled || sending}
-              className="inline-flex min-h-11 min-w-11 justify-center items-center gap-1 rounded-lg px-2 text-[10px] font-semibold text-[#874047] disabled:opacity-40"
+              disabled={disabled || sending || !canRegenerate || !onRegenerate}
+              title={!canRegenerate ? "Ask a question first." : disabled || sending ? "Wait for a ready source and the current response." : "Generate another response to your last question"}
+              aria-describedby={!canRegenerate ? "regenerate-reason" : undefined}
+              className="inline-flex min-h-11 min-w-11 justify-center items-center gap-1 rounded-lg px-2 text-xs font-semibold text-[#874047] disabled:opacity-40"
               aria-label="Regenerate last response"
             >
               <RotateCcw className="h-3 w-3" />
@@ -91,7 +94,7 @@ export function ChatInput({
               type="button"
               onClick={onClear}
               disabled={sending}
-              className="inline-flex min-h-11 min-w-11 justify-center items-center gap-1 rounded-lg px-2 text-[10px] font-semibold text-[#874047] disabled:opacity-40"
+              className="inline-flex min-h-11 min-w-11 justify-center items-center gap-1 rounded-lg px-2 text-xs font-semibold text-[#874047] disabled:opacity-40"
               aria-label="Clear conversation"
             >
               <Trash2 className="h-3 w-3" />
@@ -99,6 +102,7 @@ export function ChatInput({
             </button>
           </div>
         </div>
+        {!canRegenerate && <p id="regenerate-reason" className="mt-1 text-xs text-[#706a61]">Regenerate: ask a question first.</p>}
       </div>
     </div>
   );

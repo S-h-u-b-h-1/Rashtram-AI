@@ -143,13 +143,14 @@ export function GraphExplorer({ documentId }) {
     );
   }
 
-  if (error && !graph) {
+  if (!graph?.currentDocument) {
     return (
       <section className="surface-card p-8 text-center" role="alert">
         <h1 className="font-serif text-2xl text-[#8f1d2c]">
           Knowledge network unavailable
         </h1>
-        <p className="mt-2 text-sm text-[#706a61]">{error}</p>
+        <p className="mt-2 text-sm text-[#706a61]">{error || "No relationship data available for this source."}</p>
+        <Link href={`/app/document/${documentId}`} className="mt-4 inline-flex min-h-11 items-center text-sm text-[#8f1d2c] underline">Return to research</Link>
       </section>
     );
   }
@@ -158,7 +159,7 @@ export function GraphExplorer({ documentId }) {
     <div className="min-w-0 space-y-5 pb-5">
       <section className="surface-card overflow-hidden">
         <div className="bg-[#8f1d2c] p-6 text-white">
-          <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-white/55">
+          <p className="text-xs font-bold uppercase tracking-[0.2em] text-white/80">
             Government Knowledge Network
           </p>
           <h1 className="mt-2 max-w-4xl font-serif text-3xl">
@@ -221,7 +222,7 @@ export function GraphExplorer({ documentId }) {
                   <span className="block text-xs font-semibold text-[#29312d]">
                     {node.label}
                   </span>
-                  <span className="mt-1 block text-[9px] uppercase tracking-[0.1em] text-[#81796e]">
+                  <span className="mt-1 block text-xs uppercase tracking-[0.1em] text-[#81796e]">
                     {node.document.documentType} · {node.relationshipCount} links
                   </span>
                 </button>
@@ -256,7 +257,7 @@ export function GraphExplorer({ documentId }) {
                       {index + 1}. {node.label}
                     </Link>
                     {path.edges[index] && (
-                      <p className="mt-1 text-[9px] uppercase tracking-[0.1em] text-[#8f1d2c]">
+                      <p className="mt-1 text-xs uppercase tracking-[0.1em] text-[#8f1d2c]">
                         {path.edges[index].label}
                       </p>
                     )}

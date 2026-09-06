@@ -25,7 +25,7 @@ export function MajorDevelopments({ developments = [] }) {
   );
   return (
     <section className="surface-card p-5 sm:p-6">
-      <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#874047]">
+      <p className="text-xs font-bold uppercase tracking-[0.2em] text-[#874047]">
         Last 30 days
       </p>
       <h2 className="mt-2 font-serif text-2xl text-[#8f1d2c]">
@@ -44,7 +44,7 @@ export function MajorDevelopments({ developments = [] }) {
             <p className="mt-1 text-xs font-semibold text-[#514d46]">
               {humanize(label)}
             </p>
-            <p className="mt-2 text-[10px] leading-4 text-[#81796e]">{why}</p>
+            <p className="mt-2 text-xs leading-snug text-[#81796e]">{why}</p>
           </article>
         ))}
       </div>

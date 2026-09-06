@@ -3,7 +3,6 @@
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
-  ExternalLink,
   FileText,
   Download,
   GitCompareArrows,
@@ -23,89 +22,9 @@ import {
 } from "@/lib/api";
 import { useComparison } from "@/context/ComparisonContext";
 import { comparisonActionState } from "@/lib/comparison-regeneration.mjs";
+import { ComparisonAnalysis } from "./ComparisonAnalysis";
+import { comparisonStatus } from "@/lib/comparison-presentation.mjs";
 import { RecommendationSection } from "@/components/recommendations/RecommendationSection";
-
-const SECTION_CONFIG = [
-  ["purpose", "Purpose / objective", ["purpose"]],
-  ["scope", "Scope", ["scope"]],
-  ["applicability", "Applicability", ["applicability"]],
-  ["keyProvisions", "Key provisions", ["keyProvisions", "keyClauses"]],
-  ["similarities", "Major similarities", ["similarities"]],
-  ["differences", "Key differences", ["differences"]],
-  ["obligations", "Obligations / requirements", ["obligations", "complianceImpact"]],
-  ["rights", "Rights / protections", ["rights"]],
-  ["definitions", "Definitions", ["definitions"]],
-  ["legalEffect", "Authority / legal effect", ["legalEffect", "authorityDifferences"]],
-  ["timeline", "Dates / timeline", ["timeline"]],
-  ["stakeholderImpact", "Stakeholder impact", ["stakeholderImpact", "stakeholders"]],
-  ["whatChanged", "What changed", ["whatChanged"]],
-  ["practicalImplications", "Practical implications", ["practicalImplications", "impactAssessment"]],
-  ["keyTakeaways", "Key takeaways", ["keyTakeaways", "keyFindings"]],
-];
-
-const itemText = (item) => {
-  if (item == null) return "";
-  if (typeof item === "string") return item;
-  const textValue = (value) => {
-    if (value == null) return "";
-    if (Array.isArray(value)) return value.map(textValue).filter(Boolean).join("; ");
-    if (typeof value === "object") return Object.values(value).map(textValue).filter(Boolean).join("; ");
-    return String(value);
-  };
-  return [
-    item.topic,
-    item.dimension,
-    item.term,
-    item.documentA,
-    item.documentB,
-    item.date,
-    item.name,
-    item.clause,
-    item.point,
-    item.event,
-    item.analysis,
-    item.impact,
-    item.finding,
-    item.description,
-    item.content,
-    item.significance,
-    item.whyItMatters,
-    item.synthesis,
-    item.value,
-    item.focus,
-  ]
-    .filter(Boolean)
-    .map(textValue)
-    .join(" — ");
-};
-
-function CitationLinks({ ids, citationMap }) {
-  if (!Array.isArray(ids) || !ids.length) return null;
-  return (
-    <span className="ml-2 inline-flex flex-wrap gap-1">
-      {ids.map((id) => {
-        const citation = citationMap.get(id);
-        return (
-          <a
-            key={id}
-            href={citation?.pdfUrl || citation?.sourceUrl || `#source-${id}`}
-            target={citation?.pdfUrl || citation?.sourceUrl ? "_blank" : undefined}
-            rel="noreferrer"
-            title={citation?.snippet}
-            className="rounded bg-[#eee0dc] px-1.5 py-0.5 text-[9px] font-bold text-[#8f1d2c]"
-            onClick={() => trackActivity({
-              event_type: "citation_opened", entity_type: "comparison_citation",
-              entity_id: id, document_id: citation?.documentId,
-              page_path: "/app/compare",
-            })}
-          >
-            {id}
-          </a>
-        );
-      })}
-    </span>
-  );
-}
 
 export function DocumentComparison() {
   const searchParams = useSearchParams();
@@ -368,21 +287,7 @@ export function DocumentComparison() {
   ]);
 
   const result = comparison?.result;
-  const comparisonSections = useMemo(() => SECTION_CONFIG
-    .map(([key, title, aliases]) => {
-      const sourceKey = aliases.find((alias) => Array.isArray(result?.[alias]) && result[alias].length) || aliases[0];
-      const items = Array.isArray(result?.[sourceKey]) ? result[sourceKey].filter((item) => itemText(item).trim()) : [];
-      const status = result?.sectionStatus?.[key] || (items.some((item) => itemText(item).trim()) ? "available" : "insufficient_evidence");
-      return { key, title, items, status };
-    }), [result]);
-  const isFallbackComparison = result?.generationMode === "extractive_fallback";
-  const citationMap = useMemo(
-    () =>
-      new Map(
-        (result?.citations || []).map((citation) => [citation.id, citation]),
-      ),
-    [result?.citations],
-  );
+  const status = comparisonStatus(result);
   const chatDocumentIds = useMemo(() => {
     if (result?.documents?.length) {
       return result.documents
@@ -438,10 +343,10 @@ export function DocumentComparison() {
   }
 
   return (
-    <div className="min-w-0 space-y-5 pb-5">
+    <div className="min-w-0 space-y-5 pb-5 [overflow-wrap:anywhere]">
       <section className="surface-card overflow-hidden">
         <div className={`${result ? "bg-white text-[#29312d]" : "bg-[#8f1d2c] text-white"} p-5 sm:p-7`}>
-          <p className={`text-[10px] font-bold uppercase tracking-[0.2em] ${result ? "text-[#874047]" : "text-white/55"}`}>
+          <p className={`text-xs font-bold uppercase tracking-[0.2em] ${result ? "text-[#874047]" : "text-white/80"}`}>
             Grounded document comparison
           </p>
           <h2 className={`mt-2 font-serif ${result ? "text-2xl text-[#8f1d2c]" : "text-3xl"}`}>
@@ -450,6 +355,7 @@ export function DocumentComparison() {
                 ? "Checking selected documents"
                 : "Preparing comparison")}
           </h2>
+          {result && <p role="status" className="mt-3 text-sm font-semibold text-[#8f1d2c]">{status.label}</p>}
           <div className={`${result ? "mt-4 border-t border-[#8f1d2c]/10 pt-4" : "mt-5"} flex flex-wrap gap-3`}>
             <label className="text-xs">
               <span className="sr-only">Comparison mode</span>
@@ -485,6 +391,7 @@ export function DocumentComparison() {
               <button
                 type="button"
                 disabled={!canRunComparison}
+                aria-describedby={!canRunComparison ? "comparison-action-reason" : undefined}
                 onClick={runComparison}
                 className={`rounded-xl px-4 py-2 text-xs font-semibold disabled:opacity-50 ${result ? "bg-[#8f1d2c] text-white" : "bg-[#fffaf0] text-[#8f1d2c]"}`}
               >
@@ -512,8 +419,9 @@ export function DocumentComparison() {
               )
             )}
           </div>
+          {!canRunComparison && <p id="comparison-action-reason" className="mt-3 text-xs">{loading || regenerating ? "Wait for the current comparison to finish." : readinessLoading ? "Checking source readiness…" : selectionNotReadyMessage || "Select at least two ready sources."}</p>}
           {!result && <label className="mt-4 block max-w-3xl">
-            <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-white/60">
+            <span className="text-xs font-semibold uppercase tracking-[0.12em] text-white/80">
               Optional focused question
             </span>
             <textarea
@@ -546,28 +454,7 @@ export function DocumentComparison() {
             {selectionNotReadyMessage}
           </p>
         )}
-        {isFallbackComparison && (
-          <div
-            role="alert"
-            className="flex flex-col gap-3 bg-[#fff3d7] px-5 py-3 text-sm text-[#754e14] sm:flex-row sm:items-center sm:justify-between"
-          >
-            <span>
-              This saved comparison was generated from retrieved passages only
-              because AI generation was unavailable. Regenerate it to get the
-              full AI-written comparison.
-            </span>
-            {ids.length >= 2 && (
-              <button
-                type="button"
-                disabled={loading || regenerating || readinessLoading}
-                onClick={runComparison}
-                className="rounded-xl bg-[#8f1d2c] px-4 py-2 text-xs font-semibold text-white disabled:opacity-50"
-              >
-                {regenerating ? "Regenerating comparison…" : "Regenerate with AI"}
-              </button>
-            )}
-          </div>
-        )}
+
       </section>
 
       {!comparison && ids.length === 1 && (
@@ -627,9 +514,9 @@ export function DocumentComparison() {
                   key={document.id}
                   className="rounded-xl border border-[#8f1d2c]/8 bg-[#f7f2eb] p-4"
                 >
-                  <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-[#8f1d2c]">D{index + 1}</p>
+                  <p className="text-xs font-bold uppercase tracking-[0.14em] text-[#8f1d2c]">D{index + 1}</p>
                   <p className="mt-1 text-sm font-semibold text-[#29312d]">{document.title}</p>
-                  <p className="mt-2 text-[10px] uppercase tracking-[0.1em] text-[#706a61]">
+                  <p className="mt-2 text-xs uppercase tracking-[0.1em] text-[#706a61]">
                     {[document.type, document.ministry || document.authority,
                       document.state || document.jurisdiction,
                       document.year]
@@ -641,152 +528,7 @@ export function DocumentComparison() {
             </div>
           </section>
 
-          <section className="surface-card p-5 sm:p-6">
-            <h3 className="font-serif text-2xl text-[#8f1d2c]">
-              Executive summary
-            </h3>
-            {(result.quality?.outputValidation?.status !== "SUCCESS" || result.comparisonSchemaVersion !== "comparison-quality-v3") && <p role="status" className="mt-3 rounded-lg bg-[#fffaf0] p-3 text-xs leading-5 text-[#81796e]">This saved comparison has limited evidence coverage or uses an older validation contract. Review the section limitations; it is not a complete legal assessment.</p>}
-            <p className="mt-3 whitespace-pre-wrap text-sm leading-7 text-[#514d46]">
-              {result.executiveSummary}
-            </p>
-          </section>
-
-          <section className="surface-card p-5 sm:p-6">
-            <h3 className="font-serif text-2xl text-[#8f1d2c]">
-              Relationship overlap
-            </h3>
-            <div className="mt-4 grid gap-3 lg:grid-cols-2">
-              {(result.relationshipIntelligence?.relationships || []).map(
-                (relationship) => (
-                  <article
-                    key={relationship.id}
-                    className="rounded-xl border border-[#8f1d2c]/8 bg-[#f7f2eb] p-4"
-                  >
-                    <p className="text-xs font-semibold text-[#29312d]">
-                      {relationship.sourceTitle} → {relationship.targetTitle}
-                    </p>
-                    <p className="mt-2 text-[10px] font-bold uppercase tracking-[0.1em] text-[#8f1d2c]">
-                      {relationship.label}
-                      {relationship.confidence != null
-                        ? ` · ${Math.round(relationship.confidence * 100)}% confidence`
-                        : ""}
-                    </p>
-                    {relationship.explanation && (
-                      <p className="mt-2 text-xs leading-5 text-[#706a61]">
-                        {relationship.explanation}
-                      </p>
-                    )}
-                  </article>
-                ),
-              )}
-            </div>
-            {!(result.relationshipIntelligence?.relationships || []).length && (
-              <p className="mt-3 text-sm text-[#706a61]">
-                No direct verified relationship is stored between these
-                documents.
-              </p>
-            )}
-            <dl className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-              {[
-                ["Shared ministries", "sharedMinistries"],
-                ["Shared authorities", "sharedAuthorities"],
-                ["Shared jurisdictions", "sharedJurisdictions"],
-                ["Shared topics", "sharedTopics"],
-              ].filter(([, key]) => result.relationshipIntelligence?.[key]?.length).map(([label, key]) => (
-                <div key={key} className="rounded-xl bg-[#fffaf0] p-3">
-                  <dt className="text-[9px] uppercase tracking-[0.1em] text-[#706a61]">
-                    {label}
-                  </dt>
-                  <dd className="mt-1 text-xs text-[#514d46]">
-                    {result.relationshipIntelligence?.[key]?.join(", ")}
-                  </dd>
-                </div>
-              ))}
-            </dl>
-          </section>
-
-          {comparisonSections.length > 0 && <section className="surface-card overflow-hidden">
-            <div className="border-b border-[#8f1d2c]/10 p-5 sm:p-6">
-              <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-[#874047]">Comparative analysis</p>
-              <h3 className="mt-1 font-serif text-2xl text-[#8f1d2c]">What differs, what changed, and why it matters</h3>
-            </div>
-            <div className="divide-y divide-[#8f1d2c]/10">
-              {comparisonSections.map(({ key, title, items, status }) => (
-                <div key={key} className="grid gap-3 p-5 sm:p-6 lg:grid-cols-[210px_minmax(0,1fr)]">
-                  <h4 className="font-serif text-lg text-[#8f1d2c]">{title}</h4>
-                  {items.length ? (
-                    <ul className="space-y-3">
-                      {items.map((item, index) => {
-                        const text = itemText(item);
-                        if (!text) return null;
-                        return <li key={`${key}-${index}`} className="rounded-xl bg-[#f7f2eb] p-3 text-sm leading-6 text-[#514d46]">
-                          {text}
-                          <CitationLinks ids={item?.citations} citationMap={citationMap} />
-                        </li>;
-                      })}
-                    </ul>
-                  ) : status === "not_applicable" ? (
-                    <p className="rounded-xl border border-dashed border-[#8f1d2c]/12 bg-[#fffaf0] p-3 text-sm leading-6 text-[#81796e]">Not materially applicable to this comparison.</p>
-                  ) : (
-                    <p className="rounded-xl border border-dashed border-[#8f1d2c]/12 bg-[#fffaf0] p-3 text-sm leading-6 text-[#81796e]">Insufficient evidence in the selected sources to compare this reliably.</p>
-                  )}
-                </div>
-              ))}
-            </div>
-          </section>}
-
-          <section className="surface-card p-5 sm:p-6">
-            <h3 className="font-serif text-xl text-[#8f1d2c]">
-            Supporting evidence
-            </h3>
-            <p className="mt-2 text-sm leading-6 text-[#706a61]">Open a citation to inspect the source passage behind the analysis. Retrieved text is kept separate from the synthesized comparison.</p>
-            <div className="mt-4 grid gap-3 lg:grid-cols-2">
-              {(result.citations || []).map((citation) => (
-                <article
-                  id={`source-${citation.id}`}
-                  key={citation.id}
-                  className="rounded-xl border border-[#8f1d2c]/8 bg-[#f7f2eb] p-4"
-                >
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <p className="text-[10px] font-bold text-[#8f1d2c]">
-                        {citation.id}
-                      </p>
-                      <p className="mt-1 text-xs font-semibold text-[#29312d]">
-                        {citation.documentTitle}
-                      </p>
-                      <p className="mt-1 text-[10px] text-[#706a61]">
-                        {[
-                          citation.resourceType === "html" ? "PolicyEdge webpage" : null,
-                          citation.sectionPath?.length
-                            ? citation.sectionPath.join(" › ")
-                            : citation.heading || citation.section,
-                        ].filter(Boolean).join(" · ") || "Source passage"}
-                      </p>
-                    </div>
-                    {(citation.pdfUrl || citation.sourceUrl) && (
-                      <a
-                        href={citation.pdfUrl || citation.sourceUrl}
-                        target="_blank"
-                        rel="noreferrer"
-                        aria-label={`Open source ${citation.id}`}
-                        onClick={() => trackActivity({
-                          event_type: "source_opened", entity_type: "comparison_source",
-                          entity_id: citation.id, document_id: citation.documentId,
-                          page_path: "/app/compare",
-                        })}
-                      >
-                        <ExternalLink className="h-4 w-4 text-[#8f1d2c]" />
-                      </a>
-                    )}
-                  </div>
-                  <p className="mt-3 text-xs leading-6 text-[#706a61]">
-                    {citation.snippet}
-                  </p>
-                </article>
-              ))}
-            </div>
-          </section>
+          <ComparisonAnalysis result={result} />
 
           {(result.suggestedQuestions || []).length > 0 && (
             <section className="surface-card p-5 sm:p-6">
@@ -812,7 +554,7 @@ export function DocumentComparison() {
           {hasEmbeddedChat && (
             <section className="scroll-mt-24">
               <div className="mb-3 rounded-2xl border border-[#8f1d2c]/8 bg-[#fffaf0] p-5 shadow-sm sm:p-6">
-                <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-[#874047]">
+                <p className="text-xs font-bold uppercase tracking-[0.18em] text-[#874047]">
                   Comparison chat
                 </p>
                 <h3 className="mt-1 font-serif text-2xl text-[#8f1d2c]">

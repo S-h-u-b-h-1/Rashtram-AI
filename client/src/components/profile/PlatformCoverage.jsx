@@ -65,7 +65,7 @@ export function PlatformCoverage({ coverage }) {
     <section className="surface-card p-5 sm:p-6">
       <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
         <div>
-          <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#874047]">
+          <p className="text-xs font-bold uppercase tracking-[0.2em] text-[#874047]">
             Platform-wide data
           </p>
           <h2 className="mt-2 font-serif text-2xl text-[#8f1d2c]">
@@ -100,7 +100,7 @@ export function PlatformCoverage({ coverage }) {
               <p className="mt-4 font-serif text-3xl text-[#8f1d2c]">
                 {Number(item.value || 0).toLocaleString()}
               </p>
-              <p className="mt-1 text-[11px] text-[#81796e]">
+              <p className="mt-1 text-xs text-[#81796e]">
                 {item.label}
               </p>
             </article>
@@ -110,7 +110,7 @@ export function PlatformCoverage({ coverage }) {
 
       <div className="mt-5 grid gap-5 lg:grid-cols-[0.8fr_1.2fr]">
         <div className="rounded-2xl bg-[#8f1d2c] p-5 text-white">
-          <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[#c1a06f]">
+          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#c1a06f]">
             Core catalogue
           </p>
           <div className="mt-4 space-y-3">
@@ -129,7 +129,7 @@ export function PlatformCoverage({ coverage }) {
         </div>
 
         <div className="rounded-2xl border border-[#8f1d2c]/9 bg-[#f6f2eb] p-5">
-          <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[#874047]">
+          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#874047]">
             Document types present
           </p>
           <div className="mt-4 flex flex-wrap gap-2">

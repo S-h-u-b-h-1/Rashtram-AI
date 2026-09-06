@@ -7,7 +7,7 @@ export function GazetteResearch({ chats = [], categories = [] }) {
     <section className="surface-card p-5 sm:p-6">
       <div className="flex items-start justify-between gap-4">
         <div>
-          <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#874047]">
+          <p className="text-xs font-bold uppercase tracking-[0.2em] text-[#874047]">
             Gazette research
           </p>
           <h2 className="mt-2 font-serif text-2xl text-[#8f1d2c]">
@@ -22,7 +22,7 @@ export function GazetteResearch({ chats = [], categories = [] }) {
 
       <div className="mt-5 grid gap-5 lg:grid-cols-[1.4fr_0.8fr]">
         <div>
-          <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[#8a8277]">
+          <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[#8a8277]">
             Recent Gazette research
           </p>
           {chats.length ? (
@@ -40,7 +40,7 @@ export function GazetteResearch({ chats = [], categories = [] }) {
                     <p className="line-clamp-1 text-xs font-semibold text-[#29312d]">
                       {chat.title}
                     </p>
-                    <p className="mt-1 text-[10px] text-[#8a8277]">
+                    <p className="mt-1 text-xs text-[#8a8277]">
                       {chat.messageCount} messages · {formatDate(chat.updatedAt)}
                     </p>
                   </div>
@@ -56,7 +56,7 @@ export function GazetteResearch({ chats = [], categories = [] }) {
         </div>
 
         <div>
-          <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[#8a8277]">
+          <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[#8a8277]">
             Favourite Gazette categories
           </p>
           {categories.length ? (
@@ -64,7 +64,7 @@ export function GazetteResearch({ chats = [], categories = [] }) {
               {categories.map((category) => (
                 <span
                   key={category.label}
-                  className="rounded-full bg-[#eee0dc] px-3 py-2 text-[11px] font-medium text-[#874047]"
+                  className="rounded-full bg-[#eee0dc] px-3 py-2 text-xs font-medium text-[#874047]"
                 >
                   {category.label}
                   <strong className="ml-1.5">{category.interactions}</strong>

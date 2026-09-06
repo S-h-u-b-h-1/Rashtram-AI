@@ -1,0 +1,80 @@
+// Saved-result presentation only. No retrieval, generation, or validation changes.
+const { createResearchBriefPdf } = require('./reportPdfService');
+
+const text = value => {
+  if (value == null) return '';
+  if (typeof value !== 'object') return String(value);
+  if (Array.isArray(value)) return value.map(text).filter(Boolean).join('; ');
+  return ['topic', 'dimension', 'term', 'date', 'name', 'point', 'event', 'analysis', 'impact', 'finding', 'description', 'content', 'significance', 'whyItMatters', 'synthesis', 'documentA', 'documentB'].map(key => value[key] ? `${['documentA', 'documentB'].includes(key) ? key === 'documentA' ? 'Document A: ' : 'Document B: ' : ''}${text(value[key])}` : '').filter(Boolean).join(' - ');
+};
+const statusOf = (result = {}) => {
+  const validation = result.quality?.outputValidation;
+  if (result.generationMode === 'evidence_abstention' || validation?.status === 'INSUFFICIENT_EVIDENCE') return 'Insufficient evidence';
+  if (validation?.valid === true && validation.status === 'SUCCESS' && result.generationMode !== 'extractive_fallback' && result.comparisonSchemaVersion === 'comparison-quality-v3') return 'AI comparative analysis';
+  return 'Partial evidence comparison';
+};
+const fields = [
+  ['differences', 'Key Differences'], ['whatChanged', 'What Changed'], ['practicalImplications', 'Practical Implications', 'impactAssessment'],
+  ['purpose', 'Purpose'], ['scope', 'Scope'], ['applicability', 'Applicability'], ['keyProvisions', 'Key Provisions', 'keyClauses'], ['similarities', 'Major Similarities'], ['obligations', 'Obligations / Requirements', 'complianceImpact'], ['rights', 'Rights / Protections'], ['definitions', 'Definitions'], ['legalEffect', 'Authority / Legal Effect', 'authorityDifferences'], ['timeline', 'Dates / Timeline'], ['stakeholderImpact', 'Stakeholder Impact', 'stakeholders'], ['keyTakeaways', 'Key Takeaways', 'keyFindings'],
+];
+const excerpt = value => {
+  const normalized = text(value).replace(/\s+/gu, ' ').trim();
+  if (normalized.length <= 550) return normalized;
+  return `${normalized.slice(0, 550).replace(/\s+\S*$/, '')}… [Excerpt; full passage in app.]`;
+};
+const comparisonPdfPresentation = comparison => {
+  const result = comparison.result || {};
+  const status = statusOf(result);
+  const insufficient = status === 'Insufficient evidence';
+  const extractive = result.generationMode === 'extractive_fallback';
+  const documents = result.documents || [];
+  const citations = result.citations || [];
+  const sections = fields.map(([key, title, alias]) => {
+    const state = String(result.sectionStatus?.[key] || '').toLowerCase();
+    const values = result[key]?.length ? result[key] : result[alias];
+    const items = !extractive && !insufficient && !['not_applicable', 'insufficient_evidence'].includes(state) && Array.isArray(values) ? values.filter(item => text(item).trim()) : [];
+    return { key, title, items, state };
+  });
+  const lines = [`## ${insufficient ? 'Requested comparison' : status === 'AI comparative analysis' ? 'Compared documents' : 'Partial Analysis'}`];
+  documents.forEach((document, index) => lines.push(`- D${index + 1}: ${document.title || 'Selected document'}`));
+  lines.push('', `## ${insufficient ? 'Why a complete analysis could not be produced' : 'Executive Summary'}`, extractive ? 'AI comparative analysis was unavailable. Retrieved excerpts below are source material, not comparative findings.' : text(result.executiveSummary) || 'Insufficient evidence in the selected sources.');
+  const supported = sections.filter(section => section.items.length);
+  if (status === 'Partial evidence comparison' && supported.length) lines.push('', '## Supported Findings');
+  let detailedStarted = false;
+  for (const section of supported) {
+    if (!detailedStarted && !['differences', 'whatChanged', 'practicalImplications', 'keyTakeaways'].includes(section.key)) {
+      lines.push('', '## Detailed Comparison'); detailedStarted = true;
+    }
+    lines.push('', `### ${section.title}`);
+    for (const item of section.items) lines.push(`- ${text(item)}${Array.isArray(item?.citations) && item.citations.length ? ` [${item.citations.join(', ')}]` : ''}`);
+  }
+  const missing = sections.filter(section => !section.items.length && section.state !== 'not_applicable');
+  if (missing.length) lines.push('', '## Missing Evidence', `Insufficient evidence in the selected sources for: ${missing.map(section => section.title).join('; ')}.`);
+  const notApplicable = sections.filter(section => section.state === 'not_applicable');
+  if (notApplicable.length) lines.push('', `Not materially applicable: ${notApplicable.map(section => section.title).join('; ')}.`);
+  lines.push('', `## ${insufficient ? 'What evidence was available' : 'Available Sources'}`, `${citations.length} saved passages. A maximum of three excerpts per document is included below. Full evidence remains available in the saved in-app comparison.`);
+  const sourceGroups = new Map();
+  for (const citation of citations) {
+    const key = String(citation.documentId || citation.documentTitle || 'unknown');
+    if (!sourceGroups.has(key)) sourceGroups.set(key, []);
+    sourceGroups.get(key).push(citation);
+  }
+  lines.push('', '## Sources');
+  const sources = [];
+  for (const [key, entries] of sourceGroups) {
+    const docIndex = documents.findIndex(document => String(document.id) === key);
+    const label = docIndex >= 0 ? `D${docIndex + 1}` : entries[0].documentTitle || 'Source';
+    const first = entries[0];
+    lines.push(`- ${label}: ${entries.map(citation => `${citation.id || citation.citationId}${citation.page ? ` (p. ${citation.page})` : ''}`).join(', ')}`);
+    const url = first.canonicalSourceUrl || first.sourceUrl || first.pdfUrl;
+    if (/^https?:\/\//i.test(url || '')) lines.push(url);
+    // Stable sample: highest saved retrieval scores, never a new relevance judgment.
+    const sampled = [...entries].sort((a, b) => Number(b.score || 0) - Number(a.score || 0)).slice(0, 3);
+    for (const citation of sampled) sources.push({ citationId: citation.id || citation.citationId, documentTitle: label, page: citation.page ?? citation.pageStart, section: citation.heading || citation.section || citation.sectionTitle, content: excerpt(citation.snippet || citation.content) });
+  }
+  const limitations = (Array.isArray(result.limitations) ? result.limitations : [result.limitations]).map(text).filter(Boolean);
+  lines.push('', '## Limitations', ...(limitations.length ? limitations.map(value => `- ${value}`) : ['Verify material conclusions against the original sources and their current applicability.']), 'The export is a presentation of the saved result, not a new or revalidated analysis. Excerpts are bounded; consult the in-app evidence for complete passages.');
+  return { title: comparison.title || 'Document comparison', documentType: status, reportText: lines.join('\n'), sources, completeEvidence: true, sourcesOnNewPage: false, generatedAt: comparison.createdAt || new Date() };
+};
+const createComparisonPdf = comparison => createResearchBriefPdf(comparisonPdfPresentation(comparison));
+module.exports = { comparisonPdfPresentation, createComparisonPdf, statusOf };

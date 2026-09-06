@@ -68,7 +68,7 @@ function WorkflowButton({ workflow, disabled, onRun, compact = false }) {
           <span className="block text-xs font-bold text-[#29312d]">
             {workflow.title}
           </span>
-          <span className="mt-1 line-clamp-2 block text-[11px] leading-5 text-[#706a61]">
+          <span className="mt-1 line-clamp-2 block text-xs leading-5 text-[#706a61]">
             {workflow.description}
           </span>
         </span>
@@ -145,7 +145,7 @@ export function ResearchWorkflowPanel({
             <p className="text-xs font-bold text-[#8f1d2c]">
               Research workflows are hidden.
             </p>
-            <p className="mt-0.5 text-[11px] text-[#706a61]">
+            <p className="mt-0.5 text-xs text-[#706a61]">
               Keep the chat focused, or bring them back when you need structured
               outputs.
             </p>
@@ -178,7 +178,7 @@ export function ResearchWorkflowPanel({
       />
       <div className="relative flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
-          <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-[#874047]">
+          <p className="text-xs font-bold uppercase tracking-[0.18em] text-[#874047]">
             Research workflows
           </p>
           <h2 className="mt-1 font-serif text-xl text-[#8f1d2c]">
@@ -239,10 +239,10 @@ export function ResearchWorkflowPanel({
               <div className="grid gap-4 p-4 xl:grid-cols-3">
                 {RESEARCH_WORKFLOW_GROUPS.map((group) => (
                   <section key={group.id}>
-                    <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-[#874047]">
+                    <p className="text-xs font-bold uppercase tracking-[0.16em] text-[#874047]">
                       {group.title}
                     </p>
-                    <p className="mt-1 text-[11px] leading-5 text-[#706a61]">
+                    <p className="mt-1 text-xs leading-5 text-[#706a61]">
                       {group.description}
                     </p>
                     <div className="mt-3 grid gap-2">

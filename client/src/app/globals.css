@@ -4,6 +4,15 @@
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {
+  /* Readability scale: rem units respect the reader's browser font preference. */
+  --text-xs: 0.875rem;
+  --text-xs--line-height: 1.5;
+  --text-sm: 1rem;
+  --text-sm--line-height: 1.5;
+  --text-base: 1.0625rem;
+  --text-base--line-height: 1.65;
+  --text-lg: 1.1875rem;
+  --text-lg--line-height: 1.5;
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
@@ -75,6 +84,8 @@ body {
   background: var(--background);
   color: var(--foreground);
   font-family: var(--font-geist-sans), system-ui, sans-serif;
+  font-size: var(--text-base);
+  line-height: 1.65;
   text-rendering: optimizeLegibility;
 }
 
@@ -126,7 +137,7 @@ select:focus-visible {
   background: #ffffff;
   padding-left: 1rem;
   padding-right: 1rem;
-  font-size: 0.875rem;
+  font-size: 1rem;
   color: #352723;
   transition:
     border-color 160ms ease,
@@ -278,10 +289,6 @@ select:focus-visible {
     padding-bottom: max(1rem, env(safe-area-inset-bottom));
   }
 
-  .chat-markdown {
-    font-size: 0.875rem;
-    line-height: 1.65;
-  }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -299,7 +306,7 @@ select:focus-visible {
 }
 
 .chat-markdown {
-  font-size: 0.93rem;
+  font-size: 1.0625rem;
   line-height: 1.75;
 }
 
@@ -314,15 +321,15 @@ select:focus-visible {
 }
 
 .chat-markdown h1 {
-  font-size: 1.35rem;
+  font-size: 1.625rem;
 }
 
 .chat-markdown h2 {
-  font-size: 1.2rem;
+  font-size: 1.375rem;
 }
 
 .chat-markdown h3 {
-  font-size: 1.05rem;
+  font-size: 1.1875rem;
 }
 
 .chat-markdown p {
@@ -356,7 +363,7 @@ select:focus-visible {
   background: rgba(143, 29, 44, 0.08);
   padding: 0.12rem 0.35rem;
   font-family: var(--font-geist-mono), monospace;
-  font-size: 0.8rem;
+  font-size: 0.875rem;
 }
 
 .chat-markdown pre {

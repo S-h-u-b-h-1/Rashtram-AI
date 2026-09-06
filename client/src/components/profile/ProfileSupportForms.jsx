@@ -22,7 +22,7 @@ const inputClass =
 function Field({ label, required = false, wide = false, children }) {
   return (
     <label className={`space-y-1.5 ${wide ? "sm:col-span-2" : ""}`}>
-      <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[#706a61]">
+      <span className="text-xs font-semibold uppercase tracking-[0.12em] text-[#706a61]">
         {label}
         {required ? " *" : ""}
       </span>
@@ -99,7 +99,7 @@ export function ProfileSupportForms({ defaultEmail = "" }) {
 
   return (
     <section className="surface-card p-5 sm:p-6">
-      <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#874047]">
+      <p className="text-xs font-bold uppercase tracking-[0.2em] text-[#874047]">
         Product support
       </p>
       <h2 className="mt-2 font-serif text-2xl text-[#8f1d2c]">

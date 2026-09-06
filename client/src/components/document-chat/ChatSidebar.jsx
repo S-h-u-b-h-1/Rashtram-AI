@@ -45,7 +45,7 @@ export function ChatSidebar({
   return (
     <div className="space-y-6">
       <section>
-        <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-[#874047]">
+        <p className="text-xs font-bold uppercase tracking-[0.18em] text-[#874047]">
           Document metadata
         </p>
         <dl className="mt-3 grid gap-2">
@@ -54,7 +54,7 @@ export function ChatSidebar({
               key={label}
               className="rounded-xl border border-[#8f1d2c]/8 bg-white p-3"
             >
-              <dt className="text-[9px] uppercase tracking-[0.1em] text-[#8a8277]">
+              <dt className="text-xs uppercase tracking-[0.1em] text-[#8a8277]">
                 {label}
               </dt>
               <dd className="mt-1 text-xs leading-5 text-[#514d46]">

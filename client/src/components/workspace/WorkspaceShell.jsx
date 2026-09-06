@@ -91,7 +91,7 @@ export function WorkspaceShell({ activeKey, title, children }) {
             <h1 className="truncate text-sm font-medium text-[#706a61]">{title}</h1>
           </div>
           <button type="button" onClick={() => setPaletteOpen(true)} className="inline-flex h-11 shrink-0 items-center gap-2 rounded-lg px-3 text-[#706a61] hover:bg-[#f1ece3]" aria-label="Search Library shortcut">
-            <Search className="h-4 w-4" /><kbd className="hidden text-[11px] sm:inline">⌘K</kbd>
+            <Search className="h-4 w-4" /><kbd className="hidden text-xs sm:inline">⌘K</kbd>
           </button>
         </header>
         <main className={cn("app-scrollbar min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-4 py-5 sm:px-7", comparisonDocuments.length ? "pb-32" : "pb-8")}>

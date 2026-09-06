@@ -10,7 +10,7 @@ export function LegislativeUpdateGrid({ groups = [] }) {
   return (
     <section className="surface-card p-5 sm:p-6">
       <div>
-        <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#874047]">
+        <p className="text-xs font-bold uppercase tracking-[0.2em] text-[#874047]">
           Choose a library
         </p>
         <h2 className="mt-2 font-serif text-2xl text-[#8f1d2c]">
@@ -49,7 +49,7 @@ export function LegislativeUpdateGrid({ groups = [] }) {
                     <p className="line-clamp-2 text-xs font-medium leading-5 text-[#514d46]">
                       {group.documents[0]?.title || "Open library"}
                     </p>
-                    <p className="mt-1 text-[10px] text-[#8a8277]">
+                    <p className="mt-1 text-xs text-[#8a8277]">
                       Latest{" "}
                       {formatDate(
                         group.documents[0]?.publicationDate ||
