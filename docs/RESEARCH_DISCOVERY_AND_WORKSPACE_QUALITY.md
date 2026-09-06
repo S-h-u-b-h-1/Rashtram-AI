@@ -1,5 +1,7 @@
 # Research discovery and workspace quality
 
+> Superseded by [the 6 September completion audit](COMPLETION_AUDIT_2026_09_06.md), which distinguishes live, local-only, partial and blocked work. Historical claims below are not current verification evidence.
+
 ## Completion audit — 6 September 2026 (in progress)
 
 This audit supersedes earlier unverified completion/deployment statements below.
