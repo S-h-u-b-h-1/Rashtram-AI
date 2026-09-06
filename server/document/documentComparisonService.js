@@ -10,8 +10,7 @@ const {
 const {
   getComparisonGraphOverlap,
 } = require("../graph/knowledgeGraphService");
-const { generateDocumentComparison, generateComparisonThemeJson, providerConfig } = require("../lib/vectordb");
-const { generateThemeComparison } = require('./comparisonThemes');
+const { generateDocumentComparison, providerConfig } = require("../lib/vectordb");
 const { sanitizeProviderError } = require("../lib/providerErrorSanitizer");
 const { planQuery } = require("../retrieval/queryPlanner");
 const { retrievalConfig } = require("../retrieval/retrievalConfig");
@@ -1290,7 +1289,7 @@ const createComparison = async (userId, payload, options = {}) => {
   const analysisKey = flags.caching ? analysisCacheKey({
     kind: "comparison", userId, documentIds, mode, language,
     question: userQuestion || comparisonQuery(mode), model,
-    promptVersion: "document-comparison-themes-v1", evidenceHash,
+    promptVersion: "document-comparison-v3", evidenceHash,
     versions: groups[0]?.retrievalDiagnostics?.versions || {
       ...settings.versions,
       embeddingVersion: providerConfig().embeddingModel,
@@ -1327,10 +1326,7 @@ const createComparison = async (userId, payload, options = {}) => {
   } else {
     const generationStartedAt = Date.now();
     try {
-      generated = comparisonDocuments.length === 2
-        ? await generateThemeComparison({documents: comparisonDocuments, evidence: comparisonEvidence,
-            userQuestion, language, generateJson: generateComparisonThemeJson})
-        : await generateDocumentComparison({
+      generated = await generateDocumentComparison({
         mode,
         language,
         userQuestion,
@@ -1388,7 +1384,7 @@ const createComparison = async (userId, payload, options = {}) => {
     });
     const verificationStartedAt = Date.now();
     const verified = flags.citationVerifier
-      ? verifyStructuredComparison(generated, comparisonEvidence.map(e => ({...e, snippet: e.content})))
+      ? verifyStructuredComparison(generated, comparisonEvidence)
       : { generated, report: claimVerification };
     generated = verified.generated;
     claimVerification = verified.report;
@@ -1511,7 +1507,7 @@ const createComparison = async (userId, payload, options = {}) => {
       status: cachedAnalysis ? "hit" : analysisKey ? "miss" : "bypass",
       version: "safe-repeat-analysis-v1",
       evidenceHash: evidenceHash.slice(0, 16),
-    promptVersion: "document-comparison-themes-v1",
+      promptVersion: "document-comparison-v3",
       model,
     },
     telemetry: {

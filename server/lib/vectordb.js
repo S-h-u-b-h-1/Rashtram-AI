@@ -1534,29 +1534,6 @@ const parseJsonResponse = (value) => {
   return JSON.parse(normalized.slice(start, end + 1));
 };
 
-const generateComparisonThemeJson = async (prompt, options = {}) => {
-  const models = taskGenerationModels('comparison');
-  const response = await runGeneration('generateContent', prompt, {
-    useCircuitBreaker: false, models, maxModels: 1, attempts: 1,
-    timeoutMs: options.timeoutMs || 18_000, maxQueueWaitMs: 4_000, maxRetryAfterMs: 0,
-    generationConfig: {
-      temperature: 0.15, topP: 0.8, responseMimeType: 'application/json',
-      maxOutputTokens: options.maxOutputTokens || 3000,
-      ...(AI_PROVIDER === 'gemini' && /^gemini-2\.5-flash/.test(models[0])
-        ? { thinkingConfig: { thinkingBudget: 0 } } : {}),
-    },
-  });
-  const rawText = responseText(response);
-  try {
-    if (response.candidates?.[0]?.finishReason === 'MAX_TOKENS') throw new Error('Incomplete comparison JSON');
-    return { ...parseJsonResponse(rawText), usage: response.usageMetadata };
-  } catch (error) {
-    error.comparisonJsonParseFailure = true;
-    error.rawComparisonResponse = rawText;
-    throw error;
-  }
-};
-
 const generateDocumentComparison = async ({
   mode,
   language,
@@ -2261,7 +2238,6 @@ module.exports = {
   generateBillSummary,
   generateDocumentSummary,
   generateDocumentComparison,
-  generateComparisonThemeJson,
   generateDashboardOverview,
   generateEGazetteSummary,
   generatePolicySummary,
