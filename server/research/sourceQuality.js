@@ -68,6 +68,8 @@ const classifyDetailedAuthority = ({
   canonicalUrl,
   sourceType,
 } = {}) => {
+  // Upload provenance is authoritative for identity, never for legal authority.
+  if (sourceType === "pdf_upload") return "USER_SOURCE";
   if (sourceName) {
     const configured = sourcePolicyFor(sourceName);
     if (configured.authorityClass !== SOURCE_AUTHORITY_CLASSES.UNKNOWN) {
@@ -149,6 +151,7 @@ const evidenceStatusFor = ({
 };
 
 const publicAuthorityLabel = (authorityClass) => ({
+  USER_SOURCE: "User-uploaded source",
   [SOURCE_AUTHORITY_CLASSES.OFFICIAL_PRIMARY]: "Official government source",
   [SOURCE_AUTHORITY_CLASSES.OFFICIAL_REGULATORY]: "Regulatory source",
   [SOURCE_AUTHORITY_CLASSES.OFFICIAL_GOVERNMENT]: "Official government source",
@@ -162,6 +165,7 @@ const publicAuthorityLabel = (authorityClass) => ({
 })[authorityClass] || "External web source";
 
 const toRetrievalAuthorityClass = (authorityClass, sourceType) => {
+  if (sourceType === "pdf_upload") return "USER_SOURCE";
   if (isOfficialAuthority(authorityClass)) return "PRIMARY_OFFICIAL";
   if (authorityClass === SOURCE_AUTHORITY_CLASSES.INSTITUTIONAL_SECONDARY) return "INSTITUTIONAL";
   if ([SOURCE_AUTHORITY_CLASSES.ACADEMIC_RESEARCH,

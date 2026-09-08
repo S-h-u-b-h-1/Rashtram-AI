@@ -49,7 +49,10 @@ const DIRECT_UPLOAD_EXPIRES_SECONDS = 300;
 const MAX_SOURCE_TEXT = 500_000;
 const MAX_CONTEXT_CHARS = 9_000;
 const SOURCE_LIFECYCLE_LOCK_NAMESPACE = "research-source-upload:";
-const UPLOADED_SOURCE_IDENTITY = Object.freeze({ authorityClass: "USER_SOURCE" });
+const UPLOADED_SOURCE_IDENTITY = Object.freeze({
+  authorityClass: "USER_SOURCE",
+  publicAuthorityLabel: "User-uploaded source",
+});
 
 const sha256 = (buffer) => crypto.createHash("sha256").update(buffer).digest("hex");
 
@@ -234,6 +237,7 @@ const reservePdfUploadIntentRecord = async ({
         JSON.stringify({
           uploaded: true,
           uploadStage: "awaiting_upload",
+          ...UPLOADED_SOURCE_IDENTITY,
           uploadId,
           uploadIssuedAt: new Date().toISOString(),
           uploadExpiresAt: new Date(Date.now() + DIRECT_UPLOAD_EXPIRES_SECONDS * 1000).toISOString(),
@@ -768,7 +772,11 @@ const publicSourceMetadata = (value) => {
   return metadata;
 };
 
-const toPublicSource = (row) => ({
+const toPublicSource = (storedRow) => {
+  const row = storedRow.source_type === "pdf_upload"
+    ? { ...storedRow, metadata_json: { ...storedRow.metadata_json, ...UPLOADED_SOURCE_IDENTITY } }
+    : storedRow;
+  return ({
   id: String(row.id),
   title: row.title,
   sourceType: row.source_type,
@@ -789,7 +797,8 @@ const toPublicSource = (row) => ({
   canonicalUrl: row.metadata_json?.canonicalUrl || row.source_url || null,
   createdAt: row.created_at,
   updatedAt: row.updated_at,
-});
+  });
+};
 
 const persistSourceRows = async ({
   pool = getPool(),
@@ -891,6 +900,7 @@ const persistSource = async ({
       text,
       JSON.stringify({
         ...metadata,
+        ...(sourceType === "pdf_upload" ? UPLOADED_SOURCE_IDENTITY : {}),
         ...(storage.warning ? { storageWarning: storage.warning } : {}),
         pageCount: extracted.pageCount || null,
         extractionMethod: extracted.extractionMethod || null,
@@ -1078,6 +1088,7 @@ const addPdfSourceUnlocked = async (userId, { fileName, mimeType, buffer }) => {
           uploaded: true,
           compatibilityUpload: true,
           durableOriginal: true,
+          ...UPLOADED_SOURCE_IDENTITY,
           uploadStage: "failed_retryable",
           uploadId,
         }),
@@ -1416,6 +1427,7 @@ const persistProcessedPdfReady = async ({
         JSON.stringify({
           uploadStage: "ready",
           durableOriginal: true,
+          ...UPLOADED_SOURCE_IDENTITY,
           durableObjectKeyPlanned: null,
           pageCount: extracted.pageCount,
           extractionMethod: extracted.extractionMethod,
@@ -1655,7 +1667,9 @@ const getSourceContext = async (
   const limitations = [];
   for (const row of result.rows) {
     if (remaining <= 0) break;
-    const storedQuality = row.source_metadata_json || {};
+    const storedQuality = row.source_type === "pdf_upload"
+      ? { ...row.source_metadata_json, ...UPLOADED_SOURCE_IDENTITY }
+      : row.source_metadata_json || {};
     const canonicalUrl = storedQuality.canonicalUrl || row.source_url || null;
     const authorityClass = storedQuality.authorityClass || classifyDetailedAuthority({
       sourceUrl: row.source_url,
@@ -1887,4 +1901,5 @@ module.exports = {
   sweepStalePdfUploadIntents,
   createPdfUploadIntent,
   completePdfUpload,
+  toPublicSource,
 };
