@@ -53,3 +53,9 @@ test("policy drafting never prepares documents in the generation request", () =>
   assert.doesNotMatch(routeSource, /prepareDocument|processDocument/);
   assert.match(routeSource, /no longer ready to use/);
 });
+
+test("interrupted or token-limited drafts cannot be persisted as complete", () => {
+  assert.match(routeSource, /chunk.finishReason !== "STOP"/);
+  assert.match(routeSource, /generation was cancelled/);
+  assert.match(vectorSource, /finishReason: event.candidates/);
+});

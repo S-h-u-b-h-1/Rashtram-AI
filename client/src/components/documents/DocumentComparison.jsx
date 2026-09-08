@@ -508,7 +508,7 @@ export function DocumentComparison() {
               </button>
             </div>
             {reportError && <p role="alert" className="mt-3 text-xs text-[#9a2637]">{reportError}</p>}
-            {result.comparisonSchemaVersion === 'comparison-findings-v2' && <p className="mt-3 text-sm text-[#706a61]">
+            {result.comparisonSchemaVersion === 'comparison-findings-v2' && result.relationship && result.relationship !== 'NO_VERIFIED_RELATIONSHIP' && <p className="mt-3 text-sm text-[#706a61]">
               Relationship: {(result.relationship || 'NO_VERIFIED_RELATIONSHIP').replaceAll('_', ' ').toLowerCase()}
             </p>}
             <div className="mt-4 grid gap-3 lg:grid-cols-2">

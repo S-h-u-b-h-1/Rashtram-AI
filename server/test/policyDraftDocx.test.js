@@ -30,3 +30,15 @@ test("policy draft export is a genuine branded DOCX rendered from canonical data
   assert.match(headerXml, /RASHTRAM AI/);
   assert.match(footerXml, /Confidential working draft/);
 });
+
+test("DOCX preserves nested numbering and removes bullet/inline Markdown independently", async () => {
+  const archive = await JSZip.loadAsync(await buildPolicyDraftDocx({ draft: {
+    title: "Review policy", executiveSummary: "A proposed policy.",
+    sections: [{ heading: "Purpose", level: 2, content: "* Evidence from *a Bill*.\n* Second point." },
+      { heading: "Review", level: 3, content: "A review proposal." }],
+  } }));
+  const xml = await archive.file("word/document.xml").async("string");
+  assert.match(xml, /2\.1\. Review/);
+  assert.match(xml, /Evidence from a Bill\./);
+  assert.doesNotMatch(xml, /\*/);
+});

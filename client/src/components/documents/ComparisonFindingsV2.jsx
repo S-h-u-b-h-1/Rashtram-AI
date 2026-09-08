@@ -10,12 +10,12 @@ const labels = {
   RULE_UNDER_ACT: ['Parent Act', 'Rule', 'Operational detail', 'Practical effect'],
   CIRCULAR_UNDER_PARENT: ['Parent requirement', 'Circular / Direction', 'Clarification', 'Practical effect'],
 };
-export function ComparisonFindingsV2({ result, secondary = false }) {
+export function ComparisonFindingsV2({ result }) {
   const findings = (result.findings || []).filter(f => f.confidenceState === 'VERIFIED' ||
     (f.confidenceState === 'SUPPORTED_LIMITED' && f.limitations?.length));
   return <div className="min-w-0 space-y-5 [overflow-wrap:anywhere]">
-    {!secondary && <section className="surface-card p-5 sm:p-6">
-      <p className="text-sm font-semibold text-[#8f1d2c]">{findings.length} verified findings{result.additionalFindings?.length ? ` · ${result.additionalFindings.length} additional findings below` : ''}</p>
+    {<section className="surface-card p-5 sm:p-6">
+      <p className="text-sm font-semibold text-[#8f1d2c]">{findings.length} verified findings</p>
       <h3 className="mt-2 font-serif text-2xl text-[#29312d]">At a glance</h3>
       <p className="mt-3 text-sm leading-7 text-[#514d46]">{result.executiveSummary}</p>
       {!findings.length && <div className="mt-4 flex flex-wrap gap-3">
@@ -51,10 +51,7 @@ export function ComparisonFindingsV2({ result, secondary = false }) {
         {!!f.limitations?.length && <p className="text-xs leading-6 text-[#706a61]">{f.limitations.join(' ')}</p>}
       </article>;
     })}
-    {!secondary && !!result.additionalFindings?.length && <details className="surface-card p-5">
-      <summary className="cursor-pointer py-3 font-semibold text-[#8f1d2c]">Additional verified findings ({result.additionalFindings.length})</summary>
-      <ComparisonFindingsV2 secondary result={{ ...result, findings: result.additionalFindings, additionalFindings: [] }} />
-    </details>}
-    {!secondary && !!result.limitations?.length && <section className="px-5 text-sm leading-7 text-[#706a61]"><h3 className="font-semibold">Limitations</h3>{result.limitations.map((l, i) => <p key={i}>{l}</p>)}</section>}
+    {!!result.additionalFindings?.length && <p className="px-5 text-sm text-[#706a61]">Additional evidence was identified but omitted from the primary report for readability.</p>}
+    {!!result.limitations?.length && <section className="px-5 text-sm leading-7 text-[#706a61]"><h3 className="font-semibold">Limitations</h3>{result.limitations.map((l, i) => <p key={i}>{l}</p>)}</section>}
   </div>;
 }

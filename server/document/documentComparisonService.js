@@ -1152,6 +1152,29 @@ const createComparison = async (userId, payload, options = {}) => {
   }
   const readyPayloads = await Promise.all(loaded.map(ensureResearchReady));
   const documents = readyPayloads.map((payload) => payload.document);
+  const isFindingsV2 = payload.reportVersion === 2 || options.previousResult?.comparisonSchemaVersion === FINDINGS_VERSION;
+  // Compare source revisions, not a freshly ranked retrieval window. Ranking can
+  // change without any document changing and must not rewrite frozen findings.
+  const sourceRevision = isFindingsV2 ? (await query(
+    `SELECT document_id::text AS id, count(*)::int AS chunks,
+       md5(string_agg(COALESCE(original_text, ''), E'\\n' ORDER BY chunk_index)) AS hash
+     FROM document_text_chunks WHERE document_id = ANY($1::bigint[])
+     GROUP BY document_id ORDER BY document_id`, [documentIds],
+  )).rows : null;
+  const revisionKey = rows => JSON.stringify(rows.map(row => [String(row.id), Number(row.chunks), row.hash]));
+  if (isFindingsV2 && comparisonId && options.previousResult?.sourceRevision &&
+      revisionKey(sourceRevision) === revisionKey(options.previousResult.sourceRevision)) {
+    const graph = await getComparisonGraphOverlap(documentIds);
+    const relationships = (graph.relationships || []).filter(r => r.isVerified);
+    const result = await buildFindingsV2({ documents: options.previousResult.documents,
+      evidence: options.previousResult.citations, previous: options.previousResult, relationships,
+      explain: findings => explainVerifiedAmendments(findings, { language, question: userQuestion }) });
+    result.sourceRevision = sourceRevision;
+    assertCitationDocumentScope(result, documentIds);
+    return persistRegeneratedComparison({ userId, comparisonId,
+      title: `Comparison: ${documents.map(d => d.title).join(' and ')}`,
+      documentIds, mode, language, userQuestion, result, recommendedDocuments: [] });
+  }
   const topK = comparisonRetrievalLimit(mode, documents.length);
   const passageCharLimit = comparisonPassageCharLimit();
   const settings = retrievalConfig();
@@ -1285,6 +1308,7 @@ const createComparison = async (userId, payload, options = {}) => {
   if (payload.reportVersion === 2 || options.previousResult?.comparisonSchemaVersion === FINDINGS_VERSION) {
     const result = await buildFindingsV2({ documents: comparisonDocuments, evidence: comparisonEvidence,
       explain: findings => explainVerifiedAmendments(findings, { language, question: userQuestion }), previous: options.previousResult, relationships: sourceVerifiedGraphRelationships });
+    result.sourceRevision = sourceRevision;
     assertCitationDocumentScope(result, documentIds);
     const persist = comparisonId ? persistRegeneratedComparison : persistInitialComparison;
     return persist({ userId, comparisonId, title: `Comparison: ${documents.map(d => d.title).join(' and ')}`,

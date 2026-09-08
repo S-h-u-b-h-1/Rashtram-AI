@@ -6,7 +6,9 @@ const { classifyNumericTokens } = require('../retrieval/numericClaims');
 const VERSION = 'comparison-findings-v2';
 const EMPTY = 'Rashtram could not identify a sufficiently supported direct comparison between these documents.';
 const clean = value => String(value || '').replace(/\s+/gu, ' ').trim();
-const fingerprint = value => createHash('sha256').update(JSON.stringify(value)).digest('hex');
+const canonical = value => Array.isArray(value) ? value.map(canonical) : value && typeof value === 'object'
+  ? Object.fromEntries(Object.keys(value).sort().map(key => [key, canonical(value[key])])) : value;
+const fingerprint = value => createHash('sha256').update(JSON.stringify(canonical(value))).digest('hex');
 // Exact textual proposition matching after masking only dimensioned values.
 // Subject, negation, modal verb, units and provision identifiers must remain
 // identical; sharing a topic or a heading alone is never a finding.
@@ -159,6 +161,7 @@ const buildFindingsV2 = async ({ documents, evidence, explain, previous, relatio
         // A missing phrase in a replacement is not proof that an obligation
         // disappeared elsewhere in the instrument. Keep that inference out.
         if (/\b(remove|abolish|eliminate|no longer)\b/i.test(item.text) && !['DELETE', 'REPEAL'].includes(f.findingType)) continue;
+        if (f.relationshipContext === 'NO_VERIFIED_RELATIONSHIP' && /\b(changed?|introduced?|removed?|replaced?|expanded?|superseded?|amended?|enacted?)\b/i.test(item.text)) continue;
         const verified = verifyStructuredComparison({ practicalImplications: [{ point: `Analysis: ${item.text}`, citations: [...f.sourceA.citationIds, ...f.sourceB.citationIds] }] }, evidence);
         f.significance = verified.generated.practicalImplications?.[0]?.point || '';
         if (f.significance) explanationStatus.accepted++;
@@ -182,7 +185,7 @@ const buildFindingsV2 = async ({ documents, evidence, explain, previous, relatio
       })) })),
     relationshipEvidence: verifiedRelationship || null,
     factualFingerprint: fingerprint(frozen.map(({ significance, ...f }) => f)), omittedFindingCount: omitted,
-    executiveSummary: findings.length ? `${documents.map(d => d.title).join(' and ')}: ${findings.length} supported finding${findings.length === 1 ? '' : 's'}. The findings cover ${findings.slice(0, 3).map(f => f.title).join('; ')}${findings.length > 3 ? ', among other cited provisions' : ''}. Each finding below shows the text from both sources. ${relationship === 'NO_VERIFIED_RELATIONSHIP' ? 'No legal lineage has been established between these documents. ' : ''}${omitted ? `${omitted} unresolved provision(s) have been withheld. ` : ''}This is a comparison of the selected text, not a statement of current law.` : EMPTY,
+    executiveSummary: findings.length ? `${relationship === 'NO_VERIFIED_RELATIONSHIP' ? 'Rashtram found comparable provisions between these documents, but a direct legal relationship between the selected records could not be independently verified. The report therefore avoids describing one document as changing, replacing or enacting the other. ' : ''}${findings.length} supported finding${findings.length === 1 ? '' : 's'} are shown below, with text from both sources. ${omitted ? `${omitted} unresolved provision(s) have been withheld. ` : ''}This is a comparison of the selected text, not a statement of current law.` : EMPTY,
     keyTakeaways: [], limitations, explanationStatus, generationMode: findings.length ? 'verified_findings' : 'evidence_abstention',
     documents, citations: evidence, quality: { outputValidation: { valid: true, status: findings.length ? omitted ? 'PARTIAL_EVIDENCE' : 'SUCCESS' : 'INSUFFICIENT_EVIDENCE' } } };
 };

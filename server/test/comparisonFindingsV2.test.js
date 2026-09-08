@@ -64,7 +64,8 @@ test('bounded findings retain overflow in saved results, regeneration and PDF', 
   const regenerated = await buildFindingsV2({documents,evidence,previous:report});
   assert.equal(regenerated.factualFingerprint,report.factualFingerprint);
   const pdf=comparisonPdfPresentation({result:report}).reportText;
-  assert.ok(pdf.includes('4 additional findings are retained'));
+  assert.ok(pdf.includes('Additional evidence was identified'));
+  assert.ok(!pdf.includes('NO VERIFIED RELATIONSHIP'));
   for(const f of report.findings) assert.ok(pdf.includes(f.sourceA.excerpt));
 });
 test('explicit provision grouping retains every distinct supporting proposition', async () => {
@@ -87,4 +88,10 @@ test('new relationship provenance invalidates frozen relationship cache',async()
   const report=await buildFindingsV2({documents,evidence,previous,relationships:[{type:'BILL_TO_ACT',isVerified:true,sourceDocumentId:'1',targetDocumentId:'2'}]});
   assert.equal(report.relationship,'BILL_TO_ACT');
   assert.notEqual(report.evidenceHash,previous.evidenceHash);
+});
+test('JSONB key reordering does not change frozen facts on regeneration', async()=>{
+  const fixture=fixtures[0];const original=await buildFindingsV2(fixture);
+  const reorder=v=>Array.isArray(v)?v.map(reorder):v&&typeof v==='object'?Object.fromEntries(Object.entries(v).reverse().map(([k,x])=>[k,reorder(x)])):v;
+  const regenerated=await buildFindingsV2({...fixture,previous:reorder(original)});
+  assert.equal(original.factualFingerprint,regenerated.factualFingerprint);
 });

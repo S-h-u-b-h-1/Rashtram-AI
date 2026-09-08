@@ -25,6 +25,8 @@ const PAPER = "FBF8F2";
 const clean = (value) => String(value || "")
   .replace(/\[object Object\]/gi, "")
   .replace(/\*\*/g, "")
+  .replace(/^\s*\*\s+/gm, "• ")
+  .replace(/\*([^*\n]+)\*/g, "$1")
   .replace(/`/g, "")
   .trim();
 
@@ -104,10 +106,14 @@ const buildPolicyDraftDocx = async ({ draft, citations = [], brief = {}, created
   ];
 
   let sectionNumber = 2;
+  const hierarchy = [1, 0, 0];
   for (const section of canonical.sections) {
-    children.push(sectionHeading(sectionNumber, section.heading || "Policy Analysis", section.level));
+    const depth = Math.max(0, Math.min(2, (section.level || 2) - 2));
+    hierarchy[depth] += 1;
+    for (let i = depth + 1; i < hierarchy.length; i++) hierarchy[i] = 0;
+    children.push(sectionHeading(hierarchy.slice(0, depth + 1).join('.'), section.heading || "Policy Analysis", section.level));
     children.push(...contentParagraphs(section.content));
-    sectionNumber += 1;
+    sectionNumber = hierarchy[0] + 1;
   }
   const collections = [
     ["Drafting notes — requires review", canonical.unalignedSections || []],
@@ -124,7 +130,7 @@ const buildPolicyDraftDocx = async ({ draft, citations = [], brief = {}, created
         spacing: { before: 140, after: 80 },
         children: [new TextRun({ text: clean(item.heading), bold: true, size: 23, color: INK })],
       }));
-      children.push(bodyParagraph(item.content, { bullet: { level: 0 } }));
+      children.push(...contentParagraphs(item.content));
     }
     sectionNumber += 1;
   }

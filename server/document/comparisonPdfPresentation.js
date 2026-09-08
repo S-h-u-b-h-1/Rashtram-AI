@@ -28,7 +28,7 @@ const comparisonPdfPresentation = comparison => {
     const allFindings = result.findings || [];
     const lines = ['## Documents Compared', ...(result.documents || []).map(d =>
       [d.title, d.type, d.authority || d.ministry, d.publicationDate || d.year].filter(Boolean).join(' · ')),
-      `Relationship: ${(result.relationship || 'NO_VERIFIED_RELATIONSHIP').replaceAll('_', ' ')}`,
+      ...(result.relationship && result.relationship !== 'NO_VERIFIED_RELATIONSHIP' ? [`Relationship: ${result.relationship.replaceAll('_', ' ')}`] : []),
       '## Executive Summary', result.executiveSummary];
     for (const f of allFindings) {
       if (!['VERIFIED', 'SUPPORTED_LIMITED'].includes(f.confidenceState)) continue;
@@ -42,7 +42,7 @@ const comparisonPdfPresentation = comparison => {
         member.sourceB.excerpt, `[${member.sourceB.citationIds.join(', ')}]`, member.verifiedComparison);
     }
     if (result.additionalFindings?.length) lines.push('## Additional findings',
-      `${result.additionalFindings.length} additional findings are retained in this saved comparison. Open “Additional verified findings” in the app to review them. This PDF contains the primary findings, not the expanded appendix.`);
+      'Additional evidence was identified but omitted from the primary report for readability.');
     lines.push('## Limitations', ...(result.limitations || []), '## Sources');
     const used = new Set(allFindings.flatMap(f => [f, ...(f.supportingFindings || [])])
       .flatMap(f => [...f.sourceA.citationIds, ...f.sourceB.citationIds]));

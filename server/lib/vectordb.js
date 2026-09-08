@@ -634,7 +634,7 @@ const geminiEventStream = async function* (response) {
       const event = JSON.parse(raw);
       const parts = event.candidates?.[0]?.content?.parts || [];
       const text = parts.map((part) => part.text || "").join("");
-      if (text) yield { text };
+      if (text || event.candidates?.[0]?.finishReason) yield { text, finishReason: event.candidates?.[0]?.finishReason };
     }
   }
 
@@ -645,7 +645,7 @@ const geminiEventStream = async function* (response) {
       const event = JSON.parse(raw);
       const parts = event.candidates?.[0]?.content?.parts || [];
       const text = parts.map((part) => part.text || "").join("");
-      if (text) yield { text };
+      if (text || event.candidates?.[0]?.finishReason) yield { text, finishReason: event.candidates?.[0]?.finishReason };
     }
   }
 };
@@ -1173,6 +1173,13 @@ template section headings in their specified order and hierarchy:
 ## Executive Summary
 ${templatePrompt(template)}
 
+Keep the complete draft within 1,500 words, distributing space across every
+template heading. Finish every sentence; prefer a short complete draft to an
+unfinished long one. Do not append extra optional sections after the template.
+If the source is a Bill, describe its provisions as proposals, not existing
+legal requirements. Do not call it enacted, in force, or currently applicable
+unless supplied authoritative evidence explicitly establishes that status.
+All university-specific arrangements are recommendations, not source facts.
 Use concise tables or bullets where useful. Cite supplied labels such as
 [Catalogue document: ...], [Catalogue summary: ...], and [User source: ...]
 inline for every substantive evidence claim. A catalogue summary is secondary
