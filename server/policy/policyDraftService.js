@@ -31,7 +31,6 @@ const normalizeItem = (value) => {
   if (!content) return null;
   return {
     ...(text(value.heading || value.title, 240) ? { heading: text(value.heading || value.title, 240) } : {}),
-    ...(Number.isInteger(value.level) ? { level: Math.max(2, Math.min(4, value.level)) } : {}),
     content,
     citations: citationList(value.citations),
   };
@@ -60,8 +59,6 @@ const normalizePolicyDraft = (value) => {
     implementation: normalizeItems(value.implementation),
     risks: normalizeItems(value.risks),
     evidenceLimitations: normalizeItems(value.evidenceLimitations),
-    ...(value.template ? { template: value.template } : {}),
-    ...(value.unalignedSections ? { unalignedSections: normalizeItems(value.unalignedSections) } : {}),
   };
 };
 
@@ -96,11 +93,8 @@ const policyDraftToMarkdown = (draft) => {
     normalized.executiveSummary,
   ];
   for (const section of normalized.sections) {
-    parts.push(`${'#'.repeat(section.level || 2)} ${section.heading || "Policy Analysis"}`);
+    parts.push(`## ${section.heading || "Policy Analysis"}`);
     parts.push(`${section.content}${renderCitations(section.citations)}`);
-  }
-  if (normalized.unalignedSections?.length) {
-    parts.push('## Drafting notes — requires review', renderItems(normalized.unalignedSections));
   }
   const collections = [
     ["Recommendations", normalized.recommendations],
@@ -120,8 +114,8 @@ const policyDraftMarkdownToCanonical = (value, fallbackTitle = "Policy Draft") =
   const markdown = text(value, 100_000).replace(/\[object Object\]/gi, "").trim();
   if (!markdown) throw new Error("Policy draft response was empty.");
   const titleMatch = markdown.match(/^#\s+(.+)$/m);
-  const blocks = [...markdown.matchAll(/^(#{2,4})\s+(.+)\n([\s\S]*?)(?=^#{2,4}\s+|$(?![\s\S]))/gm)]
-    .map((match) => ({ heading: text(match[2], 240), content: text(match[3], 20_000), level: match[1].length }))
+  const blocks = [...markdown.matchAll(/^##\s+(.+)\n([\s\S]*?)(?=^##\s+|$(?![\s\S]))/gm)]
+    .map((match) => ({ heading: text(match[1], 240), content: text(match[2], 20_000) }))
     .filter((item) => item.heading && item.content);
   const executive = blocks.find((item) => /executive summary/i.test(item.heading));
   const substantive = blocks.filter((item) => !/executive summary/i.test(item.heading));

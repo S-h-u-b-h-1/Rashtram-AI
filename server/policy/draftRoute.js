@@ -19,8 +19,6 @@ const {
   policyDraftToMarkdown,
 } = require("./policyDraftService");
 const { buildPolicyDraftDocx } = require("./policyDraftDocxService");
-const { loadTemplate, applyTemplate } = require('./policyTemplateV2');
-const { validateDraftGrounding } = require('./draftGrounding');
 
 const router = express.Router();
 const MAX_DOCUMENTS = 8;
@@ -233,7 +231,6 @@ router.post("/generate", generationLimiter, async (req, res) => {
   try {
     const documentIds = safeIds(req.body?.documentIds, MAX_DOCUMENTS);
     const sourceIds = safeIds(req.body?.sourceIds, MAX_SOURCES);
-    brief.template = await loadTemplate(req.body?.template, req.user.id, query);
     const [catalogue, userSources] = await Promise.all([
       loadCatalogueContext(documentIds, brief.objective, req.user.id),
       getSourceContext(req.user.id, sourceIds, brief.objective),
@@ -284,20 +281,15 @@ router.post("/generate", generationLimiter, async (req, res) => {
       try {
         const stream = await generatePolicyDraft(prompt, context, {
           responseLanguage: brief.responseLanguage,
-          template: brief.template,
         });
         sendSSE(res, { type: "status", status: "Writing your policy draft…" });
         for await (const chunk of stream) {
           if (res.destroyed || res.writableEnded) break;
-          if (chunk.finishReason && chunk.finishReason !== "STOP") {
-            throw new Error("Policy draft generation did not complete.");
-          }
           const content = typeof chunk.text === "function" ? chunk.text() : chunk.text || "";
           if (!content) continue;
           markdown += content;
-          // Do not expose unverified legal references before the release check.
+          sendSSE(res, { type: "content", content });
         }
-        if (res.destroyed || res.writableEnded) throw new Error("Policy draft generation was cancelled.");
         if (!markdown.trim()) throw new Error("The policy draft provider returned no text.");
       } catch (generationError) {
         if (markdown.trim()) throw generationError;
@@ -310,27 +302,19 @@ router.post("/generate", generationLimiter, async (req, res) => {
         markdown = policyDraftToMarkdown(fallback);
         generationMode = "grounded_fallback";
         sendSSE(res, { type: "status", status: "A grounded fallback draft was prepared." });
+        sendSSE(res, { type: "content", content: markdown });
       }
-      sendSSE(res, { type: "status", status: "Checking source references…" });
-      const grounding = validateDraftGrounding(markdown, context);
-      const canonicalDraft = applyTemplate(policyDraftMarkdownToCanonical(grounding.markdown, title), brief.template);
-      canonicalDraft.grounding = { version: grounding.version, withheld: grounding.withheld };
-      if (grounding.withheld.length) canonicalDraft.evidenceLimitations.push({
-        content: `${grounding.withheld.length} statements containing legal references or numeric details were omitted because the selected original passages did not establish the complete claim. Verify these details before adopting the proposal.`, citations: [],
-      });
-      markdown = policyDraftToMarkdown(canonicalDraft);
+      const canonicalDraft = policyDraftMarkdownToCanonical(markdown, title);
       await query(
         `UPDATE policy_drafts SET draft_text = $1, draft_json = $2::jsonb,
            status = 'ready', error_message = NULL, updated_at = NOW()
          WHERE id = $3 AND user_id = $4`,
         [markdown, JSON.stringify(canonicalDraft), draftId, req.user.id],
       );
-      sendSSE(res, { type: "content", content: markdown });
       completeSSE(res, {
         persisted: true,
         draftId: String(draftId),
         generationMode,
-        draftText: markdown,
       });
     } catch (error) {
       const safeError = sanitizeProviderError(error);

@@ -1,5 +1,4 @@
 const { Pinecone } = require("@pinecone-database/pinecone");
-const { standardTemplate, templatePrompt } = require('../policy/policyTemplateV2');
 const {
   classifyProviderError,
   sanitizeProviderError,
@@ -634,7 +633,7 @@ const geminiEventStream = async function* (response) {
       const event = JSON.parse(raw);
       const parts = event.candidates?.[0]?.content?.parts || [];
       const text = parts.map((part) => part.text || "").join("");
-      if (text || event.candidates?.[0]?.finishReason) yield { text, finishReason: event.candidates?.[0]?.finishReason };
+      if (text) yield { text };
     }
   }
 
@@ -645,7 +644,7 @@ const geminiEventStream = async function* (response) {
       const event = JSON.parse(raw);
       const parts = event.candidates?.[0]?.content?.parts || [];
       const text = parts.map((part) => part.text || "").join("");
-      if (text || event.candidates?.[0]?.finishReason) yield { text, finishReason: event.candidates?.[0]?.finishReason };
+      if (text) yield { text };
     }
   }
 };
@@ -1146,7 +1145,7 @@ estimated must remain described as estimated.
 const generatePolicyDraft = async (
   prompt,
   context = "",
-  { responseLanguage = "English", template = standardTemplate() } = {},
+  { responseLanguage = "English" } = {},
 ) => {
   const language = normalizeResponseLanguage(responseLanguage, prompt);
   const profile = generationProfileFor({ task: "policy_draft", intent: "POLICY_DRAFT",
@@ -1166,20 +1165,34 @@ the open questions section.
 
 ${adaptiveLayers}
 
-Return a polished Markdown policy document. Never invent missing facts merely
-to fill a heading. After the title and executive summary, use ONLY the supplied
-template section headings in their specified order and hierarchy:
+Return a polished Markdown policy document. Use the relevant sections below;
+omit a section only when it is genuinely inapplicable, and never invent missing
+facts merely to fill a heading:
 # Policy Draft
 ## Executive Summary
-${templatePrompt(template)}
+## Background and Context
+## Problem and Evidence
+## Purpose and Scope
+## Policy Objectives
+## Definitions
+## Policy Principles
+## Target Groups and Equity Considerations
+## Policy Options
+## Recommended Approach
+## Policy Provisions and Measures
+## Implementation Framework and Timeline
+## Institutions and Responsibilities
+## Funding and Delivery Model
+## Governance and Oversight
+## Compliance, Monitoring, Evaluation, and Learning
+## Reporting and Review
+## Risks and Mitigations
+## Exceptions and Limitations
+## Review and Amendment
+## Consultation Questions
+## Evidence Notes
+## References
 
-Keep the complete draft within 1,500 words, distributing space across every
-template heading. Finish every sentence; prefer a short complete draft to an
-unfinished long one. Do not append extra optional sections after the template.
-If the source is a Bill, describe its provisions as proposals, not existing
-legal requirements. Do not call it enacted, in force, or currently applicable
-unless supplied authoritative evidence explicitly establishes that status.
-All university-specific arrangements are recommendations, not source facts.
 Use concise tables or bullets where useful. Cite supplied labels such as
 [Catalogue document: ...], [Catalogue summary: ...], and [User source: ...]
 inline for every substantive evidence claim. A catalogue summary is secondary

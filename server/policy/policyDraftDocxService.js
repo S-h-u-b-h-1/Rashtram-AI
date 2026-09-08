@@ -25,8 +25,6 @@ const PAPER = "FBF8F2";
 const clean = (value) => String(value || "")
   .replace(/\[object Object\]/gi, "")
   .replace(/\*\*/g, "")
-  .replace(/^\s*\*\s+/gm, "• ")
-  .replace(/\*([^*\n]+)\*/g, "$1")
   .replace(/`/g, "")
   .trim();
 
@@ -45,8 +43,8 @@ const contentParagraphs = (value) => clean(value)
     return bodyParagraph(line.replace(/^[-*•]\s+/, ""), bullet ? { bullet: { level: 0 } } : {});
   });
 
-const sectionHeading = (number, title, level = 2) => new Paragraph({
-  heading: level >= 4 ? HeadingLevel.HEADING_3 : level === 3 ? HeadingLevel.HEADING_2 : HeadingLevel.HEADING_1,
+const sectionHeading = (number, title) => new Paragraph({
+  heading: HeadingLevel.HEADING_1,
   spacing: { before: 320, after: 150 },
   border: { bottom: { color: "D9C5C0", style: BorderStyle.SINGLE, size: 4, space: 4 } },
   children: [new TextRun({ text: `${number}. ${clean(title)}`, bold: true, size: 30, color: BRAND })],
@@ -106,17 +104,12 @@ const buildPolicyDraftDocx = async ({ draft, citations = [], brief = {}, created
   ];
 
   let sectionNumber = 2;
-  const hierarchy = [1, 0, 0];
   for (const section of canonical.sections) {
-    const depth = Math.max(0, Math.min(2, (section.level || 2) - 2));
-    hierarchy[depth] += 1;
-    for (let i = depth + 1; i < hierarchy.length; i++) hierarchy[i] = 0;
-    children.push(sectionHeading(hierarchy.slice(0, depth + 1).join('.'), section.heading || "Policy Analysis", section.level));
+    children.push(sectionHeading(sectionNumber, section.heading || "Policy Analysis"));
     children.push(...contentParagraphs(section.content));
-    sectionNumber = hierarchy[0] + 1;
+    sectionNumber += 1;
   }
   const collections = [
-    ["Drafting notes — requires review", canonical.unalignedSections || []],
     ["Recommendations", canonical.recommendations],
     ["Implementation Framework", canonical.implementation],
     ["Risks and Mitigations", canonical.risks],
@@ -130,7 +123,7 @@ const buildPolicyDraftDocx = async ({ draft, citations = [], brief = {}, created
         spacing: { before: 140, after: 80 },
         children: [new TextRun({ text: clean(item.heading), bold: true, size: 23, color: INK })],
       }));
-      children.push(...contentParagraphs(item.content));
+      children.push(bodyParagraph(item.content, { bullet: { level: 0 } }));
     }
     sectionNumber += 1;
   }

@@ -61,7 +61,6 @@ export function PolicyDraftWorkspace() {
   const [sourcesOpen, setSourcesOpen] = useState(false);
   const [libraryOpen, setLibraryOpen] = useState(false);
   const [mobilePanel, setMobilePanel] = useState(null);
-  const [template, setTemplate] = useState('');
 
   useEffect(() => {
     let active = true;
@@ -78,10 +77,6 @@ export function PolicyDraftWorkspace() {
       setSelectedSourceIds((sourceResponse.sources || []).filter((source) => source.status === 'ready' && selectedSources.includes(String(source.id))).map((source) => String(source.id)));
       setScopeReferences(references); setDocuments(references); setSelectedDocumentIds(references.filter((source) => source.draftUsable).map((source) => String(source.id)));
       if (draftRecord) { setBrief((current) => ({ ...current, ...draftRecord.brief, title: draftRecord.title || draftRecord.brief?.title || '' })); setDraft(draftRecord.draftText || ''); setDraftId(draftRecord.id); setCitations(draftRecord.citations || []); }
-      if (draftRecord?.brief?.template?.reference) {
-        const reference = draftRecord.brief.template.reference;
-        setTemplate(`${reference.kind}:${reference.id}`);
-      }
     }).catch((failure) => { if (active) setError(failure.message || 'We could not load the selected sources or saved draft. Try again.'); }).finally(() => {
       if (active) setLoading(false);
     });
@@ -174,7 +169,6 @@ export function PolicyDraftWorkspace() {
       }
       const result = await createPolicyDraft({
         ...brief,
-        template: template ? { kind: template.split(':')[0], id: template.split(':')[1] } : null,
         documentIds: selectedDocumentIds,
         sourceIds: selectedSourceIds,
         onMeta: (meta) => setCitations(meta.citations || []),
@@ -257,21 +251,6 @@ export function PolicyDraftWorkspace() {
         <div className="flex items-start gap-3"><span className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-[#8f1d2c] text-white"><PenLine className="h-5 w-5" /></span><div className="min-w-0 flex-1"><p className="text-xs font-bold uppercase tracking-[0.2em] text-[#874047]">Policy drafting studio</p><h2 className="mt-1 font-serif text-2xl text-[#8f1d2c] sm:text-3xl">Create a policy draft</h2><p className="mt-2 max-w-2xl text-sm leading-6 text-[#706a61]">Review your sources, describe the outcome, and create a cited first draft.</p></div><div className="flex shrink-0 items-center gap-1.5"><button type="button" onClick={() => setMobilePanel("sources")} className="grid h-10 w-10 place-items-center rounded-xl border border-[#8f1d2c]/12 bg-white text-[#874047] lg:hidden" aria-label="Open websites and PDFs"><PanelLeftOpen className="h-4 w-4" /></button><button type="button" onClick={() => setMobilePanel("library")} className="grid h-10 w-10 place-items-center rounded-xl border border-[#8f1d2c]/12 bg-white text-[#874047] lg:hidden" aria-label="Open policy references"><PanelRightOpen className="h-4 w-4" /></button><div className="hidden items-center gap-1.5 lg:flex"><button type="button" onClick={() => setSourcesOpen((open) => !open)} className="grid h-8 w-8 place-items-center rounded-lg border border-[#8f1d2c]/12 bg-white text-[#874047] transition hover:bg-[#eee0dc]" aria-label={sourcesOpen ? "Collapse sources" : "Expand sources"} title={sourcesOpen ? "Collapse sources" : "Expand sources"}>{sourcesOpen ? <PanelLeftClose className="h-4 w-4" /> : <PanelLeftOpen className="h-4 w-4" />}</button><button type="button" onClick={() => setLibraryOpen((open) => !open)} className="grid h-8 w-8 place-items-center rounded-lg border border-[#8f1d2c]/12 bg-white text-[#874047] transition hover:bg-[#eee0dc]" aria-label={libraryOpen ? "Collapse policy references" : "Expand policy references"} title={libraryOpen ? "Collapse policy references" : "Expand policy references"}>{libraryOpen ? <PanelRightClose className="h-4 w-4" /> : <PanelRightOpen className="h-4 w-4" />}</button></div></div></div>
         <div className="mt-5 flex flex-wrap gap-2 text-xs font-semibold text-[#874047]"><span className="rounded-full bg-[#eee0dc] px-3 py-1.5">{selectedDocumentIds.length + selectedSourceIds.length} sources selected</span></div>
         <details open={!draft} className="mt-6 rounded-xl border border-[#8f1d2c]/10 bg-white"><summary className="cursor-pointer px-4 py-4 text-sm font-semibold">{draft ? 'Review brief and create another draft' : 'Your policy brief'}</summary><form onSubmit={handleDraft} className="space-y-4 p-4 sm:p-6">
-          <div>
-            <label htmlFor="draft-template" className="mb-1.5 block text-xs font-semibold text-[#514d46]">Template</label>
-            <select id="draft-template" value={template} onChange={event => {
-              const value = event.target.value;
-              setTemplate(value);
-              const [kind, id] = value.split(':');
-              if (kind === 'source') setSelectedSourceIds(current => current.filter(item => item !== id));
-              if (kind === 'document') setSelectedDocumentIds(current => current.filter(item => item !== id));
-            }} className={fieldClass} disabled={drafting}>
-              <option value="">Rashtram Standard Policy Template</option>
-              {sources.filter(s => s.status === 'ready').map(s => <option key={`source:${s.id}`} value={`source:${s.id}`}>{s.title}</option>)}
-              {documents.filter(d => d.draftUsable).map(d => <option key={`document:${d.id}`} value={`document:${d.id}`}>{d.title}</option>)}
-            </select>
-            <p className="mt-2 text-xs leading-6 text-[#706a61]">Templates guide structure, not facts. Select evidence separately. To use another template, add a PDF to your study shelf.</p>
-          </div>
           <div><label className="mb-1.5 block text-xs font-semibold text-[#514d46]" htmlFor="draft-title">Working title <span className="font-normal text-[#706a61]">(optional)</span></label><input id="draft-title" value={brief.title} onChange={(event) => updateBrief("title", event.target.value)} className={fieldClass} placeholder="For example: National urban heat resilience policy" /></div>
           <div><label className="mb-1.5 block text-xs font-semibold text-[#514d46]" htmlFor="draft-objective">What should this policy solve? <span className="text-[#8f1d2c]">*</span></label><textarea id="draft-objective" required rows={4} value={brief.objective} onChange={(event) => updateBrief("objective", event.target.value)} className={`${fieldClass} resize-y`} placeholder="Describe the problem, desired change, and why it matters." /></div>
           <div className="grid gap-4 sm:grid-cols-2"><div><label className="mb-1.5 block text-xs font-semibold text-[#514d46]" htmlFor="draft-audience">Who is it for?</label><input id="draft-audience" value={brief.audience} onChange={(event) => updateBrief("audience", event.target.value)} className={fieldClass} placeholder="States, municipalities, households…" /></div><div><label className="mb-1.5 block text-xs font-semibold text-[#514d46]" htmlFor="draft-geography">Where does it apply?</label><input id="draft-geography" value={brief.geography} onChange={(event) => updateBrief("geography", event.target.value)} className={fieldClass} placeholder="India, or a state or sector" /></div></div>
