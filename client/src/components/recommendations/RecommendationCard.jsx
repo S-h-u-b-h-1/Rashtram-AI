@@ -21,6 +21,7 @@ import { formatDate, humanize } from "@/lib/document-links";
 import {
   compareActionState,
   recommendationReadinessLabel,
+  recommendationExplanation,
   recommendationResearchHref,
 } from "./recommendation-utils.mjs";
 
@@ -44,6 +45,7 @@ export function RecommendationCard({
   const disabledReason = comparisonDisabledReason(recommendation);
   const canPrepare = canPrepareForResearch(recommendation);
   const confidence = recommendation.confidence || "medium";
+  const explanation = recommendationExplanation(recommendation);
   const needsReadinessCheck = recommendation.researchReady && Boolean(disabledReason) && !selected;
   const compareAction = compareActionState(
     canPrepare || needsReadinessCheck ? "" : disabledReason,
@@ -128,13 +130,13 @@ export function RecommendationCard({
           )}
         </div>
       )}
-      {(!compact || recommendation.graphRelationship) && (
+      {explanation && (!compact || recommendation.graphRelationship) && (
         <div className="mt-4 border-l-2 border-[#c1a06f]/55 pl-3">
           <p className="text-xs font-bold uppercase tracking-[0.12em] text-[#874047]">
             Why this matters
           </p>
           <p className="mt-1 text-xs leading-5 text-[#625d55]">
-            {recommendation.whyThisMatters || recommendation.reason || "Recommended from your recent research context."}
+            {explanation}
           </p>
         </div>
       )}

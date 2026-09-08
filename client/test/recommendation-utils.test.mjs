@@ -6,9 +6,17 @@ import {
   deduplicateRecommendations,
   recommendationMatchesFilter,
   recommendationResearchHref,
+  recommendationExplanation,
 } from "../src/components/recommendations/recommendation-utils.mjs";
 
 const now = Date.parse("2026-07-14T00:00:00.000Z");
+
+test("explicitly omitted explanations do not revive inferred candidate reasons", () => {
+  assert.equal(recommendationExplanation({whyThisMatters:null,reason:"Matches the user's tax question"}),null);
+  assert.equal(recommendationExplanation({whyThisMatters:"The title identifies the CGST Act",reason:"raw match"}),"The title identifies the CGST Act");
+  assert.equal(recommendationExplanation({reason:"Verified amendment relationship"}),"Verified amendment relationship");
+  assert.equal(recommendationExplanation({}),null);
+});
 
 test("recommendation filters use only supported document metadata and signals", () => {
   const recommendation = {

@@ -1,6 +1,14 @@
 export const PROFILE_RECOMMENDATION_GRID_CLASSES =
   "grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4";
 
+export const recommendationExplanation = (recommendation = {}) => {
+  // An explicit omission from business discovery must not revive its raw
+  // candidate-matching reason. Other recommendation surfaces retain theirs.
+  const value = Object.hasOwn(recommendation, "whyThisMatters")
+    ? recommendation.whyThisMatters : recommendation.reason;
+  return typeof value === "string" && value.trim() ? value.trim() : null;
+};
+
 export const RECOMMENDATION_FILTERS = [
   { id: "all", label: "All" },
   { id: "same-jurisdiction", label: "Same Jurisdiction" },
