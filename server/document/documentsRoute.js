@@ -537,6 +537,7 @@ router.post("/chat", generationLimiter, async (req, res) => {
           documents: passageGroups.map((group) => ({
             documentId: group.document.id,
             status: group.currentVerification.status,
+            temporalClaims: group.currentVerification.temporalClaims || [],
           })),
         }
       : { required: false, status: "NOT_REQUIRED", checkedAt: new Date().toISOString() };
@@ -649,6 +650,7 @@ router.post("/chat", generationLimiter, async (req, res) => {
               detectedClaims: implicitCurrentClaims.slice(0, 5),
               documents: temporalChecks.map((item, index) => ({
                 documentId: documents[index].id, status: item.status,
+                temporalClaims: item.temporalClaims || [],
               })),
             };
           } catch {

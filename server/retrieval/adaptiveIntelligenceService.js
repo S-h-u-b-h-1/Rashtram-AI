@@ -1,3 +1,4 @@
+const { guardNegativeTemporalClaims, detectNegativeTemporalClaims } = require('./temporalClaimGuard');
 const ANSWER_INTENTS = Object.freeze({
   SOURCE_FACT: "SOURCE_FACT",
   EXPLANATION: "EXPLANATION",
@@ -185,6 +186,7 @@ const buildAdaptivePromptLayers = ({
     `Surface: ${task}. Answer intent: ${resolvedIntent}. Freshness class: ${resolvedFreshness}. Requested style: ${resolvedStyle}.`,
     "Follow the user's newest analytical direction even if it differs from an earlier turn.",
     "FRESHNESS AND TEMPORAL CONTEXT",
+    "UNKNOWN commencement/applicability is not VERIFIED_NEGATIVE: missing dates, degraded connectors and partial verification never establish non-notification, non-commencement, non-force, repeal or inapplicability. A negative conclusion needs an explicit authoritative temporal premise for that exact document and status.",
     currentVerificationInstruction({
       required: requiresCurrentVerification(resolvedFreshness),
       ...currentVerification,
@@ -216,7 +218,7 @@ const classifyMaterialClaim = (text) => {
 };
 
 const enforceFreshnessGuard = (answer, verification = {}) => {
-  const value = String(answer || "").trim();
+  const value = guardNegativeTemporalClaims(String(answer || "").trim(), verification).answer;
   if (!verification.required || verification.status === "VERIFIED_CURRENT") return value;
   const qualified = value
     .replace(/\bis currently\b/gi, "is described in the selected document as")
@@ -233,14 +235,15 @@ const detectCurrentStatusClaims = (answer) => {
   return sentences.filter((sentence) => {
     if (/\b(?:in|during|under|according to) (?:19|20)\d{2}\b/i.test(sentence) &&
         !/\b(?:currently|presently|still|latest|today|now)\b/i.test(sentence)) return false;
-    return CURRENT_CLAIM_PATTERNS.some((pattern) => pattern.test(sentence));
+    return detectNegativeTemporalClaims(sentence).length > 0 || CURRENT_CLAIM_PATTERNS.some((pattern) => pattern.test(sentence));
   });
 };
 
 const qualifyUnverifiedCurrentClaims = (answer, verification = {}) => {
-  const value = String(answer || "").trim();
+  const negativeGuard = guardNegativeTemporalClaims(String(answer || "").trim(), verification);
+  const value = negativeGuard.answer;
   const claims = detectCurrentStatusClaims(value);
-  if (!claims.length) return { answer: value, claims: [], guarded: false };
+  if (!claims.length) return { answer: value, claims: negativeGuard.rejected, guarded: negativeGuard.rejected.length > 0 };
   if (verification.status === "VERIFIED_CURRENT") {
     return { answer: value, claims, guarded: false };
   }

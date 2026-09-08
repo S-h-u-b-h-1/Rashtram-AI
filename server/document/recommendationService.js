@@ -361,6 +361,8 @@ const authorityLabel = (authorityClass) => ({
 }[authorityClass] || "Source authority not yet classified");
 
 const recommendationPriority = (item = {}) => {
+  if (/\b(bill|draft|consultation|ordinance)\b/i.test(`${item.title || ''} ${item.documentType || ''}`)) return "background";
+  if (item.relevance?.scopeGate?.promotable === false) return "background";
   if (["PRIMARY_OFFICIAL", "PRIMARY_LEGAL_TEXT"].includes(item.authorityClass) && item.relevanceTier === RELEVANCE_TIERS.HIGH) return "essential";
   if ([RELEVANCE_TIERS.HIGH, RELEVANCE_TIERS.MEDIUM].includes(item.relevanceTier) &&
       ["PRIMARY_OFFICIAL", "PRIMARY_LEGAL_TEXT", "OFFICIAL_SECONDARY"].includes(item.authorityClass)) return "important";
@@ -375,17 +377,12 @@ const enrichProblemRecommendation = (recommendation, input, inferred, researchPl
     .filter((plan) => normalizeProblemText(plan.area).split(" ")
       .some((token) => token.length > 3 && recommendationText.includes(token)))
     .map((plan) => plan.area);
-  const focusAreas = [...new Set([
-    ...(matchedAreas.length ? matchedAreas : researchPlan.slice(0, inferred.sectors?.length ? 2 : 1).map((plan) => plan.area)),
-    ...(inferred.themes || []).slice(0, 2),
-  ])].slice(0, 4);
-  const location = inferred.jurisdictions?.length ? inferred.jurisdictions.join(" and ") : "the relevant jurisdiction";
-  const activity = input.industry || inferred.activities?.[0] || input.topic || "the issue you described";
+  const focusAreas = [...new Set(matchedAreas)].slice(0, 4);
   const authority = authorityLabel(recommendation.authorityClass);
-  const reason = recommendation.title + " is recommended for " + activity + " in " + location +
-    " because its " + (recommendation.documentType || "document") + " and " + authority.toLowerCase() +
-    " status align with the research areas identified from your problem. Use it to investigate " +
-    (focusAreas.join(", ") || "the governing framework") + "; confirm exact applicability in the source.";
+  const reason = recommendation.relevance?.scopeGate?.eligible === false ? null
+    : recommendation.relevance?.scopeGate?.reason && recommendation.relevance.scopeGate.scope
+      ? recommendation.relevance.scopeGate.reason
+      : matchedAreas.length ? `The document title concerns ${matchedAreas.join(', ')}. ${authority}; verify the relevant provisions and current applicability in the source.` : null;
   return {
     ...recommendation,
     currentnessCaution: /bill|draft|consultation/.test(`${recommendation.documentType} ${recommendation.title}`.toLowerCase())
@@ -469,6 +466,7 @@ const classifyProblemPremise = (input = {}, inferred = null) => {
 };
 
 const buildProblemSearchPlan = (input = {}, inferred = inferBusinessSignals(input)) => {
+  const scopedQueries = require('./businessRelevanceGate').searchHints(input).queries;
   const exactNames = [...new Set([
     ...explicitInstrumentNames(input.problem),
     ...(inferred.likelyTitles || []),
@@ -487,6 +485,7 @@ const buildProblemSearchPlan = (input = {}, inferred = inferBusinessSignals(inpu
     ...inferred.activities,
   ])].slice(0, 4).join(" ");
   const subqueries = [...new Set([
+    ...scopedQueries,
     exactNames[0],
     authorityTopic,
     coreConcept,
@@ -616,6 +615,7 @@ const complianceDocumentTypeWeight = (type) => {
 };
 
 const evaluateBusinessCandidate = (row = {}, input = {}, inferred = inferBusinessSignals(input)) => {
+  const scopeGate = require('./businessRelevanceGate').evaluateScope(row,input,inferred);
   const candidateText = normalizeProblemText([
     row.title, row.category, row.ministry, row.authority, row.jurisdiction,
     row.schema_state, row.document_type, row.candidate_summary,
@@ -640,7 +640,7 @@ const evaluateBusinessCandidate = (row = {}, input = {}, inferred = inferBusines
     const regulatorTokens = meaningfulTokens(regulator)
       .filter((token) => !["authority", "board", "department"].includes(token));
     const required = regulatorTokens.length <= 1 ? 1 : 2;
-    return regulatorTokens.filter((token) => candidateText.includes(token)).length >= required;
+    return regulatorTokens.filter((token) => includesNormalizedTerm(candidateText,token)).length >= required;
   });
   const likelyTitleMatch = (inferred.likelyTitles || []).some((title) => {
     const expected = meaningfulTokens(title).filter((token) => !DOCUMENT_TITLE_STOP_WORDS.has(token));
@@ -710,6 +710,7 @@ const evaluateBusinessCandidate = (row = {}, input = {}, inferred = inferBusines
   else if (!jurisdictionMismatch && !authorityMismatch && strongDomainAnchor && regulatoryAnchorMatch && dimensions >= 2 && score >= 0.38) tier = RELEVANCE_TIERS.MEDIUM;
   else if (!jurisdictionMismatch && !authorityMismatch && dimensions >= 1 && score >= 0.2) tier = RELEVANCE_TIERS.LOW;
   if (specialisedFactoryMismatch && tier !== RELEVANCE_TIERS.REJECTED) tier = RELEVANCE_TIERS.LOW;
+  if (!scopeGate.eligible) tier = RELEVANCE_TIERS.REJECTED;
   const matchReasons = [
     sectorMatch ? `sector: ${inferred.sectors.join(", ")}` : null,
     activityMatch ? `activity: ${inferred.activities.join(", ")}` : null,
@@ -719,6 +720,7 @@ const evaluateBusinessCandidate = (row = {}, input = {}, inferred = inferBusines
     lexicalMatch || semanticMatch ? "catalogue metadata matches the topic; content applicability requires review" : null,
   ].filter(Boolean);
   return {
+    scopeGate,
     tier,
     score: Number(score.toFixed(4)),
     dimensions,
@@ -1469,7 +1471,8 @@ const getProblemRecommendations = async (userId, payload) => {
          ))
          OR candidate.id = ANY($6::BIGINT[])
        )
-     ORDER BY (candidate.title ILIKE ANY($8::TEXT[])) DESC,
+     ORDER BY (candidate.title ILIKE ANY($11::TEXT[]) AND candidate.title !~* $12) DESC,
+       (candidate.title ILIKE ANY($8::TEXT[])) DESC,
        (CARDINALITY($2::TEXT[]) = 0 OR candidate.state IS NULL OR candidate.state = ANY($2::TEXT[])) DESC,
        semantic_match DESC,
        problem_rank DESC,
@@ -1490,6 +1493,8 @@ const getProblemRecommendations = async (userId, payload) => {
         .map((term) => `%${term.replace(/[%_]/g, "")}%`))],
       interpretation.subqueries,
       premiseAllowsSearch,
+      require('./businessRelevanceGate').searchHints(input).patterns,
+      require('./businessRelevanceGate').searchHints(input).exclude,
     ],
   );
   const retrievalCompletedAt = Date.now();
@@ -1931,6 +1936,7 @@ module.exports = {
   inferBusinessSignals,
   inferredStakeholders,
   recommendationPriority,
+  enrichProblemRecommendation,
   normalizeTypes,
   stateOnlyRequested,
   scoreRecommendation,

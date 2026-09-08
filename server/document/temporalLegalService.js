@@ -515,6 +515,7 @@ const assessCurrentVerification = ({ document = {}, passages = [], freshness = {
     freshness.status === "blocked_external";
   return {
     required: true,
+    temporalClaims: require('../retrieval/temporalClaimGuard').explicitTemporalClaims({document,passages,freshness}),
     status: verified ? "VERIFIED_CURRENT" :
       temporalPassages.length || freshness.checkedThrough ? "PARTIALLY_VERIFIED" : "UNVERIFIED",
     checkedAt,
