@@ -6,6 +6,7 @@ const {
   parseDetailPage,
   parseYearLinks,
   mapWithConcurrency,
+  indiaCodeConnector,
 } = require("../lib/ingestion/connectors/indiaCodeConnector");
 const {
   parseHomePage,
@@ -92,6 +93,32 @@ test("IndiaCode detail parser extracts Dublin Core fields and official PDF", () 
     detail.pdfUrl,
     "https://www.indiacode.nic.in/bitstream/123456789/22148/1/a2025-32.pdf",
   );
+});
+
+test("India Code retains browse records and opens a circuit when detail pages are unavailable", async () => {
+  let detailRequests = 0;
+  const rows = Array.from({ length: 5 }, (_, index) => `
+    <tr><td>22-Aug-2025</td><td>${index + 1}</td>
+      <td>Public Safety Act ${index + 1}, 2025</td>
+      <td><a href="/indiacode/handle/123456789/${22148 + index}">View...</a></td>
+    </tr>`).join("");
+  const result = await indiaCodeConnector.collect(
+    { years: "2025", maxPages: 1, limit: 10, detailConcurrency: 1 },
+    { fetcher: { async getText(url) {
+      if (url.includes("/browse?")) return { status: 200, body: `<table>${rows}</table>` };
+      detailRequests += 1;
+      const error = new Error("Request failed with status code 500");
+      error.response = { status: 500 };
+      throw error;
+    } } },
+  );
+  assert.equal(result.records.length, 5);
+  assert.equal(result.errors.length, 0);
+  assert.equal(detailRequests, 3);
+  const degraded = result.diagnostics.find((item) => item.type === "degraded");
+  assert.equal(degraded.circuitOpen, true);
+  assert.equal(degraded.affectedRecords, 3);
+  assert.equal(degraded.skippedRequests, 2);
 });
 
 test("eGazette parser maps recent rows to stable official archive PDFs", () => {

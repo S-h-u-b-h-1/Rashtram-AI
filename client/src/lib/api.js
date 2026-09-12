@@ -495,7 +495,10 @@ export const fetchDocument = async (documentId) => {
 export const createDocumentComparison = async (payload) => {
   return apiRequest("/documents/compare", {
     method: "POST",
-    body: JSON.stringify({ ...payload, reportVersion: 2 }),
+    // Use the evidence-verified analytical report. Findings v2 only matched
+    // near-identical legal sentences, which made most legitimate comparisons
+    // look empty even when both documents had substantial source text.
+    body: JSON.stringify({ ...payload, reportVersion: 3 }),
   });
 };
 
@@ -504,7 +507,7 @@ export const regenerateDocumentComparison = async (comparisonId, payload) => {
     `/documents/compare/${encodeURIComponent(comparisonId)}/regenerate`,
     {
       method: "POST",
-      body: JSON.stringify({ ...payload, reportVersion: 2 }),
+      body: JSON.stringify({ ...payload, reportVersion: 3 }),
     },
   );
 };

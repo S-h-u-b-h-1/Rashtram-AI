@@ -14,6 +14,7 @@ const INDIA_CODE_REQUEST_OPTIONS = {
     "User-Agent": "curl/8.7.1 RashtramAI-Catalog/1.0",
   },
 };
+const DETAIL_FAILURE_CIRCUIT_THRESHOLD = 3;
 
 const normalize = (value) =>
   String(value || "")
@@ -374,15 +375,24 @@ const indiaCodeConnector = {
       : Math.max(1, Math.ceil(limit / 2));
     const limited = records.slice(0, parentLimit);
     if (!options.catalogOnly) {
+      const detailFailures = [];
+      let consecutiveTransientFailures = 0;
+      let detailCircuitOpen = false;
+      let skippedDetailRequests = 0;
       await mapWithConcurrency(
         limited,
         options.detailConcurrency,
         async (record, index) => {
+          if (detailCircuitOpen) {
+            skippedDetailRequests += 1;
+            return;
+          }
           try {
             const response = await fetcher.getText(
               record.detailUrl,
               INDIA_CODE_REQUEST_OPTIONS,
             );
+            consecutiveTransientFailures = 0;
             limited[index] = parseDetailPage(
               response.body,
               record.detailUrl,
@@ -404,14 +414,49 @@ const indiaCodeConnector = {
               }),
             );
           } catch (error) {
-            errors.push({
-              stage: "detail",
+            const status = Number(error.response?.status || error.status || 0);
+            const transient = status === 429 || status >= 500 || !status;
+            consecutiveTransientFailures = transient
+              ? consecutiveTransientFailures + 1
+              : 0;
+            detailFailures.push({
               sourceRecordId: record.sourceRecordId,
+              status: status || null,
               message: error.message,
             });
+            if (
+              transient &&
+              consecutiveTransientFailures >= DETAIL_FAILURE_CIRCUIT_THRESHOLD
+            ) {
+              detailCircuitOpen = true;
+            }
           }
         },
       );
+      if (detailFailures.length) {
+        diagnostics.push({
+          type: "degraded",
+          stage: "detail",
+          collection,
+          affectedRecords: detailFailures.length,
+          skippedRequests: skippedDetailRequests,
+          circuitOpen: detailCircuitOpen,
+          sampleFailures: detailFailures.slice(0, 3),
+          message:
+            "India Code detail enrichment was unavailable; browse-page records were retained and can be enriched on a later run.",
+        });
+      }
+      if (
+        collection === "subordinate-legislation" &&
+        detailFailures.length &&
+        limited.every((record) => !(record.resources || []).length)
+      ) {
+        errors.push({
+          stage: "detail",
+          message:
+            "India Code subordinate legislation could not be discovered because every required detail page was unavailable.",
+        });
+      }
     }
     const subordinateRecords = limited.flatMap(subordinateRecordsFor);
     const outputRecords =
@@ -436,6 +481,7 @@ module.exports = {
   CENTRAL_ACTS_HANDLE,
   INDIA_CODE_BASE,
   INDIA_CODE_REQUEST_OPTIONS,
+  DETAIL_FAILURE_CIRCUIT_THRESHOLD,
   browseUrl,
   indiaCodeConnector,
   mapWithConcurrency,

@@ -60,9 +60,13 @@ jobs:
       # "text-embedding-3-large-768-v1" here while the API reads
       # "gemini-embedding-001-768-v1" — vectors written into a namespace
       # production never queries. Align the provider AND pin the namespace
-      # from the same secret the API uses so the two cannot drift again.
+      # from the same namespace the API uses so the two cannot drift again.
+      # The namespace is an identifier, not a credential. Keep the repository
+      # secret override for installations that use a custom namespace, but use
+      # the production Gemini namespace as the safe default. This prevents a
+      # missing optional secret from stopping the entire corpus every six hours.
       EMBEDDING_PROVIDER: gemini
-      PINECONE_NAMESPACE: ${{ secrets.PINECONE_NAMESPACE }}
+      PINECONE_NAMESPACE: ${{ secrets.PINECONE_NAMESPACE || 'gemini-embedding-001-768-v1' }}
       PINECONE_INDEX_NAME: rashtram-bills
       PINECONE_ACT_INDEX_NAME: rashtram-acts
       PROCESSING_CONCURRENCY: "3"

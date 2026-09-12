@@ -110,6 +110,7 @@ const runIngestion = async (connector, options = {}) => {
       validated: 0,
     },
     errors: [],
+    warnings: [],
     sampleRecords: [],
   };
 
@@ -135,15 +136,20 @@ const runIngestion = async (connector, options = {}) => {
       : await upsertDirectoryEntries(directoryEntries);
     summary.errors.push(...(collection.errors || []));
     for (const diagnostic of collection.diagnostics || []) {
-      if (!["blocked", "error"].includes(diagnostic.type)) continue;
-      summary.errors.push({
+      const item = {
         stage: "access",
         type: diagnostic.type,
         collection: diagnostic.collection || summary.collection,
         message:
           diagnostic.message ||
           `Connector reported ${diagnostic.type} access.`,
-      });
+        ...diagnostic,
+      };
+      if (["blocked", "error"].includes(diagnostic.type)) {
+        summary.errors.push(item);
+      } else {
+        summary.warnings.push(item);
+      }
     }
 
     const maximumPdfDownloads = Math.max(0, Number(options.maxPdfs || 100));
