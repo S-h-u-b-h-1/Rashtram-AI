@@ -109,6 +109,20 @@ jobs:
             --source-concurrency=2 \
             $EXTRA_ARGS
 
+      # Text-ready documents remain useful through PostgreSQL full-text search,
+      # but comparison and broad research quality improve materially when the
+      # active semantic namespace is complete. This bounded pass reuses stored
+      # chunks, reconciles vectors that already exist, and creates only missing
+      # Gemini embeddings. Its own capacity guard can reduce or pause the batch.
+      - name: Backfill active semantic namespace
+        shell: bash
+        run: |
+          BATCH_SIZE="${{ github.event_name == 'workflow_dispatch' && inputs.batch_size || '75' }}"
+          npm run semantic:backfill -- \
+            --limit="$BATCH_SIZE" \
+            --group-size=5 \
+            --max-chunks=100
+
       - name: Report corpus status
         if: always()
         run: npm run process:status

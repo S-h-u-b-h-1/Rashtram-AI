@@ -26,6 +26,10 @@ test("host-scoped trust only applies to explicitly configured official domains",
   assert.deepEqual(certificateFilesForHostname("taxinformation.cbic.gov.in"), [
     "entrust-dv-tls-rsa-ca-2.pem",
   ]);
+  assert.deepEqual(certificateFilesForHostname("egazette.gov.in"), [
+    "lets-encrypt-yr2.pem",
+    "isrg-root-yr.pem",
+  ]);
   assert.deepEqual(certificateFilesForHostname("example.com"), []);
 });
 
@@ -44,6 +48,8 @@ test("bundled public intermediates are valid and unexpired", () => {
     "isrg-root-ye.pem",
     "sectigo-dv-r36.pem",
     "entrust-dv-tls-rsa-ca-2.pem",
+    "lets-encrypt-yr2.pem",
+    "isrg-root-yr.pem",
   ]) {
     const certificate = new X509Certificate(
       fs.readFileSync(path.join(CERTIFICATE_DIRECTORY, filename)),

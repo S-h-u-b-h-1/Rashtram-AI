@@ -25,6 +25,14 @@ const HOST_CERTIFICATES = Object.freeze([
     domains: ["cbic.gov.in"],
     files: ["entrust-dv-tls-rsa-ca-2.pem"],
   },
+  {
+    // eGazette currently omits both of these public intermediates from its
+    // handshake. Supply only the advertised chain for this official host;
+    // rejectUnauthorized remains enabled and the chain terminates at the
+    // runtime-trusted ISRG Root X1.
+    domains: ["egazette.gov.in"],
+    files: ["lets-encrypt-yr2.pem", "isrg-root-yr.pem"],
+  },
 ]);
 
 const certificateCache = new Map();
