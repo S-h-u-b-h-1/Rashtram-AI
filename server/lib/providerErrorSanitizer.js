@@ -36,13 +36,15 @@ const classifyProviderError = (error) => {
     return "auth_or_permission";
   }
   if (
+    /\b(quota|billing|egress limit|upgrade your plan)\b/i.test(message)
+  ) {
+    return "quota_or_billing";
+  }
+  if (
     status === 429 ||
-    /\b(rate limit|rate-limit|too many requests)\b/i.test(message)
+    /\b(status:\s*429|rate limit|rate-limit|too many requests)\b/i.test(message)
   ) {
     return "rate_limited";
-  }
-  if (/\b(quota|billing)\b/i.test(message)) {
-    return "quota_or_billing";
   }
   if (
     status === 404 ||

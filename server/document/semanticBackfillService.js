@@ -45,6 +45,11 @@ const retryableEmbeddingFailure = (error) => [
   "rate_limited", "quota_or_billing", "timeout", "provider_unavailable", "network", "unknown",
 ].includes(classifyProviderError(error));
 
+const boundedErrorCode = (error) => {
+  const value = String(error?.code || error?.status || "unknown").trim();
+  return /^[A-Za-z0-9_.-]{1,64}$/.test(value) ? value : "unknown";
+};
+
 const loadBackfillCandidates = async ({
   queryFn = query,
   activeNamespace = providerConfig().vectorNamespace,
@@ -386,8 +391,10 @@ const backfillSemanticDocument = async ({
   const startedAt = Date.now();
   const jobId = await createJobFn({ document, queryFn });
   let stored = null;
+  let failureStage = "vector_store";
   try {
     if (reusableIds.size === chunks.length) {
+      failureStage = "retrieval_probe";
       const existingProbe = await probeFn({ family, document, chunks });
       if (existingProbe.verified) {
         await updateStateFn({ documentId: document.id, chunksCount: chunks.length, verified: true, queryFn });
@@ -403,6 +410,7 @@ const backfillSemanticDocument = async ({
       reusableIds.clear();
     }
 
+    failureStage = "vector_store";
     await recordStageFn({
       documentId: document.id, jobId, stage: "EMBED", status: "running",
       inputHash: sha256(chunks.map((chunk) => chunk.embeddingInputHash).join(":")),
@@ -415,7 +423,9 @@ const backfillSemanticDocument = async ({
       durationMs: stored.metrics?.embeddingsMs || 0,
       metadata: { semanticBackfill: true, generated: stored.embeddingCacheMisses || 0, reused: stored.embeddingCacheHits || 0 },
     });
+    failureStage = "chunk_metadata";
     await updateChunkMetadataFn({ documentId: document.id, chunks, config, queryFn });
+    failureStage = "retrieval_probe";
     const probe = await probeFn({ family, document, chunks });
     if (!probe.verified) {
       const probeError = new Error("Semantic retrieval probe failed after vector indexing.");
@@ -455,6 +465,8 @@ const backfillSemanticDocument = async ({
       embeddingsReused: Number(stored?.embeddingCacheHits || 0),
       embeddingsGenerated: Number(stored?.embeddingCacheMisses || 0),
       embeddingInputTokens: stored ? embeddingInputTokens : 0,
+      failureStage,
+      errorCode: boundedErrorCode(error),
       downloads: 0, ocrPages: 0,
     };
     await completeJobFn({
@@ -504,6 +516,10 @@ const runSemanticBackfill = async ({
       const result = await processDocument({ document, dryRun, queryFn });
       results.push(result);
       consecutiveFailures = result.status === "failed" ? consecutiveFailures + 1 : 0;
+      if (!dryRun && result.status === "failed" && result.reason === "quota_or_billing") {
+        stopReason = "semantic_provider_quota_exhausted";
+        break;
+      }
       if (!dryRun && consecutiveFailures >= 3) {
         stopReason = "provider_or_vector_health_degraded_after_three_consecutive_failures";
         break;
@@ -533,4 +549,5 @@ module.exports = {
   sha256,
   tierRank,
   updateSemanticState,
+  boundedErrorCode,
 };

@@ -25,6 +25,7 @@ const main = async () => {
   if (priority && !["P0", "P1", "P2", "P3"].includes(String(priority).toUpperCase())) {
     throw new Error("--priority must be P0, P1, P2, or P3");
   }
+  const dryRun = argumentFlag("dry-run");
   const result = await runSemanticBackfill({
     requested: argumentInteger("limit", 5, 1, 250),
     priority: priority ? String(priority).toUpperCase() : null,
@@ -32,7 +33,7 @@ const main = async () => {
     source: argumentValue("source"),
     groupSize: argumentInteger("group-size", 5, 1, 25),
     maxChunks: argumentInteger("max-chunks", 100, 1, 1_000),
-    dryRun: argumentFlag("dry-run"),
+    dryRun,
   });
   const report = { generatedAt: new Date().toISOString(), ...result };
   const output = argumentValue("output");
@@ -50,8 +51,18 @@ const main = async () => {
     embeddingsReused: report.embeddingsReused,
     embeddingsGenerated: report.embeddingsGenerated,
     stopReason: report.stopReason,
+    failures: (report.results || [])
+      .filter((item) => item.status === "failed")
+      .map(({ documentId, failureStage, errorCode, reason, retryEligible }) => ({
+        documentId,
+        failureStage,
+        errorCode,
+        reason,
+        retryEligible,
+      })),
     outputPath: output ? path.resolve(output) : null,
   }, null, 2));
+  if (!dryRun && report.failed > 0) process.exitCode = 2;
 };
 
 main().catch((error) => {

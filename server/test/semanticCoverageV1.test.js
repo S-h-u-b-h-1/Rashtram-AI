@@ -220,6 +220,8 @@ test("Pinecone write alone does not imply semantic readiness", async () => {
     ...noOps,
   });
   assert.equal(result.status, "failed");
+  assert.equal(result.failureStage, "retrieval_probe");
+  assert.equal(result.errorCode, "retrieval_probe_failed");
   assert.equal(states.at(-1).verified, false);
 });
 
@@ -237,6 +239,36 @@ test("retrieval verification failure preserves lexical search readiness", async 
 test("provider failures retain retryability while auth failures are permanent", () => {
   assert.equal(retryableEmbeddingFailure(Object.assign(new Error("temporarily unavailable"), { status: 503 })), true);
   assert.equal(retryableEmbeddingFailure(Object.assign(new Error("forbidden"), { status: 403 })), false);
+});
+
+test("semantic backfill stops immediately when provider quota is exhausted", async () => {
+  let attempts = 0;
+  const result = await runSemanticBackfill({
+    requested: 5,
+    groupSize: 5,
+    capacityFn: async () => ({ safeBatchSize: 5, bulkProcessingAllowed: true }),
+    queryFn: async () => ({ rows: Array.from({ length: 5 }, (_, index) => ({
+      ...document({ id: index + 1 }),
+      visibility_status: "public",
+      search_ready: true,
+      semantic_ready: false,
+      retrieval_verified: false,
+      retry_eligible: true,
+      chunk_count: 1,
+    })) }),
+    processDocument: async ({ document: candidate }) => {
+      attempts += 1;
+      return {
+        documentId: String(candidate.id),
+        status: "failed",
+        reason: "quota_or_billing",
+        retryEligible: true,
+      };
+    },
+  });
+  assert.equal(attempts, 1);
+  assert.equal(result.failed, 1);
+  assert.equal(result.stopReason, "semantic_provider_quota_exhausted");
 });
 
 test("safe batch never exceeds requested or computed capacity", async () => {

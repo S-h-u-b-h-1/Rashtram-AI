@@ -15,6 +15,7 @@ const {
 } = require("../document/DocumentRepository");
 const { PDFProcessor } = require("../lib/pdfProcessor");
 const {
+  classifyProviderError,
   sanitizeProviderError,
 } = require("../lib/providerErrorSanitizer");
 const {
@@ -391,6 +392,15 @@ test("provider fallback metadata never exposes raw credentials", () => {
   );
   assert.equal(sanitized, "AI generation provider unavailable.");
   assert.doesNotMatch(sanitized, /AQ\.|key|401/i);
+});
+
+test("provider quota messages embedded in unmapped HTTP errors are classified safely", () => {
+  const error = new Error(
+    "Request failed. You've reached your egress limit for the current month. " +
+    "To continue reading data, upgrade your plan. Status: 429.",
+  );
+  assert.equal(classifyProviderError(error), "quota_or_billing");
+  assert.equal(sanitizeProviderError(error), "AI generation provider unavailable.");
 });
 
 test("typed processing batches only claim jobs selected for that batch", () => {
